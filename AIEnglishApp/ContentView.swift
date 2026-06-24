@@ -1,21 +1,15 @@
-//
-//  ContentView.swift
-//  AIEnglishApp
-//
-//  Created by lilyliu on 2026/6/21.
-//
-
 import SwiftUI
 
 struct ContentView: View {
     var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
+        TabView {
+            Tab("Today", systemImage: "sun.max") {
+                TodayView()
+            }
+            Tab("Mine", systemImage: "person.crop.circle") {
+                MineView()
+            }
         }
-        .padding()
     }
 }
 
