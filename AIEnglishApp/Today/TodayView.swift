@@ -8,11 +8,10 @@ struct TodayView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-
             Divider()
-
             timeline
-
+        }
+        .safeAreaInset(edge: .bottom) {
             InputBar(text: $inputText, isLoading: viewModel.isLoading) {
                 let toSend = inputText
                 inputText = ""
