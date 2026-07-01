@@ -3,9 +3,10 @@
 //       按 5 种卡片类型（s1/s2/s3/s4/chat）生成结构化卡片，返回给 App。
 // 安全：GEMINI_API_KEY 只存在于这里的环境变量，绝不下发到 App。
 
-const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") ?? "";
-const GEMINI_URL =
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
+const GEMINI_API_KEY    = Deno.env.get("GEMINI_API_KEY") ?? "";
+const GEMINI_URL        = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
+const SUPABASE_URL      = Deno.env.get("SUPABASE_URL") ?? "";
+const SUPABASE_SVC_KEY  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
 const SYSTEM_PROMPT = `
 You are "English Buddy", a warm, natural English-learning companion for Chinese-speaking users.
@@ -125,6 +126,25 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// 写入 messages 表。失败只记日志，不阻断主响应。
+async function insertMessage(row: Record<string, unknown>): Promise<void> {
+  if (!SUPABASE_URL || !SUPABASE_SVC_KEY) return;
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/messages`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${SUPABASE_SVC_KEY}`,
+        "apikey": SUPABASE_SVC_KEY,
+        "Prefer": "return=minimal",
+      },
+      body: JSON.stringify(row),
+    });
+  } catch (e) {
+    console.error("DB write failed:", e);
+  }
+}
+
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -164,6 +184,24 @@ Deno.serve(async (req) => {
     const data = await geminiRes.json();
     const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
     const parsed = JSON.parse(raw);
+
+    // 写入 messages 表（两行：user + assistant），并行执行不阻塞响应
+    await Promise.all([
+      insertMessage({
+        role: "user",
+        input_type: "text",
+        user_content: text.trim(),
+        status: "delivered",
+      }),
+      insertMessage({
+        role: "assistant",
+        card_type: parsed.card_type ?? null,
+        card_content: parsed.card_content ?? null,
+        extracted_concept: parsed.extracted_concept ?? null,
+        status: "delivered",
+      }),
+    ]);
+
     return json(parsed, 200);
   } catch (_error) {
     return json({ error: "internal_error" }, 500);
