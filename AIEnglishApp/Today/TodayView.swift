@@ -5,25 +5,17 @@ struct TodayView: View {
     @State private var inputText = ""
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            Divider()
+        NavigationStack {
             timeline
+                .navigationTitle("Today")
+                .safeAreaInset(edge: .bottom) {
+                    InputBar(text: $inputText, isLoading: viewModel.isLoading) {
+                        let toSend = inputText
+                        inputText = ""
+                        Task { await viewModel.send(toSend) }
+                    }
+                }
         }
-        .safeAreaInset(edge: .bottom) {
-            InputBar(text: $inputText, isLoading: viewModel.isLoading) {
-                let toSend = inputText
-                inputText = ""
-                Task { await viewModel.send(toSend) }
-            }
-        }
-    }
-
-    private var header: some View {
-        Text("Today")
-            .font(.headline)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, AppTheme.Space.paddingCard)
     }
 
     private var timeline: some View {
