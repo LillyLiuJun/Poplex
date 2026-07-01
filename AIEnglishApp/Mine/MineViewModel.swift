@@ -31,21 +31,15 @@ final class MineViewModel {
     }
 
     private func fetchScenes() async throws -> [Material] {
-        var comps = URLComponents(
-            url: SupabaseConfig.projectURL.appending(path: "rest/v1/materials"),
-            resolvingAgainstBaseURL: false
-        )!
-        comps.queryItems = [
-            URLQueryItem(name: "select",        value: "*"),
-            URLQueryItem(name: "material_type", value: "eq.scene"),
-            URLQueryItem(name: "deleted_at",    value: "is.null"),
-            URLQueryItem(name: "order",         value: "created_at.desc"),
-        ]
-        var req = URLRequest(url: comps.url!)
+        var req = URLRequest(url: SupabaseConfig.getMaterialsFunctionURL)
         req.setValue("Bearer \(SupabaseConfig.anonKey)", forHTTPHeaderField: "Authorization")
         req.setValue(SupabaseConfig.anonKey,             forHTTPHeaderField: "apikey")
 
-        let (data, _) = try await URLSession.shared.data(for: req)
+        let (data, response) = try await URLSession.shared.data(for: req)
+        if let http = response as? HTTPURLResponse {
+            print("[MineVM] HTTP \(http.statusCode)")
+        }
+        print("[MineVM] body: \(String(data: data, encoding: .utf8) ?? "<nil>")")
 
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .custom { decoder in

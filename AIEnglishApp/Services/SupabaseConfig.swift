@@ -12,4 +12,8 @@ enum SupabaseConfig {
     static var generateFunctionURL: URL {
         projectURL.appending(path: "functions/v1/generate")
     }
+
+    static var getMaterialsFunctionURL: URL {
+        projectURL.appending(path: "functions/v1/get-materials")
+    }
 }
