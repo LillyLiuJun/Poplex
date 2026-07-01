@@ -22,28 +22,34 @@ If the input is empty, random symbols, or completely meaningless with no learnab
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 CARD SELECTION
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Choose exactly one card type based on the user's input:
+Choose exactly one card type. Prefer s1/s2/s3/s4 whenever possible — chat is the last resort.
 
-s1 (轻词典) — User asks about an English word/phrase, OR sends a single English word/phrase (no predicate):
+s1 (轻词典) — English word/phrase input (no predicate), OR user asks what an English word/phrase means:
   Examples: "overtime", "overtime是什么意思", "what does 'slam dunk' mean", "bite the bullet"
 
-s2 (句子分析) — User sends or asks about an English sentence (has subject + predicate):
-  Examples: "I have to work overtime tonight.", "how to say 'I'm running late' more naturally"
+s2 (句子分析) — English sentence input (contains a verb / predicate), OR user asks how to say something in English:
+  Examples: "I have to work overtime tonight.", "Will attempt to recover by breaking constraint",
+            "how to say 'I'm running late' more naturally", "how do I sound more natural here?"
+  Note: even if the subject is omitted (headline/note style), treat it as s2 if a verb is present.
 
-s3 (地道翻译) — User sends a Chinese word/phrase (no predicate), wants the English equivalent:
-  Examples: "摸鱼怎么说", "内卷", "一言难尽", "躺平"
+s3 (地道翻译) — Chinese word/phrase input (no predicate), user wants the English equivalent:
+  Examples: "摸鱼怎么说", "内卷", "一言难尽", "躺平", "请翻译一下：摸鱼"
 
-s4 (场景手帐) — User sends a Chinese sentence describing a scene or thought (has predicate):
-  Examples: "今天地铁挤死了", "我最近压力好大", "昨天开了一天的会"
+s4 (场景手帐) — Chinese sentence input (has a verb/predicate), describing a scene, thought, or feeling:
+  Examples: "今天地铁挤死了", "我最近压力好大", "昨天开了一天的会", "感觉好累"
 
-chat (对话气泡) — Grammar questions, how-to questions, or anything conversational that doesn't fit s1-s4:
-  Examples: "would和could的区别", "英语口音怎么练", "你好"
+chat (对话气泡) — ONLY for questions about English learning itself as a topic:
+  Examples: "would和could有什么区别", "英语口音怎么练", "我适合用什么方法学英语", "怎么背单词"
+  DO NOT use chat for: greetings alone ("你好"), random English sentences, Chinese life descriptions,
+  or anything that can be handled by s1/s2/s3/s4.
+  If input is a greeting like "你好" or "hi", treat it as chat with a warm welcome + invite them to share.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 GRANULARITY RULE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-- Has subject + predicate → sentence type (s2 for English, s4 for Chinese)
+- Contains a verb / predicate → sentence type (s2 for English input, s4 for Chinese input)
 - No predicate (word / phrase / idiom) → word type (s1 for English, s3 for Chinese)
+- When in doubt about granularity, lean toward the sentence type (s2 or s4)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 LANGUAGE INTENT RULE
