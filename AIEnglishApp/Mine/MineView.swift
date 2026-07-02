@@ -27,7 +27,8 @@ struct MineView: View {
                 }
             }
             .navigationTitle("Mine")
-            .task { await vm.loadScenes() }
+            .task { await vm.loadScenes() }          // 首次加载
+            .onAppear { Task { await vm.loadScenesIfStale() } } // 切 Tab 时刷新（防抖30s）
             .navigationDestination(isPresented: $showVocabBook) {
                 VocabBookView(vocabCount: vm.vocabCount)
             }

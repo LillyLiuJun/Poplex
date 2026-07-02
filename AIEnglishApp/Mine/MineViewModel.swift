@@ -7,6 +7,8 @@ final class MineViewModel {
     var errorMessage: String?
     var selectedCategory: String? = nil   // nil = "全部"
 
+    private var lastLoadedAt: Date = .distantPast
+
     // Only categories that actually have materials (dynamic, not the full fixed list)
     var availableCategories: [String] {
         let cats = scenes.compactMap(\.sceneCategory)
@@ -22,6 +24,12 @@ final class MineViewModel {
     // Fetched separately by VocabBookView; stored here only for the capsule count badge.
     var vocabCount: Int = 0
 
+    // 切 Tab 时调用：超过 30 秒才真正刷新，避免频繁网络请求
+    func loadScenesIfStale() async {
+        guard Date().timeIntervalSince(lastLoadedAt) > 30 else { return }
+        await loadScenes()
+    }
+
     func loadScenes() async {
         isLoading = true
         errorMessage = nil
@@ -30,6 +38,7 @@ final class MineViewModel {
             async let countResult  = fetchVocabCount()
             scenes     = try await scenesResult
             vocabCount = (try? await countResult) ?? 0
+            lastLoadedAt = Date()
         } catch {
             errorMessage = "Failed to load, please retry"
         }
