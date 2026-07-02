@@ -19,15 +19,30 @@ final class MineViewModel {
         return scenes.filter { $0.sceneCategory == cat }
     }
 
+    // Fetched separately by VocabBookView; stored here only for the capsule count badge.
+    var vocabCount: Int = 0
+
     func loadScenes() async {
         isLoading = true
         errorMessage = nil
         do {
-            scenes = try await fetchScenes()
+            async let scenesResult = fetchScenes()
+            async let countResult  = fetchVocabCount()
+            scenes     = try await scenesResult
+            vocabCount = (try? await countResult) ?? 0
         } catch {
-            errorMessage = "加载失败，请重试"
+            errorMessage = "Failed to load, please retry"
         }
         isLoading = false
+    }
+
+    private func fetchVocabCount() async throws -> Int {
+        var req = URLRequest(url: SupabaseConfig.getVocabsFunctionURL)
+        req.setValue("Bearer \(SupabaseConfig.anonKey)", forHTTPHeaderField: "Authorization")
+        req.setValue(SupabaseConfig.anonKey, forHTTPHeaderField: "apikey")
+        let (data, _) = try await URLSession.shared.data(for: req)
+        let array = try JSONSerialization.jsonObject(with: data) as? [Any]
+        return array?.count ?? 0
     }
 
     private func fetchScenes() async throws -> [Material] {

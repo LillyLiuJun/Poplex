@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MineView: View {
     @State private var vm = MineViewModel()
+    @State private var showVocabBook = false
 
     var body: some View {
         NavigationStack {
@@ -11,15 +12,15 @@ struct MineView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if let err = vm.errorMessage {
                     ContentUnavailableView(
-                        "加载失败",
+                        "Failed to load",
                         systemImage: "wifi.slash",
                         description: Text(err)
                     )
                 } else if vm.scenes.isEmpty {
                     ContentUnavailableView(
-                        "还没有素材",
+                        "No materials yet",
                         systemImage: "books.vertical",
-                        description: Text("在 Today 页面输入生活场景，素材会自动出现在这里。")
+                        description: Text("Share a moment in Today — your materials will appear here.")
                     )
                 } else {
                     sceneList
@@ -27,15 +28,37 @@ struct MineView: View {
             }
             .navigationTitle("Mine")
             .task { await vm.loadScenes() }
+            .navigationDestination(isPresented: $showVocabBook) {
+                VocabBookView(vocabCount: vm.vocabCount)
+            }
         }
     }
 
     private var sceneList: some View {
         VStack(spacing: 0) {
-            ContextFilterBar(
-                categories: vm.availableCategories,
-                selected: $vm.selectedCategory
-            )
+            // 情境筛选栏 + 词汇本入口（同一行）
+            HStack(spacing: 0) {
+                ContextFilterBar(
+                    categories: vm.availableCategories,
+                    selected: $vm.selectedCategory
+                )
+
+                // 词汇本胶囊（常驻最右侧）
+                Button {
+                    showVocabBook = true
+                } label: {
+                    Text(vm.vocabCount > 0 ? "词汇本 \(vm.vocabCount)" : "词汇本")
+                        .font(.subheadline)
+                        .padding(.horizontal, AppTheme.Space.paddingCard)
+                        .padding(.vertical, AppTheme.Space.paddingXS)
+                        .background(AppTheme.Color.cardBg)
+                        .foregroundStyle(AppTheme.Color.textSecondary)
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .padding(.trailing, AppTheme.Space.paddingCard)
+                .padding(.vertical, AppTheme.Space.paddingXS)
+            }
 
             Divider()
 

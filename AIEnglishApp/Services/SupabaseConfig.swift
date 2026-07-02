@@ -16,4 +16,8 @@ enum SupabaseConfig {
     static var getMaterialsFunctionURL: URL {
         projectURL.appending(path: "functions/v1/get-materials")
     }
+
+    static var getVocabsFunctionURL: URL {
+        projectURL.appending(path: "functions/v1/get-vocabs")
+    }
 }
