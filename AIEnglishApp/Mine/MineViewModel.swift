@@ -37,6 +37,10 @@ final class MineViewModel {
     // 切 Tab 时调用：超过 30 秒才真正刷新，避免频繁网络请求
     func loadScenesIfStale() async {
         guard Date().timeIntervalSince(lastLoadedAt) > 30 else { return }
+        Analytics.track("tab2_opened", properties: [
+            "scene_count": scenes.count,
+            "vocab_count": vocabCount
+        ])
         await loadScenes()
     }
 
@@ -77,6 +81,10 @@ final class MineViewModel {
             lastDeletedMaterial = nil
         }
 
+        Analytics.track("material_deleted", properties: [
+            "material_id": material.id.uuidString,
+            "material_type": "scene"
+        ])
         await callMaterialEndpoint(SupabaseConfig.deleteMaterialFunctionURL, id: material.id)
     }
 

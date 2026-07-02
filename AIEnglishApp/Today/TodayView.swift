@@ -42,6 +42,7 @@ struct TodayView: View {
                 }
                 .padding(AppTheme.Space.paddingPage)
             }
+            .scrollDismissesKeyboard(.interactively)
             .onChange(of: viewModel.entries.count) {
                 if let last = viewModel.entries.last {
                     withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }

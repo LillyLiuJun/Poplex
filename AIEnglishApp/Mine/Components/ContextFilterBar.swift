@@ -16,6 +16,7 @@ struct ContextFilterBar: View {
                 ForEach(categories, id: \.self) { cat in
                     FilterChip(label: cat, isSelected: selected == cat || categories.count == 1) {
                         selected = cat
+                        Analytics.track("context_tag_tapped", properties: ["scene_category": cat])
                     }
                 }
             }

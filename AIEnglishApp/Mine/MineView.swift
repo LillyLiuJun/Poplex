@@ -78,6 +78,7 @@ struct MineView: View {
 
                 // 词汇本胶囊（常驻最右侧）
                 Button {
+                    Analytics.track("vocab_book_opened", properties: ["vocab_count": vm.vocabCount])
                     showVocabBook = true
                 } label: {
                     Text(vm.vocabCount > 0 ? "Vocab \(vm.vocabCount)" : "Vocabulary")

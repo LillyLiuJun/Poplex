@@ -65,7 +65,7 @@ private struct DetailContent: View {
 
                 // 开始练习 CTA（练习模块后续 Slice 接入，此处先占位）
                 Button {
-                    // TODO: connect practice module
+                    Analytics.track("practice_button_tapped", properties: ["material_id": material.id.uuidString])
                 } label: {
                     Label("Start Practice", systemImage: "mic.fill")
                         .frame(maxWidth: .infinity)
@@ -79,6 +79,12 @@ private struct DetailContent: View {
         }
         .navigationTitle("Scene Detail")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            Analytics.track("scene_card_tapped", properties: [
+                "material_id": material.id.uuidString,
+                "scene_category": material.sceneCategory ?? "uncategorized"
+            ])
+        }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button(role: .destructive) {

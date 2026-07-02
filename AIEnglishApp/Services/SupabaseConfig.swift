@@ -28,4 +28,8 @@ enum SupabaseConfig {
     static var restoreMaterialFunctionURL: URL {
         projectURL.appending(path: "functions/v1/restore-material")
     }
+
+    static var logEventFunctionURL: URL {
+        projectURL.appending(path: "functions/v1/log-event")
+    }
 }

@@ -30,6 +30,9 @@ struct VocabBookView: View {
                     ForEach(vocabs) { material in
                         if case .vocabulary(let vocab) = material.rawContent {
                             VocabCardRow(vocab: vocab)
+                                .onTapGesture {
+                                    Analytics.track("vocab_card_tapped", properties: ["material_id": material.id.uuidString])
+                                }
                                 .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                     Button(role: .destructive) {
                                         deleteVocab(material)
@@ -73,6 +76,10 @@ struct VocabBookView: View {
             guard !Task.isCancelled else { return }
             lastDeletedVocab = nil
         }
+        Analytics.track("material_deleted", properties: [
+            "material_id": material.id.uuidString,
+            "material_type": "vocabulary"
+        ])
         Task { await callEndpoint(SupabaseConfig.deleteMaterialFunctionURL, id: material.id) }
     }
 
