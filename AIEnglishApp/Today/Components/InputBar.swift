@@ -6,6 +6,8 @@ struct InputBar: View {
     var isLoading: Bool
     var onSend: () -> Void
 
+    @FocusState private var isFocused: Bool
+
     private var canSend: Bool {
         !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isLoading
     }
@@ -17,8 +19,12 @@ struct InputBar: View {
                 .padding(AppTheme.Space.paddingS)
                 .background(AppTheme.Color.inputBg)
                 .clipShape(RoundedRectangle(cornerRadius: 20))
+                .focused($isFocused)
 
-            Button(action: onSend) {
+            Button {
+                isFocused = false
+                onSend()
+            } label: {
                 Image(systemName: "arrow.up.circle")
                     .font(.title)
             }

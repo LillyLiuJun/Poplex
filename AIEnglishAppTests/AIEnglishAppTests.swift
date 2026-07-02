@@ -2,79 +2,200 @@ import Testing
 import Foundation
 @testable import AIEnglishApp
 
-// MARK: - AIResponse JSON 解析测试
+// MARK: - AIEnvelope JSON decode tests
 
-struct AIResponseDecodeTests {
+struct AIEnvelopeDecodeTests {
 
-    @Test func decodesFullResponse() throws {
+    @Test func decodesS1VocabCard() throws {
         let json = """
         {
-            "reply": "The meeting has been postponed today.",
-            "intent": {
-                "language": "zh",
-                "is_meaningful": true,
-                "is_compliant": true,
-                "has_clear_scene": true
+            "card_type": "s1",
+            "card_content": {
+                "word": "overtime",
+                "phonetic": "/ˈoʊvərtaɪm/",
+                "pos": "n.",
+                "definition": "加班",
+                "examples": [{"en": "I work overtime tonight.", "zh": "我今晚加班。"}],
+                "scene_trigger": "Does this happen often?"
             },
-            "material": {
-                "scene_tag": "work",
-                "level": "sentence",
-                "english": "The meeting has been postponed today."
+            "extracted_concept": "overtime"
+        }
+        """.data(using: .utf8)!
+
+        let envelope = try JSONDecoder().decode(AIEnvelope.self, from: json)
+
+        guard case .s1(let c) = envelope.card else {
+            Issue.record("Expected .s1 card"); return
+        }
+        #expect(c.word == "overtime")
+        #expect(c.phonetic == "/ˈoʊvərtaɪm/")
+        #expect(c.pos == "n.")
+        #expect(c.definition == "加班")
+        #expect(c.examples.count == 1)
+        #expect(c.examples[0].en == "I work overtime tonight.")
+        #expect(c.sceneTrigger == "Does this happen often?")
+        #expect(envelope.extractedConcept == "overtime")
+    }
+
+    @Test func decodesS2GrammarCard() throws {
+        let json = """
+        {
+            "card_type": "s2",
+            "card_content": {
+                "chinese_translation": "我今晚又要加班了。",
+                "grammar_analysis": "注意 have to 表示外力强迫。",
+                "native_polish": null,
+                "key_phrase": {"phrase": "have to", "note": "比 must 更口语"},
+                "scene_trigger": "Is this a pattern?"
             }
         }
         """.data(using: .utf8)!
 
-        let response = try JSONDecoder().decode(AIResponse.self, from: json)
+        let envelope = try JSONDecoder().decode(AIEnvelope.self, from: json)
 
-        #expect(response.reply == "The meeting has been postponed today.")
-        #expect(response.intent.language == "zh")
-        #expect(response.intent.isMeaningful == true)
-        #expect(response.intent.isCompliant == true)
-        #expect(response.intent.hasClearScene == true)
-        #expect(response.material.sceneTag == "work")
-        #expect(response.material.level == "sentence")
-        #expect(response.material.english == "The meeting has been postponed today.")
+        guard case .s2(let c) = envelope.card else {
+            Issue.record("Expected .s2 card"); return
+        }
+        #expect(c.chineseTranslation == "我今晚又要加班了。")
+        #expect(c.grammarAnalysis == "注意 have to 表示外力强迫。")
+        #expect(c.nativePolish == nil)
+        #expect(c.keyPhrase?.phrase == "have to")
+        #expect(c.keyPhrase?.note == "比 must 更口语")
+        #expect(envelope.extractedConcept == nil)
     }
 
-    @Test func rejectsIncompleteJSON() {
-        let json = #"{"reply":"Hello"}"#.data(using: .utf8)!
-        #expect(throws: DecodingError.self) {
-            try JSONDecoder().decode(AIResponse.self, from: json)
+    @Test func decodesS3TranslationCard() throws {
+        let json = """
+        {
+            "card_type": "s3",
+            "card_content": {
+                "chinese_concept": "摸鱼",
+                "english_translation": "slack off",
+                "phonetic": "/slæk ɔːf/",
+                "pos": "v.",
+                "example": {"en": "I've been slacking off all day.", "zh": "我摸了一天鱼。"},
+                "scene_trigger": "What were you supposed to be doing?"
+            }
         }
+        """.data(using: .utf8)!
+
+        let envelope = try JSONDecoder().decode(AIEnvelope.self, from: json)
+
+        guard case .s3(let c) = envelope.card else {
+            Issue.record("Expected .s3 card"); return
+        }
+        #expect(c.chineseConcept == "摸鱼")
+        #expect(c.englishTranslation == "slack off")
+        #expect(c.example.en == "I've been slacking off all day.")
+        #expect(c.example.zh == "我摸了一天鱼。")
+    }
+
+    @Test func decodesS4SceneCard() throws {
+        let json = """
+        {
+            "card_type": "s4",
+            "card_content": {
+                "chinese_original": "今天地铁挤死了。",
+                "native_translation": "The subway was absolutely packed this morning.",
+                "key_phrase": {"phrase": "absolutely packed", "note": "比 very crowded 更有力"},
+                "scene_trigger": "Is this your daily commute?"
+            }
+        }
+        """.data(using: .utf8)!
+
+        let envelope = try JSONDecoder().decode(AIEnvelope.self, from: json)
+
+        guard case .s4(let c) = envelope.card else {
+            Issue.record("Expected .s4 card"); return
+        }
+        #expect(c.chineseOriginal == "今天地铁挤死了。")
+        #expect(c.nativeTranslation == "The subway was absolutely packed this morning.")
+        #expect(c.keyPhrase?.phrase == "absolutely packed")
+        #expect(c.keyPhrase?.note == "比 very crowded 更有力")
+    }
+
+    @Test func decodesChatCard() throws {
+        let json = """
+        {
+            "card_type": "chat",
+            "card_content": {
+                "text": "Great question! Would and could are both modal verbs...",
+                "scene_connection": null
+            }
+        }
+        """.data(using: .utf8)!
+
+        let envelope = try JSONDecoder().decode(AIEnvelope.self, from: json)
+
+        guard case .chat(let c) = envelope.card else {
+            Issue.record("Expected .chat card"); return
+        }
+        #expect(c.text == "Great question! Would and could are both modal verbs...")
+        #expect(c.sceneConnection == nil)
+    }
+
+    @Test func decodesS2WithNullOptionals() throws {
+        let json = """
+        {
+            "card_type": "s2",
+            "card_content": {
+                "chinese_translation": "她很开心。",
+                "grammar_analysis": null,
+                "native_polish": null,
+                "key_phrase": null,
+                "scene_trigger": "What made her happy?"
+            }
+        }
+        """.data(using: .utf8)!
+
+        let envelope = try JSONDecoder().decode(AIEnvelope.self, from: json)
+
+        guard case .s2(let c) = envelope.card else {
+            Issue.record("Expected .s2 card"); return
+        }
+        #expect(c.grammarAnalysis == nil)
+        #expect(c.nativePolish == nil)
+        #expect(c.keyPhrase == nil)
     }
 }
 
-// MARK: - 测试用假服务（注入用，不发真实网络请求）
+// MARK: - TodayViewModel tests
 
 private struct SuccessMock: AIServicing {
-    func generate(text: String) async throws -> AIResponse {
-        AIResponse(
-            reply: "Test reply",
-            intent: .init(language: "zh", isMeaningful: true, isCompliant: true, hasClearScene: true),
-            material: .init(sceneTag: "work", level: "sentence", english: "Test reply")
-        )
+    func generate(text: String) async throws -> AIEnvelope {
+        let json = """
+        {
+            "card_type": "chat",
+            "card_content": {"text": "Test response", "scene_connection": null},
+            "extracted_concept": null
+        }
+        """.data(using: .utf8)!
+        return try JSONDecoder().decode(AIEnvelope.self, from: json)
     }
 }
 
 private struct FailingMock: AIServicing {
-    func generate(text: String) async throws -> AIResponse {
+    func generate(text: String) async throws -> AIEnvelope {
         throw AIServiceError.requestFailed
     }
 }
 
-// MARK: - TodayViewModel 状态机测试
-
 struct TodayViewModelTests {
 
-    @Test func sendAppendsUserAndAIMessages() async {
+    @Test func sendAppendsUserAndAIEntries() async {
         let vm = TodayViewModel(service: SuccessMock())
         await vm.send("今天会议推迟了")
 
-        #expect(vm.messages.count == 2)
-        #expect(vm.messages[0].role == .user)
-        #expect(vm.messages[0].text == "今天会议推迟了")
-        #expect(vm.messages[1].role == .ai)
-        #expect(vm.messages[1].text == "Test reply")
+        #expect(vm.entries.count == 2)
+
+        guard case .userBubble(let text) = vm.entries[0].content else {
+            Issue.record("Expected userBubble at [0]"); return
+        }
+        #expect(text == "今天会议推迟了")
+
+        guard case .aiCard = vm.entries[1].content else {
+            Issue.record("Expected aiCard at [1]"); return
+        }
         #expect(vm.isLoading == false)
         #expect(vm.errorMessage == nil)
     }
@@ -83,8 +204,10 @@ struct TodayViewModelTests {
         let vm = TodayViewModel(service: FailingMock())
         await vm.send("今天会议推迟了")
 
-        #expect(vm.messages.count == 1)
-        #expect(vm.messages[0].role == .user)
+        #expect(vm.entries.count == 1)
+        guard case .userBubble = vm.entries[0].content else {
+            Issue.record("Expected userBubble at [0]"); return
+        }
         #expect(vm.errorMessage == "生成失败，请重试")
         #expect(vm.isLoading == false)
     }
@@ -93,7 +216,7 @@ struct TodayViewModelTests {
         let vm = TodayViewModel(service: SuccessMock())
         await vm.send("   ")
 
-        #expect(vm.messages.isEmpty)
+        #expect(vm.entries.isEmpty)
         #expect(vm.isLoading == false)
     }
 }

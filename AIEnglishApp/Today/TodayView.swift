@@ -1,41 +1,30 @@
 import SwiftUI
 
 struct TodayView: View {
-    // 已接真后端：调用 Supabase Edge Function，由它在服务器端带 Key 调用 Gemini。
     @State private var viewModel = TodayViewModel(service: LiveAIService())
     @State private var inputText = ""
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            Divider()
+        NavigationStack {
             timeline
-        }
-        .safeAreaInset(edge: .bottom) {
-            InputBar(text: $inputText, isLoading: viewModel.isLoading) {
-                let toSend = inputText
-                inputText = ""
-                Task { await viewModel.send(toSend) }
-            }
+                .navigationTitle("Today")
+                .safeAreaInset(edge: .bottom) {
+                    InputBar(text: $inputText, isLoading: viewModel.isLoading) {
+                        let toSend = inputText
+                        inputText = ""
+                        Task { await viewModel.send(toSend) }
+                    }
+                }
         }
     }
 
-    // Layer 1：顶部固定栏，极简、居中标题
-    private var header: some View {
-        Text("Today")
-            .font(.headline)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, AppTheme.Space.paddingCard)
-    }
-
-    // Layer 2：中部滚动时间线，最新消息在最底部，发送后自动滚到底
     private var timeline: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: AppTheme.Space.paddingCard) {
-                    ForEach(viewModel.messages) { message in
-                        MessageRow(message: message)
-                            .id(message.id)
+                    ForEach(viewModel.entries) { entry in
+                        TimelineRow(entry: entry)
+                            .id(entry.id)
                     }
 
                     if viewModel.isLoading {
@@ -53,8 +42,9 @@ struct TodayView: View {
                 }
                 .padding(AppTheme.Space.paddingPage)
             }
-            .onChange(of: viewModel.messages.count) {
-                if let last = viewModel.messages.last {
+            .scrollDismissesKeyboard(.interactively)
+            .onChange(of: viewModel.entries.count) {
+                if let last = viewModel.entries.last {
                     withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
                 }
             }

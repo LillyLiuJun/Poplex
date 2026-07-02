@@ -1,9 +1,8 @@
 import Foundation
 
-// Tab1 的状态层。@Observable 是 iOS 17+ 的写法（符合 CLAUDE.md），界面会自动跟着这里的数据变化刷新。
 @Observable
 final class TodayViewModel {
-    var messages: [Message] = []
+    var entries: [TimelineEntry] = []
     var isLoading = false
     var errorMessage: String?
 
@@ -17,13 +16,13 @@ final class TodayViewModel {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
-        messages.append(Message(role: .user, text: trimmed))
+        entries.append(TimelineEntry.userBubble(text: trimmed))
         isLoading = true
         errorMessage = nil
 
         do {
-            let response = try await service.generate(text: trimmed)
-            messages.append(Message(role: .ai, text: response.reply))
+            let envelope = try await service.generate(text: trimmed)
+            entries.append(TimelineEntry.aiCard(envelope.card))
         } catch {
             errorMessage = "生成失败，请重试"
         }

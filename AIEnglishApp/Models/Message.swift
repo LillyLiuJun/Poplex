@@ -1,21 +1,25 @@
 import Foundation
 
-// 时间线里的一条记录：用户说的，或 AI 回的
-enum MessageRole {
-    case user
-    case ai
-}
-
-struct Message: Identifiable {
+struct TimelineEntry: Identifiable {
     let id: UUID
-    let role: MessageRole
-    let text: String
     let createdAt: Date
+    let content: Content
 
-    init(id: UUID = UUID(), role: MessageRole, text: String, createdAt: Date = .now) {
-        self.id = id
-        self.role = role
-        self.text = text
-        self.createdAt = createdAt
+    enum Content {
+        case userBubble(text: String)
+        case aiCard(AICard)
+        case aiError(message: String)
+    }
+
+    static func userBubble(text: String) -> TimelineEntry {
+        TimelineEntry(id: UUID(), createdAt: .now, content: .userBubble(text: text))
+    }
+
+    static func aiCard(_ card: AICard) -> TimelineEntry {
+        TimelineEntry(id: UUID(), createdAt: .now, content: .aiCard(card))
+    }
+
+    static func aiError(_ message: String) -> TimelineEntry {
+        TimelineEntry(id: UUID(), createdAt: .now, content: .aiError(message: message))
     }
 }

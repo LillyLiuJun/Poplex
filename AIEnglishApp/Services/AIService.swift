@@ -1,9 +1,7 @@
 import Foundation
 
-// AI 服务的抽象接口。界面只依赖这个协议，不关心背后是真后端还是假数据——
-// 这样测试可以注入假实现，开发期也能先用 Mock 看界面。
 protocol AIServicing {
-    func generate(text: String) async throws -> AIResponse
+    func generate(text: String) async throws -> AIEnvelope
 }
 
 enum AIServiceError: Error {
@@ -11,9 +9,8 @@ enum AIServiceError: Error {
     case decodingFailed
 }
 
-// 真实实现：POST 到 Supabase Edge Function，由它在服务器端带 Key 调用 Gemini。
 struct LiveAIService: AIServicing {
-    func generate(text: String) async throws -> AIResponse {
+    func generate(text: String) async throws -> AIEnvelope {
         var request = URLRequest(url: SupabaseConfig.generateFunctionURL)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -26,22 +23,27 @@ struct LiveAIService: AIServicing {
             throw AIServiceError.requestFailed
         }
         do {
-            return try JSONDecoder().decode(AIResponse.self, from: data)
+            return try JSONDecoder().decode(AIEnvelope.self, from: data)
         } catch {
             throw AIServiceError.decodingFailed
         }
     }
 }
 
-// 假实现：返回写死的数据，不发网络请求。开发期看界面、单元测试时用。
 struct MockAIService: AIServicing {
-    func generate(text: String) async throws -> AIResponse {
-        try await Task.sleep(for: .seconds(1))
-        return AIResponse(
-            reply: "Here's a natural way to say it:\n\"The meeting got pushed back to this afternoon.\"",
-            intent: .init(language: "zh", isMeaningful: true, isCompliant: true, hasClearScene: true),
-            material: .init(sceneTag: "work", level: "sentence",
-                            english: "The meeting got pushed back to this afternoon.")
-        )
+    func generate(text: String) async throws -> AIEnvelope {
+        try await Task.sleep(for: .milliseconds(800))
+        let json = """
+        {
+            "card_type": "s4",
+            "card_content": {
+                "chinese_original": "今天地铁挤死了。",
+                "native_translation": "The subway was absolutely packed this morning.",
+                "key_phrase": {"phrase": "absolutely packed", "note": "比 very crowded 更有力的表达"},
+                "scene_trigger": "Packed commutes are the worst. Do you deal with this every day?"
+            }
+        }
+        """.data(using: .utf8)!
+        return try JSONDecoder().decode(AIEnvelope.self, from: json)
     }
 }

@@ -30,10 +30,17 @@ enum AppTheme {
     enum Color {
         static let textPrimary    = SwiftUI.Color.primary
         static let textSecondary  = SwiftUI.Color.secondary
+        static let textAccent     = SwiftUI.Color.accentColor
         static let bubbleAIBg     = SwiftUI.Color(uiColor: .secondarySystemBackground)
         static let bubbleUserBg   = SwiftUI.Color.accentColor
         static let bubbleUserText = SwiftUI.Color.white
         static let inputBg        = SwiftUI.Color(uiColor: .secondarySystemBackground)
         static let divider        = SwiftUI.Color(uiColor: .separator)
+        static let cardBg         = SwiftUI.Color(uiColor: .secondarySystemBackground)
+    }
+
+    enum Radius {
+        static let bubble: CGFloat = 16
+        static let card: CGFloat   = 16
     }
 }
