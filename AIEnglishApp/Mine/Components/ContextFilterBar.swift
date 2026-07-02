@@ -7,7 +7,7 @@ struct ContextFilterBar: View {
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: AppTheme.Space.paddingS) {
-                FilterChip(label: "全部", isSelected: selected == nil) {
+                FilterChip(label: "All", isSelected: selected == nil) {
                     selected = nil
                 }
                 ForEach(categories, id: \.self) { cat in

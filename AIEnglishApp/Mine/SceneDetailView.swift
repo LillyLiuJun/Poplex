@@ -2,10 +2,11 @@ import SwiftUI
 
 struct SceneDetailView: View {
     let material: Material
+    var onDelete: (() -> Void)? = nil
 
     var body: some View {
         if case .scene(let scene) = material.rawContent {
-            DetailContent(material: material, scene: scene)
+            DetailContent(material: material, scene: scene, onDelete: onDelete)
         }
     }
 }
@@ -13,6 +14,8 @@ struct SceneDetailView: View {
 private struct DetailContent: View {
     let material: Material
     let scene: SceneMaterial
+    var onDelete: (() -> Void)? = nil
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         ScrollView {
@@ -64,7 +67,7 @@ private struct DetailContent: View {
                 Button {
                     // TODO: connect practice module
                 } label: {
-                    Label("开始练习", systemImage: "mic.fill")
+                    Label("Start Practice", systemImage: "mic.fill")
                         .frame(maxWidth: .infinity)
                         .padding(AppTheme.Space.paddingCard)
                         .background(AppTheme.Color.textAccent)
@@ -74,7 +77,17 @@ private struct DetailContent: View {
             }
             .padding(AppTheme.Space.paddingPage)
         }
-        .navigationTitle("场景详情")
+        .navigationTitle("Scene Detail")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button(role: .destructive) {
+                    onDelete?()
+                    dismiss()
+                } label: {
+                    Image(systemName: "trash")
+                }
+            }
+        }
     }
 }

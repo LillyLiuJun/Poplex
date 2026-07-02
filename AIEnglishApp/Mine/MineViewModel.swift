@@ -9,6 +9,10 @@ final class MineViewModel {
 
     private var lastLoadedAt: Date = .distantPast
 
+    // 软删除撤销状态：存最近一次删除的素材，4 秒内可撤销
+    private(set) var lastDeletedMaterial: Material? = nil
+    private var undoTimer: Task<Void, Never>? = nil
+
     // Only categories that actually have materials (dynamic, not the full fixed list)
     var availableCategories: [String] {
         let cats = scenes.compactMap(\.sceneCategory)
@@ -52,6 +56,39 @@ final class MineViewModel {
         let (data, _) = try await URLSession.shared.data(for: req)
         let array = try JSONSerialization.jsonObject(with: data) as? [Any]
         return array?.count ?? 0
+    }
+
+    // 乐观删除：先从列表移除，再调后端，4 秒撤销窗口
+    func deleteMaterial(_ material: Material) async {
+        scenes.removeAll { $0.id == material.id }
+        lastDeletedMaterial = material
+
+        undoTimer?.cancel()
+        undoTimer = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(4))
+            guard !Task.isCancelled else { return }
+            lastDeletedMaterial = nil
+        }
+
+        await callMaterialEndpoint(SupabaseConfig.deleteMaterialFunctionURL, id: material.id)
+    }
+
+    func restoreMaterial() async {
+        guard let material = lastDeletedMaterial else { return }
+        undoTimer?.cancel()
+        lastDeletedMaterial = nil
+        await callMaterialEndpoint(SupabaseConfig.restoreMaterialFunctionURL, id: material.id)
+        await loadScenes()
+    }
+
+    private func callMaterialEndpoint(_ url: URL, id: UUID) async {
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("Bearer \(SupabaseConfig.anonKey)", forHTTPHeaderField: "Authorization")
+        req.setValue(SupabaseConfig.anonKey, forHTTPHeaderField: "apikey")
+        req.httpBody = try? JSONEncoder().encode(["id": id.uuidString])
+        _ = try? await URLSession.shared.data(for: req)
     }
 
     private func fetchScenes() async throws -> [Material] {

@@ -5,6 +5,8 @@ struct VocabBookView: View {
     @State private var vocabs: [Material] = []
     @State private var isLoading = false
     @State private var errorMessage: String?
+    @State private var lastDeletedVocab: Material? = nil
+    @State private var undoTimer: Task<Void, Never>? = nil
 
     var body: some View {
         Group {
@@ -24,22 +26,72 @@ struct VocabBookView: View {
                     description: Text("Words you look up will be saved here.")
                 )
             } else {
-                ScrollView {
-                    LazyVStack(spacing: AppTheme.Space.paddingCard) {
-                        ForEach(vocabs) { material in
-                            if case .vocabulary(let vocab) = material.rawContent {
-                                VocabCardRow(vocab: vocab)
-                            }
+                List {
+                    ForEach(vocabs) { material in
+                        if case .vocabulary(let vocab) = material.rawContent {
+                            VocabCardRow(vocab: vocab)
+                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                    Button(role: .destructive) {
+                                        deleteVocab(material)
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
+                                }
                         }
                     }
-                    .padding(.horizontal, AppTheme.Space.paddingPage)
-                    .padding(.vertical, AppTheme.Space.paddingCard)
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets(
+                        top: AppTheme.Space.paddingCard / 2,
+                        leading: AppTheme.Space.paddingPage,
+                        bottom: AppTheme.Space.paddingCard / 2,
+                        trailing: AppTheme.Space.paddingPage
+                    ))
                 }
+                .listStyle(.plain)
             }
         }
         .navigationTitle("Vocabulary")
         .navigationBarTitleDisplayMode(.inline)
         .task { await loadVocabs() }
+        .overlay(alignment: .bottom) {
+            if lastDeletedVocab != nil {
+                UndoToast(message: "Deleted") { Task { await restoreVocab() } }
+                    .padding(.bottom, AppTheme.Space.paddingPage)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.easeInOut(duration: 0.25), value: lastDeletedVocab != nil)
+    }
+
+    private func deleteVocab(_ material: Material) {
+        vocabs.removeAll { $0.id == material.id }
+        lastDeletedVocab = material
+        undoTimer?.cancel()
+        undoTimer = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(4))
+            guard !Task.isCancelled else { return }
+            lastDeletedVocab = nil
+        }
+        Task { await callEndpoint(SupabaseConfig.deleteMaterialFunctionURL, id: material.id) }
+    }
+
+    private func restoreVocab() async {
+        guard let material = lastDeletedVocab else { return }
+        undoTimer?.cancel()
+        lastDeletedVocab = nil
+        await callEndpoint(SupabaseConfig.restoreMaterialFunctionURL, id: material.id)
+        await loadVocabs()
+    }
+
+    private func callEndpoint(_ url: URL, id: UUID) async {
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("Bearer \(SupabaseConfig.anonKey)", forHTTPHeaderField: "Authorization")
+        req.setValue(SupabaseConfig.anonKey, forHTTPHeaderField: "apikey")
+        req.httpBody = try? JSONEncoder().encode(["id": id.uuidString])
+        _ = try? await URLSession.shared.data(for: req)
     }
 
     private func loadVocabs() async {

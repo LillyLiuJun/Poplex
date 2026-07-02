@@ -27,11 +27,21 @@ struct MineView: View {
                 }
             }
             .navigationTitle("Mine")
-            .task { await vm.loadScenes() }          // 首次加载
-            .onAppear { Task { await vm.loadScenesIfStale() } } // 切 Tab 时刷新（防抖30s）
+            .task { await vm.loadScenes() }
+            .onAppear { Task { await vm.loadScenesIfStale() } }
             .navigationDestination(isPresented: $showVocabBook) {
                 VocabBookView(vocabCount: vm.vocabCount)
             }
+            .overlay(alignment: .bottom) {
+                if vm.lastDeletedMaterial != nil {
+                    UndoToast(message: "Deleted") {
+                        Task { await vm.restoreMaterial() }
+                    }
+                    .padding(.bottom, AppTheme.Space.paddingPage)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+            .animation(.easeInOut(duration: 0.25), value: vm.lastDeletedMaterial != nil)
         }
     }
 
@@ -48,7 +58,7 @@ struct MineView: View {
                 Button {
                     showVocabBook = true
                 } label: {
-                    Text(vm.vocabCount > 0 ? "词汇本 \(vm.vocabCount)" : "词汇本")
+                    Text(vm.vocabCount > 0 ? "Vocab \(vm.vocabCount)" : "Vocabulary")
                         .font(.subheadline)
                         .padding(.horizontal, AppTheme.Space.paddingCard)
                         .padding(.vertical, AppTheme.Space.paddingXS)
@@ -61,24 +71,37 @@ struct MineView: View {
                 .padding(.vertical, AppTheme.Space.paddingXS)
             }
 
-            Divider()
-
-            ScrollView {
-                LazyVStack(spacing: AppTheme.Space.paddingCard) {
-                    ForEach(vm.filteredScenes) { material in
-                        if case .scene(let scene) = material.rawContent {
+            List {
+                ForEach(vm.filteredScenes) { material in
+                    if case .scene(let scene) = material.rawContent {
+                        ZStack {
                             NavigationLink {
-                                SceneDetailView(material: material)
+                                SceneDetailView(material: material, onDelete: {
+                                    Task { await vm.deleteMaterial(material) }
+                                })
+                            } label: { EmptyView() }
+                                .opacity(0)
+                            SceneCardRow(scene: scene)
+                        }
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            Button(role: .destructive) {
+                                Task { await vm.deleteMaterial(material) }
                             } label: {
-                                SceneCardRow(scene: scene)
+                                Label("Delete", systemImage: "trash")
                             }
-                            .buttonStyle(.plain)
                         }
                     }
                 }
-                .padding(.horizontal, AppTheme.Space.paddingPage)
-                .padding(.vertical, AppTheme.Space.paddingCard)
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets(
+                    top: AppTheme.Space.paddingCard / 2,
+                    leading: AppTheme.Space.paddingPage,
+                    bottom: AppTheme.Space.paddingCard / 2,
+                    trailing: AppTheme.Space.paddingPage
+                ))
             }
+            .listStyle(.plain)
         }
     }
 }
