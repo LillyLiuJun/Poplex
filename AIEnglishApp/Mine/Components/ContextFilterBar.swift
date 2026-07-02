@@ -7,11 +7,14 @@ struct ContextFilterBar: View {
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: AppTheme.Space.paddingS) {
-                FilterChip(label: "All", isSelected: selected == nil) {
-                    selected = nil
+                // "All" 只在有 2 个以上情境时才有意义
+                if categories.count > 1 {
+                    FilterChip(label: "All", isSelected: selected == nil) {
+                        selected = nil
+                    }
                 }
                 ForEach(categories, id: \.self) { cat in
-                    FilterChip(label: cat, isSelected: selected == cat) {
+                    FilterChip(label: cat, isSelected: selected == cat || categories.count == 1) {
                         selected = cat
                     }
                 }

@@ -9,6 +9,12 @@ final class MineViewModel {
 
     private var lastLoadedAt: Date = .distantPast
 
+    // 上次成功加载的场景数，用于骨架屏占位数量；第一次默认 3
+    var skeletonCount: Int {
+        let cached = UserDefaults.standard.integer(forKey: "mine_last_scene_count")
+        return cached > 0 ? cached : 3  // 首次无记录时默认 3，之后用实际条数
+    }
+
     // 软删除撤销状态：存最近一次删除的素材，4 秒内可撤销
     private(set) var lastDeletedMaterial: Material? = nil
     private var undoTimer: Task<Void, Never>? = nil
@@ -43,6 +49,7 @@ final class MineViewModel {
             scenes     = try await scenesResult
             vocabCount = (try? await countResult) ?? 0
             lastLoadedAt = Date()
+            UserDefaults.standard.set(scenes.count, forKey: "mine_last_scene_count")
         } catch {
             errorMessage = "Failed to load, please retry"
         }

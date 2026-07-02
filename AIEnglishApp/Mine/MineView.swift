@@ -7,15 +7,36 @@ struct MineView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if vm.isLoading {
-                    ProgressView()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if let err = vm.errorMessage {
-                    ContentUnavailableView(
-                        "Failed to load",
-                        systemImage: "wifi.slash",
-                        description: Text(err)
-                    )
+                if vm.isLoading && vm.scenes.isEmpty {
+                    // 首次加载（无历史数据）才显示骨架屏，数量用上次缓存的 count
+                    List {
+                        ForEach(0..<vm.skeletonCount, id: \.self) { _ in
+                            SkeletonCardRow()
+                        }
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets(
+                            top: AppTheme.Space.paddingCard / 2,
+                            leading: AppTheme.Space.paddingPage,
+                            bottom: AppTheme.Space.paddingCard / 2,
+                            trailing: AppTheme.Space.paddingPage
+                        ))
+                    }
+                    .listStyle(.plain)
+                } else if vm.errorMessage != nil && vm.scenes.isEmpty {
+                    // 只在没有任何数据时才显示错误状态，有数据时静默失败
+                    VStack(spacing: AppTheme.Space.paddingCard) {
+                        Image(systemName: "wifi.slash")
+                            .font(.system(size: 48))
+                            .foregroundStyle(AppTheme.Color.textSecondary)
+                        Text("Failed to load")
+                            .font(.headline)
+                        Button("Retry") {
+                            Task { await vm.loadScenes() }
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if vm.scenes.isEmpty {
                     ContentUnavailableView(
                         "No materials yet",
@@ -53,6 +74,7 @@ struct MineView: View {
                     categories: vm.availableCategories,
                     selected: $vm.selectedCategory
                 )
+                .animation(.easeInOut(duration: 0.3), value: vm.availableCategories.count)
 
                 // 词汇本胶囊（常驻最右侧）
                 Button {
