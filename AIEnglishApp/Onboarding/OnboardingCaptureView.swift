@@ -119,23 +119,22 @@ struct OnboardingCaptureView: View {
         Task { await viewModel.generate() }
     }
 
-    // MARK: - Result content (image + loading/text)
+    // MARK: - Result content (image thumbnail + generated text as hero)
 
     private var resultContent: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Selected image replaces the grid
+            // Small thumbnail — visual anchor, not the hero
             if let card = viewModel.selectedCard {
                 Image(card.imageName)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 200)
-                    .clipped()
-                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
+                    .frame(width: 64, height: 64)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
                     .padding(.horizontal, AppTheme.Space.paddingPage)
+                    .padding(.bottom, AppTheme.Space.paddingSection)
             }
 
-            // Generated content
+            // Generated content — the real hero
             Group {
                 if viewModel.isLoading {
                     skeletonView
@@ -148,7 +147,6 @@ struct OnboardingCaptureView: View {
                 }
             }
             .padding(.horizontal, AppTheme.Space.paddingPage)
-            .padding(.top, AppTheme.Space.paddingSection)
 
             Spacer()
 
@@ -187,6 +185,11 @@ struct OnboardingCaptureView: View {
                     .foregroundStyle(AppTheme.Color.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+
+            Text("That's a moment from your life — now it's yours in English.")
+                .font(.footnote)
+                .foregroundStyle(AppTheme.Color.textSecondary)
+                .padding(.top, AppTheme.Space.paddingXS)
         }
     }
 
