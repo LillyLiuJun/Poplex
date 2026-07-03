@@ -31,6 +31,7 @@ enum AppTheme {
         static let textPrimary    = SwiftUI.Color.primary
         static let textSecondary  = SwiftUI.Color.secondary
         static let textAccent     = SwiftUI.Color.accentColor
+        static let pageBg         = SwiftUI.Color(uiColor: .systemBackground)
         static let bubbleAIBg     = SwiftUI.Color(uiColor: .secondarySystemBackground)
         static let bubbleUserBg   = SwiftUI.Color.accentColor
         static let bubbleUserText = SwiftUI.Color.white

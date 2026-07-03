@@ -2,7 +2,7 @@ import SwiftUI
 
 struct OnboardingScreen2View: View {
     var onBack: () -> Void
-    var onContinue: () -> Void
+    var onForward: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -33,7 +33,7 @@ struct OnboardingScreen2View: View {
 
             Spacer()
 
-            Button(action: onContinue) {
+            Button(action: onForward) {
                 Text("Continue")
                     .font(.body.weight(.semibold))
                     .frame(maxWidth: .infinity)
@@ -43,18 +43,11 @@ struct OnboardingScreen2View: View {
             .padding(.horizontal, AppTheme.Space.paddingPage)
             .padding(.bottom, 56)
         }
-        .gesture(
-            DragGesture(minimumDistance: 40)
-                .onEnded { value in
-                    let isHorizontal = abs(value.translation.width) > abs(value.translation.height)
-                    if isHorizontal && value.translation.width > 60 {
-                        onBack()
-                    }
-                }
-        )
+        .contentShape(Rectangle())
+        .onHorizontalSwipe(onLeft: onForward, onRight: onBack)
     }
 }
 
 #Preview {
-    OnboardingScreen2View(onBack: {}, onContinue: {})
+    OnboardingScreen2View(onBack: {}, onForward: {})
 }

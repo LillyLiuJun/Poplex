@@ -123,6 +123,32 @@ struct ErrorContent: Decodable {
     }
 }
 
+// MARK: - AICard helpers
+extension AICard {
+    /// The primary English expression to display (e.g. on Screen 5 or TTS).
+    var primaryEnglish: String {
+        switch self {
+        case .s1(let c): return c.examples.first?.en ?? c.word
+        case .s2(let c): return c.nativePolish ?? ""
+        case .s3(let c): return c.englishTranslation
+        case .s4(let c): return c.nativeTranslation
+        case .chat(let c): return c.text
+        case .error(let c): return c.message
+        }
+    }
+
+    /// The AI's follow-up question for s1–s4 cards; nil for chat/error.
+    var sceneTrigger: String? {
+        switch self {
+        case .s1(let c): return c.sceneTrigger
+        case .s2(let c): return c.sceneTrigger
+        case .s3(let c): return c.sceneTrigger
+        case .s4(let c): return c.sceneTrigger
+        default: return nil
+        }
+    }
+}
+
 // MARK: - Shared sub-types
 struct BilingualExample: Decodable {
     let en: String

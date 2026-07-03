@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct OnboardingScreen1View: View {
-    var onContinue: () -> Void
+    var onForward: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -21,7 +21,7 @@ struct OnboardingScreen1View: View {
 
             Spacer()
 
-            Button(action: onContinue) {
+            Button(action: onForward) {
                 Text("Continue")
                     .font(.body.weight(.semibold))
                     .frame(maxWidth: .infinity)
@@ -31,18 +31,11 @@ struct OnboardingScreen1View: View {
             .padding(.horizontal, AppTheme.Space.paddingPage)
             .padding(.bottom, 56)
         }
-        .gesture(
-            DragGesture(minimumDistance: 40)
-                .onEnded { value in
-                    let isHorizontal = abs(value.translation.width) > abs(value.translation.height)
-                    if isHorizontal && value.translation.width < -60 {
-                        onContinue()
-                    }
-                }
-        )
+        .contentShape(Rectangle())
+        .onHorizontalSwipe(onLeft: onForward)
     }
 }
 
 #Preview {
-    OnboardingScreen1View(onContinue: {})
+    OnboardingScreen1View(onForward: {})
 }

@@ -1,47 +1,45 @@
 import SwiftUI
 
 enum OnboardingStep: Int, CaseIterable {
-    case screen1, screen2, screen4, screen5
+    case screen1, screen2, screen4
 }
 
 struct OnboardingView: View {
     @State private var step: OnboardingStep = .screen1
-    @State private var goingBack = false
+    @State private var viewModel = OnboardingViewModel()
     var onComplete: () -> Void
 
-    private var stepTransition: AnyTransition {
-        goingBack
-            ? .asymmetric(
-                insertion: .move(edge: .leading).combined(with: .opacity),
-                removal: .move(edge: .trailing).combined(with: .opacity)
-              )
-            : .asymmetric(
-                insertion: .move(edge: .trailing).combined(with: .opacity),
-                removal: .move(edge: .leading).combined(with: .opacity)
-              )
-    }
+    private var index: Int { step.rawValue }  // screen1=0, screen2=1, screen4=2
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            Group {
-                switch step {
-                case .screen1:
-                    OnboardingScreen1View(onContinue: advance)
-                case .screen2:
-                    OnboardingScreen2View(onBack: back, onContinue: advance)
-                case .screen4:
-                    OnboardingScreen4View(onContinue: advance)
-                case .screen5:
-                    OnboardingScreen5View(onComplete: completeOnboarding)
+            // Offset-based paging: all pages sit side by side in one HStack and
+            // we slide the whole strip left/right. No insert/remove transitions,
+            // so direction is always correct and pages never overlap or ghost.
+            GeometryReader { geo in
+                HStack(spacing: 0) {
+                    OnboardingScreen1View(onForward: advance)
+                        .frame(width: geo.size.width, height: geo.size.height)
+
+                    OnboardingScreen2View(onBack: back, onForward: advance)
+                        .frame(width: geo.size.width, height: geo.size.height)
+
+                    OnboardingCaptureView(
+                        viewModel: viewModel,
+                        onBack: back,
+                        onComplete: completeOnboarding
+                    )
+                    .frame(width: geo.size.width, height: geo.size.height)
                 }
+                .frame(width: geo.size.width, alignment: .leading)
+                .offset(x: -CGFloat(index) * geo.size.width)
+                .animation(.easeInOut(duration: 0.35), value: step)
             }
-            .id(step)
-            .transition(stepTransition)
+            .clipped()
 
             progressDots
                 .padding(.bottom, 20)
         }
-        .animation(.easeInOut(duration: 0.3), value: step)
     }
 
     private var progressDots: some View {
@@ -58,20 +56,43 @@ struct OnboardingView: View {
     private func advance() {
         let cases = OnboardingStep.allCases
         guard let idx = cases.firstIndex(of: step), idx + 1 < cases.count else { return }
-        goingBack = false
         step = cases[idx + 1]
     }
 
     private func back() {
         let cases = OnboardingStep.allCases
         guard let idx = cases.firstIndex(of: step), idx > 0 else { return }
-        goingBack = true
         step = cases[idx - 1]
     }
 
     private func completeOnboarding() {
         UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: "onboarding_completed_at")
         onComplete()
+    }
+}
+
+// MARK: - Horizontal swipe helper
+
+extension View {
+    /// Detects horizontal swipes. `onLeft` = swipe finger left (advance),
+    /// `onRight` = swipe finger right (back). Uses simultaneousGesture so it
+    /// coexists with buttons (taps don't move) and ScrollViews (vertical drags
+    /// are ignored via the horizontal guard).
+    func onHorizontalSwipe(
+        threshold: CGFloat = 60,
+        onLeft: @escaping () -> Void = {},
+        onRight: @escaping () -> Void = {}
+    ) -> some View {
+        simultaneousGesture(
+            DragGesture(minimumDistance: 30)
+                .onEnded { value in
+                    let w = value.translation.width
+                    let h = value.translation.height
+                    guard abs(w) > abs(h) else { return }
+                    if w <= -threshold { onLeft() }
+                    else if w >= threshold { onRight() }
+                }
+        )
     }
 }
 
