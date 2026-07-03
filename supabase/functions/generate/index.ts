@@ -380,8 +380,8 @@ Deno.serve(async (req) => {
     await Promise.all([
       insertMessage({
         role: "user",
-        input_type: "text",
-        user_content: text.trim(),
+        input_type: image_base64 ? "image" : "text",
+        user_content: image_base64 ? "[photo]" : (text ?? "").trim(),
         status: "delivered",
       }),
       insertMessage({
