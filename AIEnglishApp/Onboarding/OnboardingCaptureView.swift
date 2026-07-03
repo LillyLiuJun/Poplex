@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 
 struct OnboardingCaptureView: View {
     var viewModel: OnboardingViewModel
@@ -6,8 +7,12 @@ struct OnboardingCaptureView: View {
     var onComplete: () -> Void
 
     @State private var pendingCard: PresetCard?
+    @State private var pendingImage: UIImage?      // picked from camera or library
+    @State private var showCamera = false
+    @State private var photoPickerItem: PhotosPickerItem?
 
-    private var isSelecting: Bool { viewModel.selectedCard == nil }
+    private var isSelecting: Bool { viewModel.selectedCard == nil && viewModel.selectedImage == nil }
+    private var hasSelection: Bool { pendingCard != nil || pendingImage != nil }
     private let columns = [GridItem(.flexible()), GridItem(.flexible())]
 
     var body: some View {
@@ -37,6 +42,26 @@ struct OnboardingCaptureView: View {
         .animation(.easeInOut(duration: 0.3), value: isSelecting)
         .contentShape(Rectangle())
         .onHorizontalSwipe(onRight: handleBack)
+        .sheet(isPresented: $showCamera) {
+            CameraPickerView(
+                onImage: { image in
+                    pendingImage = image
+                    pendingCard = nil
+                },
+                onCancel: {}
+            )
+            .ignoresSafeArea()
+        }
+        .onChange(of: photoPickerItem) { _, item in
+            guard let item else { return }
+            Task {
+                if let data = try? await item.loadTransferable(type: Data.self),
+                   let image = UIImage(data: data) {
+                    pendingImage = image
+                    pendingCard = nil
+                }
+            }
+        }
     }
 
     // MARK: - Back
@@ -66,8 +91,18 @@ struct OnboardingCaptureView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     HStack(spacing: AppTheme.Space.paddingS) {
-                        CaptureButton(icon: "camera",             label: "Take a photo", action: {})
-                        CaptureButton(icon: "photo.on.rectangle", label: "Choose photo", action: {})
+                        CaptureButton(icon: "camera", label: "Take a photo") {
+                            showCamera = true
+                        }
+                        PhotosPicker(selection: $photoPickerItem, matching: .images) {
+                            Label("Choose photo", systemImage: "photo.on.rectangle")
+                                .font(.subheadline.weight(.medium))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                                .background(AppTheme.Color.cardBg)
+                                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
+                                .foregroundStyle(AppTheme.Color.textPrimary)
+                        }
                     }
                     .padding(.horizontal, AppTheme.Space.paddingPage)
 
@@ -78,25 +113,49 @@ struct OnboardingCaptureView: View {
                         .padding(.top, AppTheme.Space.paddingSection)
                         .padding(.bottom, AppTheme.Space.paddingCard)
 
+                    // Picked image preview (camera / library)
+                    if let image = pendingImage {
+                        ZStack(alignment: .topTrailing) {
+                            Image(uiImage: image)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 160)
+                                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: AppTheme.Radius.card)
+                                        .stroke(Color.accentColor, lineWidth: 3)
+                                )
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.title3)
+                                .symbolRenderingMode(.palette)
+                                .foregroundStyle(.white, Color.accentColor)
+                                .padding(8)
+                        }
+                        .padding(.horizontal, AppTheme.Space.paddingPage)
+                        .padding(.bottom, AppTheme.Space.paddingCard)
+                    }
+
                     LazyVGrid(columns: columns, spacing: AppTheme.Space.paddingCard) {
                         ForEach(PresetCard.all) { card in
                             PresetCardTile(
                                 card: card,
-                                isSelected: pendingCard?.id == card.id
+                                isSelected: pendingCard?.id == card.id && pendingImage == nil
                             ) {
                                 withAnimation(.spring(duration: 0.2)) {
                                     pendingCard = card
+                                    pendingImage = nil
                                 }
                             }
                         }
                     }
                     .padding(.horizontal, AppTheme.Space.paddingPage)
-                    .padding(.bottom, pendingCard == nil ? 72 : 100)
+                    .padding(.bottom, hasSelection ? 100 : 72)
                 }
             }
             .scrollBounceBehavior(.basedOnSize)
 
-            if pendingCard != nil {
+            if hasSelection {
                 Button(action: confirmSelection) {
                     Text("Continue")
                         .font(.body.weight(.semibold))
@@ -110,13 +169,15 @@ struct OnboardingCaptureView: View {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: pendingCard == nil)
+        .animation(.easeInOut(duration: 0.2), value: hasSelection)
     }
 
     private func confirmSelection() {
-        guard let card = pendingCard else { return }
-        viewModel.selectedCard = card
-        Task { await viewModel.generate() }
+        if let image = pendingImage {
+            Task { await viewModel.startWithImage(image) }
+        } else if let card = pendingCard {
+            Task { await viewModel.startWithCard(card) }
+        }
     }
 
     // MARK: - Result content (image thumbnail + generated text as hero)
@@ -124,15 +185,21 @@ struct OnboardingCaptureView: View {
     private var resultContent: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Small thumbnail — visual anchor, not the hero
-            if let card = viewModel.selectedCard {
-                Image(card.imageName)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: 64, height: 64)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                    .padding(.horizontal, AppTheme.Space.paddingPage)
-                    .padding(.bottom, AppTheme.Space.paddingSection)
+            Group {
+                if let image = viewModel.selectedImage {
+                    Image(uiImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                } else if let card = viewModel.selectedCard {
+                    Image(card.imageName)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                }
             }
+            .frame(width: 64, height: 64)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .padding(.horizontal, AppTheme.Space.paddingPage)
+            .padding(.bottom, AppTheme.Space.paddingSection)
 
             // Generated content — the real hero
             Group {

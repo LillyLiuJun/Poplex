@@ -337,9 +337,25 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { text } = await req.json();
-    if (typeof text !== "string" || text.trim() === "") {
-      return json({ error: "missing_text" }, 400);
+    const body = await req.json();
+    const { text, image_base64, mime_type } = body;
+
+    if (!text && !image_base64) {
+      return json({ error: "missing_input" }, 400);
+    }
+
+    // Build Gemini parts: text or image (multimodal)
+    let userParts: unknown[];
+    if (image_base64) {
+      userParts = [
+        { inline_data: { mime_type: mime_type ?? "image/jpeg", data: image_base64 } },
+        { text: "Describe the scene in this photo and generate an English learning card." },
+      ];
+    } else {
+      if (typeof text !== "string" || text.trim() === "") {
+        return json({ error: "missing_text" }, 400);
+      }
+      userParts = [{ text }];
     }
 
     const geminiRes = await fetch(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
@@ -347,7 +363,7 @@ Deno.serve(async (req) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-        contents: [{ role: "user", parts: [{ text }] }],
+        contents: [{ role: "user", parts: userParts }],
         generationConfig: { responseMimeType: "application/json" },
       }),
     });
