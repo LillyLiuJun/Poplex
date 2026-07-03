@@ -7,8 +7,9 @@ struct OnboardingCaptureView: View {
     var onComplete: () -> Void
 
     @State private var pendingCard: PresetCard?
-    @State private var pendingImage: UIImage?      // picked from camera or library
+    @State private var pendingImage: UIImage?
     @State private var showCamera = false
+    @State private var showPhotoPicker = false
     @State private var photoPickerItem: PhotosPickerItem?
 
     private var isSelecting: Bool { viewModel.selectedCard == nil && viewModel.selectedImage == nil }
@@ -52,6 +53,7 @@ struct OnboardingCaptureView: View {
             )
             .ignoresSafeArea()
         }
+        .photosPicker(isPresented: $showPhotoPicker, selection: $photoPickerItem, matching: .images)
         .onChange(of: photoPickerItem) { _, item in
             guard let item else { return }
             Task {
@@ -94,14 +96,8 @@ struct OnboardingCaptureView: View {
                         CaptureButton(icon: "camera", label: "Take a photo") {
                             showCamera = true
                         }
-                        PhotosPicker(selection: $photoPickerItem, matching: .images) {
-                            Label("Choose photo", systemImage: "photo.on.rectangle")
-                                .font(.subheadline.weight(.medium))
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 14)
-                                .background(AppTheme.Color.cardBg)
-                                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
-                                .foregroundStyle(AppTheme.Color.textPrimary)
+                        CaptureButton(icon: "photo.on.rectangle", label: "Choose photo") {
+                            showPhotoPicker = true
                         }
                     }
                     .padding(.horizontal, AppTheme.Space.paddingPage)
