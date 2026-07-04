@@ -20,11 +20,33 @@ struct TodayView: View {
                 }
         }
         .overlay {
-            if let img = previewImage {
-                ImagePreview(image: img) {
-                    withAnimation(.spring(duration: 0.3)) { previewImage = nil }
+            ZStack {
+                if previewImage != nil {
+                    Color.black
+                        .ignoresSafeArea()
+                        .transition(.opacity)
+                        .onTapGesture {
+                            withAnimation(.spring(duration: 0.3)) { previewImage = nil }
+                        }
                 }
-                .transition(.scale(scale: 0.1, anchor: previewAnchor).combined(with: .opacity))
+                if let img = previewImage {
+                    ZStack(alignment: .topTrailing) {
+                        Image(uiImage: img)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .allowsHitTesting(false)
+                        Button {
+                            withAnimation(.spring(duration: 0.3)) { previewImage = nil }
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.title)
+                                .foregroundStyle(.white, Color(uiColor: .systemGray3))
+                                .padding()
+                        }
+                    }
+                    .transition(.scale(scale: 0.1, anchor: previewAnchor).combined(with: .opacity))
+                }
             }
         }
         .animation(.spring(duration: 0.35), value: previewImage != nil)

@@ -56,30 +56,6 @@ private struct UserBubble: View {
     }
 }
 
-// MARK: - Full-screen image preview
-struct ImagePreview: View {
-    let image: UIImage
-    let onDismiss: () -> Void
-
-    var body: some View {
-        ZStack(alignment: .topTrailing) {
-            Color.black.ignoresSafeArea()
-                .onTapGesture { onDismiss() }
-            Image(uiImage: image)
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .allowsHitTesting(false)
-            Button { onDismiss() } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.title)
-                    .foregroundStyle(.white, Color(uiColor: .systemGray3))
-                    .padding()
-            }
-        }
-    }
-}
-
 // MARK: - Routes to the correct card view
 private struct AICardView: View {
     let card: AICard
