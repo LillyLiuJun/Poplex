@@ -1,6 +1,6 @@
 // Supabase Edge Function: get-materials
 // 读取 materials 表的场景素材，供 Tab2 展示用。
-// 使用 service role key 访问 DB，绕开 anon key 直连 PostgREST 的权限问题。
+// 切片 C：从用户 JWT 解析 auth.uid()，只返回该用户自己的素材（user_id 过滤）。
 
 const SUPABASE_URL     = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SVC_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -17,6 +17,25 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+async function getAuthUserId(req: Request): Promise<string | null> {
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader || !SUPABASE_URL || !SUPABASE_SVC_KEY) return null;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      headers: {
+        "Authorization": authHeader,
+        "apikey": SUPABASE_SVC_KEY,
+      },
+    });
+    if (!res.ok) return null;
+    const user = await res.json();
+    return typeof user?.id === "string" ? user.id : null;
+  } catch (e) {
+    console.error("getAuthUserId failed:", e);
+    return null;
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -26,10 +45,16 @@ Deno.serve(async (req) => {
     return json({ error: "missing_config" }, 500);
   }
 
+  const userId = await getAuthUserId(req);
+  if (!userId) {
+    return json({ error: "unauthorized" }, 401);
+  }
+
   try {
     const url = new URL(`${SUPABASE_URL}/rest/v1/materials`);
     url.searchParams.set("select", "*");
     url.searchParams.set("material_type", "eq.scene");
+    url.searchParams.set("user_id", `eq.${userId}`);
     url.searchParams.set("deleted_at", "is.null");
     url.searchParams.set("order", "created_at.desc");
 
