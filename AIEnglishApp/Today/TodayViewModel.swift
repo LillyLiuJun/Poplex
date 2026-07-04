@@ -1,10 +1,11 @@
 import Foundation
+import UIKit
 
 @Observable
 final class TodayViewModel {
     var entries: [TimelineEntry] = []
     var isLoading = false
-    var errorMessage: String?
+    var pendingImage: UIImage?
 
     private let service: AIServicing
 
@@ -14,18 +15,28 @@ final class TodayViewModel {
 
     func send(_ text: String) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        let image = pendingImage
+        guard !trimmed.isEmpty || image != nil else { return }
 
-        entries.append(TimelineEntry.userBubble(text: trimmed))
+        let textToSend: String? = trimmed.isEmpty ? nil : trimmed
+        entries.append(TimelineEntry.userBubble(text: textToSend, image: image))
+        pendingImage = nil
+
+        let loadingEntry = TimelineEntry.aiLoading()
+        entries.append(loadingEntry)
         isLoading = true
-        errorMessage = nil
 
         do {
-            let envelope = try await service.generate(text: trimmed)
-            entries.append(TimelineEntry.aiCard(envelope.card))
+            let envelope = try await service.generate(text: textToSend, image: image)
+            replace(loadingEntry.id, with: .aiCard(envelope.card))
         } catch {
-            errorMessage = "生成失败，请重试"
+            replace(loadingEntry.id, with: .aiError(message: "Something went wrong. Please try again."))
         }
         isLoading = false
+    }
+
+    private func replace(_ id: UUID, with content: TimelineEntry.Content) {
+        guard let idx = entries.firstIndex(where: { $0.id == id }) else { return }
+        entries[idx] = TimelineEntry(id: id, createdAt: entries[idx].createdAt, content: content)
     }
 }

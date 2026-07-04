@@ -99,8 +99,9 @@ s3 card_content fields:
   scene_trigger       — warm follow-up question in English
 
 s4 card_content fields:
-  chinese_original    — the user's original Chinese sentence
-  native_translation  — natural English version
+  chinese_original    — the user's original Chinese sentence; null for pure image input (no text)
+  ai_scene_guess      — (string or null) a brief Chinese description of the scene you see in the photo; set only when chinese_original is null; null in all other cases
+  native_translation  — natural English version of the scene
   key_phrase          — (object or null) {phrase, note} for the most notable expression
   scene_trigger       — warm follow-up question in English
 
@@ -344,12 +345,19 @@ Deno.serve(async (req) => {
       return json({ error: "missing_input" }, 400);
     }
 
-    // Build Gemini parts: text or image (multimodal)
+    // Build Gemini parts: text only / image only / image + text
     let userParts: unknown[];
-    if (image_base64) {
+    if (image_base64 && !text) {
+      // Pure image: always s4, chinese_original null, ai_scene_guess set
       userParts = [
         { inline_data: { mime_type: mime_type ?? "image/jpeg", data: image_base64 } },
-        { text: "Describe the scene in this photo and generate an English learning card." },
+        { text: "The user sent only a photo. Generate an s4 card. Set chinese_original to null. Set ai_scene_guess to a concise Chinese description of what you see (e.g. \"一杯咖啡放在办公桌上\"). Fill native_translation, key_phrase, and scene_trigger based on the scene." },
+      ];
+    } else if (image_base64 && text) {
+      // Image + text: classify by text, image is context
+      userParts = [
+        { inline_data: { mime_type: mime_type ?? "image/jpeg", data: image_base64 } },
+        { text: `The user sent this photo along with the following text. Use the text to classify and generate the card (s1/s2/s3/s4). The photo is additional context — let it inform the scene details in native_translation and scene_trigger. User text: ${text}` },
       ];
     } else {
       if (typeof text !== "string" || text.trim() === "") {
@@ -381,7 +389,9 @@ Deno.serve(async (req) => {
       insertMessage({
         role: "user",
         input_type: image_base64 ? "image" : "text",
-        user_content: image_base64 ? "[photo]" : (text ?? "").trim(),
+        user_content: image_base64
+        ? (text ? `[photo] ${text.trim()}` : "[photo]")
+        : (text ?? "").trim(),
         status: "delivered",
       }),
       insertMessage({
@@ -391,7 +401,7 @@ Deno.serve(async (req) => {
         extracted_concept: parsed.extracted_concept ?? null,
         status: "delivered",
       }),
-      saveMaterial(parsed.card_type ?? '', parsed.card_content ?? {}, text.trim()),
+      saveMaterial(parsed.card_type ?? '', parsed.card_content ?? {}, (text ?? '').trim()),
     ]);
 
     return json(parsed, 200);

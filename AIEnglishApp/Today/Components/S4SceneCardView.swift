@@ -5,9 +5,15 @@ struct S4SceneCardView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Space.paddingCard) {
-            Text(content.chineseOriginal)
-                .font(.callout)
-                .foregroundStyle(AppTheme.Color.textSecondary)
+            if let original = content.chineseOriginal {
+                Text(original)
+                    .font(.callout)
+                    .foregroundStyle(AppTheme.Color.textSecondary)
+            } else if let guess = content.aiSceneGuess {
+                Text(guess)
+                    .font(.callout)
+                    .foregroundStyle(AppTheme.Color.textSecondary)
+            }
 
             Text(content.nativeTranslation)
                 .font(.body.bold())

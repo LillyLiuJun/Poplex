@@ -86,15 +86,17 @@ struct TranslationContent: Decodable {
     }
 }
 
-// MARK: - s4 场景手帐（中文句子）
+// MARK: - s4 场景手帐（中文句子 或 纯图片）
 struct SceneContent: Decodable {
-    let chineseOriginal: String
+    let chineseOriginal: String?   // nil for pure image input
+    let aiSceneGuess: String?      // AI's scene description; set only when chineseOriginal is nil
     let nativeTranslation: String
     let keyPhrase: KeyPhrase?
     let sceneTrigger: String
 
     enum CodingKeys: String, CodingKey {
         case chineseOriginal   = "chinese_original"
+        case aiSceneGuess      = "ai_scene_guess"
         case nativeTranslation = "native_translation"
         case keyPhrase         = "key_phrase"
         case sceneTrigger      = "scene_trigger"

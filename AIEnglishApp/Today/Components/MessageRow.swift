@@ -5,8 +5,10 @@ struct TimelineRow: View {
 
     var body: some View {
         switch entry.content {
-        case .userBubble(let text):
-            UserBubble(text: text)
+        case .userBubble(let text, let image):
+            UserBubble(text: text, image: image)
+        case .aiLoading:
+            AILoadingCard()
         case .aiCard(let card):
             AICardView(card: card)
         case .aiError(let message):
@@ -15,18 +17,35 @@ struct TimelineRow: View {
     }
 }
 
-// MARK: - User bubble (right-aligned)
+// MARK: - User bubble (right-aligned, image above text)
 private struct UserBubble: View {
-    let text: String
+    let text: String?
+    let image: UIImage?
 
     var body: some View {
-        HStack {
-            Spacer(minLength: AppTheme.Space.paddingHero)
-            Text(text)
-                .padding(AppTheme.Space.paddingCard)
-                .background(AppTheme.Color.bubbleUserBg)
-                .foregroundStyle(AppTheme.Color.bubbleUserText)
-                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.bubble))
+        VStack(alignment: .trailing, spacing: AppTheme.Space.paddingS) {
+            if let img = image {
+                HStack {
+                    Spacer(minLength: AppTheme.Space.paddingHero)
+                    Image(uiImage: img)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 200)
+                        .clipped()
+                        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.bubble))
+                }
+            }
+            if let text, !text.isEmpty {
+                HStack {
+                    Spacer(minLength: AppTheme.Space.paddingHero)
+                    Text(text)
+                        .padding(AppTheme.Space.paddingCard)
+                        .background(AppTheme.Color.bubbleUserBg)
+                        .foregroundStyle(AppTheme.Color.bubbleUserText)
+                        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.bubble))
+                }
+            }
         }
     }
 }
@@ -44,6 +63,15 @@ private struct AICardView: View {
         case .chat(let c):  ChatBubbleView(content: c)
         case .error(let c): ErrorBanner(message: c.message)
         }
+    }
+}
+
+// MARK: - AI loading placeholder
+private struct AILoadingCard: View {
+    var body: some View {
+        ProgressView()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, AppTheme.Space.paddingCard)
     }
 }
 

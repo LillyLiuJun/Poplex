@@ -2,8 +2,7 @@ import Foundation
 import UIKit
 
 protocol AIServicing {
-    func generate(text: String) async throws -> AIEnvelope
-    func generate(image: UIImage) async throws -> AIEnvelope
+    func generate(text: String?, image: UIImage?) async throws -> AIEnvelope
 }
 
 enum AIServiceError: Error {
@@ -12,21 +11,32 @@ enum AIServiceError: Error {
     case imageEncodingFailed
 }
 
-struct LiveAIService: AIServicing {
-    func generate(text: String) async throws -> AIEnvelope {
-        let body = try JSONEncoder().encode(["text": text])
-        return try await call(body: body)
+private extension UIImage {
+    func compressedForUpload() -> UIImage {
+        let maxDimension: CGFloat = 1600
+        let scale = min(maxDimension / size.width, maxDimension / size.height, 1.0)
+        guard scale < 1.0 else { return self }
+        let newSize = CGSize(width: size.width * scale, height: size.height * scale)
+        let renderer = UIGraphicsImageRenderer(size: newSize)
+        return renderer.image { _ in draw(in: CGRect(origin: .zero, size: newSize)) }
     }
+}
 
-    func generate(image: UIImage) async throws -> AIEnvelope {
-        guard let jpeg = image.jpegData(compressionQuality: 0.7) else {
-            throw AIServiceError.imageEncodingFailed
+struct LiveAIService: AIServicing {
+    func generate(text: String?, image: UIImage?) async throws -> AIEnvelope {
+        var dict: [String: String] = [:]
+        if let text, !text.isEmpty {
+            dict["text"] = text
         }
-        let base64 = jpeg.base64EncodedString()
-        let body = try JSONEncoder().encode([
-            "image_base64": base64,
-            "mime_type": "image/jpeg"
-        ])
+        if let image {
+            let compressed = image.compressedForUpload()
+            guard let jpeg = compressed.jpegData(compressionQuality: 0.75) else {
+                throw AIServiceError.imageEncodingFailed
+            }
+            dict["image_base64"] = jpeg.base64EncodedString()
+            dict["mime_type"] = "image/jpeg"
+        }
+        let body = try JSONEncoder().encode(dict)
         return try await call(body: body)
     }
 
@@ -51,8 +61,7 @@ struct LiveAIService: AIServicing {
 }
 
 struct MockAIService: AIServicing {
-    func generate(text: String) async throws -> AIEnvelope { try await mockResult() }
-    func generate(image: UIImage) async throws -> AIEnvelope { try await mockResult() }
+    func generate(text: String?, image: UIImage?) async throws -> AIEnvelope { try await mockResult() }
 
     private func mockResult() async throws -> AIEnvelope {
         try await Task.sleep(for: .milliseconds(800))

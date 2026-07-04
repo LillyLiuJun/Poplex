@@ -5,11 +5,12 @@ struct TodayView: View {
     @State private var inputText = ""
 
     var body: some View {
+        @Bindable var vm = viewModel
         NavigationStack {
             timeline
                 .navigationTitle("Today")
                 .safeAreaInset(edge: .bottom) {
-                    InputBar(text: $inputText, isLoading: viewModel.isLoading) {
+                    InputBar(text: $inputText, image: $vm.pendingImage, isLoading: viewModel.isLoading) {
                         let toSend = inputText
                         inputText = ""
                         Task { await viewModel.send(toSend) }
@@ -27,18 +28,6 @@ struct TodayView: View {
                             .id(entry.id)
                     }
 
-                    if viewModel.isLoading {
-                        ProgressView()
-                            .frame(maxWidth: .infinity)
-                            .id("loading")
-                    }
-
-                    if let error = viewModel.errorMessage {
-                        Text(error)
-                            .font(.footnote)
-                            .foregroundStyle(AppTheme.Color.textSecondary)
-                            .frame(maxWidth: .infinity)
-                    }
                 }
                 .padding(AppTheme.Space.paddingPage)
             }

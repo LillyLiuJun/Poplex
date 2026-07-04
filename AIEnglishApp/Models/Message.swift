@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 struct TimelineEntry: Identifiable {
     let id: UUID
@@ -6,13 +7,18 @@ struct TimelineEntry: Identifiable {
     let content: Content
 
     enum Content {
-        case userBubble(text: String)
+        case userBubble(text: String?, image: UIImage?)
+        case aiLoading
         case aiCard(AICard)
         case aiError(message: String)
     }
 
-    static func userBubble(text: String) -> TimelineEntry {
-        TimelineEntry(id: UUID(), createdAt: .now, content: .userBubble(text: text))
+    static func userBubble(text: String?, image: UIImage?) -> TimelineEntry {
+        TimelineEntry(id: UUID(), createdAt: .now, content: .userBubble(text: text, image: image))
+    }
+
+    static func aiLoading() -> TimelineEntry {
+        TimelineEntry(id: UUID(), createdAt: .now, content: .aiLoading)
     }
 
     static func aiCard(_ card: AICard) -> TimelineEntry {
