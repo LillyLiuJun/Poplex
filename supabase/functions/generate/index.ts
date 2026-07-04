@@ -10,6 +10,7 @@ const GEMINI_API_KEY    = Deno.env.get("GEMINI_API_KEY") ?? "";
 const GEMINI_URL        = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
 const SUPABASE_URL      = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SVC_KEY  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+const STORAGE_BUCKET    = "material_images";
 
 const SYSTEM_PROMPT = `
 You are "English Buddy", a warm, natural English-learning companion for Chinese-speaking users.
@@ -134,6 +135,47 @@ const corsHeaders = {
 // DB helpers
 // ──────────────────────────────────────────────────────
 
+// 优先级3：把 base64 图片上传到私有 Storage bucket，返回存储路径（或 null 表示失败）。
+// 返回路径而非 URL——URL 由读取端（get-materials）按需签发，有效期 1 小时，不持久化。
+// 路径格式：{userId}/{随机uuid}.ext，按用户分文件夹，便于将来加 Storage RLS / 清理。
+async function uploadImage(
+  base64: string,
+  mimeType: string,
+  userId: string | null
+): Promise<string | null> {
+  if (!SUPABASE_URL || !SUPABASE_SVC_KEY) return null;
+  try {
+    const bytes  = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+    const ext    = mimeType.includes("png") ? "png" : "jpg";
+    const folder = userId ?? "anonymous";
+    const path   = `${folder}/${crypto.randomUUID()}.${ext}`;
+
+    const res = await fetch(
+      `${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}/${path}`,
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${SUPABASE_SVC_KEY}`,
+          "apikey": SUPABASE_SVC_KEY,   // API Gateway 要求：识别项目用，缺少会在网关层被拒
+          "Content-Type": mimeType,
+          "x-upsert": "true",
+        },
+        body: bytes,
+      }
+    );
+    if (!res.ok) {
+      console.error("[uploadImage] failed:", res.status, await res.text());
+      return null;
+    }
+    console.log(`[uploadImage] ok path=${path}`);
+    // 返回路径，不返回 URL（私有 bucket 无公开 URL；签名 URL 由 get-materials 按需签发）
+    return path;
+  } catch (e) {
+    console.error("[uploadImage] error:", e);
+    return null;
+  }
+}
+
 // 从请求的 Authorization 头解析出登录用户 id（切片 B：user_id 数据隔离）。
 // 关键：走 /auth/v1/user 端点让 Supabase【验证 JWT 签名与过期】后返回 user，
 // 而不是自己 base64 解码 token——后者不验签，任何人伪造一个 sub 就能冒充他人写库。
@@ -157,7 +199,11 @@ async function getAuthUserId(req: Request): Promise<string | null> {
   }
 }
 
-async function insertMessage(row: Record<string, unknown>, userId: string | null): Promise<void> {
+async function insertMessage(
+  row: Record<string, unknown>,
+  userId: string | null,
+  imageUrl: string | null = null
+): Promise<void> {
   if (!SUPABASE_URL || !SUPABASE_SVC_KEY) return;
   try {
     await fetch(`${SUPABASE_URL}/rest/v1/messages`, {
@@ -168,7 +214,7 @@ async function insertMessage(row: Record<string, unknown>, userId: string | null
         "apikey": SUPABASE_SVC_KEY,
         "Prefer": "return=minimal",
       },
-      body: JSON.stringify({ ...row, user_id: userId }),
+      body: JSON.stringify({ ...row, user_id: userId, image_url: imageUrl }),
     });
   } catch (e) {
     console.error("insertMessage failed:", e);
@@ -183,6 +229,7 @@ interface SceneRawContent {
   native_english: string;
   chinese_original: string;
   key_phrases: { phrase: string; note: string }[];
+  source_image_path: string | null;  // 优先级3：来源图片在私有 Storage 的路径（非 URL）
 }
 
 interface VocabRawContent {
@@ -197,7 +244,8 @@ interface VocabRawContent {
 function buildRawContent(
   cardType: string,
   content: Record<string, unknown>,
-  userText: string
+  userText: string,
+  sourceImageUrl: string | null
 ): { materialType: 'scene' | 'vocabulary'; rawContent: SceneRawContent | VocabRawContent } | null {
   switch (cardType) {
     case 's1': {
@@ -222,6 +270,7 @@ function buildRawContent(
           native_english: String(content.native_polish ?? userText),
           chinese_original: String(content.chinese_translation ?? ''),
           key_phrases: kp ? [kp] : [],
+          source_image_path: sourceImageUrl,
         },
       };
     }
@@ -247,6 +296,7 @@ function buildRawContent(
           native_english: String(content.native_translation ?? ''),
           chinese_original: String(content.chinese_original ?? ''),
           key_phrases: kp ? [kp] : [],
+          source_image_path: sourceImageUrl,
         },
       };
     }
@@ -281,11 +331,12 @@ async function saveMaterial(
   cardType: string,
   cardContent: Record<string, unknown>,
   userText: string,
-  userId: string | null
+  userId: string | null,
+  sourceImageUrl: string | null
 ): Promise<void> {
   if (!SUPABASE_URL || !SUPABASE_SVC_KEY) return;
 
-  const extracted = buildRawContent(cardType, cardContent, userText);
+  const extracted = buildRawContent(cardType, cardContent, userText, sourceImageUrl);
   if (!extracted) return;
 
   const { materialType, rawContent } = extracted;
@@ -379,16 +430,14 @@ Deno.serve(async (req) => {
       return json({ error: "missing_input" }, 400);
     }
 
-    // Build Gemini parts: text only / image only / image + text
+    // Build Gemini parts（同步，不阻塞）
     let userParts: unknown[];
     if (image_base64 && !text) {
-      // Pure image: always s4, chinese_original null, ai_scene_guess set
       userParts = [
         { inline_data: { mime_type: mime_type ?? "image/jpeg", data: image_base64 } },
         { text: "The user sent only a photo. Generate an s4 card. Set chinese_original to null. Set ai_scene_guess to a concise Chinese description of what you see (e.g. \"一杯咖啡放在办公桌上\"). Fill native_translation, key_phrase, and scene_trigger based on the scene." },
       ];
     } else if (image_base64 && text) {
-      // Image + text: classify by text, image is context
       userParts = [
         { inline_data: { mime_type: mime_type ?? "image/jpeg", data: image_base64 } },
         { text: `The user sent this photo along with the following text. Use the text to classify and generate the card (s1/s2/s3/s4). The photo is additional context — let it inform the scene details in native_translation and scene_trigger. User text: ${text}` },
@@ -400,15 +449,22 @@ Deno.serve(async (req) => {
       userParts = [{ text }];
     }
 
-    const geminiRes = await fetch(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-        contents: [{ role: "user", parts: userParts }],
-        generationConfig: { responseMimeType: "application/json" },
+    // 优先级3：Storage 上传与 Gemini 调用并行——图片消息不比纯文字消息慢。
+    // 上传失败时 sourceImagePath=null，素材正常保存只是没有图片，不阻塞主流程。
+    const [geminiRes, sourceImagePath] = await Promise.all([
+      fetch(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+          contents: [{ role: "user", parts: userParts }],
+          generationConfig: { responseMimeType: "application/json" },
+        }),
       }),
-    });
+      image_base64
+        ? uploadImage(image_base64, mime_type ?? "image/jpeg", userId)
+        : Promise.resolve(null),
+    ]);
 
     if (!geminiRes.ok) {
       return json({ error: "gemini_failed", status: geminiRes.status }, 502);
@@ -427,15 +483,15 @@ Deno.serve(async (req) => {
         ? (text ? `[photo] ${text.trim()}` : "[photo]")
         : (text ?? "").trim(),
         status: "delivered",
-      }, userId),
+      }, userId, sourceImagePath),
       insertMessage({
         role: "assistant",
         card_type: parsed.card_type ?? null,
         card_content: parsed.card_content ?? null,
         extracted_concept: parsed.extracted_concept ?? null,
         status: "delivered",
-      }, userId),
-      saveMaterial(parsed.card_type ?? '', parsed.card_content ?? {}, (text ?? '').trim(), userId),
+      }, userId, null),
+      saveMaterial(parsed.card_type ?? '', parsed.card_content ?? {}, (text ?? '').trim(), userId, sourceImagePath),
     ]);
 
     return json(parsed, 200);

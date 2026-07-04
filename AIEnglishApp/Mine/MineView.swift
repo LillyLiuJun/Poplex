@@ -104,7 +104,7 @@ struct MineView: View {
                                 })
                             } label: { EmptyView() }
                                 .opacity(0)
-                            SceneCardRow(scene: scene)
+                            SceneCardRow(materialId: material.id, scene: scene)
                         }
                         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                             Button(role: .destructive) {

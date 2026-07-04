@@ -48,11 +48,17 @@ struct SceneMaterial: Decodable {
     let nativeEnglish: String        // s4: native_translation; s2: native_polish ?? user sentence
     let chineseOriginal: String      // s4: chinese_original; s2: chinese_translation
     let keyPhrases: [KeyPhraseMaterial]
+    let sourceImagePath: String?     // DB 存的稳定路径（用作图片缓存 key）
+    let sourceImageUrl: String?      // get-materials 现签的 1h 签名 URL（用于实际下载）
+    // NOTE(Realtime): Realtime 推送来的素材只有 sourceImagePath，无 sourceImageUrl。
+    //   实现 Realtime 时需单独为带路径的素材请求签名 URL。
 
     enum CodingKeys: String, CodingKey {
         case nativeEnglish   = "native_english"
         case chineseOriginal = "chinese_original"
         case keyPhrases      = "key_phrases"
+        case sourceImagePath = "source_image_path"
+        case sourceImageUrl  = "source_image_url"
     }
 }
 

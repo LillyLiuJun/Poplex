@@ -20,6 +20,20 @@ private struct DetailContent: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: AppTheme.Space.paddingCard) {
+                // 来源图片（仅图片素材有）；用路径当缓存 key 避免重签 URL 触发重新下载
+                if let signedUrl = scene.sourceImageUrl, let imagePath = scene.sourceImagePath {
+                    CachedRemoteImage(
+                        signedUrl: signedUrl,
+                        stableKey: imagePath,
+                        placeholder: RoundedRectangle(cornerRadius: AppTheme.Radius.card)
+                            .fill(AppTheme.Color.cardBg)
+                            .overlay(Image(systemName: "photo").font(.largeTitle).foregroundStyle(AppTheme.Color.textSecondary))
+                    )
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 200)
+                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
+                }
+
                 // 情境标签 + 时间
                 HStack {
                     if let cat = material.sceneCategory {
