@@ -44,8 +44,7 @@ struct LiveAIService: AIServicing {
         var request = URLRequest(url: SupabaseConfig.generateFunctionURL)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(SupabaseConfig.anonKey)", forHTTPHeaderField: "Authorization")
-        request.setValue(SupabaseConfig.anonKey, forHTTPHeaderField: "apikey")
+        try await SupabaseManager.setAuthHeaders(on: &request)
         request.httpBody = body
 
         let (data, response) = try await URLSession.shared.data(for: request)

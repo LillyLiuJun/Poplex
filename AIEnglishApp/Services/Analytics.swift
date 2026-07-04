@@ -13,8 +13,8 @@ enum Analytics {
         var req = URLRequest(url: SupabaseConfig.logEventFunctionURL)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.setValue("Bearer \(SupabaseConfig.anonKey)", forHTTPHeaderField: "Authorization")
-        req.setValue(SupabaseConfig.anonKey, forHTTPHeaderField: "apikey")
+        // 埋点是尽力而为：拿不到 token 就直接放弃，不阻塞、不报错。
+        try? await SupabaseManager.setAuthHeaders(on: &req)
         req.httpBody = body
         _ = try? await URLSession.shared.data(for: req)
     }

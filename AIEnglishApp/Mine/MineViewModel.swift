@@ -62,8 +62,7 @@ final class MineViewModel {
 
     private func fetchVocabCount() async throws -> Int {
         var req = URLRequest(url: SupabaseConfig.getVocabsFunctionURL)
-        req.setValue("Bearer \(SupabaseConfig.anonKey)", forHTTPHeaderField: "Authorization")
-        req.setValue(SupabaseConfig.anonKey, forHTTPHeaderField: "apikey")
+        try await SupabaseManager.setAuthHeaders(on: &req)
         let (data, _) = try await URLSession.shared.data(for: req)
         let array = try JSONSerialization.jsonObject(with: data) as? [Any]
         return array?.count ?? 0
@@ -100,16 +99,14 @@ final class MineViewModel {
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.setValue("Bearer \(SupabaseConfig.anonKey)", forHTTPHeaderField: "Authorization")
-        req.setValue(SupabaseConfig.anonKey, forHTTPHeaderField: "apikey")
+        try? await SupabaseManager.setAuthHeaders(on: &req)
         req.httpBody = try? JSONEncoder().encode(["id": id.uuidString])
         _ = try? await URLSession.shared.data(for: req)
     }
 
     private func fetchScenes() async throws -> [Material] {
         var req = URLRequest(url: SupabaseConfig.getMaterialsFunctionURL)
-        req.setValue("Bearer \(SupabaseConfig.anonKey)", forHTTPHeaderField: "Authorization")
-        req.setValue(SupabaseConfig.anonKey,             forHTTPHeaderField: "apikey")
+        try await SupabaseManager.setAuthHeaders(on: &req)
 
         let (data, response) = try await URLSession.shared.data(for: req)
         if let http = response as? HTTPURLResponse {

@@ -134,6 +134,29 @@ const corsHeaders = {
 // DB helpers
 // ──────────────────────────────────────────────────────
 
+// 从请求的 Authorization 头解析出登录用户 id（切片 B：user_id 数据隔离）。
+// 关键：走 /auth/v1/user 端点让 Supabase【验证 JWT 签名与过期】后返回 user，
+// 而不是自己 base64 解码 token——后者不验签，任何人伪造一个 sub 就能冒充他人写库。
+// 拿不到（未登录 / token 失效）时返回 null，由调用方决定如何降级。
+async function getAuthUserId(req: Request): Promise<string | null> {
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader || !SUPABASE_URL || !SUPABASE_SVC_KEY) return null;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      headers: {
+        "Authorization": authHeader,   // 用户 JWT，交给 GoTrue 验签
+        "apikey": SUPABASE_SVC_KEY,    // apikey 头只用于标识本项目
+      },
+    });
+    if (!res.ok) return null;
+    const user = await res.json();
+    return typeof user?.id === "string" ? user.id : null;
+  } catch (e) {
+    console.error("getAuthUserId failed:", e);
+    return null;
+  }
+}
+
 async function insertMessage(row: Record<string, unknown>): Promise<void> {
   if (!SUPABASE_URL || !SUPABASE_SVC_KEY) return;
   try {
@@ -257,7 +280,8 @@ async function classifySceneCategory(nativeEnglish: string, chineseOriginal: str
 async function saveMaterial(
   cardType: string,
   cardContent: Record<string, unknown>,
-  userText: string
+  userText: string,
+  userId: string | null
 ): Promise<void> {
   if (!SUPABASE_URL || !SUPABASE_SVC_KEY) return;
 
@@ -265,6 +289,12 @@ async function saveMaterial(
   if (!extracted) return;
 
   const { materialType, rawContent } = extracted;
+
+  // 切片 B：素材必须归属到登录用户；拿不到 uid 说明鉴权没生效，
+  // 记录告警但不阻塞生成体验（脏数据由切片 C 的回填/RLS 兜底）。
+  if (!userId) {
+    console.warn('[saveMaterial] no userId from JWT — material will be written with null user_id');
+  }
 
   try {
     // Stage 1: INSERT — vocabulary直接 categorized，scene 先 pending
@@ -277,6 +307,7 @@ async function saveMaterial(
         'Prefer': 'return=representation',
       },
       body: JSON.stringify({
+        user_id: userId,
         material_type: materialType,
         status: materialType === 'vocabulary' ? 'categorized' : 'pending',
         raw_content: rawContent,
@@ -338,6 +369,9 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // 切片 B：从用户 JWT 解析出 uid，稍后写进 materials.user_id 完成数据归属。
+    const userId = await getAuthUserId(req);
+
     const body = await req.json();
     const { text, image_base64, mime_type } = body;
 
@@ -401,7 +435,7 @@ Deno.serve(async (req) => {
         extracted_concept: parsed.extracted_concept ?? null,
         status: "delivered",
       }),
-      saveMaterial(parsed.card_type ?? '', parsed.card_content ?? {}, (text ?? '').trim()),
+      saveMaterial(parsed.card_type ?? '', parsed.card_content ?? {}, (text ?? '').trim(), userId),
     ]);
 
     return json(parsed, 200);

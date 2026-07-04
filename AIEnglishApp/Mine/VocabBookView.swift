@@ -95,8 +95,7 @@ struct VocabBookView: View {
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.setValue("Bearer \(SupabaseConfig.anonKey)", forHTTPHeaderField: "Authorization")
-        req.setValue(SupabaseConfig.anonKey, forHTTPHeaderField: "apikey")
+        try? await SupabaseManager.setAuthHeaders(on: &req)
         req.httpBody = try? JSONEncoder().encode(["id": id.uuidString])
         _ = try? await URLSession.shared.data(for: req)
     }
@@ -114,8 +113,7 @@ struct VocabBookView: View {
 
     private func fetchVocabs() async throws -> [Material] {
         var req = URLRequest(url: SupabaseConfig.getVocabsFunctionURL)
-        req.setValue("Bearer \(SupabaseConfig.anonKey)", forHTTPHeaderField: "Authorization")
-        req.setValue(SupabaseConfig.anonKey, forHTTPHeaderField: "apikey")
+        try await SupabaseManager.setAuthHeaders(on: &req)
 
         let (data, _) = try await URLSession.shared.data(for: req)
 
