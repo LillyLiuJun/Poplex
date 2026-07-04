@@ -2,7 +2,7 @@ import SwiftUI
 
 struct TimelineRow: View {
     let entry: TimelineEntry
-    var onImageTap: ((UIImage) -> Void)? = nil
+    var onImageTap: ((UIImage, CGRect) -> Void)? = nil
 
     var body: some View {
         switch entry.content {
@@ -22,8 +22,9 @@ struct TimelineRow: View {
 private struct UserBubble: View {
     let text: String?
     let image: UIImage?
-    var onImageTap: ((UIImage) -> Void)?
+    var onImageTap: ((UIImage, CGRect) -> Void)?
 
+    @State private var imageFrame: CGRect = .zero
     private let imageSize = UIScreen.main.bounds.width * 0.3
 
     var body: some View {
@@ -37,7 +38,8 @@ private struct UserBubble: View {
                         .frame(width: imageSize, height: imageSize)
                         .clipped()
                         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.bubble))
-                        .onTapGesture { onImageTap?(img) }
+                        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { imageFrame = $0 }
+                        .onTapGesture { onImageTap?(img, imageFrame) }
                 }
             }
             if let text, !text.isEmpty {

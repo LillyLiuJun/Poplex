@@ -4,6 +4,7 @@ struct TodayView: View {
     @State private var viewModel = TodayViewModel(service: LiveAIService())
     @State private var inputText = ""
     @State private var previewImage: UIImage?
+    @State private var previewAnchor: UnitPoint = .center
 
     var body: some View {
         @Bindable var vm = viewModel
@@ -23,7 +24,7 @@ struct TodayView: View {
                 ImagePreview(image: img) {
                     withAnimation(.spring(duration: 0.3)) { previewImage = nil }
                 }
-                .transition(.scale(scale: 0.1, anchor: .topTrailing).combined(with: .opacity))
+                .transition(.scale(scale: 0.1, anchor: previewAnchor).combined(with: .opacity))
             }
         }
         .animation(.spring(duration: 0.35), value: previewImage != nil)
@@ -34,7 +35,12 @@ struct TodayView: View {
             ScrollView {
                 LazyVStack(spacing: AppTheme.Space.paddingCard) {
                     ForEach(viewModel.entries) { entry in
-                        TimelineRow(entry: entry, onImageTap: { img in
+                        TimelineRow(entry: entry, onImageTap: { img, frame in
+                            let screen = UIScreen.main.bounds.size
+                            previewAnchor = UnitPoint(
+                                x: frame.midX / screen.width,
+                                y: frame.midY / screen.height
+                            )
                             withAnimation(.spring(duration: 0.35)) { previewImage = img }
                         })
                         .id(entry.id)
