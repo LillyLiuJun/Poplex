@@ -157,7 +157,7 @@ async function getAuthUserId(req: Request): Promise<string | null> {
   }
 }
 
-async function insertMessage(row: Record<string, unknown>): Promise<void> {
+async function insertMessage(row: Record<string, unknown>, userId: string | null): Promise<void> {
   if (!SUPABASE_URL || !SUPABASE_SVC_KEY) return;
   try {
     await fetch(`${SUPABASE_URL}/rest/v1/messages`, {
@@ -168,7 +168,7 @@ async function insertMessage(row: Record<string, unknown>): Promise<void> {
         "apikey": SUPABASE_SVC_KEY,
         "Prefer": "return=minimal",
       },
-      body: JSON.stringify(row),
+      body: JSON.stringify({ ...row, user_id: userId }),
     });
   } catch (e) {
     console.error("insertMessage failed:", e);
@@ -427,14 +427,14 @@ Deno.serve(async (req) => {
         ? (text ? `[photo] ${text.trim()}` : "[photo]")
         : (text ?? "").trim(),
         status: "delivered",
-      }),
+      }, userId),
       insertMessage({
         role: "assistant",
         card_type: parsed.card_type ?? null,
         card_content: parsed.card_content ?? null,
         extracted_concept: parsed.extracted_concept ?? null,
         status: "delivered",
-      }),
+      }, userId),
       saveMaterial(parsed.card_type ?? '', parsed.card_content ?? {}, (text ?? '').trim(), userId),
     ]);
 
