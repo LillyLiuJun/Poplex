@@ -2,11 +2,12 @@ import SwiftUI
 
 struct TimelineRow: View {
     let entry: TimelineEntry
+    var onImageTap: ((UIImage) -> Void)? = nil
 
     var body: some View {
         switch entry.content {
         case .userBubble(let text, let image):
-            UserBubble(text: text, image: image)
+            UserBubble(text: text, image: image, onImageTap: onImageTap)
         case .aiLoading:
             AILoadingCard()
         case .aiCard(let card):
@@ -21,19 +22,22 @@ struct TimelineRow: View {
 private struct UserBubble: View {
     let text: String?
     let image: UIImage?
+    var onImageTap: ((UIImage) -> Void)?
+
+    private let imageSize = UIScreen.main.bounds.width * 0.3
 
     var body: some View {
         VStack(alignment: .trailing, spacing: AppTheme.Space.paddingS) {
             if let img = image {
                 HStack {
-                    Spacer(minLength: AppTheme.Space.paddingHero)
+                    Spacer()
                     Image(uiImage: img)
                         .resizable()
                         .aspectRatio(contentMode: .fill)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 200)
+                        .frame(width: imageSize, height: imageSize)
                         .clipped()
                         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.bubble))
+                        .onTapGesture { onImageTap?(img) }
                 }
             }
             if let text, !text.isEmpty {
@@ -45,6 +49,30 @@ private struct UserBubble: View {
                         .foregroundStyle(AppTheme.Color.bubbleUserText)
                         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.bubble))
                 }
+            }
+        }
+    }
+}
+
+// MARK: - Full-screen image preview
+struct ImagePreview: View {
+    let image: UIImage
+    let onDismiss: () -> Void
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Color.black.ignoresSafeArea()
+                .onTapGesture { onDismiss() }
+            Image(uiImage: image)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .allowsHitTesting(false)
+            Button { onDismiss() } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.title)
+                    .foregroundStyle(.white, Color(uiColor: .systemGray3))
+                    .padding()
             }
         }
     }
