@@ -50,6 +50,12 @@ struct TodayView: View {
             }
         }
         .animation(.spring(duration: 0.35), value: previewImage != nil)
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
+            viewModel.session.didEnterBackground()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+            viewModel.session.didBecomeActive()
+        }
     }
 
     private var timeline: some View {

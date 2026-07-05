@@ -6,6 +6,7 @@ final class TodayViewModel {
     var entries: [TimelineEntry] = []
     var isLoading = false
     var pendingImage: UIImage?
+    let session = ConversationSession()
 
     private let service: AIServicing
 
@@ -27,8 +28,21 @@ final class TodayViewModel {
         isLoading = true
 
         do {
-            let envelope = try await service.generate(text: textToSend, image: image)
+            let envelope = try await service.generate(
+                text: textToSend,
+                image: image,
+                context: session.currentContext
+            )
             replace(loadingEntry.id, with: .aiCard(envelope.card))
+            // 更新上下文：纯图片时 userContent 用 "[photo]"，其余用原文
+            let userContent = textToSend ?? (image != nil ? "[photo]" : nil)
+            if let userContent {
+                session.onAIResponseReceived(
+                    userContent: userContent,
+                    cardType: envelope.card.cardTypeName,
+                    cardContent: envelope.card.contextRepresentation
+                )
+            }
         } catch {
             replace(loadingEntry.id, with: .aiError(message: "Something went wrong. Please try again."))
         }

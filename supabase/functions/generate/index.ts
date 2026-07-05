@@ -118,6 +118,13 @@ TONE
 - Keep responses concise and practical
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MULTI-TURN CONTEXT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+When prior conversation turns are provided, use them as context if the current input is related.
+If the current input is clearly a new unrelated topic, ignore the prior context and treat it as a fresh input.
+Always apply the card selection rules independently to the current input.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Return ONLY valid JSON with EXACTLY this top-level shape (no markdown, no extra text):
 {
   "card_type": "s1" | "s2" | "s3" | "s4" | "chat" | "error",
@@ -424,13 +431,18 @@ Deno.serve(async (req) => {
     const userId = await getAuthUserId(req);
 
     const body = await req.json();
-    const { text, image_base64, mime_type } = body;
+    const { text, image_base64, mime_type, context } = body as {
+      text?: string;
+      image_base64?: string;
+      mime_type?: string;
+      context?: { user: string; card_content: Record<string, unknown> } | null;
+    };
 
     if (!text && !image_base64) {
       return json({ error: "missing_input" }, 400);
     }
 
-    // Build Gemini parts（同步，不阻塞）
+    // Build current-turn Gemini parts（同步，不阻塞）
     let userParts: unknown[];
     if (image_base64 && !text) {
       userParts = [
@@ -449,6 +461,15 @@ Deno.serve(async (req) => {
       userParts = [{ text }];
     }
 
+    // 多轮对话：客户端传来上一轮 (user, card_content)，注入为 Gemini history
+    // Gemini 用 "model" role（OpenAI 用 "assistant"），此处对应
+    const contents: Array<{ role: string; parts: unknown[] }> = [];
+    if (context?.user && context?.card_content) {
+      contents.push({ role: "user",  parts: [{ text: context.user }] });
+      contents.push({ role: "model", parts: [{ text: JSON.stringify(context.card_content) }] });
+    }
+    contents.push({ role: "user", parts: userParts });
+
     // 优先级3：Storage 上传与 Gemini 调用并行——图片消息不比纯文字消息慢。
     // 上传失败时 sourceImagePath=null，素材正常保存只是没有图片，不阻塞主流程。
     const [geminiRes, sourceImagePath] = await Promise.all([
@@ -457,7 +478,7 @@ Deno.serve(async (req) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-          contents: [{ role: "user", parts: userParts }],
+          contents,
           generationConfig: { responseMimeType: "application/json" },
         }),
       }),

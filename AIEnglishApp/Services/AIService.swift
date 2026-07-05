@@ -2,13 +2,14 @@ import Foundation
 import UIKit
 
 protocol AIServicing {
-    func generate(text: String?, image: UIImage?) async throws -> AIEnvelope
+    func generate(text: String?, image: UIImage?, context: ContextTurn?) async throws -> AIEnvelope
 }
 
 enum AIServiceError: Error {
     case requestFailed
     case decodingFailed
     case imageEncodingFailed
+    case bodySerializationFailed
 }
 
 private extension UIImage {
@@ -23,21 +24,32 @@ private extension UIImage {
 }
 
 struct LiveAIService: AIServicing {
-    func generate(text: String?, image: UIImage?) async throws -> AIEnvelope {
-        var dict: [String: String] = [:]
+    func generate(text: String?, image: UIImage?, context: ContextTurn?) async throws -> AIEnvelope {
+        var body: [String: Any] = [:]
         if let text, !text.isEmpty {
-            dict["text"] = text
+            body["text"] = text
         }
         if let image {
             let compressed = image.compressedForUpload()
             guard let jpeg = compressed.jpegData(compressionQuality: 0.75) else {
                 throw AIServiceError.imageEncodingFailed
             }
-            dict["image_base64"] = jpeg.base64EncodedString()
-            dict["mime_type"] = "image/jpeg"
+            body["image_base64"] = jpeg.base64EncodedString()
+            body["mime_type"] = "image/jpeg"
         }
-        let body = try JSONEncoder().encode(dict)
-        return try await call(body: body)
+        if let ctx = context {
+            // Include card_type inside card_content so the AI knows what kind of card it gave
+            var cardWithType = ctx.cardContent
+            cardWithType["card_type"] = ctx.cardType
+            body["context"] = [
+                "user": ctx.userContent,
+                "card_content": cardWithType,
+            ]
+        }
+        guard let bodyData = try? JSONSerialization.data(withJSONObject: body) else {
+            throw AIServiceError.bodySerializationFailed
+        }
+        return try await call(body: bodyData)
     }
 
     private func call(body: Data) async throws -> AIEnvelope {
@@ -60,7 +72,9 @@ struct LiveAIService: AIServicing {
 }
 
 struct MockAIService: AIServicing {
-    func generate(text: String?, image: UIImage?) async throws -> AIEnvelope { try await mockResult() }
+    func generate(text: String?, image: UIImage?, context: ContextTurn?) async throws -> AIEnvelope {
+        try await mockResult()
+    }
 
     private func mockResult() async throws -> AIEnvelope {
         try await Task.sleep(for: .milliseconds(800))

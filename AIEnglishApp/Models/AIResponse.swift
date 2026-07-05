@@ -127,6 +127,63 @@ struct ErrorContent: Decodable {
 
 // MARK: - AICard helpers
 extension AICard {
+    var cardTypeName: String {
+        switch self {
+        case .s1: return "s1"
+        case .s2: return "s2"
+        case .s3: return "s3"
+        case .s4: return "s4"
+        case .chat: return "chat"
+        case .error: return "error"
+        }
+    }
+
+    // Re-encodes the typed card back to [String: Any] so it can be sent as
+    // raw JSON context in the next generate request (multi-turn design).
+    var contextRepresentation: [String: Any] {
+        switch self {
+        case .s1(let c):
+            return [
+                "word": c.word, "phonetic": c.phonetic, "pos": c.pos,
+                "definition": c.definition,
+                "examples": c.examples.map { ["en": $0.en, "zh": $0.zh] },
+                "scene_trigger": c.sceneTrigger,
+            ]
+        case .s2(let c):
+            var d: [String: Any] = [
+                "chinese_translation": c.chineseTranslation,
+                "scene_trigger": c.sceneTrigger,
+            ]
+            if let v = c.grammarAnalysis { d["grammar_analysis"] = v }
+            if let v = c.nativePolish    { d["native_polish"] = v }
+            if let kp = c.keyPhrase      { d["key_phrase"] = ["phrase": kp.phrase, "note": kp.note] }
+            return d
+        case .s3(let c):
+            return [
+                "chinese_concept": c.chineseConcept,
+                "english_translation": c.englishTranslation,
+                "phonetic": c.phonetic, "pos": c.pos,
+                "example": ["en": c.example.en, "zh": c.example.zh],
+                "scene_trigger": c.sceneTrigger,
+            ]
+        case .s4(let c):
+            var d: [String: Any] = [
+                "native_translation": c.nativeTranslation,
+                "scene_trigger": c.sceneTrigger,
+            ]
+            if let v = c.chineseOriginal { d["chinese_original"] = v }
+            if let v = c.aiSceneGuess   { d["ai_scene_guess"] = v }
+            if let kp = c.keyPhrase     { d["key_phrase"] = ["phrase": kp.phrase, "note": kp.note] }
+            return d
+        case .chat(let c):
+            var d: [String: Any] = ["text": c.text]
+            if let v = c.sceneConnection { d["scene_connection"] = v }
+            return d
+        case .error(let c):
+            return ["error_type": c.errorType, "message": c.message]
+        }
+    }
+
     /// The primary English expression to display (e.g. on Screen 5 or TTS).
     var primaryEnglish: String {
         switch self {
