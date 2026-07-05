@@ -11,6 +11,7 @@ struct TodayView: View {
         NavigationStack {
             timeline
                 .navigationTitle("Today")
+                .task { await viewModel.loadHistory() }
                 .safeAreaInset(edge: .bottom) {
                     InputBar(text: $inputText, image: $vm.pendingImage, isLoading: viewModel.isLoading) {
                         let toSend = inputText

@@ -14,6 +14,8 @@ struct TimelineRow: View {
             AICardView(card: card)
         case .aiError(let message):
             ErrorBanner(message: message)
+        case .dateSeparator(let label):
+            DateSeparatorView(label: label)
         }
     }
 }
@@ -91,5 +93,26 @@ struct ErrorBanner: View {
             .foregroundStyle(AppTheme.Color.textSecondary)
             .frame(maxWidth: .infinity, alignment: .center)
             .padding(AppTheme.Space.paddingCard)
+    }
+}
+
+// MARK: - Date separator
+private struct DateSeparatorView: View {
+    let label: String
+
+    var body: some View {
+        HStack(spacing: AppTheme.Space.paddingS) {
+            Rectangle()
+                .fill(AppTheme.Color.textSecondary.opacity(0.25))
+                .frame(height: 0.5)
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(AppTheme.Color.textSecondary)
+                .fixedSize()
+            Rectangle()
+                .fill(AppTheme.Color.textSecondary.opacity(0.25))
+                .frame(height: 0.5)
+        }
+        .padding(.vertical, AppTheme.Space.paddingS)
     }
 }

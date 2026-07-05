@@ -32,4 +32,8 @@ enum SupabaseConfig {
     static var logEventFunctionURL: URL {
         projectURL.appending(path: "functions/v1/log-event")
     }
+
+    static var messagesFunctionURL: URL {
+        projectURL.appending(path: "functions/v1/get-messages")
+    }
 }

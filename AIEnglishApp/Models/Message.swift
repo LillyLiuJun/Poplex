@@ -11,6 +11,7 @@ struct TimelineEntry: Identifiable {
         case aiLoading
         case aiCard(AICard)
         case aiError(message: String)
+        case dateSeparator(String)   // "Today" / "Yesterday" / "Jul 3"
     }
 
     static func userBubble(text: String?, image: UIImage?) -> TimelineEntry {
