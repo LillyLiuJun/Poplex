@@ -3,12 +3,14 @@ import SwiftUI
 struct ContentView: View {
     var body: some View {
         TabView {
-            Tab("Today", systemImage: "sun.max") {
-                TodayView()
-            }
-            Tab("Mine", systemImage: "person.crop.circle") {
-                MineView()
-            }
+            TodayView()
+                .tabItem {
+                    Label("Today", systemImage: "sun.max")
+                }
+            MineView()
+                .tabItem {
+                    Label("Mine", systemImage: "person.crop.circle")
+                }
         }
     }
 }
