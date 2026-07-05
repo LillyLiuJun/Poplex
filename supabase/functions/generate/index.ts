@@ -511,16 +511,18 @@ Deno.serve(async (req) => {
     const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
     const parsed = JSON.parse(raw);
 
-    // 写 messages 表 + 提取素材（并行，失败不影响主响应）
-    await Promise.all([
-      insertMessage({
-        role: "user",
-        input_type: image_base64 ? "image" : "text",
-        user_content: image_base64
+    // 用户消息必须先写入，确保 created_at 早于 assistant，loadHistory 按时间排序时顺序正确
+    await insertMessage({
+      role: "user",
+      input_type: image_base64 ? "image" : "text",
+      user_content: image_base64
         ? (text ? `[photo] ${text.trim()}` : "[photo]")
         : (text ?? "").trim(),
-        status: "delivered",
-      }, userId, sourceImagePath),
+      status: "delivered",
+    }, userId, sourceImagePath);
+
+    // assistant 消息和素材提取并行，失败不影响主响应
+    await Promise.all([
       insertMessage({
         role: "assistant",
         card_type: parsed.card_type ?? null,

@@ -48,6 +48,9 @@ final class TodayViewModel {
         }
 
         print("[TodayVM] loaded \(records.count) records → \(result.count) entries")
+        // 如果 send() 已经在运行（isLoading）或已添加过条目，说明用户在历史加载完成前就发了消息。
+        // 此时内存里的顺序是正确的，不能用数据库结果覆盖，否则会因 Promise.all 的时间戳竞争导致顺序错乱。
+        guard !isLoading, entries.isEmpty else { return }
         entries = result
     }
 
