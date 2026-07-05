@@ -22,7 +22,13 @@ final class TodayViewModel {
         isLoadingHistory = true
         defer { isLoadingHistory = false }
 
-        guard let records = try? await fetchMessageRecords() else { return }
+        let records: [MessageRecord]
+        do {
+            records = try await fetchMessageRecords()
+        } catch {
+            print("[TodayVM] loadHistory error:", error)
+            return
+        }
 
         var result: [TimelineEntry] = []
         var lastDayLabel: String?
@@ -41,6 +47,7 @@ final class TodayViewModel {
             }
         }
 
+        print("[TodayVM] loaded \(records.count) records → \(result.count) entries")
         entries = result
     }
 
@@ -53,16 +60,19 @@ final class TodayViewModel {
 
         let textToSend: String? = trimmed.isEmpty ? nil : trimmed
 
-        // 今天第一条消息时，若最近的非分隔符条目不是今天，插入 "Today" 分隔符
+        // 若最后一条分隔符不是 "Today"，插入今天的分隔符
         let today = Self.dayLabel(for: .now)
-        let lastNonSeparatorDate = entries.last(where: {
-            if case .dateSeparator = $0.content { return false }
-            return true
-        })?.createdAt
-        let needsSeparator = lastNonSeparatorDate.map {
-            Self.dayLabel(for: $0) != today
-        } ?? (entries.isEmpty ? false : true)
-        if needsSeparator || entries.isEmpty {
+        let lastSeparator = entries.last(where: {
+            if case .dateSeparator = $0.content { return true }
+            return false
+        })
+        let alreadyHasToday: Bool
+        if case .dateSeparator(let label) = lastSeparator?.content {
+            alreadyHasToday = (label == today)
+        } else {
+            alreadyHasToday = false
+        }
+        if !alreadyHasToday {
             entries.append(TimelineEntry(
                 id: UUID(), createdAt: .now,
                 content: .dateSeparator(today)
@@ -111,13 +121,30 @@ final class TodayViewModel {
         try await SupabaseManager.setAuthHeaders(on: &request)
 
         let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            let body = String(data: data, encoding: .utf8) ?? "<binary>"
+            print("[TodayVM] HTTP \(http.statusCode): \(body)")
             throw URLError(.badServerResponse)
         }
 
         let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return try decoder.decode([MessageRecord].self, from: data)
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let str = try container.decode(String.self)
+            let fmt = ISO8601DateFormatter()
+            fmt.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            if let d = fmt.date(from: str) { return d }
+            fmt.formatOptions = [.withInternetDateTime]
+            if let d = fmt.date(from: str) { return d }
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Bad date: \(str)")
+        }
+
+        do {
+            return try decoder.decode([MessageRecord].self, from: data)
+        } catch {
+            print("[TodayVM] decode error:", error)
+            throw error
+        }
     }
 
     private static func dayLabel(for date: Date) -> String {

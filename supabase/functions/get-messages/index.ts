@@ -42,7 +42,7 @@ Deno.serve(async (req) => {
     const url = new URL(`${SUPABASE_URL}/rest/v1/messages`);
     url.searchParams.set(
       "select",
-      "id,role,input_type,user_content,card_type,card_content,image_url,created_at"
+      "id,role,input_type,user_content,card_type,card_content,created_at"
     );
     url.searchParams.set("user_id", `eq.${userId}`);
     url.searchParams.set("status", "eq.delivered");
@@ -57,8 +57,9 @@ Deno.serve(async (req) => {
     });
 
     if (!res.ok) {
-      console.error("[get-messages] db error:", res.status, await res.text());
-      return json({ error: "db_error" }, 502);
+      const errBody = await res.text();
+      console.error("[get-messages] db error:", res.status, errBody);
+      return json({ error: "db_error", status: res.status, detail: errBody }, 502);
     }
 
     const messages = await res.json();
