@@ -40,7 +40,8 @@ final class TodayViewModel {
                 session.onAIResponseReceived(
                     userContent: userContent,
                     cardType: envelope.card.cardTypeName,
-                    cardContent: envelope.card.contextRepresentation
+                    cardContent: envelope.card.contextRepresentation,
+                    image: image   // 存入 session，下轮 follow-up 时重发给 AI
                 )
             }
         } catch {

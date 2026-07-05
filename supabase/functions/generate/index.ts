@@ -435,7 +435,12 @@ Deno.serve(async (req) => {
       text?: string;
       image_base64?: string;
       mime_type?: string;
-      context?: { user: string; card_content: Record<string, unknown> } | null;
+      context?: {
+        user: string;
+        card_content: Record<string, unknown>;
+        image_base64?: string;   // 上一轮图片，follow-up 时重发让 AI 真正看到历史图片
+        mime_type?: string;
+      } | null;
     };
 
     if (!text && !image_base64) {
@@ -461,11 +466,22 @@ Deno.serve(async (req) => {
       userParts = [{ text }];
     }
 
-    // 多轮对话：客户端传来上一轮 (user, card_content)，注入为 Gemini history
+    // 多轮对话：客户端传来上一轮 (user, card_content, 可选 image_base64)，注入为 Gemini history
     // Gemini 用 "model" role（OpenAI 用 "assistant"），此处对应
     const contents: Array<{ role: string; parts: unknown[] }> = [];
     if (context?.user && context?.card_content) {
-      contents.push({ role: "user",  parts: [{ text: context.user }] });
+      // 如果上一轮有图片，重放到历史 user turn，让 AI 在 follow-up 时真正看到图片
+      const ctxUserParts: unknown[] = [];
+      if (context.image_base64) {
+        ctxUserParts.push({
+          inline_data: {
+            mime_type: context.mime_type ?? "image/jpeg",
+            data: context.image_base64,
+          },
+        });
+      }
+      ctxUserParts.push({ text: context.user });
+      contents.push({ role: "user",  parts: ctxUserParts });
       contents.push({ role: "model", parts: [{ text: JSON.stringify(context.card_content) }] });
     }
     contents.push({ role: "user", parts: userParts });

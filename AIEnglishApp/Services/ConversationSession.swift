@@ -1,9 +1,11 @@
 import Foundation
+import UIKit
 
 struct ContextTurn {
     let userContent: String
     let cardType: String
     let cardContent: [String: Any]
+    let image: UIImage?   // 上一轮的图片，follow-up 时重发给 AI，让模型真正"看"到上轮图片
 }
 
 @Observable
@@ -23,7 +25,7 @@ final class ConversationSession {
         backgroundedAt = nil
     }
 
-    func onAIResponseReceived(userContent: String, cardType: String, cardContent: [String: Any]) {
-        currentContext = ContextTurn(userContent: userContent, cardType: cardType, cardContent: cardContent)
+    func onAIResponseReceived(userContent: String, cardType: String, cardContent: [String: Any], image: UIImage? = nil) {
+        currentContext = ContextTurn(userContent: userContent, cardType: cardType, cardContent: cardContent, image: image)
     }
 }

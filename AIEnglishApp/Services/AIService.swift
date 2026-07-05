@@ -12,7 +12,7 @@ enum AIServiceError: Error {
     case bodySerializationFailed
 }
 
-private extension UIImage {
+extension UIImage {
     func compressedForUpload() -> UIImage {
         let maxDimension: CGFloat = 1600
         let scale = min(maxDimension / size.width, maxDimension / size.height, 1.0)
@@ -38,13 +38,20 @@ struct LiveAIService: AIServicing {
             body["mime_type"] = "image/jpeg"
         }
         if let ctx = context {
-            // Include card_type inside card_content so the AI knows what kind of card it gave
             var cardWithType = ctx.cardContent
             cardWithType["card_type"] = ctx.cardType
-            body["context"] = [
+            var contextPayload: [String: Any] = [
                 "user": ctx.userContent,
                 "card_content": cardWithType,
             ]
+            // 重发上一轮图片：让 AI 在 follow-up 时真正"看"到历史图片，
+            // 而不只是依赖文字描述的 card_content
+            if let img = ctx.image,
+               let jpeg = img.compressedForUpload().jpegData(compressionQuality: 0.75) {
+                contextPayload["image_base64"] = jpeg.base64EncodedString()
+                contextPayload["mime_type"] = "image/jpeg"
+            }
+            body["context"] = contextPayload
         }
         guard let bodyData = try? JSONSerialization.data(withJSONObject: body) else {
             throw AIServiceError.bodySerializationFailed

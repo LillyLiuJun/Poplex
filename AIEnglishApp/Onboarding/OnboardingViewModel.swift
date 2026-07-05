@@ -51,9 +51,9 @@ final class OnboardingViewModel {
         do {
             let envelope: AIEnvelope
             if let image = selectedImage {
-                envelope = try await service.generate(text: nil, image: image)
+                envelope = try await service.generate(text: nil, image: image, context: nil)
             } else if let card = selectedCard {
-                envelope = try await service.generate(text: card.generationPrompt, image: nil)
+                envelope = try await service.generate(text: card.generationPrompt, image: nil, context: nil)
             } else {
                 isLoading = false
                 return
