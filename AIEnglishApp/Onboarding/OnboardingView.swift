@@ -67,6 +67,10 @@ struct OnboardingView: View {
 
     private func completeOnboarding() {
         UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: "onboarding_completed_at")
+        Task {
+            do { try await ProfileService.markOnboardingComplete() }
+            catch { print("[Onboarding] ERROR remote sync failed: \(error)") }
+        }
         onComplete()
     }
 }

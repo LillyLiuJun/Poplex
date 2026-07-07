@@ -13,6 +13,7 @@ struct AIEnglishAppApp: App {
     var body: some Scene {
         WindowGroup {
             RootView()
+                .preferredColorScheme(.light)   // 已退出系统自适应，MVP 锁定浅色
                 .task {
                     // 启动即静默匿名登录（无 UI）。拿到会话后所有请求才带得上用户 JWT。
                     do {
@@ -28,14 +29,35 @@ struct AIEnglishAppApp: App {
 
 struct RootView: View {
     @AppStorage("onboarding_completed_at") private var onboardingCompletedAt: Double = 0
+    @State private var isCheckingRemote = false
 
     var body: some View {
-        if onboardingCompletedAt > 0 {
-            ContentView()
-        } else {
-            OnboardingView {
-                onboardingCompletedAt = Date().timeIntervalSince1970
+        Group {
+            if onboardingCompletedAt > 0 {
+                ContentView()
+            } else if isCheckingRemote {
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                OnboardingView {
+                    onboardingCompletedAt = Date().timeIntervalSince1970
+                }
             }
+        }
+        .task { await syncOnboardingStateFromRemote() }
+    }
+
+    private func syncOnboardingStateFromRemote() async {
+        guard onboardingCompletedAt == 0 else { return }
+        isCheckingRemote = true
+        defer { isCheckingRemote = false }
+        do {
+            try await SupabaseManager.ensureSignedIn()
+            if let remoteDate = try await ProfileService.fetchOnboardingCompletedAt() {
+                onboardingCompletedAt = remoteDate.timeIntervalSince1970
+            }
+        } catch {
+            print("[RootView] remote profile check failed, showing onboarding: \(error)")
         }
     }
 }
