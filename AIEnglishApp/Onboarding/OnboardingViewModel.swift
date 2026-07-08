@@ -50,10 +50,18 @@ final class OnboardingViewModel {
 
         do {
             let envelope: AIEnvelope
-            if let image = selectedImage {
-                envelope = try await service.generate(text: nil, image: image, context: nil)
-            } else if let card = selectedCard {
-                envelope = try await service.generate(text: card.generationPrompt, image: nil, context: nil)
+            if let card = selectedCard {
+                // 用卡片 bundle 图发 AI，体验与用户自拍照一致；bundle 图缺失时降级为文字 prompt
+                let cardImage = UIImage(named: card.imageName)
+                envelope = try await service.generate(
+                    text: cardImage == nil ? card.generationPrompt : nil,
+                    image: cardImage,
+                    context: nil,
+                    presetCardId: card.id,
+                    source: "onboarding"
+                )
+            } else if let image = selectedImage {
+                envelope = try await service.generate(text: nil, image: image, context: nil, presetCardId: nil, source: "onboarding")
             } else {
                 isLoading = false
                 return

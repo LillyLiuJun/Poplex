@@ -6,8 +6,8 @@ struct TimelineRow: View {
 
     var body: some View {
         switch entry.content {
-        case .userBubble(let text, let image):
-            UserBubble(text: text, image: image, onImageTap: onImageTap)
+        case .userBubble(let text, let image, let imageUrl):
+            UserBubble(text: text, image: image, imageUrl: imageUrl, onImageTap: onImageTap)
         case .aiLoading:
             AILoadingCard()
         case .aiCard(let card):
@@ -24,6 +24,7 @@ struct TimelineRow: View {
 private struct UserBubble: View {
     let text: String?
     let image: UIImage?
+    let imageUrl: String?
     var onImageTap: ((UIImage, CGRect) -> Void)?
 
     @State private var imageFrame: CGRect = .zero
@@ -42,6 +43,29 @@ private struct UserBubble: View {
                         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.bubble))
                         .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { imageFrame = $0 }
                         .onTapGesture { onImageTap?(img, imageFrame) }
+                }
+            } else if let urlStr = imageUrl, let url = URL(string: urlStr) {
+                HStack {
+                    Spacer()
+                    AsyncImage(url: url) { phase in
+                        switch phase {
+                        case .success(let img):
+                            img.resizable()
+                               .aspectRatio(contentMode: .fill)
+                               .frame(width: imageSize, height: imageSize)
+                               .clipped()
+                               .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.bubble))
+                        case .failure:
+                            Image(systemName: "photo")
+                                .frame(width: imageSize, height: imageSize)
+                                .background(AppTheme.Color.cardBg)
+                                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.bubble))
+                        default:
+                            RoundedRectangle(cornerRadius: AppTheme.Radius.bubble)
+                                .fill(AppTheme.Color.cardBg)
+                                .frame(width: imageSize, height: imageSize)
+                        }
+                    }
                 }
             }
             if let text, !text.isEmpty {

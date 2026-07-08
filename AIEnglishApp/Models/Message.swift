@@ -7,15 +7,15 @@ struct TimelineEntry: Identifiable {
     let content: Content
 
     enum Content {
-        case userBubble(text: String?, image: UIImage?)
+        case userBubble(text: String?, image: UIImage?, imageUrl: String?)
         case aiLoading
         case aiCard(AICard)
         case aiError(message: String)
         case dateSeparator(String)   // "Today" / "Yesterday" / "Jul 3"
     }
 
-    static func userBubble(text: String?, image: UIImage?) -> TimelineEntry {
-        TimelineEntry(id: UUID(), createdAt: .now, content: .userBubble(text: text, image: image))
+    static func userBubble(text: String?, image: UIImage?, imageUrl: String? = nil) -> TimelineEntry {
+        TimelineEntry(id: UUID(), createdAt: .now, content: .userBubble(text: text, image: image, imageUrl: imageUrl))
     }
 
     static func aiLoading() -> TimelineEntry {

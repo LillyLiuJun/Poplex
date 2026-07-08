@@ -82,7 +82,8 @@ final class TodayViewModel {
             ))
         }
 
-        entries.append(TimelineEntry.userBubble(text: textToSend, image: image))
+        let bubbleText = textToSend ?? (image != nil ? "Describe this image" : nil)
+        entries.append(TimelineEntry.userBubble(text: bubbleText, image: image))
         pendingImage = nil
 
         let loadingEntry = TimelineEntry.aiLoading()
@@ -93,7 +94,9 @@ final class TodayViewModel {
             let envelope = try await service.generate(
                 text: textToSend,
                 image: image,
-                context: session.currentContext
+                context: session.currentContext,
+                presetCardId: nil,
+                source: "tab1"
             )
             replace(loadingEntry.id, with: .aiCard(envelope.card))
             let userContent = textToSend ?? (image != nil ? "[photo]" : nil)
