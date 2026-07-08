@@ -8,6 +8,18 @@ struct CachedRemoteImage<Placeholder: View>: View {
     let stableKey: String
     let placeholder: Placeholder
 
+    init(signedUrl: String, stableKey: String, placeholder: Placeholder) {
+        self.signedUrl = signedUrl
+        self.stableKey = stableKey
+        self.placeholder = placeholder
+    }
+
+    init(signedUrl: String, stableKey: String, @ViewBuilder placeholder: () -> Placeholder) {
+        self.signedUrl = signedUrl
+        self.stableKey = stableKey
+        self.placeholder = placeholder()
+    }
+
     @State private var image: UIImage?
 
     var body: some View {

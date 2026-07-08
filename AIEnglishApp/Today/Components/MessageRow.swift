@@ -44,28 +44,16 @@ private struct UserBubble: View {
                         .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { imageFrame = $0 }
                         .onTapGesture { onImageTap?(img, imageFrame) }
                 }
-            } else if let urlStr = imageUrl, let url = URL(string: urlStr) {
+            } else if let urlStr = imageUrl {
                 HStack {
                     Spacer()
-                    AsyncImage(url: url) { phase in
-                        switch phase {
-                        case .success(let img):
-                            img.resizable()
-                               .aspectRatio(contentMode: .fill)
-                               .frame(width: imageSize, height: imageSize)
-                               .clipped()
-                               .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.bubble))
-                        case .failure:
-                            Image(systemName: "photo")
-                                .frame(width: imageSize, height: imageSize)
-                                .background(AppTheme.Color.cardBg)
-                                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.bubble))
-                        default:
-                            RoundedRectangle(cornerRadius: AppTheme.Radius.bubble)
-                                .fill(AppTheme.Color.cardBg)
-                                .frame(width: imageSize, height: imageSize)
-                        }
+                    CachedRemoteImage(signedUrl: urlStr, stableKey: urlStr) {
+                        RoundedRectangle(cornerRadius: AppTheme.Radius.bubble)
+                            .fill(Color(.systemGray5))
+                            .overlay(ProgressView().scaleEffect(0.7))
                     }
+                    .frame(width: imageSize, height: imageSize)
+                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.bubble))
                 }
             }
             if let text, !text.isEmpty {
