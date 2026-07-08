@@ -6,8 +6,8 @@ struct TimelineRow: View {
 
     var body: some View {
         switch entry.content {
-        case .userBubble(let text, let image, let imageUrl):
-            UserBubble(text: text, image: image, imageUrl: imageUrl, onImageTap: onImageTap)
+        case .userBubble(let text, let image, let imageUrl, let imageStableKey):
+            UserBubble(text: text, image: image, imageUrl: imageUrl, imageStableKey: imageStableKey, onImageTap: onImageTap)
         case .aiLoading:
             AILoadingCard()
         case .aiCard(let card):
@@ -25,6 +25,7 @@ private struct UserBubble: View {
     let text: String?
     let image: UIImage?
     let imageUrl: String?
+    let imageStableKey: String?
     var onImageTap: ((UIImage, CGRect) -> Void)?
 
     @State private var imageFrame: CGRect = .zero
@@ -47,7 +48,7 @@ private struct UserBubble: View {
             } else if let urlStr = imageUrl {
                 HStack {
                     Spacer()
-                    CachedRemoteImage(signedUrl: urlStr, stableKey: urlStr) {
+                    CachedRemoteImage(signedUrl: urlStr, stableKey: imageStableKey ?? urlStr) {
                         RoundedRectangle(cornerRadius: AppTheme.Radius.bubble)
                             .fill(Color(.systemGray5))
                             .overlay(ProgressView().scaleEffect(0.7))

@@ -6,7 +6,8 @@ struct MessageRecord: Decodable, Identifiable {
     let role: String
     let inputType: String?
     let userContent: String?
-    let signedImageUrl: String?  // get-messages 为 image 消息签发的 1h Storage URL
+    let signedImageUrl: String?  // 1h 访问 URL，随 session 变化
+    let imagePath: String?       // Storage 路径（稳定 key，用于磁盘缓存）
     let card: AICard?
     let createdAt: Date
 
@@ -15,6 +16,7 @@ struct MessageRecord: Decodable, Identifiable {
         case inputType      = "input_type"
         case userContent    = "user_content"
         case signedImageUrl = "signed_image_url"
+        case imagePath      = "image_url"
         case cardType       = "card_type"
         case cardContent    = "card_content"
         case createdAt      = "created_at"
@@ -27,6 +29,7 @@ struct MessageRecord: Decodable, Identifiable {
         inputType      = try c.decodeIfPresent(String.self, forKey: .inputType)
         userContent    = try c.decodeIfPresent(String.self, forKey: .userContent)
         signedImageUrl = try c.decodeIfPresent(String.self, forKey: .signedImageUrl)
+        imagePath      = try c.decodeIfPresent(String.self, forKey: .imagePath)
         createdAt      = try c.decode(Date.self,   forKey: .createdAt)
 
         let cardType = try c.decodeIfPresent(String.self, forKey: .cardType)
@@ -52,7 +55,7 @@ struct MessageRecord: Decodable, Identifiable {
                 displayText = userContent
             }
             return TimelineEntry(id: id, createdAt: createdAt,
-                                 content: .userBubble(text: displayText, image: nil, imageUrl: signedImageUrl))
+                                 content: .userBubble(text: displayText, image: nil, imageUrl: signedImageUrl, imageStableKey: imagePath))
         case "assistant":
             guard let card else { return nil }
             return TimelineEntry(id: id, createdAt: createdAt, content: .aiCard(card))
