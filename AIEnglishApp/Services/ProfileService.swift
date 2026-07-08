@@ -22,6 +22,14 @@ enum ProfileService {
         return row.onboardingCompletedAt
     }
 
+    /// 新会话开始时原子自增 session_count。失败不阻塞流程（调用方 fire-and-forget）。
+    static func incrementSessionCount() async throws {
+        try await SupabaseManager.ensureSignedIn()
+        try await SupabaseManager.client
+            .rpc("increment_session_count")
+            .execute()
+    }
+
     /// 引导完成时写入远端。失败不阻塞流程（调用方 fire-and-forget）。
     static func markOnboardingComplete() async throws {
         let user = try await SupabaseManager.ensureSignedIn()
