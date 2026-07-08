@@ -431,10 +431,12 @@ Deno.serve(async (req) => {
     const userId = await getAuthUserId(req);
 
     const body = await req.json();
-    const { text, image_base64, mime_type, context } = body as {
+    const { text, image_base64, mime_type, context, preset_card_id, source } = body as {
       text?: string;
       image_base64?: string;
       mime_type?: string;
+      preset_card_id?: string;
+      source?: string;
       context?: {
         user: string;
         card_content: Record<string, unknown>;
@@ -446,6 +448,23 @@ Deno.serve(async (req) => {
     if (!text && !image_base64) {
       return json({ error: "missing_input" }, 400);
     }
+
+    // onboarding 每次重新生成前清掉旧记录，确保 DB 里只保留最终一条
+    if (source === 'onboarding' && userId && SUPABASE_URL && SUPABASE_SVC_KEY) {
+      await fetch(
+        `${SUPABASE_URL}/rest/v1/messages?user_id=eq.${userId}&source=eq.onboarding`,
+        {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${SUPABASE_SVC_KEY}`,
+            'apikey': SUPABASE_SVC_KEY,
+          },
+        }
+      );
+    }
+
+    // 在 AI 调用之前就锁定 user 消息时间戳，确保比 assistant 的 now() 早，与异步顺序无关
+    const userCreatedAt = new Date().toISOString();
 
     // Build current-turn Gemini parts（同步，不阻塞）
     let userParts: unknown[];
@@ -511,13 +530,16 @@ Deno.serve(async (req) => {
     const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
     const parsed = JSON.parse(raw);
 
-    // 用户消息必须先写入，确保 created_at 早于 assistant，loadHistory 按时间排序时顺序正确
+    // userCreatedAt 在 AI 调用前已锁定，保证早于 assistant 的 DB now()，排序永远正确
     await insertMessage({
       role: "user",
-      input_type: image_base64 ? "image" : "text",
+      created_at: userCreatedAt,
+      input_type: preset_card_id ? "preset_card" : (image_base64 ? "image" : "text"),
       user_content: image_base64
         ? (text ? `[photo] ${text.trim()}` : "[photo]")
         : (text ?? "").trim(),
+      preset_card_id: preset_card_id ?? null,
+      source: source ?? "tab1",
       status: "delivered",
     }, userId, sourceImagePath);
 
@@ -525,6 +547,7 @@ Deno.serve(async (req) => {
     await Promise.all([
       insertMessage({
         role: "assistant",
+        source: source ?? "tab1",
         card_type: parsed.card_type ?? null,
         card_content: parsed.card_content ?? null,
         extracted_concept: parsed.extracted_concept ?? null,

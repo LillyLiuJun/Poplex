@@ -2,7 +2,7 @@ import Foundation
 import UIKit
 
 protocol AIServicing {
-    func generate(text: String?, image: UIImage?, context: ContextTurn?) async throws -> AIEnvelope
+    func generate(text: String?, image: UIImage?, context: ContextTurn?, presetCardId: String?, source: String?) async throws -> AIEnvelope
 }
 
 enum AIServiceError: Error {
@@ -24,10 +24,16 @@ extension UIImage {
 }
 
 struct LiveAIService: AIServicing {
-    func generate(text: String?, image: UIImage?, context: ContextTurn?) async throws -> AIEnvelope {
+    func generate(text: String?, image: UIImage?, context: ContextTurn?, presetCardId: String? = nil, source: String? = nil) async throws -> AIEnvelope {
         var body: [String: Any] = [:]
         if let text, !text.isEmpty {
             body["text"] = text
+        }
+        if let presetCardId {
+            body["preset_card_id"] = presetCardId
+        }
+        if let source {
+            body["source"] = source
         }
         if let image {
             let compressed = image.compressedForUpload()
@@ -79,7 +85,7 @@ struct LiveAIService: AIServicing {
 }
 
 struct MockAIService: AIServicing {
-    func generate(text: String?, image: UIImage?, context: ContextTurn?) async throws -> AIEnvelope {
+    func generate(text: String?, image: UIImage?, context: ContextTurn?, presetCardId: String? = nil, source: String? = nil) async throws -> AIEnvelope {
         try await mockResult()
     }
 

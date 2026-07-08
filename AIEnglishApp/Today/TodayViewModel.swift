@@ -48,10 +48,23 @@ final class TodayViewModel {
         }
 
         print("[TodayVM] loaded \(records.count) records → \(result.count) entries")
-        // 如果 send() 已经在运行（isLoading）或已添加过条目，说明用户在历史加载完成前就发了消息。
-        // 此时内存里的顺序是正确的，不能用数据库结果覆盖，否则会因 Promise.all 的时间戳竞争导致顺序错乱。
         guard !isLoading, entries.isEmpty else { return }
         entries = result
+
+        // 背景预载最新 15 张图片，新→旧顺序；对滚动场景有效，失败安全
+        Task(priority: .background) {
+            let recent = records.suffix(15).reversed()
+            for record in recent {
+                guard let signed = record.signedImageUrl,
+                      let path = record.imagePath,
+                      ImageCache.shared.get(path) == nil,
+                      let url = URL(string: signed),
+                      let (data, _) = try? await URLSession.shared.data(from: url),
+                      let img = UIImage(data: data)
+                else { continue }
+                ImageCache.shared.set(img, forKey: path)
+            }
+        }
     }
 
     // MARK: - Send
@@ -82,7 +95,8 @@ final class TodayViewModel {
             ))
         }
 
-        entries.append(TimelineEntry.userBubble(text: textToSend, image: image))
+        let bubbleText = textToSend ?? (image != nil ? "Describe this image" : nil)
+        entries.append(TimelineEntry.userBubble(text: bubbleText, image: image))
         pendingImage = nil
 
         let loadingEntry = TimelineEntry.aiLoading()
@@ -93,7 +107,9 @@ final class TodayViewModel {
             let envelope = try await service.generate(
                 text: textToSend,
                 image: image,
-                context: session.currentContext
+                context: session.currentContext,
+                presetCardId: nil,
+                source: "tab1"
             )
             replace(loadingEntry.id, with: .aiCard(envelope.card))
             let userContent = textToSend ?? (image != nil ? "[photo]" : nil)

@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import UIKit
 @testable import AIEnglishApp
 
 // MARK: - AIEnvelope JSON decode tests
@@ -159,10 +160,11 @@ struct AIEnvelopeDecodeTests {
     }
 }
 
-// MARK: - TodayViewModel tests
+// MARK: - Mocks
 
 private struct SuccessMock: AIServicing {
-    func generate(text: String) async throws -> AIEnvelope {
+    func generate(text: String?, image: UIImage?, context: ContextTurn?,
+                  presetCardId: String?, source: String?) async throws -> AIEnvelope {
         let json = """
         {
             "card_type": "chat",
@@ -175,48 +177,169 @@ private struct SuccessMock: AIServicing {
 }
 
 private struct FailingMock: AIServicing {
-    func generate(text: String) async throws -> AIEnvelope {
-        throw AIServiceError.requestFailed
+    func generate(text: String?, image: UIImage?, context: ContextTurn?,
+                  presetCardId: String?, source: String?) async throws -> AIEnvelope {
+        throw URLError(.badServerResponse)
     }
 }
 
+// MARK: - TodayViewModel tests
+
 struct TodayViewModelTests {
 
-    @Test func sendAppendsUserAndAIEntries() async {
+    @Test func sendAppendsUserBubbleAndAICard() async {
         let vm = TodayViewModel(service: SuccessMock())
         await vm.send("今天会议推迟了")
 
-        #expect(vm.entries.count == 2)
-
-        guard case .userBubble(let text) = vm.entries[0].content else {
-            Issue.record("Expected userBubble at [0]"); return
+        let bubbleEntry = vm.entries.first {
+            if case .userBubble = $0.content { return true }
+            return false
+        }
+        guard let bubbleEntry,
+              case .userBubble(let text, _, _, _) = bubbleEntry.content else {
+            Issue.record("Expected userBubble entry"); return
         }
         #expect(text == "今天会议推迟了")
 
-        guard case .aiCard = vm.entries[1].content else {
-            Issue.record("Expected aiCard at [1]"); return
+        let hasCard = vm.entries.contains {
+            if case .aiCard = $0.content { return true }
+            return false
         }
+        #expect(hasCard)
         #expect(vm.isLoading == false)
-        #expect(vm.errorMessage == nil)
     }
 
-    @Test func sendSetsErrorMessageOnFailure() async {
+    @Test func sendAppendsErrorEntryOnFailure() async {
         let vm = TodayViewModel(service: FailingMock())
         await vm.send("今天会议推迟了")
 
-        #expect(vm.entries.count == 1)
-        guard case .userBubble = vm.entries[0].content else {
-            Issue.record("Expected userBubble at [0]"); return
+        let hasError = vm.entries.contains {
+            if case .aiError = $0.content { return true }
+            return false
         }
-        #expect(vm.errorMessage == "生成失败，请重试")
+        #expect(hasError)
         #expect(vm.isLoading == false)
     }
 
     @Test func sendIgnoresBlankInput() async {
         let vm = TodayViewModel(service: SuccessMock())
         await vm.send("   ")
-
         #expect(vm.entries.isEmpty)
-        #expect(vm.isLoading == false)
+    }
+}
+
+// MARK: - ImageCache tests
+
+struct ImageCacheTests {
+
+    @Test func getUnknownKeyReturnsNil() {
+        #expect(ImageCache.shared.get("no_such_key_\(UUID().uuidString)") == nil)
+    }
+
+    @Test func setThenGetHitsMemory() {
+        let key = "mem_\(UUID().uuidString)"
+        let image = UIImage(systemName: "star")!
+        ImageCache.shared.set(image, forKey: key)
+        #expect(ImageCache.shared.get(key) != nil)
+    }
+
+    @Test func setThenGetFromDiskAfterMemoryClear() {
+        let key = "disk_\(UUID().uuidString)"
+        let image = UIImage(systemName: "heart")!
+        ImageCache.shared.set(image, forKey: key)
+        ImageCache.shared.clearMemoryForTesting()
+        // 内存已清，必须从磁盘读
+        #expect(ImageCache.shared.get(key) != nil)
+    }
+}
+
+// MARK: - MessageRecord image field propagation tests
+
+struct MessageRecordImageFieldsTests {
+
+    private static let decoder: JSONDecoder = {
+        let d = JSONDecoder()
+        d.dateDecodingStrategy = .custom { decoder in
+            let c = try decoder.singleValueContainer()
+            let str = try c.decode(String.self)
+            let fmt = ISO8601DateFormatter()
+            fmt.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            if let d = fmt.date(from: str) { return d }
+            fmt.formatOptions = [.withInternetDateTime]
+            if let d = fmt.date(from: str) { return d }
+            throw DecodingError.dataCorruptedError(in: c, debugDescription: "Bad date: \(str)")
+        }
+        return d
+    }()
+
+    @Test func imageRecordPassesBothUrlsToTimelineEntry() throws {
+        let json = """
+        {
+            "id": "00000000-0000-0000-0000-000000000001",
+            "role": "user",
+            "input_type": "image",
+            "user_content": "[photo]",
+            "signed_image_url": "https://example.com/signed?token=abc",
+            "image_url": "user_images/uid123/photo.jpg",
+            "created_at": "2026-07-08T10:00:00.000Z"
+        }
+        """.data(using: .utf8)!
+
+        let record = try Self.decoder.decode(MessageRecord.self, from: json)
+        #expect(record.imagePath == "user_images/uid123/photo.jpg")
+        #expect(record.signedImageUrl == "https://example.com/signed?token=abc")
+
+        guard let entry = record.asTimelineEntry(),
+              case .userBubble(let text, _, let imageUrl, let stableKey) = entry.content else {
+            Issue.record("Expected userBubble entry"); return
+        }
+        #expect(text == "Describe this image")
+        #expect(imageUrl == "https://example.com/signed?token=abc")
+        #expect(stableKey == "user_images/uid123/photo.jpg")
+    }
+
+    @Test func textRecordHasNilImageFields() throws {
+        let json = """
+        {
+            "id": "00000000-0000-0000-0000-000000000002",
+            "role": "user",
+            "input_type": "text",
+            "user_content": "Hello world",
+            "created_at": "2026-07-08T10:00:00.000Z"
+        }
+        """.data(using: .utf8)!
+
+        let record = try Self.decoder.decode(MessageRecord.self, from: json)
+        #expect(record.imagePath == nil)
+        #expect(record.signedImageUrl == nil)
+
+        guard let entry = record.asTimelineEntry(),
+              case .userBubble(let text, _, let imageUrl, let stableKey) = entry.content else {
+            Issue.record("Expected userBubble entry"); return
+        }
+        #expect(text == "Hello world")
+        #expect(imageUrl == nil)
+        #expect(stableKey == nil)
+    }
+
+    @Test func presetCardDefaultsToDescribeThisImage() throws {
+        let json = """
+        {
+            "id": "00000000-0000-0000-0000-000000000003",
+            "role": "user",
+            "input_type": "preset_card",
+            "user_content": "[photo]",
+            "signed_image_url": "https://example.com/signed?token=xyz",
+            "image_url": "user_images/uid123/card.jpg",
+            "created_at": "2026-07-08T10:00:00.000Z"
+        }
+        """.data(using: .utf8)!
+
+        let record = try Self.decoder.decode(MessageRecord.self, from: json)
+        guard let entry = record.asTimelineEntry(),
+              case .userBubble(let text, _, _, _) = entry.content else {
+            Issue.record("Expected userBubble entry"); return
+        }
+        #expect(text == "Describe this image")
     }
 }

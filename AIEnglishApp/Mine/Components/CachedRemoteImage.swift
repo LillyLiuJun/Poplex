@@ -8,6 +8,18 @@ struct CachedRemoteImage<Placeholder: View>: View {
     let stableKey: String
     let placeholder: Placeholder
 
+    init(signedUrl: String, stableKey: String, placeholder: Placeholder) {
+        self.signedUrl = signedUrl
+        self.stableKey = stableKey
+        self.placeholder = placeholder
+    }
+
+    init(signedUrl: String, stableKey: String, @ViewBuilder placeholder: () -> Placeholder) {
+        self.signedUrl = signedUrl
+        self.stableKey = stableKey
+        self.placeholder = placeholder()
+    }
+
     @State private var image: UIImage?
 
     var body: some View {
@@ -34,19 +46,45 @@ struct CachedRemoteImage<Placeholder: View>: View {
     }
 }
 
-// 内存缓存：key = stableKey（material_id 或路径），重签 URL 不会导致重新下载
+// L1 内存 + L2 磁盘双层缓存
+// key = stableKey（Storage 路径），跨 session 稳定，重签 URL 不影响命中
 final class ImageCache: @unchecked Sendable {
     static let shared = ImageCache()
-    private let cache = NSCache<NSString, UIImage>()
+    private let memory = NSCache<NSString, UIImage>()
+    private let diskDir: URL
 
     private init() {
-        cache.countLimit = 200
-        cache.totalCostLimit = 100 * 1024 * 1024  // 100 MB
+        memory.countLimit = 100
+        memory.totalCostLimit = 50 * 1024 * 1024  // 50 MB
+        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        diskDir = caches.appendingPathComponent("img_cache", isDirectory: true)
+        try? FileManager.default.createDirectory(at: diskDir, withIntermediateDirectories: true)
     }
 
-    func get(_ key: String) -> UIImage? { cache.object(forKey: key as NSString) }
+    func get(_ key: String) -> UIImage? {
+        if let img = memory.object(forKey: key as NSString) { return img }
+        if let data = try? Data(contentsOf: diskPath(for: key)),
+           let img = UIImage(data: data) {
+            memory.setObject(img, forKey: key as NSString)
+            return img
+        }
+        return nil
+    }
+
     func set(_ image: UIImage, forKey key: String) {
-        let cost = image.jpegData(compressionQuality: 1)?.count ?? 0
-        cache.setObject(image, forKey: key as NSString, cost: cost)
+        if let data = image.jpegData(compressionQuality: 0.85) {
+            memory.setObject(image, forKey: key as NSString, cost: data.count)
+            try? data.write(to: diskPath(for: key), options: .atomic)
+        } else {
+            memory.setObject(image, forKey: key as NSString)
+        }
+    }
+
+    func clearMemoryForTesting() { memory.removeAllObjects() }
+
+    private func diskPath(for key: String) -> URL {
+        // key 通常是 "bucket/userId/uuid.jpg"，取最后两段作为文件名避免冲突
+        let safe = key.replacingOccurrences(of: "/", with: "_")
+        return diskDir.appendingPathComponent(safe + ".jpg")
     }
 }

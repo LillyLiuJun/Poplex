@@ -7,25 +7,26 @@ struct S4SceneCardView: View {
         VStack(alignment: .leading, spacing: AppTheme.Space.paddingCard) {
             if let original = content.chineseOriginal {
                 Text(original)
-                    .font(.callout)
-                    .foregroundStyle(AppTheme.Color.textSecondary)
+                    .font(AppTheme.Font.chineseFaint)
+                    .foregroundStyle(AppTheme.Color.textFaint)
             } else if let guess = content.aiSceneGuess {
                 Text(guess)
-                    .font(.callout)
-                    .foregroundStyle(AppTheme.Color.textSecondary)
+                    .font(AppTheme.Font.chineseFaint)
+                    .foregroundStyle(AppTheme.Color.textFaint)
             }
 
             Text(content.nativeTranslation)
-                .font(.body.bold())
+                .font(AppTheme.Font.englishPrimary)
+                .foregroundStyle(AppTheme.Color.textPrimary)
 
             if let kp = content.keyPhrase {
                 VStack(alignment: .leading, spacing: AppTheme.Space.paddingXS) {
                     Text(kp.phrase)
-                        .font(.callout.bold())
-                        .foregroundStyle(AppTheme.Color.textAccent)
+                        .font(AppTheme.Font.keyPhrase)
+                        .foregroundStyle(AppTheme.Color.accentBuddy)
                     Text(kp.note)
-                        .font(.caption)
-                        .foregroundStyle(AppTheme.Color.textSecondary)
+                        .font(AppTheme.Font.pos)
+                        .foregroundStyle(AppTheme.Color.textMuted)
                 }
             }
 
@@ -34,6 +35,16 @@ struct S4SceneCardView: View {
         .padding(AppTheme.Space.paddingCard)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(AppTheme.Color.cardBg)
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
+        .overlay(
+            RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
+                .stroke(AppTheme.Color.border, lineWidth: 0.5)
+        )
+        .shadow(
+            color: AppTheme.Shadow.cardColor,
+            radius: AppTheme.Shadow.cardRadius,
+            x: AppTheme.Shadow.cardX,
+            y: AppTheme.Shadow.cardY
+        )
     }
 }

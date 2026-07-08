@@ -7,9 +7,8 @@ struct CardSceneTrigger: View {
         VStack(alignment: .leading, spacing: AppTheme.Space.paddingS) {
             DashedDivider()
             Text(text)
-                .font(.callout)
-                .foregroundStyle(AppTheme.Color.textSecondary)
-                .italic()
+                .font(AppTheme.Font.buddy)
+                .foregroundStyle(AppTheme.Color.accentBuddy)
         }
     }
 }
@@ -21,7 +20,7 @@ struct DashedDivider: View {
                 path.move(to: CGPoint(x: 0, y: 0.5))
                 path.addLine(to: CGPoint(x: geo.size.width, y: 0.5))
             }
-            .stroke(AppTheme.Color.divider, style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+            .stroke(AppTheme.Color.borderDashed, style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
         }
         .frame(height: 1)
     }

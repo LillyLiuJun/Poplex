@@ -6,8 +6,8 @@ struct TimelineRow: View {
 
     var body: some View {
         switch entry.content {
-        case .userBubble(let text, let image):
-            UserBubble(text: text, image: image, onImageTap: onImageTap)
+        case .userBubble(let text, let image, let imageUrl, let imageStableKey):
+            UserBubble(text: text, image: image, imageUrl: imageUrl, imageStableKey: imageStableKey, onImageTap: onImageTap)
         case .aiLoading:
             AILoadingCard()
         case .aiCard(let card):
@@ -24,6 +24,8 @@ struct TimelineRow: View {
 private struct UserBubble: View {
     let text: String?
     let image: UIImage?
+    let imageUrl: String?
+    let imageStableKey: String?
     var onImageTap: ((UIImage, CGRect) -> Void)?
 
     @State private var imageFrame: CGRect = .zero
@@ -42,6 +44,17 @@ private struct UserBubble: View {
                         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.bubble))
                         .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { imageFrame = $0 }
                         .onTapGesture { onImageTap?(img, imageFrame) }
+                }
+            } else if let urlStr = imageUrl {
+                HStack {
+                    Spacer()
+                    CachedRemoteImage(signedUrl: urlStr, stableKey: imageStableKey ?? urlStr) {
+                        RoundedRectangle(cornerRadius: AppTheme.Radius.bubble)
+                            .fill(Color(.systemGray5))
+                            .overlay(ProgressView().scaleEffect(0.7))
+                    }
+                    .frame(width: imageSize, height: imageSize)
+                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.bubble))
                 }
             }
             if let text, !text.isEmpty {

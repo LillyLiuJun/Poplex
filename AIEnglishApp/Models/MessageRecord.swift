@@ -3,30 +3,35 @@ import Foundation
 // DB 消息记录——从 get-messages 解码，用于重建历史时间线
 struct MessageRecord: Decodable, Identifiable {
     let id: UUID
-    let role: String           // "user" | "assistant"
-    let inputType: String?     // "text" | "image"
-    let userContent: String?   // 用户原文（role=user 时有值）
-    let card: AICard?          // 从 card_type + card_content 重建（role=assistant 时有值）
+    let role: String
+    let inputType: String?
+    let userContent: String?
+    let signedImageUrl: String?  // 1h 访问 URL，随 session 变化
+    let imagePath: String?       // Storage 路径（稳定 key，用于磁盘缓存）
+    let card: AICard?
     let createdAt: Date
 
     enum CodingKeys: String, CodingKey {
         case id, role
-        case inputType   = "input_type"
-        case userContent = "user_content"
-        case cardType    = "card_type"
-        case cardContent = "card_content"
-        case createdAt   = "created_at"
+        case inputType      = "input_type"
+        case userContent    = "user_content"
+        case signedImageUrl = "signed_image_url"
+        case imagePath      = "image_url"
+        case cardType       = "card_type"
+        case cardContent    = "card_content"
+        case createdAt      = "created_at"
     }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        id          = try c.decode(UUID.self,   forKey: .id)
-        role        = try c.decode(String.self, forKey: .role)
-        inputType   = try c.decodeIfPresent(String.self, forKey: .inputType)
-        userContent = try c.decodeIfPresent(String.self, forKey: .userContent)
-        createdAt   = try c.decode(Date.self,   forKey: .createdAt)
+        id             = try c.decode(UUID.self,   forKey: .id)
+        role           = try c.decode(String.self, forKey: .role)
+        inputType      = try c.decodeIfPresent(String.self, forKey: .inputType)
+        userContent    = try c.decodeIfPresent(String.self, forKey: .userContent)
+        signedImageUrl = try c.decodeIfPresent(String.self, forKey: .signedImageUrl)
+        imagePath      = try c.decodeIfPresent(String.self, forKey: .imagePath)
+        createdAt      = try c.decode(Date.self,   forKey: .createdAt)
 
-        // 用已有的各卡片 Decodable 直接从 card_content 字段解码，复用现有解码逻辑
         let cardType = try c.decodeIfPresent(String.self, forKey: .cardType)
         switch cardType {
         case "s1":   card = try .s1(c.decode(VocabContent.self,       forKey: .cardContent))
@@ -38,21 +43,19 @@ struct MessageRecord: Decodable, Identifiable {
         }
     }
 
-    // 转换为 UI 用的 TimelineEntry（图片消息历史里无法恢复 UIImage，显示为纯文字气泡）
     func asTimelineEntry() -> TimelineEntry? {
         switch role {
         case "user":
             let displayText: String?
-            if inputType == "image" {
-                // "[photo] 文字" → 只显示附带的文字（如果有），否则显示 nil
+            if inputType == "image" || inputType == "preset_card" {
                 let stripped = userContent?.replacingOccurrences(of: "[photo] ", with: "")
                                           .replacingOccurrences(of: "[photo]", with: "")
-                displayText = stripped?.isEmpty == false ? stripped : nil
+                displayText = stripped?.isEmpty == false ? stripped : "Describe this image"
             } else {
                 displayText = userContent
             }
             return TimelineEntry(id: id, createdAt: createdAt,
-                                 content: .userBubble(text: displayText, image: nil))
+                                 content: .userBubble(text: displayText, image: nil, imageUrl: signedImageUrl, imageStableKey: imagePath))
         case "assistant":
             guard let card else { return nil }
             return TimelineEntry(id: id, createdAt: createdAt, content: .aiCard(card))
