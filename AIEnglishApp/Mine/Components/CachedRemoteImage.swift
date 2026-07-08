@@ -72,11 +72,15 @@ final class ImageCache: @unchecked Sendable {
     }
 
     func set(_ image: UIImage, forKey key: String) {
-        memory.setObject(image, forKey: key as NSString)
         if let data = image.jpegData(compressionQuality: 0.85) {
+            memory.setObject(image, forKey: key as NSString, cost: data.count)
             try? data.write(to: diskPath(for: key), options: .atomic)
+        } else {
+            memory.setObject(image, forKey: key as NSString)
         }
     }
+
+    func clearMemoryForTesting() { memory.removeAllObjects() }
 
     private func diskPath(for key: String) -> URL {
         // key 通常是 "bucket/userId/uuid.jpg"，取最后两段作为文件名避免冲突
