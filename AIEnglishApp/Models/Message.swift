@@ -11,6 +11,7 @@ struct TimelineEntry: Identifiable {
         case aiLoading
         case aiCard(AICard)
         case aiError(message: String)
+        case sendFailed(text: String?, image: UIImage?)   // 生成请求失败（含断网）：可点击重试，携带原始输入以重发
         case dateSeparator(String)   // "Today" / "Yesterday" / "Jul 3"
     }
 

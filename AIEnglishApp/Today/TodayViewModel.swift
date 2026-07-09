@@ -6,10 +6,12 @@ final class TodayViewModel {
     var entries: [TimelineEntry] = []
     var isLoading = false
     var isLoadingHistory = false
+    var isOffline = false            // 有缓存在显示、但本次刷新请求失败时为 true
     var pendingImage: UIImage?
     let session = ConversationSession()
 
     private let service: AIServicing
+    private var hasLiveActivity = false   // 本次会话是否已产生实时对话（发过消息）
 
     init(service: AIServicing = LiveAIService()) {
         self.service = service
@@ -22,19 +24,44 @@ final class TodayViewModel {
         isLoadingHistory = true
         defer { isLoadingHistory = false }
 
-        let records: [MessageRecord]
+        // 1) 先读本地缓存并立即渲染——仅当时间线还空着、且本次会话未产生实时对话。
+        //    有缓存 → 用户瞬间看到历史，不再是空白/骨架。
+        if entries.isEmpty, !hasLiveActivity,
+           let cached = LocalCache.shared.load(key: .messages),
+           let records = try? Self.decodeRecords(from: cached) {
+            entries = Self.buildEntries(from: records)
+        }
+
+        // 2) 后台向服务器请求最新数据，对齐正本（查新增/删除）
+        let data: Data
         do {
-            records = try await fetchMessageRecords()
+            data = try await fetchMessageData()
         } catch {
             print("[TodayVM] loadHistory error:", error)
+            isOffline = !entries.isEmpty   // 有缓存在显示才提示离线；彻底空手则维持现状
             return
         }
 
+        // 请求成功：更新缓存 + 清除离线标志
+        isOffline = false
+        LocalCache.shared.save(data, key: .messages)
+
+        guard let records = try? Self.decodeRecords(from: data) else { return }
+
+        // 用户已在本次会话产生实时对话 → 不用历史覆盖，避免打断
+        guard !isLoading, !hasLiveActivity else { return }
+        entries = Self.buildEntries(from: records)
+
+        print("[TodayVM] loaded \(records.count) records → \(entries.count) entries")
+        preloadRecentImages(records)
+    }
+
+    /// 把历史记录重建为时间线（含按天插入日期分隔符）
+    private static func buildEntries(from records: [MessageRecord]) -> [TimelineEntry] {
         var result: [TimelineEntry] = []
         var lastDayLabel: String?
-
         for record in records {
-            let dayLabel = Self.dayLabel(for: record.createdAt)
+            let dayLabel = dayLabel(for: record.createdAt)
             if dayLabel != lastDayLabel {
                 result.append(TimelineEntry(
                     id: UUID(), createdAt: record.createdAt,
@@ -46,12 +73,12 @@ final class TodayViewModel {
                 result.append(entry)
             }
         }
+        return result
+    }
 
-        print("[TodayVM] loaded \(records.count) records → \(result.count) entries")
-        guard !isLoading, entries.isEmpty else { return }
-        entries = result
-
-        // 背景预载最新 15 张图片，新→旧顺序；对滚动场景有效，失败安全
+    /// 背景预载最新 15 张图片，新→旧顺序；命中即跳过，失败安全。
+    /// 这一步让联网时看过的图片进入磁盘缓存，之后离线也能显示。
+    private func preloadRecentImages(_ records: [MessageRecord]) {
         Task(priority: .background) {
             let recent = records.suffix(15).reversed()
             for record in recent {
@@ -73,6 +100,8 @@ final class TodayViewModel {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let image = pendingImage
         guard !trimmed.isEmpty || image != nil else { return }
+
+        hasLiveActivity = true   // 本次会话已有实时对话，后台历史刷新不得覆盖
 
         let textToSend: String? = trimmed.isEmpty ? nil : trimmed
 
@@ -99,20 +128,32 @@ final class TodayViewModel {
         entries.append(TimelineEntry.userBubble(text: bubbleText, image: image))
         pendingImage = nil
 
+        await runGeneration(text: textToSend, image: image)
+    }
+
+    /// 用户点击"重试"：不重复生成用户气泡（它已在上方保留），仅移除失败提示后重新发起生成。
+    func retrySend(text: String?, image: UIImage?, failedEntryId: UUID) async {
+        entries.removeAll { $0.id == failedEntryId }
+        await runGeneration(text: text, image: image)
+    }
+
+    /// 发起一次 AI 生成：追加 loading → 成功换成卡片 / 失败换成可重试的 sendFailed。
+    /// 用户气泡由调用方负责，这里只管"生成"这一步，故 send 与 retry 可复用。
+    private func runGeneration(text: String?, image: UIImage?) async {
         let loadingEntry = TimelineEntry.aiLoading()
         entries.append(loadingEntry)
         isLoading = true
 
         do {
             let envelope = try await service.generate(
-                text: textToSend,
+                text: text,
                 image: image,
                 context: session.currentContext,
                 presetCardId: nil,
                 source: "tab1"
             )
             replace(loadingEntry.id, with: .aiCard(envelope.card))
-            let userContent = textToSend ?? (image != nil ? "[photo]" : nil)
+            let userContent = text ?? (image != nil ? "[photo]" : nil)
             if let userContent {
                 session.onAIResponseReceived(
                     userContent: userContent,
@@ -122,7 +163,8 @@ final class TodayViewModel {
                 )
             }
         } catch {
-            replace(loadingEntry.id, with: .aiError(message: "Something went wrong. Please try again."))
+            // 失败（含断网）：保留用户气泡，换成可点击重试的提示，原始输入随 entry 带着以便重发。
+            replace(loadingEntry.id, with: .sendFailed(text: text, image: image))
         }
         isLoading = false
     }
@@ -134,7 +176,8 @@ final class TodayViewModel {
         entries[idx] = TimelineEntry(id: id, createdAt: entries[idx].createdAt, content: content)
     }
 
-    private func fetchMessageRecords() async throws -> [MessageRecord] {
+    /// 只取原始响应字节——成功后既用于解码、也用于落盘缓存（两者同一份 Data）
+    private func fetchMessageData() async throws -> Data {
         var request = URLRequest(url: SupabaseConfig.messagesFunctionURL)
         request.httpMethod = "GET"
         try await SupabaseManager.setAuthHeaders(on: &request)
@@ -145,7 +188,11 @@ final class TodayViewModel {
             print("[TodayVM] HTTP \(http.statusCode): \(body)")
             throw URLError(.badServerResponse)
         }
+        return data
+    }
 
+    /// 把原始字节解码成记录——网络回来的和缓存读出来的走完全相同的这条路径
+    private static func decodeRecords(from data: Data) throws -> [MessageRecord] {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()
@@ -157,13 +204,7 @@ final class TodayViewModel {
             if let d = fmt.date(from: str) { return d }
             throw DecodingError.dataCorruptedError(in: container, debugDescription: "Bad date: \(str)")
         }
-
-        do {
-            return try decoder.decode([MessageRecord].self, from: data)
-        } catch {
-            print("[TodayVM] decode error:", error)
-            throw error
-        }
+        return try decoder.decode([MessageRecord].self, from: data)
     }
 
     private static func dayLabel(for date: Date) -> String {

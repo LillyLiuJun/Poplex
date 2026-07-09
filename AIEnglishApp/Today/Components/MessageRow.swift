@@ -3,6 +3,7 @@ import SwiftUI
 struct TimelineRow: View {
     let entry: TimelineEntry
     var onImageTap: ((UIImage, CGRect) -> Void)? = nil
+    var onRetry: ((_ text: String?, _ image: UIImage?, _ entryId: UUID) -> Void)? = nil
 
     var body: some View {
         switch entry.content {
@@ -14,9 +15,31 @@ struct TimelineRow: View {
             AICardView(card: card)
         case .aiError(let message):
             ErrorBanner(message: message)
+        case .sendFailed(let text, let image):
+            SendFailedRow { onRetry?(text, image, entry.id) }
         case .dateSeparator(let label):
             DateSeparatorView(label: label)
         }
+    }
+}
+
+// MARK: - Send failed (tap to retry)
+private struct SendFailedRow: View {
+    let onRetry: () -> Void
+
+    var body: some View {
+        Button(action: onRetry) {
+            HStack(spacing: AppTheme.Space.paddingXS) {
+                Image(systemName: "exclamationmark.arrow.circlepath")
+                    .imageScale(.small)
+                Text("Couldn't send. Tap to retry.")
+                    .font(AppTheme.Font.chineseFaint)
+            }
+            .foregroundStyle(AppTheme.Color.danger)
+            .frame(maxWidth: .infinity, alignment: .trailing)
+            .padding(.vertical, AppTheme.Space.paddingXS)
+        }
+        .buttonStyle(.plain)
     }
 }
 

@@ -12,6 +12,13 @@ struct TodayView: View {
             timeline
                 .navigationTitle("Today")
                 .task { await viewModel.loadHistory() }
+                .safeAreaInset(edge: .top) {
+                    if viewModel.isOffline {
+                        OfflineBanner()
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                    }
+                }
+                .animation(.easeInOut(duration: 0.25), value: viewModel.isOffline)
                 .safeAreaInset(edge: .bottom) {
                     InputBar(text: $inputText, image: $vm.pendingImage, isLoading: viewModel.isLoading) {
                         let toSend = inputText
@@ -71,6 +78,8 @@ struct TodayView: View {
                                 y: frame.midY / screen.height
                             )
                             withAnimation(.spring(duration: 0.35)) { previewImage = img }
+                        }, onRetry: { text, image, entryId in
+                            Task { await viewModel.retrySend(text: text, image: image, failedEntryId: entryId) }
                         })
                         .id(entry.id)
                     }

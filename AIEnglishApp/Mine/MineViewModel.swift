@@ -5,6 +5,7 @@ final class MineViewModel {
     var scenes: [Material] = []
     var isLoading = false
     var errorMessage: String?
+    var isOffline = false
     var selectedCategory: String? = nil   // nil = "全部"
 
     private var lastLoadedAt: Date = .distantPast
@@ -45,17 +46,33 @@ final class MineViewModel {
     }
 
     func loadScenes() async {
+        // 1. 先读本地缓存立即渲染（有缓存就不再是骨架），用墓碑过滤已删条目
+        if scenes.isEmpty,
+           let cached = LocalCache.shared.load(key: .scenes),
+           let decoded = try? Self.decodeMaterials(from: cached) {
+            let tombstones = LocalCache.shared.tombstones(for: .scenes)
+            scenes = decoded.filter { !tombstones.contains($0.id.uuidString) }
+        }
+
         isLoading = true
         errorMessage = nil
         do {
-            async let scenesResult = fetchScenes()
-            async let countResult  = fetchVocabCount()
-            scenes     = try await scenesResult
+            async let dataResult  = fetchMaterialsData()
+            async let countResult = fetchVocabCount()
+            let data   = try await dataResult
             vocabCount = (try? await countResult) ?? 0
+
+            // 请求成功：落盘、清墓碑、更新列表
+            LocalCache.shared.save(data, key: .scenes)
+            LocalCache.shared.clearTombstones(for: .scenes)
+            scenes = (try? Self.decodeMaterials(from: data)) ?? scenes
             lastLoadedAt = Date()
+            isOffline = false
             UserDefaults.standard.set(scenes.count, forKey: "mine_last_scene_count")
         } catch {
-            errorMessage = "Failed to load, please retry"
+            // 有缓存在显示 → 静默失败，仅提示离线；无缓存才显示错误
+            isOffline = !scenes.isEmpty
+            if scenes.isEmpty { errorMessage = "Failed to load, please retry" }
         }
         isLoading = false
     }
@@ -68,9 +85,10 @@ final class MineViewModel {
         return array?.count ?? 0
     }
 
-    // 乐观删除：先从列表移除，再调后端，4 秒撤销窗口
+    // 乐观删除：先从列表移除 + 立即写入墓碑（防幽灵素材），再调后端，4 秒撤销窗口
     func deleteMaterial(_ material: Material) async {
         scenes.removeAll { $0.id == material.id }
+        LocalCache.shared.addTombstone(material.id, key: .scenes)
         lastDeletedMaterial = material
 
         undoTimer?.cancel()
@@ -91,6 +109,8 @@ final class MineViewModel {
         guard let material = lastDeletedMaterial else { return }
         undoTimer?.cancel()
         lastDeletedMaterial = nil
+        // 撤销：移除墓碑，让缓存里的该条目重新可见
+        LocalCache.shared.removeTombstone(material.id, key: .scenes)
         await callMaterialEndpoint(SupabaseConfig.restoreMaterialFunctionURL, id: material.id)
         await loadScenes()
     }
@@ -104,16 +124,19 @@ final class MineViewModel {
         _ = try? await URLSession.shared.data(for: req)
     }
 
-    private func fetchScenes() async throws -> [Material] {
+    private func fetchMaterialsData() async throws -> Data {
         var req = URLRequest(url: SupabaseConfig.getMaterialsFunctionURL)
         try await SupabaseManager.setAuthHeaders(on: &req)
-
         let (data, response) = try await URLSession.shared.data(for: req)
-        if let http = response as? HTTPURLResponse {
+        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             print("[MineVM] HTTP \(http.statusCode)")
+            throw URLError(.badServerResponse)
         }
-        print("[MineVM] body: \(String(data: data, encoding: .utf8) ?? "<nil>")")
+        return data
+    }
 
+    /// 网络返回的字节和缓存读出的字节走同一条解析路径
+    static func decodeMaterials(from data: Data) throws -> [Material] {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()

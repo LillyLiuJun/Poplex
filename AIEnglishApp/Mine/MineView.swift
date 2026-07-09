@@ -50,6 +50,13 @@ struct MineView: View {
             .navigationTitle("Mine")
             .task { await vm.loadScenes() }
             .onAppear { Task { await vm.loadScenesIfStale() } }
+            .safeAreaInset(edge: .top) {
+                if vm.isOffline {
+                    OfflineBanner()
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
+            }
+            .animation(.easeInOut(duration: 0.25), value: vm.isOffline)
             .navigationDestination(isPresented: $showVocabBook) {
                 VocabBookView(vocabCount: vm.vocabCount)
             }
