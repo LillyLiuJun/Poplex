@@ -183,6 +183,25 @@ private struct FailingMock: AIServicing {
     }
 }
 
+/// 第一次抛错、之后成功——模拟"断网发送失败 → 恢复网络后重试成功"。
+/// 用 class（引用语义）才能在多次 generate 调用间共享计数。
+private final class FailOnceMock: AIServicing {
+    private var callCount = 0
+    func generate(text: String?, image: UIImage?, context: ContextTurn?,
+                  presetCardId: String?, source: String?) async throws -> AIEnvelope {
+        callCount += 1
+        if callCount == 1 { throw URLError(.notConnectedToInternet) }
+        let json = """
+        {
+            "card_type": "chat",
+            "card_content": {"text": "Recovered", "scene_connection": null},
+            "extracted_concept": null
+        }
+        """.data(using: .utf8)!
+        return try JSONDecoder().decode(AIEnvelope.self, from: json)
+    }
+}
+
 // MARK: - TodayViewModel tests
 
 struct TodayViewModelTests {
@@ -209,22 +228,171 @@ struct TodayViewModelTests {
         #expect(vm.isLoading == false)
     }
 
-    @Test func sendAppendsErrorEntryOnFailure() async {
+    // 断网/失败：保留用户气泡 + 产生可重试的 sendFailed（携带原始输入），不再是 aiError
+    @Test func sendFailureKeepsBubbleAndProducesRetryableEntry() async {
         let vm = TodayViewModel(service: FailingMock())
         await vm.send("今天会议推迟了")
 
-        let hasError = vm.entries.contains {
-            if case .aiError = $0.content { return true }
+        // 用户气泡仍在
+        let hasBubble = vm.entries.contains {
+            if case .userBubble = $0.content { return true }
             return false
         }
-        #expect(hasError)
+        #expect(hasBubble)
+
+        // 失败态是 sendFailed，且带着原始文本以便重发
+        let failed = vm.entries.first {
+            if case .sendFailed = $0.content { return true }
+            return false
+        }
+        guard let failed, case .sendFailed(let text, let image) = failed.content else {
+            Issue.record("Expected sendFailed entry"); return
+        }
+        #expect(text == "今天会议推迟了")
+        #expect(image == nil)
         #expect(vm.isLoading == false)
+    }
+
+    // 重试：移除失败提示、不新增用户气泡、成功后出现卡片
+    @Test func retryAfterFailureReplacesWithCard() async {
+        let vm = TodayViewModel(service: FailOnceMock())
+        await vm.send("今天会议推迟了")
+
+        guard let failed = vm.entries.first(where: {
+            if case .sendFailed = $0.content { return true }
+            return false
+        }), case .sendFailed(let text, let image) = failed.content else {
+            Issue.record("Expected sendFailed entry after first send"); return
+        }
+
+        let bubbleCountBefore = vm.entries.filter {
+            if case .userBubble = $0.content { return true }
+            return false
+        }.count
+
+        await vm.retrySend(text: text, image: image, failedEntryId: failed.id)
+
+        // 失败提示已移除
+        let stillFailed = vm.entries.contains {
+            if case .sendFailed = $0.content { return true }
+            return false
+        }
+        #expect(stillFailed == false)
+
+        // 出现卡片
+        let hasCard = vm.entries.contains {
+            if case .aiCard = $0.content { return true }
+            return false
+        }
+        #expect(hasCard)
+
+        // 用户气泡数量不变（重试不重复气泡）
+        let bubbleCountAfter = vm.entries.filter {
+            if case .userBubble = $0.content { return true }
+            return false
+        }.count
+        #expect(bubbleCountAfter == bubbleCountBefore)
     }
 
     @Test func sendIgnoresBlankInput() async {
         let vm = TodayViewModel(service: SuccessMock())
         await vm.send("   ")
         #expect(vm.entries.isEmpty)
+    }
+}
+
+// MARK: - Onboarding gate three-state parsing tests
+
+struct OnboardingStateParsingTests {
+
+    // 有行且有完成时间 → completed（同机重装的老用户直接进主界面）
+    @Test func rowWithDateMeansCompleted() {
+        let date = Date(timeIntervalSince1970: 1_780_000_000)
+        let state = ProfileService.parseOnboardingState(completedDates: [date])
+        #expect(state == .completed(date))
+    }
+
+    // 有行但完成时间为空 → notCompleted（唯一允许进引导的情况）
+    @Test func rowWithNilDateMeansNotCompleted() {
+        let state = ProfileService.parseOnboardingState(completedDates: [nil])
+        #expect(state == .notCompleted)
+    }
+
+    // 查不到行 → missingProfile（数据缺失 ≠ 没走过引导，与 notCompleted 严格区分）
+    @Test func emptyRowsMeansMissingProfile() {
+        let state = ProfileService.parseOnboardingState(completedDates: [])
+        #expect(state == .missingProfile)
+    }
+}
+
+// MARK: - LocalCache tombstone tests
+
+struct LocalCacheTombstoneTests {
+
+    // 加墓碑 → 读缓存时该 ID 被过滤（不再出现）
+    @Test func tombstonedIdIsFilteredFromCache() {
+        let id = UUID()
+        LocalCache.shared.addTombstone(id, key: .scenes)
+        let tombstones = LocalCache.shared.tombstones(for: .scenes)
+        #expect(tombstones.contains(id.uuidString))
+        LocalCache.shared.removeTombstone(id, key: .scenes)
+    }
+
+    // 撤销：移除墓碑后 ID 重新出现
+    @Test func removeTombstoneRestoresVisibility() {
+        let id = UUID()
+        LocalCache.shared.addTombstone(id, key: .scenes)
+        LocalCache.shared.removeTombstone(id, key: .scenes)
+        let tombstones = LocalCache.shared.tombstones(for: .scenes)
+        #expect(tombstones.contains(id.uuidString) == false)
+    }
+
+    // 成功拉取服务器后清空墓碑（服务器为正本，已不含被删条目）
+    @Test func clearTombstonesEmptiesAll() {
+        let id1 = UUID()
+        let id2 = UUID()
+        LocalCache.shared.addTombstone(id1, key: .vocabs)
+        LocalCache.shared.addTombstone(id2, key: .vocabs)
+        LocalCache.shared.clearTombstones(for: .vocabs)
+        let tombstones = LocalCache.shared.tombstones(for: .vocabs)
+        #expect(tombstones.isEmpty)
+    }
+
+    // scenes 和 vocabs 各自独立（不互相污染）
+    @Test func tombstonesAreScopedPerKey() {
+        let id = UUID()
+        LocalCache.shared.addTombstone(id, key: .scenes)
+        let vocabTombstones = LocalCache.shared.tombstones(for: .vocabs)
+        #expect(vocabTombstones.contains(id.uuidString) == false)
+        LocalCache.shared.removeTombstone(id, key: .scenes)
+    }
+}
+
+// MARK: - LocalCache tests
+
+struct LocalCacheTests {
+
+    @Test func saveThenLoadRoundTrips() {
+        let payload = #"[{"hello":"world"}]"#.data(using: .utf8)!
+        LocalCache.shared.save(payload, key: .vocabs)
+        let loaded = LocalCache.shared.load(key: .vocabs)
+        #expect(loaded == payload)
+        LocalCache.shared.remove(key: .vocabs)   // 清理，避免污染其它用例
+    }
+
+    @Test func removeThenLoadReturnsNil() {
+        let payload = #"{"x":1}"#.data(using: .utf8)!
+        LocalCache.shared.save(payload, key: .scenes)
+        LocalCache.shared.remove(key: .scenes)
+        #expect(LocalCache.shared.load(key: .scenes) == nil)
+    }
+
+    @Test func saveOverwritesPrevious() {
+        LocalCache.shared.save("old".data(using: .utf8)!, key: .messages)
+        LocalCache.shared.save("new".data(using: .utf8)!, key: .messages)
+        let loaded = LocalCache.shared.load(key: .messages)
+        #expect(loaded == "new".data(using: .utf8)!)
+        LocalCache.shared.remove(key: .messages)
     }
 }
 

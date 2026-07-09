@@ -339,7 +339,8 @@ async function saveMaterial(
   cardContent: Record<string, unknown>,
   userText: string,
   userId: string | null,
-  sourceImageUrl: string | null
+  sourceImageUrl: string | null,
+  source: string
 ): Promise<void> {
   if (!SUPABASE_URL || !SUPABASE_SVC_KEY) return;
 
@@ -369,6 +370,7 @@ async function saveMaterial(
         material_type: materialType,
         status: materialType === 'vocabulary' ? 'categorized' : 'pending',
         raw_content: rawContent,
+        source,
       }),
     });
 
@@ -449,18 +451,32 @@ Deno.serve(async (req) => {
       return json({ error: "missing_input" }, 400);
     }
 
-    // onboarding 每次重新生成前清掉旧记录，确保 DB 里只保留最终一条
+    // onboarding 每次重新生成前清掉旧记录，确保 DB 里只保留最终一条。
+    // 先查 profiles：若已有 onboarding_completed_at（走完引导的用户），跳过清理，
+    // 保留已有数据不被覆盖；只有明确"尚未完成"的用户才需要清旧记录重试。
     if (source === 'onboarding' && userId && SUPABASE_URL && SUPABASE_SVC_KEY) {
-      await fetch(
-        `${SUPABASE_URL}/rest/v1/messages?user_id=eq.${userId}&source=eq.onboarding`,
+      const profileRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}&select=onboarding_completed_at`,
         {
-          method: 'DELETE',
           headers: {
             'Authorization': `Bearer ${SUPABASE_SVC_KEY}`,
             'apikey': SUPABASE_SVC_KEY,
           },
         }
       );
+      const profiles = await profileRes.json() as Array<{ onboarding_completed_at: string | null }>;
+      const alreadyCompleted = profiles.length > 0 && profiles[0].onboarding_completed_at != null;
+
+      if (!alreadyCompleted) {
+        const svcHeaders = {
+          'Authorization': `Bearer ${SUPABASE_SVC_KEY}`,
+          'apikey': SUPABASE_SVC_KEY,
+        };
+        await Promise.all([
+          fetch(`${SUPABASE_URL}/rest/v1/messages?user_id=eq.${userId}&source=eq.onboarding`, { method: 'DELETE', headers: svcHeaders }),
+          fetch(`${SUPABASE_URL}/rest/v1/materials?user_id=eq.${userId}&source=eq.onboarding`, { method: 'DELETE', headers: svcHeaders }),
+        ]);
+      }
     }
 
     // 在 AI 调用之前就锁定 user 消息时间戳，确保比 assistant 的 now() 早，与异步顺序无关
@@ -553,7 +569,7 @@ Deno.serve(async (req) => {
         extracted_concept: parsed.extracted_concept ?? null,
         status: "delivered",
       }, userId, null),
-      saveMaterial(parsed.card_type ?? '', parsed.card_content ?? {}, (text ?? '').trim(), userId, sourceImagePath),
+      saveMaterial(parsed.card_type ?? '', parsed.card_content ?? {}, (text ?? '').trim(), userId, sourceImagePath, source ?? 'tab1'),
     ]);
 
     return json(parsed, 200);
