@@ -7,25 +7,26 @@ struct S1VocabCardView: View {
         VStack(alignment: .leading, spacing: AppTheme.Space.paddingCard) {
             HStack(alignment: .firstTextBaseline, spacing: AppTheme.Space.paddingS) {
                 Text(content.pos)
-                    .font(.caption)
-                    .foregroundStyle(AppTheme.Color.textSecondary)
+                    .font(AppTheme.Font.pos)
+                    .foregroundStyle(AppTheme.Color.textMuted)
                 Text(content.word)
-                    .font(.title3.bold())
+                    .font(AppTheme.Font.englishPrimary)
                 Text(content.phonetic)
-                    .font(.caption)
-                    .foregroundStyle(AppTheme.Color.textSecondary)
+                    .font(AppTheme.Font.phonetic)
+                    .foregroundStyle(AppTheme.Color.textMuted)
             }
+            .padding(.trailing, 72)
 
             Text(content.definition)
-                .font(.body)
-                .foregroundStyle(AppTheme.Color.textAccent)
+                .font(AppTheme.Font.chineseBody)
+                .foregroundStyle(AppTheme.Color.textSecondary)
 
             if let example = content.examples.first {
                 VStack(alignment: .leading, spacing: AppTheme.Space.paddingXS) {
                     Text("\u{201C}\(example.en)\u{201D}")
-                        .font(.callout)
+                        .font(AppTheme.Font.englishBody)
                     Text(example.zh)
-                        .font(.callout)
+                        .font(AppTheme.Font.chineseBody)
                         .foregroundStyle(AppTheme.Color.textSecondary)
                 }
             }
@@ -35,6 +36,20 @@ struct S1VocabCardView: View {
         .padding(AppTheme.Space.paddingCard)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(AppTheme.Color.cardBg)
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
+        .overlay(
+            RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
+                .stroke(AppTheme.Color.border, lineWidth: 0.5)
+        )
+        .shadow(
+            color: AppTheme.Shadow.cardColor,
+            radius: AppTheme.Shadow.cardRadius,
+            x: AppTheme.Shadow.cardX,
+            y: AppTheme.Shadow.cardY
+        )
+        .overlay(alignment: .topTrailing) {
+            CardTypeChip(label: "Word", color: AppTheme.Color.chipWord)
+                .padding(AppTheme.Space.paddingCard)
+        }
     }
 }

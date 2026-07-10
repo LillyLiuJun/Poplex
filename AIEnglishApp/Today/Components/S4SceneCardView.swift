@@ -9,10 +9,12 @@ struct S4SceneCardView: View {
                 Text(original)
                     .font(AppTheme.Font.chineseFaint)
                     .foregroundStyle(AppTheme.Color.textFaint)
+                    .padding(.trailing, 72)
             } else if let guess = content.aiSceneGuess {
                 Text(guess)
                     .font(AppTheme.Font.chineseFaint)
                     .foregroundStyle(AppTheme.Color.textFaint)
+                    .padding(.trailing, 72)
             }
 
             Text(content.nativeTranslation)
@@ -46,5 +48,9 @@ struct S4SceneCardView: View {
             x: AppTheme.Shadow.cardX,
             y: AppTheme.Shadow.cardY
         )
+        .overlay(alignment: .topTrailing) {
+            CardTypeChip(label: "Moment", color: AppTheme.Color.chipMoment)
+                .padding(AppTheme.Space.paddingCard)
+        }
     }
 }

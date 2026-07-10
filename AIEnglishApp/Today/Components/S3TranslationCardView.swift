@@ -8,26 +8,28 @@ struct S3TranslationCardView: View {
             VStack(alignment: .leading, spacing: AppTheme.Space.paddingXS) {
                 HStack(alignment: .firstTextBaseline, spacing: AppTheme.Space.paddingS) {
                     Text(content.chineseConcept)
-                        .font(.title3.bold())
+                        .font(AppTheme.Font.englishPrimary)
                     Text("→")
-                        .foregroundStyle(AppTheme.Color.textSecondary)
+                        .foregroundStyle(AppTheme.Color.textMuted)
                     Text(content.englishTranslation)
-                        .font(.title3.bold())
-                        .foregroundStyle(AppTheme.Color.textAccent)
+                        .font(AppTheme.Font.englishPrimary)
+                        .foregroundStyle(AppTheme.Color.textPrimary)
                 }
+                .padding(.trailing, 72)
+
                 HStack(spacing: AppTheme.Space.paddingS) {
                     Text(content.pos)
                     Text(content.phonetic)
                 }
-                .font(.caption)
-                .foregroundStyle(AppTheme.Color.textSecondary)
+                .font(AppTheme.Font.pos)
+                .foregroundStyle(AppTheme.Color.textMuted)
             }
 
             VStack(alignment: .leading, spacing: AppTheme.Space.paddingXS) {
                 Text("\u{201C}\(content.example.en)\u{201D}")
-                    .font(.callout)
+                    .font(AppTheme.Font.englishBody)
                 Text(content.example.zh)
-                    .font(.callout)
+                    .font(AppTheme.Font.chineseBody)
                     .foregroundStyle(AppTheme.Color.textSecondary)
             }
 
@@ -36,6 +38,20 @@ struct S3TranslationCardView: View {
         .padding(AppTheme.Space.paddingCard)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(AppTheme.Color.cardBg)
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
+        .overlay(
+            RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
+                .stroke(AppTheme.Color.border, lineWidth: 0.5)
+        )
+        .shadow(
+            color: AppTheme.Shadow.cardColor,
+            radius: AppTheme.Shadow.cardRadius,
+            x: AppTheme.Shadow.cardX,
+            y: AppTheme.Shadow.cardY
+        )
+        .overlay(alignment: .topTrailing) {
+            CardTypeChip(label: "Translate", color: AppTheme.Color.chipTranslate)
+                .padding(AppTheme.Space.paddingCard)
+        }
     }
 }

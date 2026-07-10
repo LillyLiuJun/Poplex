@@ -125,7 +125,7 @@ struct ErrorBanner: View {
 
     var body: some View {
         Text(message)
-            .font(.footnote)
+            .font(AppTheme.Font.chineseFaint)
             .foregroundStyle(AppTheme.Color.textSecondary)
             .frame(maxWidth: .infinity, alignment: .center)
             .padding(AppTheme.Space.paddingCard)
@@ -142,7 +142,7 @@ private struct DateSeparatorView: View {
                 .fill(AppTheme.Color.textSecondary.opacity(0.25))
                 .frame(height: 0.5)
             Text(label)
-                .font(.caption)
+                .font(AppTheme.Font.date)
                 .foregroundStyle(AppTheme.Color.textSecondary)
                 .fixedSize()
             Rectangle()
