@@ -32,19 +32,34 @@ private enum Primitive {
     static let radius16: CGFloat = 16
     static let radius20: CGFloat = 20
 
-    // 色值（浅色锁定，固定 hex —— 已退出系统自适应，深色模式留后续版本）
-    static let warmWhite    = Color(hex: 0xFAFAF8)  // 暖白页面底
-    static let pureWhite    = Color(hex: 0xFFFFFF)  // 卡片底
-    static let warmSubtle   = Color(hex: 0xF3F2EF)  // 用户气泡 / 输入框底
-    static let nearBlack    = Color(hex: 0x111111)  // 英文主内容 / 控件
-    static let graphite     = Color(hex: 0x374151)  // 次要英文
-    static let slateGray    = Color(hex: 0x6B7280)  // 音标/词性/语法/中文翻译
-    static let ashGray      = Color(hex: 0x9CA3AF)  // 中文原文/日期（最浅）
-    static let sage         = Color(hex: 0x2D7D52)  // AI 专属声音
-    static let sageBg       = Color(hex: 0xF0FAF5)  // AI 声音轻背景
-    static let warmBorder   = Color(hex: 0xE8E5E0)  // 卡片描边
-    static let dashGray     = Color(hex: 0xD9D6D0)  // 卡片内虚线
-    static let dangerRed    = Color(hex: 0xDC2626)  // 删除
+    // ── 底与面（浅色锁定，固定 hex）──────────────────────────────────────
+    static let pureWhite    = Color(hex: 0xFFFFFF)  // 页面底 / 卡片底
+    static let surfaceInput = Color(hex: 0xFAF9F7)  // 输入框底
+
+    // ── 文字：近黑锚系 ────────────────────────────────────────────────────
+    static let nearBlack    = Color(hex: 0x1B1A18)  // 主文字 / CTA 锚
+    static let charcoal     = Color(hex: 0x4A4844)  // 次要文字
+    static let stone        = Color(hex: 0x85817A)  // 音标 / 词性 / 说明
+    static let ash          = Color(hex: 0xB4B0A8)  // 最弱文字 / 占位
+
+    // ── 糖果四色 · 全浓度（chip / 贴纸 / 小圆点 —— 仅用于小块点缀）────────
+    static let candyBlue    = Color(hex: 0x84E2FA)
+    static let candyPink    = Color(hex: 0xFF88D3)
+    static let candyGreen   = Color(hex: 0xA6F686)
+    static let candyYellow  = Color(hex: 0xFFCD20)
+
+    // ── 糖果四色 · 淡染（气泡 / 胶囊 / 大面积底色）──────────────────────
+    static let tintBlue     = Color(hex: 0xDDF5FD)
+    static let tintPink     = Color(hex: 0xFFE3F4)
+    static let tintGreen    = Color(hex: 0xE4FBD9)
+    static let tintYellow   = Color(hex: 0xFFF3C4)
+
+    // ── AI 追问 / 核心词组 ────────────────────────────────────────────────
+    static let triggerGreen = Color(hex: 0x3E9D4E)  // 全浓度绿加深至 AA 可读
+
+    // ── 描边 / 状态 ───────────────────────────────────────────────────────
+    static let warmBorder   = Color(hex: 0xF1EFEB)
+    static let dangerRed    = Color(hex: 0xDC2626)
 }
 
 // MARK: - Semantic layer (purpose-named tokens — components reference only these)
@@ -61,38 +76,50 @@ enum AppTheme {
 
     enum Color {
         // 背景
-        static let pageBg   = Primitive.warmWhite
+        static let pageBg   = Primitive.pureWhite
         static let cardBg   = Primitive.pureWhite
-        static let inputBg  = Primitive.warmSubtle
+        static let inputBg  = Primitive.surfaceInput
 
-        // 文字（英文由重到轻：primary → secondary → muted；中文只有 faint 一档）
+        // 文字（由重到轻）
         static let textPrimary   = Primitive.nearBlack
-        static let textSecondary = Primitive.graphite
-        static let textMuted     = Primitive.slateGray
-        static let textFaint     = Primitive.ashGray
+        static let textSecondary = Primitive.charcoal
+        static let textMuted     = Primitive.stone
+        static let textFaint     = Primitive.ash
 
-        // AI 专属声音（scene trigger / 核心词组）—— 绝不用于交互控件
-        static let accentBuddy   = Primitive.sage
-        static let accentBuddyBg = Primitive.sageBg
+        // 卡片类型 chip · 全浓度（仅用于小色块点缀，不做大面积填充）
+        static let chipMoment    = Primitive.candyPink    // S4 Moment
+        static let chipWord      = Primitive.candyBlue    // S1 Word
+        static let chipPolish    = Primitive.candyYellow  // S2 Polish
+        static let chipTranslate = Primitive.candyGreen   // S3 Translate
 
-        // 交互控件（发送键 / 选中态 / CTA）—— 中性近黑
+        // 淡染（大面积底：气泡 / 胶囊 / 插画底）
+        static let tintMoment    = Primitive.tintPink
+        static let tintWord      = Primitive.tintBlue
+        static let tintPolish    = Primitive.tintYellow
+        static let tintTranslate = Primitive.tintGreen
+
+        // AI 追问区 / 核心词组
+        static let accentBuddy   = Primitive.triggerGreen
+        static let accentBuddyBg = Primitive.tintGreen
+
+        // 交互控件（发送键 / CTA）
         static let interactive   = Primitive.nearBlack
+
+        // 用户气泡
+        static let bubbleUserBg   = Primitive.tintBlue
+        static let bubbleUserText = Primitive.nearBlack
+        static let bubbleAIBg     = Primitive.pureWhite
 
         // 描边 / 分割
         static let border       = Primitive.warmBorder
-        static let borderDashed = Primitive.dashGray
+        static let borderDashed = Primitive.warmBorder
         static let divider      = Primitive.warmBorder
 
         // 语义状态
         static let danger = Primitive.dangerRed
 
-        // 用户气泡（横向铺开阶段再定，暂留）
-        static let bubbleUserBg   = Primitive.nearBlack
-        static let bubbleUserText = Primitive.pureWhite
-        static let bubbleAIBg     = Primitive.pureWhite
-
         // MARK: 过渡别名（旧组件仍引用，横向迁移后废弃 —— 勿在新代码中使用）
-        static let textAccent = Primitive.sage
+        static let textAccent = Primitive.triggerGreen
     }
 
     enum Font {
@@ -119,9 +146,9 @@ enum AppTheme {
     }
 
     enum Shadow {
-        static let cardColor: SwiftUI.Color = SwiftUI.Color.black.opacity(0.05)
-        static let cardRadius: CGFloat = 4
+        static let cardColor: SwiftUI.Color = SwiftUI.Color.black.opacity(0.06)
+        static let cardRadius: CGFloat = 14
         static let cardX: CGFloat = 0
-        static let cardY: CGFloat = 1
+        static let cardY: CGFloat = 2
     }
 }
