@@ -1,8 +1,15 @@
 import SwiftUI
 
 struct MineView: View {
+    var listResetToken: UUID = UUID()
+    @Binding var swipeActionOpen: Bool
     @State private var vm = MineViewModel()
     @State private var showVocabBook = false
+
+    init(listResetToken: UUID = UUID(), swipeActionOpen: Binding<Bool> = .constant(false)) {
+        self.listResetToken = listResetToken
+        self._swipeActionOpen = swipeActionOpen
+    }
 
     var body: some View {
         NavigationStack {
@@ -132,6 +139,16 @@ struct MineView: View {
                 ))
             }
             .listStyle(.plain)
+            .id(listResetToken)
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 5)
+                    .onChanged { value in
+                        if value.translation.width < -30 { swipeActionOpen = true }
+                    }
+                    .onEnded { value in
+                        if value.translation.width > 30 { swipeActionOpen = false }
+                    }
+            )
         }
     }
 }

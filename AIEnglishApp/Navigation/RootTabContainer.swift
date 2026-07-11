@@ -3,6 +3,10 @@ import SwiftUI
 struct RootTabContainer: View {
     @State private var selectedTab: AppTab = .today
     @State private var showAccountMenu = false
+    @State private var mineListResetToken = UUID()
+    @State private var mineSwipeActionOpen = false
+    @State private var capturedSwipeOpen = false
+    @State private var captureRecorded = false
 
     private var appVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
@@ -40,6 +44,12 @@ struct RootTabContainer: View {
                 .opacity(showAccountMenu ? 1.0 : 0)
                 .allowsHitTesting(showAccountMenu)
         }
+        .onChange(of: selectedTab) { oldTab, _ in
+            if oldTab == .mine {
+                mineListResetToken = UUID()
+                mineSwipeActionOpen = false
+            }
+        }
     }
 
     private func openMenu() {
@@ -55,20 +65,34 @@ struct RootTabContainer: View {
             TodayView()
                 .opacity(selectedTab == .today ? 1 : 0)
                 .allowsHitTesting(selectedTab == .today)
-            MineView()
+            MineView(listResetToken: mineListResetToken, swipeActionOpen: $mineSwipeActionOpen)
                 .opacity(selectedTab == .mine ? 1 : 0)
                 .allowsHitTesting(selectedTab == .mine)
         }
         .simultaneousGesture(
             DragGesture(minimumDistance: 30, coordinateSpace: .local)
+                .onChanged { value in
+                    // Capture swipe state at gesture start, before List's onEnded can clear it
+                    if !captureRecorded {
+                        captureRecorded = true
+                        capturedSwipeOpen = mineSwipeActionOpen
+                    }
+                }
                 .onEnded { value in
+                    defer { captureRecorded = false }
                     let dx = value.translation.width
                     let dy = value.translation.height
                     guard abs(dx) > abs(dy) else { return }
                     if dx < -60 && selectedTab == .today {
                         withAnimation(.easeInOut(duration: 0.2)) { selectedTab = .mine }
                     } else if dx > 60 && selectedTab == .mine {
-                        withAnimation(.easeInOut(duration: 0.2)) { selectedTab = .today }
+                        if capturedSwipeOpen {
+                            // Delete was open — reset list, don't switch tab
+                            mineListResetToken = UUID()
+                            mineSwipeActionOpen = false
+                        } else {
+                            withAnimation(.easeInOut(duration: 0.2)) { selectedTab = .today }
+                        }
                     }
                 }
         )
