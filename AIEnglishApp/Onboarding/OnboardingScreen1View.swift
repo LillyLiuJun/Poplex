@@ -29,7 +29,7 @@ struct OnboardingScreen1View: View {
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
             .padding(.horizontal, AppTheme.Space.paddingPage)
-            .padding(.bottom, 56)
+            .padding(.bottom, AppTheme.Space.paddingScreenBottom)
         }
         .contentShape(Rectangle())
         .onHorizontalSwipe(onLeft: onForward)

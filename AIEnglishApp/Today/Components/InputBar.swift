@@ -60,7 +60,7 @@ struct InputBar: View {
                 .lineLimit(1...4)
                 .padding(AppTheme.Space.paddingS)
                 .background(AppTheme.Color.inputBg)
-                .clipShape(RoundedRectangle(cornerRadius: 20))
+                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.large))
                 .focused($isFocused)
             Button {
                 isFocused = false
