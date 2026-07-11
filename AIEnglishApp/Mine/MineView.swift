@@ -47,7 +47,7 @@ struct MineView: View {
                     sceneList
                 }
             }
-            .navigationTitle("Mine")
+            .toolbar(.hidden, for: .navigationBar)
             .task { await vm.loadScenes() }
             .onAppear { Task { await vm.loadScenesIfStale() } }
             .safeAreaInset(edge: .top) {

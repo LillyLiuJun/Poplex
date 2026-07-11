@@ -133,6 +133,7 @@ enum AppTheme {
         static let chineseBody    = SwiftUI.Font.system(.callout)                     // 中文翻译
         static let date           = SwiftUI.Font.system(.caption2, weight: .semibold) // 日期分隔
         static let hero           = SwiftUI.Font.system(.largeTitle, weight: .bold)   // Onboarding 标题
+        static let tabLabel       = SwiftUI.Font.system(.subheadline, weight: .semibold) // 顶部 Tab 名称
     }
 
     enum Radius {
@@ -152,3 +153,4 @@ enum AppTheme {
         static let cardY: CGFloat = 2
     }
 }
+

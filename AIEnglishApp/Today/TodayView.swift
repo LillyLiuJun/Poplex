@@ -8,26 +8,23 @@ struct TodayView: View {
 
     var body: some View {
         @Bindable var vm = viewModel
-        NavigationStack {
-            timeline
-                .navigationTitle("Today")
-                .task { await viewModel.loadHistory() }
-                .safeAreaInset(edge: .top) {
-                    if viewModel.isOffline {
-                        OfflineBanner()
-                            .transition(.move(edge: .top).combined(with: .opacity))
-                    }
+        timeline
+            .task { await viewModel.loadHistory() }
+            .safeAreaInset(edge: .top) {
+                if viewModel.isOffline {
+                    OfflineBanner()
+                        .transition(.move(edge: .top).combined(with: .opacity))
                 }
-                .animation(.easeInOut(duration: 0.25), value: viewModel.isOffline)
-                .safeAreaInset(edge: .bottom) {
-                    InputBar(text: $inputText, image: $vm.pendingImage, isLoading: viewModel.isLoading) {
-                        let toSend = inputText
-                        inputText = ""
-                        Task { await viewModel.send(toSend) }
-                    }
+            }
+            .animation(.easeInOut(duration: 0.25), value: viewModel.isOffline)
+            .safeAreaInset(edge: .bottom) {
+                InputBar(text: $inputText, image: $vm.pendingImage, isLoading: viewModel.isLoading) {
+                    let toSend = inputText
+                    inputText = ""
+                    Task { await viewModel.send(toSend) }
                 }
-        }
-        .overlay {
+            }
+            .overlay {
             ZStack {
                 if previewImage != nil {
                     Color.black
