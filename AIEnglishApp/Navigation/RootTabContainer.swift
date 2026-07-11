@@ -2,13 +2,52 @@ import SwiftUI
 
 struct RootTabContainer: View {
     @State private var selectedTab: AppTab = .today
+    @State private var showAccountMenu = false
+
+    private var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+    }
+
+    private var menuItems: [AccountMenuItem] {
+        [
+            AccountMenuItem(id: "settings", icon: "gearshape",   title: "Settings") {},
+            AccountMenuItem(id: "about",    icon: "info.circle", title: "About")    {},
+        ]
+    }
 
     var body: some View {
-        VStack(spacing: 0) {
-            topBar
-            contentArea
+        ZStack(alignment: .topLeading) {
+            VStack(spacing: 0) {
+                topBar
+                contentArea
+            }
+            .background(AppTheme.Color.pageBg)
+
+            // Dismiss layer — only intercepts taps when menu is visible
+            if showAccountMenu {
+                Color.clear
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .ignoresSafeArea()
+                    .contentShape(Rectangle())
+                    .onTapGesture { closeMenu() }
+            }
+
+            // Menu always in hierarchy; scale + opacity drive the animation
+            AccountMenuView(items: menuItems, appVersion: appVersion, onDismiss: closeMenu)
+                .padding(.leading, AppTheme.Space.paddingPage)
+                .padding(.top, AppTheme.Space.paddingHero)
+                .scaleEffect(showAccountMenu ? 1.0 : 0.75, anchor: .topLeading)
+                .opacity(showAccountMenu ? 1.0 : 0)
+                .allowsHitTesting(showAccountMenu)
         }
-        .background(AppTheme.Color.pageBg)
+    }
+
+    private func openMenu() {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showAccountMenu = true }
+    }
+
+    private func closeMenu() {
+        withAnimation(.easeOut(duration: 0.18)) { showAccountMenu = false }
     }
 
     private var contentArea: some View {
@@ -20,9 +59,6 @@ struct RootTabContainer: View {
                 .opacity(selectedTab == .mine ? 1 : 0)
                 .allowsHitTesting(selectedTab == .mine)
         }
-        // simultaneousGesture 让我们的手势与子视图手势同时运行，不互相阻断。
-        // 方向判断保证：左滑只在 Today 触发切换，右滑只在 Mine 触发切换，
-        // 与 Mine 列表行的左滑删除方向相反，完全不冲突。
         .simultaneousGesture(
             DragGesture(minimumDistance: 30, coordinateSpace: .local)
                 .onEnded { value in
@@ -40,10 +76,15 @@ struct RootTabContainer: View {
 
     private var topBar: some View {
         HStack {
-            Circle()
-                .fill(AppTheme.Color.border)
-                .frame(width: 32, height: 32)
-                .padding(.leading, AppTheme.Space.paddingPage)
+            Button {
+                showAccountMenu ? closeMenu() : openMenu()
+            } label: {
+                Circle()
+                    .fill(AppTheme.Color.border)
+                    .frame(width: 32, height: 32)
+            }
+            .buttonStyle(.plain)
+            .padding(.leading, AppTheme.Space.paddingPage)
             Spacer()
             TopTabSelector(selectedTab: $selectedTab)
                 .padding(.trailing, AppTheme.Space.paddingPage)
