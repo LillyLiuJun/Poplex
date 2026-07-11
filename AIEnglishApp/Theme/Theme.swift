@@ -31,6 +31,7 @@ private enum Primitive {
     static let radius8: CGFloat  = 8
     static let radius16: CGFloat = 16
     static let radius20: CGFloat = 20
+    static let radius28: CGFloat = 28
 
     // ── 底与面（浅色锁定，固定 hex）──────────────────────────────────────
     static let pureWhite    = Color(hex: 0xFFFFFF)  // 页面底 / 卡片底
@@ -137,9 +138,10 @@ enum AppTheme {
     }
 
     enum Radius {
-        static let small: CGFloat  = Primitive.radius8   // tag / 小元素
-        static let medium: CGFloat = Primitive.radius16  // 卡片 / 气泡
-        static let large: CGFloat  = Primitive.radius20  // 输入框
+        static let small: CGFloat          = Primitive.radius8   // tag / 小元素
+        static let medium: CGFloat         = Primitive.radius16  // 卡片 / 气泡
+        static let large: CGFloat          = Primitive.radius20  // 输入框
+        static let glassContainer: CGFloat = Primitive.radius28  // 浮动 glass 容器
 
         // MARK: 过渡别名（旧组件仍引用，横向迁移后统一到上面三档）
         static let bubble: CGFloat = Primitive.radius16
@@ -151,6 +153,38 @@ enum AppTheme {
         static let cardRadius: CGFloat = 14
         static let cardX: CGFloat = 0
         static let cardY: CGFloat = 2
+    }
+}
+
+// MARK: - Glass container modifier
+// iOS 26+: native Liquid Glass via .glassEffect(in:)
+// iOS 17-25: .ultraThinMaterial + shadow fallback
+// Components call .glassContainer() and never inline material values.
+
+private struct GlassContainerModifier: ViewModifier {
+    let cornerRadius: CGFloat
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 26, *) {
+            content
+                .glassEffect(in: RoundedRectangle(cornerRadius: cornerRadius))
+        } else {
+            content
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: cornerRadius))
+                .shadow(
+                    color: AppTheme.Shadow.cardColor,
+                    radius: AppTheme.Shadow.cardRadius,
+                    x: AppTheme.Shadow.cardX,
+                    y: AppTheme.Shadow.cardY
+                )
+        }
+    }
+}
+
+extension View {
+    func glassContainer(cornerRadius: CGFloat = AppTheme.Radius.glassContainer) -> some View {
+        modifier(GlassContainerModifier(cornerRadius: cornerRadius))
     }
 }
 

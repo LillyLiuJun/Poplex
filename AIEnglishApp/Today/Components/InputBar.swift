@@ -24,6 +24,9 @@ struct InputBar: View {
             inputRow
         }
         .padding(AppTheme.Space.paddingCard)
+        .glassContainer()
+        .padding(.horizontal, AppTheme.Space.paddingPage)
+        .padding(.bottom, AppTheme.Space.paddingS)
         .sheet(isPresented: $showCamera) {
             CameraPickerView(onImage: { img in image = img }, onCancel: {})
         }
