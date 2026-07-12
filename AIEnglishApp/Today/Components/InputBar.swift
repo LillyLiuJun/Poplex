@@ -8,8 +8,7 @@ struct InputBar: View {
     var onSend: () -> Void
 
     @FocusState private var isFocused: Bool
-    @State private var showCamera = false
-    @State private var showPhotoLibrary = false
+    @State private var activeSheet: CaptureSource?
     @State private var showCameraPermissionAlert = false
 
     private var canSend: Bool {
@@ -27,11 +26,17 @@ struct InputBar: View {
         .glassContainer()
         .padding(.horizontal, AppTheme.Space.paddingPage)
         .padding(.bottom, AppTheme.Space.paddingS)
-        .sheet(isPresented: $showCamera) {
-            CameraPickerView(onImage: { img in image = img }, onCancel: {})
-        }
-        .sheet(isPresented: $showPhotoLibrary) {
-            PHPickerView(image: $image)
+        // One sheet, switched by CaptureSource — never two live modals at once,
+        // so SwiftUI's presentation state can't desync between camera & photo.
+        .sheet(item: $activeSheet) { source in
+            switch source {
+            case .camera:
+                CameraCaptureView(onImage: { img in image = img })
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.hidden)
+            case .photoLibrary:
+                PHPickerView(image: $image, onFinish: { activeSheet = nil })
+            }
         }
         .alert("Camera Access Required", isPresented: $showCameraPermissionAlert) {
             Button("Open Settings") {
@@ -51,17 +56,28 @@ struct InputBar: View {
                     .font(.title2)
                     .foregroundStyle(AppTheme.Color.textAccent)
             }
-            Button { showPhotoLibrary = true } label: {
+            .buttonStyle(PressableButtonStyle())
+            Button { activeSheet = .photoLibrary } label: {
                 Image(systemName: "photo")
                     .font(.title2)
                     .foregroundStyle(AppTheme.Color.textAccent)
             }
-            TextField("Describe your moment in Chinese or English...", text: $text, axis: .vertical)
+            .buttonStyle(PressableButtonStyle())
+            TextField("Anything in your life....", text: $text, axis: .vertical)
                 .lineLimit(1...4)
                 .padding(AppTheme.Space.paddingS)
                 .background(AppTheme.Color.inputBg)
                 .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.large))
                 .focused($isFocused)
+                .onChange(of: text) { _, newValue in
+                    // Collapse whitespace/newline-only content to a true empty
+                    // string so the placeholder reappears (a lingering "\n"
+                    // otherwise suppresses it while the field looks blank).
+                    if !newValue.isEmpty,
+                       newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        text = ""
+                    }
+                }
             Button {
                 isFocused = false
                 onSend()
@@ -70,6 +86,7 @@ struct InputBar: View {
                     .font(.title)
                     .foregroundStyle(canSend ? AppTheme.Color.textAccent : AppTheme.Color.textSecondary)
             }
+            .buttonStyle(PressableButtonStyle())
             .disabled(!canSend)
         }
     }
@@ -95,11 +112,11 @@ struct InputBar: View {
     private func checkCameraPermission() {
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
-            showCamera = true
+            activeSheet = .camera
         case .notDetermined:
             AVCaptureDevice.requestAccess(for: .video) { granted in
                 DispatchQueue.main.async {
-                    if granted { showCamera = true }
+                    if granted { activeSheet = .camera }
                 }
             }
         default:

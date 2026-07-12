@@ -61,6 +61,11 @@ private enum Primitive {
     // ── 描边 / 状态 ───────────────────────────────────────────────────────
     static let warmBorder   = Color(hex: 0xF1EFEB)
     static let dangerRed    = Color(hex: 0xDC2626)
+
+    // ── 覆盖在实时媒体（相机画面）上的控件 ────────────────────────────────
+    static let mediaSurface   = Color.black             // 相机全屏底
+    static let controlOnMedia = Color.white             // 画面上的图标 / 快门
+    static let scrimOnMedia    = Color.black.opacity(0.35) // 图标背后的半透明托底
 }
 
 // MARK: - Semantic layer (purpose-named tokens — components reference only these)
@@ -118,6 +123,11 @@ enum AppTheme {
 
         // 语义状态
         static let danger = Primitive.dangerRed
+
+        // 相机全屏表面 + 覆盖控件（白控件浮在实时画面上，与浅色主题无关）
+        static let cameraBg        = Primitive.mediaSurface
+        static let cameraControl   = Primitive.controlOnMedia
+        static let cameraControlBg = Primitive.scrimOnMedia
 
         // MARK: 过渡别名（旧组件仍引用，横向迁移后废弃 —— 勿在新代码中使用）
         static let textAccent = Primitive.triggerGreen

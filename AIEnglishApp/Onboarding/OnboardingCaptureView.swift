@@ -8,9 +8,7 @@ struct OnboardingCaptureView: View {
 
     @State private var pendingCard: PresetCard?
     @State private var pendingImage: UIImage?
-    @State private var showCamera = false
-    @State private var showPhotoPicker = false
-    @State private var photoPickerItem: PhotosPickerItem?
+    @State private var activeSheet: CaptureSource?
 
     private var isSelecting: Bool { viewModel.selectedCard == nil && viewModel.selectedImage == nil }
     private var hasSelection: Bool { pendingCard != nil || pendingImage != nil }
@@ -43,26 +41,29 @@ struct OnboardingCaptureView: View {
         .animation(.easeInOut(duration: 0.3), value: isSelecting)
         .contentShape(Rectangle())
         .onHorizontalSwipe(onRight: handleBack)
-        .sheet(isPresented: $showCamera) {
-            CameraPickerView(
-                onImage: { image in
-                    pendingImage = image
-                    pendingCard = nil
-                },
-                onCancel: {}
-            )
-            .ignoresSafeArea()
-        }
-        .photosPicker(isPresented: $showPhotoPicker, selection: $photoPickerItem, matching: .images)
-        .onChange(of: photoPickerItem) { _, item in
-            guard let item else { return }
-            Task {
-                if let data = try? await item.loadTransferable(type: Data.self),
-                   let image = UIImage(data: data) {
-                    pendingImage = image
-                    pendingCard = nil
-                }
+        // One sheet, switched by CaptureSource — never two live modals at once,
+        // so SwiftUI's presentation state can't desync between camera & photo.
+        .sheet(item: $activeSheet) { source in
+            switch source {
+            case .camera:
+                CameraCaptureView(
+                    onImage: { image in
+                        pendingImage = image
+                        pendingCard = nil
+                    }
+                )
+                .presentationDetents([.large])
+                .presentationDragIndicator(.hidden)
+            case .photoLibrary:
+                PHPickerView(
+                    image: $pendingImage,
+                    onFinish: { activeSheet = nil }
+                )
             }
+        }
+        .onChange(of: pendingImage) { _, newImage in
+            // Selecting a photo (any source) clears a previously picked card.
+            if newImage != nil { pendingCard = nil }
         }
     }
 
@@ -94,10 +95,10 @@ struct OnboardingCaptureView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     HStack(spacing: AppTheme.Space.paddingS) {
                         CaptureButton(icon: "camera", label: "Take a photo") {
-                            showCamera = true
+                            activeSheet = .camera
                         }
                         CaptureButton(icon: "photo.on.rectangle", label: "Choose photo") {
-                            showPhotoPicker = true
+                            activeSheet = .photoLibrary
                         }
                     }
                     .padding(.horizontal, AppTheme.Space.paddingPage)

@@ -70,7 +70,7 @@ struct RootTabContainer: View {
                 .allowsHitTesting(selectedTab == .mine)
         }
         .simultaneousGesture(
-            DragGesture(minimumDistance: 30, coordinateSpace: .local)
+            DragGesture(minimumDistance: 20, coordinateSpace: .local)
                 .onChanged { value in
                     // Capture swipe state at gesture start, before List's onEnded can clear it
                     if !captureRecorded {
