@@ -9,6 +9,12 @@ struct OnboardingCaptureView: View {
     @State private var pendingCard: PresetCard?
     @State private var pendingImage: UIImage?
     @State private var activeSheet: CaptureSource?
+    // Holds the photo picked inside the sheet until the sheet has fully
+    // dismissed. Writing it straight into `pendingImage` would reshape the
+    // layout underneath the sheet in the same transaction that tears the
+    // sheet down, which desyncs the presentation state on device and leaves
+    // both entry buttons dead afterwards.
+    @State private var stagedImage: UIImage?
 
     private var isSelecting: Bool { viewModel.selectedCard == nil && viewModel.selectedImage == nil }
     private var hasSelection: Bool { pendingCard != nil || pendingImage != nil }
@@ -43,27 +49,23 @@ struct OnboardingCaptureView: View {
         .onHorizontalSwipe(onRight: handleBack)
         // One sheet, switched by CaptureSource — never two live modals at once,
         // so SwiftUI's presentation state can't desync between camera & photo.
-        .sheet(item: $activeSheet) { source in
+        // Both sources write into `stagedImage`; the result is applied in
+        // onDismiss, after the presentation is fully torn down.
+        .sheet(item: $activeSheet, onDismiss: applyStagedImage) { source in
             switch source {
             case .camera:
                 CameraCaptureView(
-                    onImage: { image in
-                        pendingImage = image
-                        pendingCard = nil
-                    }
+                    onImage: { stagedImage = $0 },
+                    onClose: { activeSheet = nil }
                 )
                 .presentationDetents([.large])
                 .presentationDragIndicator(.hidden)
             case .photoLibrary:
                 PHPickerView(
-                    image: $pendingImage,
+                    image: $stagedImage,
                     onFinish: { activeSheet = nil }
                 )
             }
-        }
-        .onChange(of: pendingImage) { _, newImage in
-            // Selecting a photo (any source) clears a previously picked card.
-            if newImage != nil { pendingCard = nil }
         }
     }
 
@@ -77,6 +79,16 @@ struct OnboardingCaptureView: View {
                 .padding(AppTheme.Space.paddingS)
                 .contentShape(Rectangle())
         }
+    }
+
+    // Runs in the sheet's onDismiss, i.e. only once the modal is gone, so the
+    // preview/Continue layout change can never race the dismissal animation.
+    // Selecting a photo (any source) also clears a previously picked card.
+    private func applyStagedImage() {
+        guard let image = stagedImage else { return }
+        stagedImage = nil
+        pendingImage = image
+        pendingCard = nil
     }
 
     private func handleBack() {
@@ -129,6 +141,14 @@ struct OnboardingCaptureView: View {
                                 .foregroundStyle(.white, Color.accentColor)
                                 .padding(8)
                         }
+                        // clipShape only clips DRAWING, not hit-testing: an
+                        // aspect-filled portrait camera photo really lays out
+                        // ~470pt tall inside this 160pt frame and invisibly
+                        // overflows ~155pt upward — right over the two capture
+                        // buttons, swallowing their taps ("entries dead after
+                        // taking a photo"). Display-only view → opt out of
+                        // hit-testing entirely.
+                        .allowsHitTesting(false)
                         .padding(.horizontal, AppTheme.Space.paddingPage)
                         .padding(.bottom, AppTheme.Space.paddingCard)
                     }
@@ -195,6 +215,9 @@ struct OnboardingCaptureView: View {
             }
             .frame(width: 64, height: 64)
             .clipShape(RoundedRectangle(cornerRadius: 10))
+            // Same clipped-overflow-still-hit-tests gotcha as the selection
+            // preview; display-only.
+            .allowsHitTesting(false)
             .padding(.horizontal, AppTheme.Space.paddingPage)
             .padding(.bottom, AppTheme.Space.paddingSection)
 
@@ -334,6 +357,9 @@ private struct PresetCardTile: View {
                         .transition(.scale.combined(with: .opacity))
                 }
             }
+            // Restrict the tappable area to the visible tile — the aspect-fill
+            // image overflows the clip invisibly and would steal neighbors' taps.
+            .contentShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
         }
         .buttonStyle(.plain)
     }

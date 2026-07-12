@@ -65,6 +65,10 @@ private struct UserBubble: View {
                         .frame(width: imageSize, height: imageSize)
                         .clipped()
                         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.bubble))
+                        // Clip affects drawing only — restrict hit-testing to
+                        // the visible bubble so the invisible overflow can't
+                        // swallow taps around the message.
+                        .contentShape(RoundedRectangle(cornerRadius: AppTheme.Radius.bubble))
                         .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { imageFrame = $0 }
                         .onTapGesture { onImageTap?(img, imageFrame) }
                 }

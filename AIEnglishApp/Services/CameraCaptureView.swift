@@ -154,8 +154,12 @@ private struct CameraPreview: UIViewRepresentable {
 
 struct CameraCaptureView: View {
     var onImage: (UIImage) -> Void
+    // Closing is delegated to the presenter (which sets its `activeSheet = nil`)
+    // instead of `@Environment(\.dismiss)`. Self-dismissing while the capture
+    // path also mutates the presenter's state desyncs `.sheet(item:)` and leaves
+    // the entry points dead after the first real photo. This mirrors PHPickerView.
+    var onClose: () -> Void
 
-    @Environment(\.dismiss) private var dismiss
     @State private var model = CameraCaptureModel()
     @State private var isCapturing = false
 
@@ -182,7 +186,7 @@ struct CameraCaptureView: View {
 
     private var topControls: some View {
         HStack {
-            CameraControlButton(icon: "xmark") { dismiss() }
+            CameraControlButton(icon: "xmark") { onClose() }
             Spacer()
             CameraControlButton(icon: flashIcon) { model.cycleFlash() }
         }
@@ -217,9 +221,14 @@ struct CameraCaptureView: View {
         model.capture { image in
             isCapturing = false
             if let image {
+                // The presenter stages the photo and applies it in the sheet's
+                // onDismiss — it must NOT reshape its layout here, while the
+                // sheet is still up (that desyncs presentation state on device).
                 onImage(image)
             }
-            dismiss()
+            // Same single close path as the X button and PHPickerView: hand the
+            // close back to the presenter's binding rather than self-dismissing.
+            onClose()
         }
     }
 }

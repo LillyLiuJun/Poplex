@@ -10,6 +10,12 @@ struct InputBar: View {
     @FocusState private var isFocused: Bool
     @State private var activeSheet: CaptureSource?
     @State private var showCameraPermissionAlert = false
+    // Holds the photo picked inside the sheet until the sheet has fully
+    // dismissed. Writing it straight into `image` would insert the thumbnail
+    // row (layout change) in the same transaction that tears the sheet down,
+    // which desyncs the presentation state on device and leaves the camera /
+    // library buttons dead afterwards.
+    @State private var stagedImage: UIImage?
 
     private var canSend: Bool {
         (!text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || image != nil) && !isLoading
@@ -28,14 +34,16 @@ struct InputBar: View {
         .padding(.bottom, AppTheme.Space.paddingS)
         // One sheet, switched by CaptureSource — never two live modals at once,
         // so SwiftUI's presentation state can't desync between camera & photo.
-        .sheet(item: $activeSheet) { source in
+        // Both sources write into `stagedImage`; the result is applied in
+        // onDismiss, after the presentation is fully torn down.
+        .sheet(item: $activeSheet, onDismiss: applyStagedImage) { source in
             switch source {
             case .camera:
-                CameraCaptureView(onImage: { img in image = img })
+                CameraCaptureView(onImage: { stagedImage = $0 }, onClose: { activeSheet = nil })
                     .presentationDetents([.large])
                     .presentationDragIndicator(.hidden)
             case .photoLibrary:
-                PHPickerView(image: $image, onFinish: { activeSheet = nil })
+                PHPickerView(image: $stagedImage, onFinish: { activeSheet = nil })
             }
         }
         .alert("Camera Access Required", isPresented: $showCameraPermissionAlert) {
@@ -99,6 +107,11 @@ struct InputBar: View {
                 .aspectRatio(contentMode: .fill)
                 .frame(width: 72, height: 72)
                 .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
+                // clipShape only clips drawing, not hit-testing: the filled
+                // photo overflows this frame invisibly and would eat taps on
+                // the camera/library buttons below. Keep the X button live,
+                // so disable hits on the image only.
+                .allowsHitTesting(false)
             Button { image = nil } label: {
                 Image(systemName: "xmark.circle.fill")
                     .foregroundStyle(.white, Color(uiColor: .systemGray3))
@@ -107,6 +120,14 @@ struct InputBar: View {
             }
         }
         .padding(.leading, AppTheme.Space.paddingS)
+    }
+
+    // Runs in the sheet's onDismiss, i.e. only once the modal is gone, so the
+    // thumbnail-row layout change can never race the dismissal animation.
+    private func applyStagedImage() {
+        guard let staged = stagedImage else { return }
+        stagedImage = nil
+        image = staged
     }
 
     private func checkCameraPermission() {
