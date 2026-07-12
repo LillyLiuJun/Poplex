@@ -27,6 +27,9 @@ private enum Primitive {
     static let space48: CGFloat = 48
     static let space56: CGFloat = 56
 
+    // 控件尺寸
+    static let size44: CGFloat = 44
+
     // 圆角
     static let radius8: CGFloat  = 8
     static let radius16: CGFloat = 16
@@ -73,6 +76,7 @@ enum AppTheme {
     enum Space {
         static let paddingXS: CGFloat           = Primitive.space4
         static let paddingS: CGFloat            = Primitive.space8
+        static let paddingM: CGFloat            = Primitive.space12
         static let paddingCard: CGFloat         = Primitive.space16
         static let paddingPage: CGFloat         = Primitive.space20
         static let paddingSection: CGFloat      = Primitive.space32
@@ -164,6 +168,15 @@ enum AppTheme {
         static let cardX: CGFloat = 0
         static let cardY: CGFloat = 2
     }
+
+    enum Size {
+        static let barControl: CGFloat = Primitive.size44  // 顶栏/工具栏可点控件标准边长
+    }
+
+    enum Motion {
+        // 顶部 Tab 选中滑块：贴近系统分段控件的弹性手感（有回弹、不过冲太多）
+        static let tabSelection: Animation = .spring(response: 0.34, dampingFraction: 0.72)
+    }
 }
 
 // MARK: - Glass container modifier
@@ -192,9 +205,77 @@ private struct GlassContainerModifier: ViewModifier {
     }
 }
 
+// MARK: - Glass bar item modifier (顶栏导航件)
+// iOS 26: native glass in the given shape; interactive only for tappable items —
+// interactive glass on a non-button container swallows child button taps
+// iOS 17-25: ultraThinMaterial + shadow fallback
+private struct GlassBarItemModifier<S: Shape>: ViewModifier {
+    let shape: S
+    let interactive: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 26, *) {
+            content
+                .glassEffect(interactive ? .regular.interactive() : .regular, in: shape)
+        } else {
+            content
+                .background(.ultraThinMaterial, in: shape)
+                .shadow(color: AppTheme.Shadow.cardColor, radius: 8, x: 0, y: 2)
+        }
+    }
+}
+
+// MARK: - Top edge scroll fade (顶栏下内容可读性)
+// iOS 26: registers soft scroll edge effect on the enclosing ScrollView
+// iOS 17-25: no-op (safeAreaInset keeps content starting below the bar)
+private struct TopEdgeFadeModifier: ViewModifier {
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 26, *) {
+            content
+                .scrollEdgeEffectStyle(.soft, for: .top)
+        } else {
+            content
+        }
+    }
+}
+
+// MARK: - GlassGroup container
+// iOS 26: wraps children in GlassEffectContainer for merged rendering
+// iOS 17-25: transparent passthrough (each child handles its own material fallback)
+struct GlassGroup<Content: View>: View {
+    let spacing: CGFloat
+    @ViewBuilder let content: () -> Content
+
+    init(spacing: CGFloat = AppTheme.Space.paddingS, @ViewBuilder content: @escaping () -> Content) {
+        self.spacing = spacing
+        self.content = content
+    }
+
+    @ViewBuilder
+    var body: some View {
+        if #available(iOS 26, *) {
+            GlassEffectContainer(spacing: spacing) {
+                content()
+            }
+        } else {
+            content()
+        }
+    }
+}
+
 extension View {
     func glassContainer(cornerRadius: CGFloat = AppTheme.Radius.glassContainer) -> some View {
         modifier(GlassContainerModifier(cornerRadius: cornerRadius))
+    }
+
+    func glassBarItem<S: Shape>(in shape: S, interactive: Bool = true) -> some View {
+        modifier(GlassBarItemModifier(shape: shape, interactive: interactive))
+    }
+
+    func topEdgeFade() -> some View {
+        modifier(TopEdgeFadeModifier())
     }
 }
 
