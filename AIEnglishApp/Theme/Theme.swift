@@ -216,8 +216,12 @@ private struct GlassBarItemModifier<S: Shape>: ViewModifier {
     @ViewBuilder
     func body(content: Content) -> some View {
         if #available(iOS 26, *) {
+            // Shadow added explicitly: glass on a white background has no inherent
+            // border or depth cue, so without a shadow the element is invisible at
+            // rest (only visible when coloured content scrolls behind it).
             content
                 .glassEffect(interactive ? .regular.interactive() : .regular, in: shape)
+                .shadow(color: AppTheme.Shadow.cardColor, radius: 10, x: 0, y: 2)
         } else {
             content
                 .background(.ultraThinMaterial, in: shape)

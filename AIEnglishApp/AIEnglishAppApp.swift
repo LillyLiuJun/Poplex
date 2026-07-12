@@ -86,12 +86,25 @@ struct RootView: View {
                 }
             }
         }
-        .task { await syncOnboardingStateFromRemote() }
+        // Race the network sync against a 20-second timeout using a TaskGroup so
+        // whichever finishes first automatically cancels the other — avoids the
+        // false-positive retry page that appeared when slow-but-successful cold
+        // starts (auth Keychain restore + Supabase round-trip) exceeded 10 s.
         .task {
-            // 兜底超时：若 10 秒内 syncOnboardingStateFromRemote 仍未完成（网络极慢或卡住），
-            // 直接显示重试页，而不是让用户盯着空白屏幕等。
-            try? await Task.sleep(for: .seconds(10))
-            if gate == .checking { gate = .connectionFailed }
+            await withTaskGroup(of: Void.self) { group in
+                group.addTask { await syncOnboardingStateFromRemote() }
+                group.addTask {
+                    do {
+                        try await Task.sleep(for: .seconds(20))
+                        if gate == .checking { gate = .connectionFailed }
+                    } catch {
+                        // Cancelled because sync completed first — nothing to do
+                    }
+                }
+                // Wait for whichever task finishes first, then Swift's structured
+                // concurrency cancels the remaining one automatically on scope exit
+                await group.next()
+            }
         }
     }
 
