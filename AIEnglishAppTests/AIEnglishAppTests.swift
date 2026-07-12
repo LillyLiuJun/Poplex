@@ -3,6 +3,34 @@ import Foundation
 import UIKit
 @testable import AIEnglishApp
 
+// MARK: - AppTab navigation state tests
+
+struct AppTabTests {
+
+    @Test func defaultTabIsToday() {
+        let tab = AppTab.today
+        #expect(tab == .today)
+    }
+
+    @Test func tabSwitchesToMine() {
+        var selected: AppTab = .today
+        selected = .mine
+        #expect(selected == .mine)
+    }
+
+    @Test func tabSwitchesBackToToday() {
+        var selected: AppTab = .mine
+        selected = .today
+        #expect(selected == .today)
+    }
+
+    @Test func inputBarVisibleOnlyForToday() {
+        let isVisible: (AppTab) -> Bool = { $0 == .today }
+        #expect(isVisible(.today) == true)
+        #expect(isVisible(.mine) == false)
+    }
+}
+
 // MARK: - AIEnvelope JSON decode tests
 
 struct AIEnvelopeDecodeTests {

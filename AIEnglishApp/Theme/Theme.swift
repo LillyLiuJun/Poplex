@@ -31,6 +31,7 @@ private enum Primitive {
     static let radius8: CGFloat  = 8
     static let radius16: CGFloat = 16
     static let radius20: CGFloat = 20
+    static let radius28: CGFloat = 28
 
     // ── 底与面（浅色锁定，固定 hex）──────────────────────────────────────
     static let pureWhite    = Color(hex: 0xFFFFFF)  // 页面底 / 卡片底
@@ -60,6 +61,11 @@ private enum Primitive {
     // ── 描边 / 状态 ───────────────────────────────────────────────────────
     static let warmBorder   = Color(hex: 0xF1EFEB)
     static let dangerRed    = Color(hex: 0xDC2626)
+
+    // ── 覆盖在实时媒体（相机画面）上的控件 ────────────────────────────────
+    static let mediaSurface   = Color.black             // 相机全屏底
+    static let controlOnMedia = Color.white             // 画面上的图标 / 快门
+    static let scrimOnMedia    = Color.black.opacity(0.35) // 图标背后的半透明托底
 }
 
 // MARK: - Semantic layer (purpose-named tokens — components reference only these)
@@ -118,6 +124,11 @@ enum AppTheme {
         // 语义状态
         static let danger = Primitive.dangerRed
 
+        // 相机全屏表面 + 覆盖控件（白控件浮在实时画面上，与浅色主题无关）
+        static let cameraBg        = Primitive.mediaSurface
+        static let cameraControl   = Primitive.controlOnMedia
+        static let cameraControlBg = Primitive.scrimOnMedia
+
         // MARK: 过渡别名（旧组件仍引用，横向迁移后废弃 —— 勿在新代码中使用）
         static let textAccent = Primitive.triggerGreen
     }
@@ -133,12 +144,14 @@ enum AppTheme {
         static let chineseBody    = SwiftUI.Font.system(.callout)                     // 中文翻译
         static let date           = SwiftUI.Font.system(.caption2, weight: .semibold) // 日期分隔
         static let hero           = SwiftUI.Font.system(.largeTitle, weight: .bold)   // Onboarding 标题
+        static let tabLabel       = SwiftUI.Font.system(.subheadline, weight: .semibold) // 顶部 Tab 名称
     }
 
     enum Radius {
-        static let small: CGFloat  = Primitive.radius8   // tag / 小元素
-        static let medium: CGFloat = Primitive.radius16  // 卡片 / 气泡
-        static let large: CGFloat  = Primitive.radius20  // 输入框
+        static let small: CGFloat          = Primitive.radius8   // tag / 小元素
+        static let medium: CGFloat         = Primitive.radius16  // 卡片 / 气泡
+        static let large: CGFloat          = Primitive.radius20  // 输入框
+        static let glassContainer: CGFloat = Primitive.radius28  // 浮动 glass 容器
 
         // MARK: 过渡别名（旧组件仍引用，横向迁移后统一到上面三档）
         static let bubble: CGFloat = Primitive.radius16
@@ -152,3 +165,36 @@ enum AppTheme {
         static let cardY: CGFloat = 2
     }
 }
+
+// MARK: - Glass container modifier
+// iOS 26+: native Liquid Glass via .glassEffect(in:)
+// iOS 17-25: .ultraThinMaterial + shadow fallback
+// Components call .glassContainer() and never inline material values.
+
+private struct GlassContainerModifier: ViewModifier {
+    let cornerRadius: CGFloat
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 26, *) {
+            content
+                .glassEffect(in: RoundedRectangle(cornerRadius: cornerRadius))
+        } else {
+            content
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: cornerRadius))
+                .shadow(
+                    color: AppTheme.Shadow.cardColor,
+                    radius: AppTheme.Shadow.cardRadius,
+                    x: AppTheme.Shadow.cardX,
+                    y: AppTheme.Shadow.cardY
+                )
+        }
+    }
+}
+
+extension View {
+    func glassContainer(cornerRadius: CGFloat = AppTheme.Radius.glassContainer) -> some View {
+        modifier(GlassContainerModifier(cornerRadius: cornerRadius))
+    }
+}
+
