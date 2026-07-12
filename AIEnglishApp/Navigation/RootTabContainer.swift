@@ -1,10 +1,20 @@
 import SwiftUI
 
+/// 顶栏浮层的实测高度，向下传给 Mine 以在其独立 NavigationStack 内预留等高空位
+private struct TopBarHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
 struct RootTabContainer: View {
     @State private var selectedTab: AppTab = .today
     @State private var showAccountMenu = false
     @State private var mineListResetToken = UUID()
     @State private var mineSwipeActionOpen = false
+    @State private var mineDetailActive = false
+    @State private var topBarHeight: CGFloat = 0
     @State private var capturedSwipeOpen = false
     @State private var captureRecorded = false
 
@@ -21,11 +31,15 @@ struct RootTabContainer: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            VStack(spacing: 0) {
-                topBar
-                contentArea
-            }
-            .background(AppTheme.Color.pageBg)
+            // Content fills full screen; topBar floats as a safeArea inset above it.
+            // Hidden while a Mine detail page is pushed — detail pages own their own chrome.
+            contentArea
+                .safeAreaInset(edge: .top) {
+                    if !(selectedTab == .mine && mineDetailActive) {
+                        topBar
+                    }
+                }
+                .onPreferenceChange(TopBarHeightKey.self) { topBarHeight = $0 }
 
             // Dismiss layer — only intercepts taps when menu is visible
             if showAccountMenu {
@@ -44,6 +58,7 @@ struct RootTabContainer: View {
                 .opacity(showAccountMenu ? 1.0 : 0)
                 .allowsHitTesting(showAccountMenu)
         }
+        .background(AppTheme.Color.pageBg)
         .onChange(of: selectedTab) { oldTab, _ in
             if oldTab == .mine {
                 mineListResetToken = UUID()
@@ -65,7 +80,7 @@ struct RootTabContainer: View {
             TodayView()
                 .opacity(selectedTab == .today ? 1 : 0)
                 .allowsHitTesting(selectedTab == .today)
-            MineView(listResetToken: mineListResetToken, swipeActionOpen: $mineSwipeActionOpen)
+            MineView(listResetToken: mineListResetToken, swipeActionOpen: $mineSwipeActionOpen, detailActive: $mineDetailActive, topInset: topBarHeight)
                 .opacity(selectedTab == .mine ? 1 : 0)
                 .allowsHitTesting(selectedTab == .mine)
         }
@@ -103,18 +118,27 @@ struct RootTabContainer: View {
             Button {
                 showAccountMenu ? closeMenu() : openMenu()
             } label: {
-                Circle()
-                    .fill(AppTheme.Color.border)
-                    .frame(width: 32, height: 32)
+                Image(systemName: "person.fill")
+                    .imageScale(.medium)
+                    .foregroundStyle(AppTheme.Color.textSecondary)
+                    .frame(width: AppTheme.Size.barControl, height: AppTheme.Size.barControl)
+                    .glassBarItem(in: Circle())
+                    .contentShape(Circle())
             }
             .buttonStyle(.plain)
             .padding(.leading, AppTheme.Space.paddingPage)
+
             Spacer()
+
             TopTabSelector(selectedTab: $selectedTab)
                 .padding(.trailing, AppTheme.Space.paddingPage)
         }
         .padding(.vertical, AppTheme.Space.paddingS)
-        .background(AppTheme.Color.pageBg)
+        .background(
+            GeometryReader { geo in
+                Color.clear.preference(key: TopBarHeightKey.self, value: geo.size.height)
+            }
+        )
     }
 }
 

@@ -1,18 +1,36 @@
 import SwiftUI
 
+/// Mine 内部导航目的地。用 Material.id（UUID, Hashable）而非整个 Material，
+/// 避免给 Material 加 Hashable；push/pop 会同步改写 path，便于即时联动顶栏显隐。
+private enum MineRoute: Hashable {
+    case scene(UUID)
+    case vocab
+}
+
 struct MineView: View {
     var listResetToken: UUID = UUID()
     @Binding var swipeActionOpen: Bool
+    @Binding var detailActive: Bool
+    /// 全局浮层顶栏的实测高度：本视图有独立 NavigationStack，会吞掉父层
+    /// safeAreaInset，需在自己内部预留等高空位，避免内容被顶栏盖住
+    var topInset: CGFloat = 0
     @State private var vm = MineViewModel()
-    @State private var showVocabBook = false
+    @State private var path: [MineRoute] = []
 
-    init(listResetToken: UUID = UUID(), swipeActionOpen: Binding<Bool> = .constant(false)) {
+    init(
+        listResetToken: UUID = UUID(),
+        swipeActionOpen: Binding<Bool> = .constant(false),
+        detailActive: Binding<Bool> = .constant(false),
+        topInset: CGFloat = 0
+    ) {
         self.listResetToken = listResetToken
         self._swipeActionOpen = swipeActionOpen
+        self._detailActive = detailActive
+        self.topInset = topInset
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             Group {
                 if vm.isLoading && vm.scenes.isEmpty {
                     // 首次加载（无历史数据）才显示骨架屏，数量用上次缓存的 count
@@ -57,16 +75,13 @@ struct MineView: View {
             .toolbar(.hidden, for: .navigationBar)
             .task { await vm.loadScenes() }
             .onAppear { Task { await vm.loadScenesIfStale() } }
-            .safeAreaInset(edge: .top) {
-                if vm.isOffline {
-                    OfflineBanner()
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                }
+            // path 变化即 push/pop 发生的同一帧 —— 顶栏据此即时显隐，无延迟闪现
+            .onChange(of: path) { _, newPath in
+                detailActive = !newPath.isEmpty
             }
+            .safeAreaInset(edge: .top, spacing: 0) { topInsetBar }
             .animation(.easeInOut(duration: 0.25), value: vm.isOffline)
-            .navigationDestination(isPresented: $showVocabBook) {
-                VocabBookView(vocabCount: vm.vocabCount)
-            }
+            .navigationDestination(for: MineRoute.self) { destination(for: $0) }
             .overlay(alignment: .bottom) {
                 if vm.lastDeletedMaterial != nil {
                     UndoToast(message: "Deleted") {
@@ -77,6 +92,32 @@ struct MineView: View {
                 }
             }
             .animation(.easeInOut(duration: 0.25), value: vm.lastDeletedMaterial != nil)
+        }
+    }
+
+    @ViewBuilder
+    private func destination(for route: MineRoute) -> some View {
+        switch route {
+        case .scene(let id):
+            if let material = vm.scenes.first(where: { $0.id == id }) {
+                SceneDetailView(material: material, onDelete: {
+                    Task { await vm.deleteMaterial(material) }
+                })
+            }
+        case .vocab:
+            VocabBookView(vocabCount: vm.vocabCount)
+        }
+    }
+
+    // 顶部预留区：全局浮层顶栏等高空位 +（离线时）离线横幅
+    @ViewBuilder
+    private var topInsetBar: some View {
+        VStack(spacing: 0) {
+            Color.clear.frame(height: topInset)
+            if vm.isOffline {
+                OfflineBanner()
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
         }
     }
 
@@ -93,7 +134,7 @@ struct MineView: View {
                 // 词汇本胶囊（常驻最右侧）
                 Button {
                     Analytics.track("vocab_book_opened", properties: ["vocab_count": vm.vocabCount])
-                    showVocabBook = true
+                    path.append(.vocab)
                 } label: {
                     Text(vm.vocabCount > 0 ? "Vocab \(vm.vocabCount)" : "Vocabulary")
                         .font(.subheadline)
@@ -112,11 +153,9 @@ struct MineView: View {
                 ForEach(vm.filteredScenes) { material in
                     if case .scene(let scene) = material.rawContent {
                         ZStack {
-                            NavigationLink {
-                                SceneDetailView(material: material, onDelete: {
-                                    Task { await vm.deleteMaterial(material) }
-                                })
-                            } label: { EmptyView() }
+                            // 隐形 value-based link：整行可点、无默认 disclosure 箭头，
+                            // 且 push 时同步写入 path（供顶栏即时联动）
+                            NavigationLink(value: MineRoute.scene(material.id)) { EmptyView() }
                                 .opacity(0)
                             SceneCardRow(materialId: material.id, scene: scene)
                         }
