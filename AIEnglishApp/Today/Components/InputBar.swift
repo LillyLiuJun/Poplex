@@ -1,6 +1,15 @@
 import SwiftUI
 import AVFoundation
 
+// Right circle button mode — derived from content + loading state.
+// Focused-but-empty is intentionally the same as idle: camera stays visible
+// because the user may want to take a photo rather than type.
+private enum RightButtonMode: Equatable {
+    case camera   // idle or focused with no content
+    case send     // has text or an image → tap submits
+    case loading  // response in flight → spinner, no action
+}
+
 struct InputBar: View {
     @Binding var text: String
     @Binding var image: UIImage?
@@ -10,32 +19,57 @@ struct InputBar: View {
     @FocusState private var isFocused: Bool
     @State private var activeSheet: CaptureSource?
     @State private var showCameraPermissionAlert = false
-    // Holds the photo picked inside the sheet until the sheet has fully
-    // dismissed. Writing it straight into `image` would insert the thumbnail
-    // row (layout change) in the same transaction that tears the sheet down,
-    // which desyncs the presentation state on device and leaves the camera /
-    // library buttons dead afterwards.
+    // Staged until the sheet is fully dismissed; applying it in onDismiss prevents
+    // the thumbnail layout change from racing the sheet teardown on device.
     @State private var stagedImage: UIImage?
+    @State private var showAttachmentMenu = false
 
-    private var canSend: Bool {
-        (!text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || image != nil) && !isLoading
+    // MARK: - Derived state
+
+    private var hasContent: Bool {
+        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || image != nil
     }
 
+    private var rightButtonMode: RightButtonMode {
+        if isLoading { return .loading }
+        return hasContent ? .send : .camera
+    }
+
+    // MARK: - Body
+
     var body: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Space.paddingS) {
-            if let selectedImage = image {
-                thumbnailPreview(selectedImage)
+        ZStack {
+            // Transparent layer captures taps anywhere outside the menu.
+            if showAttachmentMenu {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        withAnimation(.easeOut(duration: 0.18)) {
+                            showAttachmentMenu = false
+                        }
+                    }
             }
-            inputRow
+
+            // Capsule + popup anchored to the bottom-leading corner of the capsule.
+            ZStack(alignment: .bottomLeading) {
+                capsule
+
+                if showAttachmentMenu {
+                    attachmentMenu
+                        // Rise above the capsule: 52pt height + 8pt gap.
+                        .offset(x: 0, y: -(52 + AppTheme.Space.paddingS))
+                        .transition(
+                            .scale(scale: 0.85, anchor: .bottomLeading)
+                                .combined(with: .opacity)
+                        )
+                }
+            }
+            .padding(.horizontal, AppTheme.Space.paddingPage)
+            .padding(.bottom, AppTheme.Space.paddingS)
         }
-        .padding(AppTheme.Space.paddingCard)
-        .glassContainer()
-        .padding(.horizontal, AppTheme.Space.paddingPage)
-        .padding(.bottom, AppTheme.Space.paddingS)
-        // One sheet, switched by CaptureSource — never two live modals at once,
-        // so SwiftUI's presentation state can't desync between camera & photo.
-        // Both sources write into `stagedImage`; the result is applied in
-        // onDismiss, after the presentation is fully torn down.
+        // Single sheet, source-switched — two live modals can never co-exist,
+        // so SwiftUI's presentation state cannot desync between camera and picker.
         .sheet(item: $activeSheet, onDismiss: applyStagedImage) { source in
             switch source {
             case .camera:
@@ -57,73 +91,201 @@ struct InputBar: View {
         }
     }
 
-    private var inputRow: some View {
-        HStack(spacing: AppTheme.Space.paddingS) {
-            Button { checkCameraPermission() } label: {
-                Image(systemName: "camera")
-                    .font(.title2)
-                    .foregroundStyle(AppTheme.Color.textAccent)
+    // MARK: - Capsule (the single glass container)
+    // Everything visible lives inside one glassCapsule() — no nested glass.
+
+    private var capsule: some View {
+        VStack(spacing: 0) {
+            // Thumbnail above the input row when an image is staged (iMessage layout).
+            if let img = image {
+                thumbnailRow(img)
+                    .transition(.asymmetric(
+                        insertion: .scale(scale: 0.85).combined(with: .opacity),
+                        removal:   .scale(scale: 0.85).combined(with: .opacity)
+                    ))
             }
-            .buttonStyle(PressableButtonStyle())
-            Button { activeSheet = .photoLibrary } label: {
-                Image(systemName: "photo")
-                    .font(.title2)
-                    .foregroundStyle(AppTheme.Color.textAccent)
-            }
-            .buttonStyle(PressableButtonStyle())
-            TextField("Anything in your life....", text: $text, axis: .vertical)
-                .lineLimit(1...4)
-                .padding(AppTheme.Space.paddingS)
-                .background(AppTheme.Color.inputBg)
-                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.large))
-                .focused($isFocused)
-                .onChange(of: text) { _, newValue in
-                    // Collapse whitespace/newline-only content to a true empty
-                    // string so the placeholder reappears (a lingering "\n"
-                    // otherwise suppresses it while the field looks blank).
-                    if !newValue.isEmpty,
-                       newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        text = ""
-                    }
-                }
-            Button {
-                isFocused = false
-                onSend()
-            } label: {
-                Image(systemName: "arrow.up.circle")
-                    .font(.title)
-                    .foregroundStyle(canSend ? AppTheme.Color.textAccent : AppTheme.Color.textSecondary)
-            }
-            .buttonStyle(PressableButtonStyle())
-            .disabled(!canSend)
+            inputRow
         }
+        .frame(minHeight: 52)
+        .glassCapsule()
+        .animation(.easeOut(duration: 0.2), value: image != nil)
     }
 
-    @ViewBuilder
-    private func thumbnailPreview(_ img: UIImage) -> some View {
-        ZStack(alignment: .topTrailing) {
-            Image(uiImage: img)
-                .resizable()
-                .aspectRatio(contentMode: .fill)
-                .frame(width: 72, height: 72)
-                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
-                // clipShape only clips drawing, not hit-testing: the filled
-                // photo overflows this frame invisibly and would eat taps on
-                // the camera/library buttons below. Keep the X button live,
-                // so disable hits on the image only.
-                .allowsHitTesting(false)
-            Button { image = nil } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .foregroundStyle(.white, Color(uiColor: .systemGray3))
-                    .font(.system(size: 18))
-                    .offset(x: 6, y: -6)
-            }
+    // MARK: - Input row:  [+]  [TextField]  [●]
+
+    private var inputRow: some View {
+        HStack(alignment: .bottom, spacing: 0) {
+            plusButton
+            textField
+            // 4pt padding gives the 44pt button breathing room inside the 52pt capsule.
+            rightCircleButton
+                .padding(AppTheme.Space.paddingXS)
         }
         .padding(.leading, AppTheme.Space.paddingS)
     }
 
-    // Runs in the sheet's onDismiss, i.e. only once the modal is gone, so the
-    // thumbnail-row layout change can never race the dismissal animation.
+    // MARK: - + Button (attachment menu trigger)
+
+    private var plusButton: some View {
+        Button {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                showAttachmentMenu.toggle()
+            }
+        } label: {
+            Image(systemName: "plus")
+                .font(.system(size: 22))
+                .foregroundStyle(AppTheme.Color.textPrimary)
+                // 44pt hit area — prevents accidental TextField focus when aiming for +.
+                .frame(width: AppTheme.Size.barControl, height: AppTheme.Size.barControl)
+                .contentShape(Rectangle())
+                .rotationEffect(.degrees(showAttachmentMenu ? 45 : 0))
+                .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showAttachmentMenu)
+        }
+        .buttonStyle(PressableButtonStyle())
+        .disabled(isLoading)
+    }
+
+    // MARK: - TextField (no inner background — text sits directly on the glass)
+
+    private var textField: some View {
+        TextField("", text: $text, axis: .vertical)
+            .lineLimit(1...4)
+            .font(AppTheme.Font.englishBody)
+            .foregroundStyle(AppTheme.Color.textPrimary)
+            .tint(AppTheme.Color.interactive)
+            .focused($isFocused)
+            .overlay(alignment: .leadingFirstTextBaseline) {
+                // Custom placeholder gives token-controlled color (textFaint / ash).
+                // Baseline-aligned so placeholder and typed text sit on the same line.
+                if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Text("Your moment")
+                        .font(AppTheme.Font.englishBody)
+                        .foregroundStyle(AppTheme.Color.textFaint)
+                        .allowsHitTesting(false)
+                }
+            }
+            .onChange(of: text) { _, newValue in
+                // A trailing newline after deleting the last character leaves the
+                // field visually empty but suppresses the placeholder. Collapse it.
+                if !newValue.isEmpty,
+                   newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    text = ""
+                }
+            }
+    }
+
+    // MARK: - Right circle button  (camera ⇄ arrow.up ⇄ spinner)
+    // Color stays nearBlack in all states; only the icon changes.
+
+    private var rightCircleButton: some View {
+        Button {
+            switch rightButtonMode {
+            case .camera:  checkCameraPermission()
+            case .send:    isFocused = false; onSend()
+            case .loading: break
+            }
+        } label: {
+            ZStack {
+                Circle()
+                    .fill(AppTheme.Color.interactive)
+                    .frame(width: AppTheme.Size.barControl, height: AppTheme.Size.barControl)
+                rightButtonIcon
+            }
+            .animation(.spring(response: 0.28, dampingFraction: 0.72), value: rightButtonMode)
+        }
+        .buttonStyle(PressableButtonStyle())
+        .disabled(rightButtonMode == .loading)
+    }
+
+    @ViewBuilder
+    private var rightButtonIcon: some View {
+        switch rightButtonMode {
+        case .loading:
+            ProgressView()
+                .progressViewStyle(.circular)
+                .tint(.white)
+                .scaleEffect(0.85)
+        case .send:
+            Image(systemName: "arrow.up")
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(.white)
+                .transition(.scale(scale: 0.5).combined(with: .opacity))
+        case .camera:
+            Image(systemName: "camera.fill")
+                .font(.system(size: 18))
+                .foregroundStyle(.white)
+                .transition(.scale(scale: 0.5).combined(with: .opacity))
+        }
+    }
+
+    // MARK: - Attachment menu popup
+
+    private var attachmentMenu: some View {
+        VStack(spacing: 0) {
+            menuItem(icon: "camera.fill", label: "Camera") {
+                showAttachmentMenu = false
+                checkCameraPermission()
+            }
+            Divider()
+                .overlay(AppTheme.Color.border)
+            menuItem(icon: "photo.on.rectangle", label: "Photo Library") {
+                showAttachmentMenu = false
+                activeSheet = .photoLibrary
+            }
+        }
+        .glassContainer(cornerRadius: AppTheme.Radius.medium)
+        .fixedSize()
+    }
+
+    private func menuItem(icon: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: AppTheme.Space.paddingS) {
+                Image(systemName: icon)
+                    .font(.system(size: 18))
+                    .frame(width: 24)
+                Text(label)
+                    .font(AppTheme.Font.englishBody)
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(AppTheme.Color.textPrimary)
+            .padding(.horizontal, AppTheme.Space.paddingCard)
+            .padding(.vertical, AppTheme.Space.paddingM)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Thumbnail row (inside capsule, above input row)
+
+    @ViewBuilder
+    private func thumbnailRow(_ img: UIImage) -> some View {
+        HStack {
+            ZStack(alignment: .topTrailing) {
+                Image(uiImage: img)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 56, height: 56)
+                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.small))
+                    // clipShape clips drawing but not hit-testing; disable image hits
+                    // so the remove button behind it stays reachable.
+                    .allowsHitTesting(false)
+                Button {
+                    withAnimation(.easeOut(duration: 0.2)) { image = nil }
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 16))
+                        .foregroundStyle(.white, Color(uiColor: .systemGray3))
+                        .offset(x: 6, y: -6)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, AppTheme.Space.paddingS)
+        .padding(.top, AppTheme.Space.paddingS)
+    }
+
+    // MARK: - Helpers
+
     private func applyStagedImage() {
         guard let staged = stagedImage else { return }
         stagedImage = nil

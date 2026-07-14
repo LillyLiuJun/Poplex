@@ -269,6 +269,28 @@ struct GlassGroup<Content: View>: View {
     }
 }
 
+// MARK: - Glass capsule modifier (InputBar single-capsule container)
+// iOS 26+: native Liquid Glass via .glassEffect(in: Capsule())
+// iOS 17-25: .ultraThinMaterial in Capsule + shadow fallback
+private struct GlassCapsuleModifier: ViewModifier {
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 26, *) {
+            content
+                .glassEffect(in: Capsule())
+        } else {
+            content
+                .background(.ultraThinMaterial, in: Capsule())
+                .shadow(
+                    color: AppTheme.Shadow.cardColor,
+                    radius: AppTheme.Shadow.cardRadius,
+                    x: AppTheme.Shadow.cardX,
+                    y: AppTheme.Shadow.cardY
+                )
+        }
+    }
+}
+
 extension View {
     func glassContainer(cornerRadius: CGFloat = AppTheme.Radius.glassContainer) -> some View {
         modifier(GlassContainerModifier(cornerRadius: cornerRadius))
@@ -280,6 +302,10 @@ extension View {
 
     func topEdgeFade() -> some View {
         modifier(TopEdgeFadeModifier())
+    }
+
+    func glassCapsule() -> some View {
+        modifier(GlassCapsuleModifier())
     }
 }
 
