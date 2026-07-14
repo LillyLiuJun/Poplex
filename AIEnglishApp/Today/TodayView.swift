@@ -87,9 +87,12 @@ struct TodayView: View {
             }
             .topEdgeFade()
             .scrollDismissesKeyboard(.interactively)
-            .onTapGesture {
+            // simultaneousGesture instead of onTapGesture: lets InputBar buttons
+            // (e.g. the thumbnail × button) handle the tap first without
+            // the scroll view's gesture recognizer cancelling them.
+            .simultaneousGesture(TapGesture().onEnded {
                 UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-            }
+            })
             .onChange(of: viewModel.entries.count) {
                 if let last = viewModel.entries.last {
                     withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }

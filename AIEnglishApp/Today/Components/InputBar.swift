@@ -277,13 +277,9 @@ struct InputBar: View {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 18))
                         .foregroundStyle(.white, Color(uiColor: .systemGray3))
-                        // paddingXS expands the tap target to 26pt while keeping the
-                        // icon within the 56pt ZStack frame. offset() only moves the
-                        // visual, not the hit area — keeping it inside the frame is the
-                        // only reliable way to make the button tappable.
-                        .padding(AppTheme.Space.paddingXS)
                 }
-                .buttonStyle(.plain)
+                .frame(width: 32, height: 32)
+                .contentShape(Rectangle())
             }
             Spacer(minLength: 0)
         }
