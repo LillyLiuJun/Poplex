@@ -149,30 +149,31 @@ struct InputBar: View {
     // MARK: - TextField (no inner background — text sits directly on the glass)
 
     private var textField: some View {
-        TextField("", text: $text, axis: .vertical)
-            .lineLimit(1...4)
-            .font(AppTheme.Font.englishBody)
-            .foregroundStyle(AppTheme.Color.textPrimary)
-            .tint(AppTheme.Color.interactive)
-            .focused($isFocused)
-            .overlay(alignment: .leadingFirstTextBaseline) {
-                // Custom placeholder gives token-controlled color (textFaint / ash).
-                // Baseline-aligned so placeholder and typed text sit on the same line.
-                if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    Text("Your moment")
-                        .font(AppTheme.Font.englishBody)
-                        .foregroundStyle(AppTheme.Color.textFaint)
-                        .allowsHitTesting(false)
-                }
+        // prompt: renders the placeholder at exactly the same position as the real
+        // cursor, avoiding the baseline-alignment drift of a manual overlay.
+        // fixedSize(vertical: true) stops the field from greedily expanding to fill
+        // the HStack's offered height when the keyboard is hidden — without it the
+        // field can grow to 60pt+ and push "Your moment" to the top of the capsule.
+        TextField(
+            "",
+            text: $text,
+            prompt: Text("Your moment").foregroundStyle(AppTheme.Color.textFaint),
+            axis: .vertical
+        )
+        .lineLimit(1...4)
+        .fixedSize(horizontal: false, vertical: true)
+        .font(AppTheme.Font.englishBody)
+        .foregroundStyle(AppTheme.Color.textPrimary)
+        .tint(AppTheme.Color.interactive)
+        .focused($isFocused)
+        .onChange(of: text) { _, newValue in
+            // A trailing newline after deleting the last character leaves the
+            // field visually empty but suppresses the placeholder. Collapse it.
+            if !newValue.isEmpty,
+               newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                text = ""
             }
-            .onChange(of: text) { _, newValue in
-                // A trailing newline after deleting the last character leaves the
-                // field visually empty but suppresses the placeholder. Collapse it.
-                if !newValue.isEmpty,
-                   newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    text = ""
-                }
-            }
+        }
     }
 
     // MARK: - Right circle button  (camera ⇄ arrow.up ⇄ spinner)
