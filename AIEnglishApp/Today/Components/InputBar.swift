@@ -38,27 +38,18 @@ struct InputBar: View {
     // MARK: - Body
 
     var body: some View {
-        ZStack {
-            // Transparent layer captures taps anywhere outside the menu.
-            if showAttachmentMenu {
-                Color.clear
-                    .contentShape(Rectangle())
-                    .ignoresSafeArea()
-                    .onTapGesture {
-                        withAnimation(.easeOut(duration: 0.18)) {
-                            showAttachmentMenu = false
-                        }
-                    }
-            }
-
-            // Capsule + popup anchored to the bottom-leading corner of the capsule.
-            ZStack(alignment: .bottomLeading) {
-                capsule
-
+        // Overlay positions the menu WITHOUT contributing to the capsule's layout frame,
+        // so tapping + never causes the capsule to shift position.
+        capsule
+            .overlay(alignment: .topLeading) {
                 if showAttachmentMenu {
                     attachmentMenu
-                        // Rise above the capsule: 52pt height + 8pt gap.
-                        .offset(x: 0, y: -(52 + AppTheme.Space.paddingS))
+                        .fixedSize()
+                        // Place the menu above the capsule: alignmentGuide(.top) returns
+                        // d.height + gap, meaning "the child's .top anchor is at d.height+gap
+                        // within the child". SwiftUI aligns that point to the parent's .top
+                        // (y=0), so the child renders (d.height+gap) above the capsule top.
+                        .alignmentGuide(.top) { d in d.height + AppTheme.Space.paddingS }
                         .transition(
                             .scale(scale: 0.85, anchor: .bottomLeading)
                                 .combined(with: .opacity)
@@ -67,28 +58,33 @@ struct InputBar: View {
             }
             .padding(.horizontal, AppTheme.Space.paddingPage)
             .padding(.bottom, AppTheme.Space.paddingS)
-        }
-        // Single sheet, source-switched — two live modals can never co-exist,
-        // so SwiftUI's presentation state cannot desync between camera and picker.
-        .sheet(item: $activeSheet, onDismiss: applyStagedImage) { source in
-            switch source {
-            case .camera:
-                CameraCaptureView(onImage: { stagedImage = $0 }, onClose: { activeSheet = nil })
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.hidden)
-            case .photoLibrary:
-                PHPickerView(image: $stagedImage, onFinish: { activeSheet = nil })
+            // Close the menu the moment the user starts typing.
+            .onChange(of: isFocused) { _, focused in
+                if focused {
+                    withAnimation(.easeOut(duration: 0.18)) { showAttachmentMenu = false }
+                }
             }
-        }
-        .alert("Camera Access Required", isPresented: $showCameraPermissionAlert) {
-            Button("Open Settings") {
-                guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
-                UIApplication.shared.open(url)
+            // Single sheet, source-switched — two live modals can never co-exist,
+            // so SwiftUI's presentation state cannot desync between camera and picker.
+            .sheet(item: $activeSheet, onDismiss: applyStagedImage) { source in
+                switch source {
+                case .camera:
+                    CameraCaptureView(onImage: { stagedImage = $0 }, onClose: { activeSheet = nil })
+                        .presentationDetents([.large])
+                        .presentationDragIndicator(.hidden)
+                case .photoLibrary:
+                    PHPickerView(image: $stagedImage, onFinish: { activeSheet = nil })
+                }
             }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Camera access is required to take photos. Open Settings to allow access.")
-        }
+            .alert("Camera Access Required", isPresented: $showCameraPermissionAlert) {
+                Button("Open Settings") {
+                    guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+                    UIApplication.shared.open(url)
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Camera access is required to take photos. Open Settings to allow access.")
+            }
     }
 
     // MARK: - Capsule (the single glass container)
@@ -114,7 +110,11 @@ struct InputBar: View {
     // MARK: - Input row:  [+]  [TextField]  [●]
 
     private var inputRow: some View {
-        HStack(alignment: .bottom, spacing: 0) {
+        // .center alignment keeps the + icon, placeholder, and circle at the same
+        // vertical midpoint for the common single-line state. The capsule minHeight(52)
+        // and the right button's 4pt padding both resolve to a 52pt effective height,
+        // so all three elements center at 26pt from the capsule top.
+        HStack(alignment: .center, spacing: 0) {
             plusButton
             textField
             // 4pt padding gives the 44pt button breathing room inside the 52pt capsule.
