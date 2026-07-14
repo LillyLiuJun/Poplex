@@ -34,6 +34,14 @@ struct RootTabContainer: View {
             // Content fills full screen; topBar floats as a safeArea inset above it.
             // Hidden while a Mine detail page is pushed — detail pages own their own chrome.
             contentArea
+                // Frosted bar behind the floating glass pills: content scrolling up
+                // is blurred (not shown through cleanly) behind the status bar + topBar.
+                // Applied before safeAreaInset so the topBar glass renders on top of it.
+                .overlay(alignment: .top) {
+                    if !(selectedTab == .mine && mineDetailActive) {
+                        topBarBlur
+                    }
+                }
                 .safeAreaInset(edge: .top) {
                     if !(selectedTab == .mine && mineDetailActive) {
                         topBar
@@ -65,6 +73,59 @@ struct RootTabContainer: View {
                 mineSwipeActionOpen = false
             }
         }
+    }
+
+    /// 顶栏渐进式模糊（参考 Stoic）：两层叠加，盖在滚动内容之上、顶栏玻璃胶囊之下。
+    ///
+    /// 层1 —— 毛玻璃 + 渐变 mask：统一模糊经 mask 让「显示强度」自上而下递减，模拟
+    ///   variable blur（顶部彻底液化内容、底部无模糊），下沿羽化消融，无硬分割线。
+    /// 层2 —— 画布同色 alpha 渐变：顶部半透明盖住状态栏保证时间/电量可读，
+    ///   轻量不透明度（max 0.85）让遮罩本身无"存在感"，缓出至全透明。
+    ///
+    /// 高度 = 状态栏 + 顶栏 + 羽化段（paddingHero+12pt）；+12pt 给内容留足呼吸空间，
+    /// 避免卡片刚触到遮罩就被硬切断。纯视觉、不拦截点击。
+    // TODO(token): 待数值定稿后把这些 opacity 提进 AppTheme 语义层。
+    private var topBarBlur: some View {
+        GeometryReader { proxy in
+            let safeTop = proxy.safeAreaInsets.top
+            let solidH  = safeTop + topBarHeight            // 状态栏 + 顶栏：实模糊区
+            let fadeH   = AppTheme.Space.paddingHero + 12  // 羽化段：延长 12pt 增加呼吸空间
+            let totalH  = solidH + fadeH
+            let solid   = solidH / totalH                   // 实区占比（mask 拐点）
+
+            ZStack(alignment: .top) {
+                // 层1：毛玻璃，mask 让模糊随显示强度自上而下递减
+                // stops 间距拉宽，过渡更平缓，增加"虚化纵深"
+                Rectangle()
+                    .fill(.ultraThinMaterial)
+                    .mask(
+                        LinearGradient(
+                            stops: [
+                                .init(color: .black,               location: 0),
+                                .init(color: .black,               location: solid * 0.85),
+                                .init(color: .black.opacity(0.45), location: solid),
+                                .init(color: .black.opacity(0.12), location: solid + (1 - solid) * 0.55),
+                                .init(color: .clear,               location: 1.0)
+                            ],
+                            startPoint: .top, endPoint: .bottom
+                        )
+                    )
+                // 层2：画布同色 alpha 渐变，整体减重（max 0.85）让遮罩"无存在感"
+                LinearGradient(
+                    stops: [
+                        .init(color: AppTheme.Color.pageBg.opacity(0.85), location: 0),
+                        .init(color: AppTheme.Color.pageBg.opacity(0.60), location: safeTop / totalH),
+                        .init(color: AppTheme.Color.pageBg.opacity(0.15), location: solid),
+                        .init(color: AppTheme.Color.pageBg.opacity(0.0),  location: 1.0)
+                    ],
+                    startPoint: .top, endPoint: .bottom
+                )
+            }
+            .frame(height: totalH)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .ignoresSafeArea(edges: .top)
+        }
+        .allowsHitTesting(false)
     }
 
     private func openMenu() {
