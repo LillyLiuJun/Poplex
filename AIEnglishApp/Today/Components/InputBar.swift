@@ -275,15 +275,18 @@ struct InputBar: View {
                     withAnimation(.easeOut(duration: 0.2)) { image = nil }
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 16))
+                        .font(.system(size: 18))
                         .foregroundStyle(.white, Color(uiColor: .systemGray3))
+                        // offset straddles the thumbnail corner; paddingM top padding
+                        // ensures the button stays inside the capsule's curved boundary.
                         .offset(x: 6, y: -6)
                 }
             }
             Spacer(minLength: 0)
         }
         .padding(.horizontal, AppTheme.Space.paddingS)
-        .padding(.top, AppTheme.Space.paddingS)
+        .padding(.top, AppTheme.Space.paddingM)    // 12pt — keeps × inside capsule curve
+        .padding(.bottom, AppTheme.Space.paddingS) // 8pt gap before input row
     }
 
     // MARK: - Helpers
