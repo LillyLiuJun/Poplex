@@ -44,12 +44,10 @@ struct InputBar: View {
             .overlay(alignment: .topLeading) {
                 if showAttachmentMenu {
                     attachmentMenu
-                        .fixedSize()
-                        // Place the menu above the capsule: alignmentGuide(.top) returns
-                        // d.height + gap, meaning "the child's .top anchor is at d.height+gap
-                        // within the child". SwiftUI aligns that point to the parent's .top
-                        // (y=0), so the child renders (d.height+gap) above the capsule top.
-                        .alignmentGuide(.top) { d in d.height + AppTheme.Space.paddingS }
+                        // offset() is layout-neutral: the capsule never moves.
+                        // 90pt = 2 rows × ~44pt (12pt v-padding + body text) + ~2pt divider.
+                        // paddingS gap keeps the menu from touching the capsule edge.
+                        .offset(y: -(90 + AppTheme.Space.paddingS))
                         .transition(
                             .scale(scale: 0.85, anchor: .bottomLeading)
                                 .combined(with: .opacity)
@@ -135,12 +133,15 @@ struct InputBar: View {
             Image(systemName: "plus")
                 .font(.system(size: 22))
                 .foregroundStyle(AppTheme.Color.textPrimary)
-                // 44pt hit area — prevents accidental TextField focus when aiming for +.
-                .frame(width: AppTheme.Size.barControl, height: AppTheme.Size.barControl)
-                .contentShape(Rectangle())
                 .rotationEffect(.degrees(showAttachmentMenu ? 45 : 0))
                 .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showAttachmentMenu)
         }
+        // Width fixes the hit target; maxHeight makes the button fill the full
+        // HStack height so the icon always centers with the circle button —
+        // no matter whether text is single-line (52pt) or multiline (>52pt).
+        .frame(width: AppTheme.Size.barControl)
+        .frame(maxHeight: .infinity)
+        .contentShape(Rectangle())
         .buttonStyle(PressableButtonStyle())
         .disabled(isLoading)
     }
