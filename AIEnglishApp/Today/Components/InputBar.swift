@@ -133,14 +133,14 @@ struct InputBar: View {
             Image(systemName: "plus")
                 .font(.system(size: 22))
                 .foregroundStyle(AppTheme.Color.textPrimary)
+                .frame(width: AppTheme.Size.barControl, height: AppTheme.Size.barControl)
                 .rotationEffect(.degrees(showAttachmentMenu ? 45 : 0))
                 .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showAttachmentMenu)
         }
-        // Width fixes the hit target; maxHeight makes the button fill the full
-        // HStack height so the icon always centers with the circle button —
-        // no matter whether text is single-line (52pt) or multiline (>52pt).
-        .frame(width: AppTheme.Size.barControl)
-        .frame(maxHeight: .infinity)
+        // paddingXS top+bottom = 44 + 4×2 = 52pt — matches rightCircleButton's
+        // effective height (44pt circle + paddingXS on each side), so both icons
+        // share the same centre in a HStack(alignment: .center).
+        .padding(.vertical, AppTheme.Space.paddingXS)
         .contentShape(Rectangle())
         .buttonStyle(PressableButtonStyle())
         .disabled(isLoading)
