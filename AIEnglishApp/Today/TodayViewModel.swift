@@ -6,7 +6,6 @@ final class TodayViewModel {
     var entries: [TimelineEntry] = []
     var isLoading = false
     var isLoadingHistory = false
-    var isOffline = false            // 有缓存在显示、但本次刷新请求失败时为 true
     var pendingImage: UIImage?
     let session = ConversationSession()
 
@@ -37,13 +36,14 @@ final class TodayViewModel {
         do {
             data = try await fetchMessageData()
         } catch {
-            print("[TodayVM] loadHistory error:", error)
-            isOffline = !entries.isEmpty   // 有缓存在显示才提示离线；彻底空手则维持现状
+            // 静默降级：拉历史失败就继续显示本地缓存，不弹任何提示。
+            // 是否「离线」由 NetworkMonitor 的真实网络状态决定，不再把「这一次请求失败」
+            // 误判成离线——后端报错 / 超时时用户网络可能完全正常（例如刚成功生成过内容）。
+            print("[TodayVM] loadHistory error (keeping cache):", error)
             return
         }
 
-        // 请求成功：更新缓存 + 清除离线标志
-        isOffline = false
+        // 请求成功：更新缓存
         LocalCache.shared.save(data, key: .messages)
 
         guard let records = try? Self.decodeRecords(from: data) else { return }
