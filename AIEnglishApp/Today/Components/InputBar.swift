@@ -193,8 +193,8 @@ struct InputBar: View {
     private var multiLineInputRow: some View {
         VStack(spacing: 0) {
             textField
-                .padding(.horizontal, AppTheme.Space.paddingS)
-                .padding(.top, AppTheme.Space.paddingS)
+                .padding(.horizontal, AppTheme.Space.paddingCard)
+                .padding(.top, AppTheme.Space.paddingCard)
                 .padding(.bottom, AppTheme.Space.paddingXS)
             HStack(alignment: .center, spacing: 0) {
                 plusButton
