@@ -137,7 +137,7 @@ struct InputBar: View {
     private var inputRow: some View {
         Group {
             if isMultiLine {
-                multiLineInputRow
+                multiLineInputRow(hasImage: image != nil)
             } else {
                 singleLineInputRow
             }
@@ -190,11 +190,14 @@ struct InputBar: View {
     // MARK: - Multi-line layout:  [text — full width]
     //                             [+]      [spacer]      [●]
 
-    private var multiLineInputRow: some View {
+    private func multiLineInputRow(hasImage: Bool) -> some View {
         VStack(spacing: 0) {
             textField
                 .padding(.horizontal, AppTheme.Space.paddingCard)
-                .padding(.top, AppTheme.Space.paddingCard)
+                // When an image sits above the text, the thumbnail already provides
+                // visual separation — use a tighter top gap so the combined spacing
+                // (thumbnailRow bottom 8pt + this padding) doesn't balloon to 24pt.
+                .padding(.top, hasImage ? AppTheme.Space.paddingS : AppTheme.Space.paddingCard)
                 .padding(.bottom, AppTheme.Space.paddingXS)
             HStack(alignment: .center, spacing: 0) {
                 plusButton
@@ -356,7 +359,8 @@ struct InputBar: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, AppTheme.Space.paddingS)
+        .padding(.leading, AppTheme.Space.paddingM)
+        .padding(.trailing, AppTheme.Space.paddingS)
         .padding(.top, AppTheme.Space.paddingM)
         .padding(.bottom, AppTheme.Space.paddingS)
     }
