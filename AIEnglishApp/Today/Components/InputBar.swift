@@ -1,13 +1,26 @@
 import SwiftUI
 import AVFoundation
 
-// Right circle button mode — derived from content + loading state.
-// Focused-but-empty is intentionally the same as idle: camera stays visible
-// because the user may want to take a photo rather than type.
 private enum RightButtonMode: Equatable {
-    case camera   // idle or focused with no content
-    case send     // has text or an image → tap submits
-    case loading  // response in flight → spinner, no action
+    case camera
+    case send
+    case loading
+}
+
+// Measures the actual rendered width of the capsule's input row.
+private struct RowWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
+// Measures the single-line width of the current text string.
+private struct TextWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
 }
 
 struct InputBar: View {
@@ -19,10 +32,32 @@ struct InputBar: View {
     @FocusState private var isFocused: Bool
     @State private var activeSheet: CaptureSource?
     @State private var showCameraPermissionAlert = false
-    // Staged until the sheet is fully dismissed; applying it in onDismiss prevents
-    // the thumbnail layout change from racing the sheet teardown on device.
     @State private var stagedImage: UIImage?
     @State private var showAttachmentMenu = false
+
+    // Layout measurement state
+    @State private var rowWidth: CGFloat = 0
+    @State private var measuredTextWidth: CGFloat = 0
+    // Tracks whether the keyboard was open so we can re-focus after layout switch.
+    @State private var wasKeyboardOpen = false
+
+    // Total horizontal space consumed by fixed elements in single-line row:
+    // leading-padding + plus-button + right-button + right-button-padding (×2 sides)
+    private let buttonAreaWidth: CGFloat =
+        AppTheme.Space.paddingS +
+        AppTheme.Size.barControl +
+        AppTheme.Size.barControl +
+        AppTheme.Space.paddingXS * 2
+
+    private var availableInlineWidth: CGFloat {
+        max(0, rowWidth - buttonAreaWidth)
+    }
+
+    // Switches to two-row layout the moment text would overflow the inline zone.
+    private var isMultiLine: Bool {
+        guard availableInlineWidth > 0, !text.isEmpty else { return false }
+        return measuredTextWidth > availableInlineWidth
+    }
 
     // MARK: - Derived state
 
@@ -38,15 +73,10 @@ struct InputBar: View {
     // MARK: - Body
 
     var body: some View {
-        // Overlay positions the menu WITHOUT contributing to the capsule's layout frame,
-        // so tapping + never causes the capsule to shift position.
         capsule
             .overlay(alignment: .topLeading) {
                 if showAttachmentMenu {
                     attachmentMenu
-                        // offset() is layout-neutral: the capsule never moves.
-                        // 90pt = 2 rows × ~44pt (12pt v-padding + body text) + ~2pt divider.
-                        // paddingS gap keeps the menu from touching the capsule edge.
                         .offset(y: -(90 + AppTheme.Space.paddingS))
                         .transition(
                             .scale(scale: 0.85, anchor: .bottomLeading)
@@ -56,14 +86,12 @@ struct InputBar: View {
             }
             .padding(.horizontal, AppTheme.Space.paddingPage)
             .padding(.bottom, AppTheme.Space.paddingS)
-            // Close the menu the moment the user starts typing.
             .onChange(of: isFocused) { _, focused in
+                wasKeyboardOpen = focused
                 if focused {
                     withAnimation(.easeOut(duration: 0.18)) { showAttachmentMenu = false }
                 }
             }
-            // Single sheet, source-switched — two live modals can never co-exist,
-            // so SwiftUI's presentation state cannot desync between camera and picker.
             .sheet(item: $activeSheet, onDismiss: applyStagedImage) { source in
                 switch source {
                 case .camera:
@@ -85,12 +113,10 @@ struct InputBar: View {
             }
     }
 
-    // MARK: - Capsule (the single glass container)
-    // Everything visible lives inside one glassCapsule() — no nested glass.
+    // MARK: - Capsule
 
     private var capsule: some View {
         VStack(spacing: 0) {
-            // Thumbnail above the input row when an image is staged (iMessage layout).
             if let img = image {
                 thumbnailRow(img)
                     .transition(.asymmetric(
@@ -103,23 +129,81 @@ struct InputBar: View {
         .frame(minHeight: 52)
         .glassCapsule()
         .animation(.easeOut(duration: 0.2), value: image != nil)
+        .animation(.easeOut(duration: 0.2), value: isMultiLine)
     }
 
-    // MARK: - Input row:  [+]  [TextField]  [●]
+    // MARK: - Input row (layout switches based on text width)
 
     private var inputRow: some View {
-        // .center alignment keeps the + icon, placeholder, and circle at the same
-        // vertical midpoint for the common single-line state. The capsule minHeight(52)
-        // and the right button's 4pt padding both resolve to a 52pt effective height,
-        // so all three elements center at 26pt from the capsule top.
+        Group {
+            if isMultiLine {
+                multiLineInputRow
+            } else {
+                singleLineInputRow
+            }
+        }
+        // Measure the full row width so we know how much space the inline text zone has.
+        .background(
+            GeometryReader { geo in
+                Color.clear.preference(key: RowWidthKey.self, value: geo.size.width)
+            }
+        )
+        // Hidden single-line Text tells us how wide the current string would be at lineLimit(1).
+        // This fires before the layout renders, so the switch is seamless.
+        .overlay(alignment: .leading) {
+            if !text.isEmpty {
+                Text(text)
+                    .lineLimit(1)
+                    .font(AppTheme.Font.englishBody)
+                    .fixedSize()
+                    .opacity(0)
+                    .allowsHitTesting(false)
+                    .background(
+                        GeometryReader { geo in
+                            Color.clear.preference(key: TextWidthKey.self, value: geo.size.width)
+                        }
+                    )
+            }
+        }
+        .onPreferenceChange(RowWidthKey.self) { if $0 > 0 { rowWidth = $0 } }
+        .onPreferenceChange(TextWidthKey.self) { measuredTextWidth = text.isEmpty ? 0 : $0 }
+        // Re-focus the TextField after the layout switch if the keyboard was already open.
+        .onChange(of: isMultiLine) { _, _ in
+            if wasKeyboardOpen {
+                DispatchQueue.main.async { isFocused = true }
+            }
+        }
+    }
+
+    // MARK: - Single-line layout:  [+]  [TextField]  [●]
+
+    private var singleLineInputRow: some View {
         HStack(alignment: .center, spacing: 0) {
             plusButton
             textField
-            // 4pt padding gives the 44pt button breathing room inside the 52pt capsule.
             rightCircleButton
                 .padding(AppTheme.Space.paddingXS)
         }
         .padding(.leading, AppTheme.Space.paddingS)
+    }
+
+    // MARK: - Multi-line layout:  [text — full width]
+    //                             [+]      [spacer]      [●]
+
+    private var multiLineInputRow: some View {
+        VStack(spacing: 0) {
+            textField
+                .padding(.horizontal, AppTheme.Space.paddingS)
+                .padding(.top, AppTheme.Space.paddingS)
+                .padding(.bottom, AppTheme.Space.paddingXS)
+            HStack(alignment: .center, spacing: 0) {
+                plusButton
+                Spacer()
+                rightCircleButton
+                    .padding(AppTheme.Space.paddingXS)
+            }
+            .padding(.leading, AppTheme.Space.paddingS)
+        }
     }
 
     // MARK: - + Button (attachment menu trigger)
@@ -137,23 +221,15 @@ struct InputBar: View {
                 .rotationEffect(.degrees(showAttachmentMenu ? 45 : 0))
                 .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showAttachmentMenu)
         }
-        // paddingXS top+bottom = 44 + 4×2 = 52pt — matches rightCircleButton's
-        // effective height (44pt circle + paddingXS on each side), so both icons
-        // share the same centre in a HStack(alignment: .center).
         .padding(.vertical, AppTheme.Space.paddingXS)
         .contentShape(Rectangle())
         .buttonStyle(PressableButtonStyle())
         .disabled(isLoading)
     }
 
-    // MARK: - TextField (no inner background — text sits directly on the glass)
+    // MARK: - TextField
 
     private var textField: some View {
-        // prompt: renders the placeholder at exactly the same position as the real
-        // cursor, avoiding the baseline-alignment drift of a manual overlay.
-        // fixedSize(vertical: true) stops the field from greedily expanding to fill
-        // the HStack's offered height when the keyboard is hidden — without it the
-        // field can grow to 60pt+ and push "Your moment" to the top of the capsule.
         TextField(
             "",
             text: $text,
@@ -166,9 +242,9 @@ struct InputBar: View {
         .foregroundStyle(AppTheme.Color.textPrimary)
         .tint(AppTheme.Color.interactive)
         .focused($isFocused)
+        // Stable identity across layout switches — prevents focus loss during the transition.
+        .id("input-textfield")
         .onChange(of: text) { _, newValue in
-            // A trailing newline after deleting the last character leaves the
-            // field visually empty but suppresses the placeholder. Collapse it.
             if !newValue.isEmpty,
                newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 text = ""
@@ -177,7 +253,6 @@ struct InputBar: View {
     }
 
     // MARK: - Right circle button  (camera ⇄ arrow.up ⇄ spinner)
-    // Color stays nearBlack in all states; only the icon changes.
 
     private var rightCircleButton: some View {
         Button {
@@ -268,8 +343,6 @@ struct InputBar: View {
                     .aspectRatio(contentMode: .fill)
                     .frame(width: 56, height: 56)
                     .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.small))
-                    // clipShape clips drawing but not hit-testing; disable image hits
-                    // so the remove button behind it stays reachable.
                     .allowsHitTesting(false)
                 Button {
                     withAnimation(.easeOut(duration: 0.2)) { image = nil }
@@ -284,8 +357,8 @@ struct InputBar: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, AppTheme.Space.paddingS)
-        .padding(.top, AppTheme.Space.paddingM)    // 12pt — keeps × inside capsule curve
-        .padding(.bottom, AppTheme.Space.paddingS) // 8pt gap before input row
+        .padding(.top, AppTheme.Space.paddingM)
+        .padding(.bottom, AppTheme.Space.paddingS)
     }
 
     // MARK: - Helpers
