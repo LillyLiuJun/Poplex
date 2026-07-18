@@ -176,6 +176,8 @@ enum AppTheme {
     enum Motion {
         // 顶部 Tab 选中滑块：贴近系统分段控件的弹性手感（有回弹、不过冲太多）
         static let tabSelection: Animation = .spring(response: 0.34, dampingFraction: 0.72)
+        // 顶栏滚动紧凑/恢复：稍快，确保不拖延内容阅读
+        static let topBarCompact: Animation = .spring(response: 0.30, dampingFraction: 0.82)
     }
 }
 

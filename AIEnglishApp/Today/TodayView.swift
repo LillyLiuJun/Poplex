@@ -7,6 +7,12 @@ struct TodayView: View {
     @State private var previewAnchor: UnitPoint = .center
     /// 真实网络状态：离线横幅只在设备确实无网时显示，不再被单次请求失败误触发
     @State private var network = NetworkMonitor.shared
+    /// Written by the scroll view; read by RootTabContainer to drive topBar compact mode
+    @Binding var topBarCompact: Bool
+
+    init(topBarCompact: Binding<Bool> = .constant(false)) {
+        self._topBarCompact = topBarCompact
+    }
 
     var body: some View {
         @Bindable var vm = viewModel
@@ -86,6 +92,7 @@ struct TodayView: View {
                 .padding(AppTheme.Space.paddingPage)
             }
             .topEdgeFade()
+            .modifier(ScrollCompactDetector(compact: $topBarCompact))
             .scrollDismissesKeyboard(.interactively)
             // simultaneousGesture instead of onTapGesture: lets InputBar buttons
             // (e.g. the thumbnail × button) handle the tap first without
@@ -98,6 +105,34 @@ struct TodayView: View {
                     withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
                 }
             }
+        }
+    }
+}
+
+// GeometryReader+PreferenceKey doesn't fire during active scrolling (layout-only),
+// so we use onScrollGeometryChange (iOS 18+) which runs on every scroll frame.
+// iOS 17 gets no compact mode; the existing topEdgeFade keeps content readable there.
+private struct ScrollCompactDetector: ViewModifier {
+    @Binding var compact: Bool
+
+    func body(content: Content) -> some View {
+        if #available(iOS 18, *) {
+            content.onScrollGeometryChange(
+                // Distance actually scrolled down from the top, normalised to start at 0.
+                // The ScrollView sits under the topBar's safe-area inset, so raw
+                // contentOffset.y rests at a negative value; adding contentInsets.top
+                // cancels that out so the thresholds below are measured from the top edge.
+                for: CGFloat.self,
+                of: { $0.contentOffset.y + $0.contentInsets.top }
+            ) { _, scrolled in
+                if scrolled > 40 && !compact {
+                    withAnimation(AppTheme.Motion.topBarCompact) { compact = true }
+                } else if scrolled <= 8 && compact {
+                    withAnimation(AppTheme.Motion.topBarCompact) { compact = false }
+                }
+            }
+        } else {
+            content
         }
     }
 }
