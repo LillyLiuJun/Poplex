@@ -2,6 +2,8 @@ import SwiftUI
 
 struct TopTabSelector: View {
     @Binding var selectedTab: AppTab
+    /// True while the user is scrolling into content; hides tab labels to reduce obstruction
+    var compact: Bool = false
     @Namespace private var thumbNamespace
 
     var body: some View {
@@ -12,6 +14,9 @@ struct TopTabSelector: View {
         .padding(.horizontal, AppTheme.Space.paddingXS)
         .padding(.vertical, AppTheme.Space.paddingXS)
         .glassBarItem(in: Capsule(), interactive: false)
+        // tabSelection drives thumb moves; topBarCompact drives label show/hide
+        .animation(AppTheme.Motion.tabSelection, value: selectedTab)
+        .animation(AppTheme.Motion.topBarCompact, value: compact)
     }
 
     private func tabItem(_ tab: AppTab, icon: String, label: String) -> some View {
@@ -24,14 +29,15 @@ struct TopTabSelector: View {
             HStack(spacing: AppTheme.Space.paddingXS) {
                 Image(systemName: icon)
                     .imageScale(.medium)
-                if isSelected {
+                // Label hidden when compact — even for the selected tab
+                if isSelected && !compact {
                     Text(label)
                         .font(AppTheme.Font.tabLabel)
                         .fixedSize()
                         .transition(.opacity.combined(with: .scale(scale: 0.85, anchor: .leading)))
                 }
             }
-            .padding(.horizontal, isSelected ? AppTheme.Space.paddingCard : AppTheme.Space.paddingM)
+            .padding(.horizontal, (isSelected && !compact) ? AppTheme.Space.paddingCard : AppTheme.Space.paddingM)
             .frame(minHeight: AppTheme.Size.barControl - AppTheme.Space.paddingXS * 2)
             .foregroundStyle(isSelected ? AppTheme.Color.textPrimary : AppTheme.Color.textSecondary)
             .background {

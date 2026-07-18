@@ -15,6 +15,7 @@ struct RootTabContainer: View {
     @State private var mineSwipeActionOpen = false
     @State private var mineDetailActive = false
     @State private var topBarHeight: CGFloat = 0
+    @State private var topBarCompact = false
     @State private var capturedSwipeOpen = false
     @State private var captureRecorded = false
 
@@ -64,6 +65,8 @@ struct RootTabContainer: View {
                 mineListResetToken = UUID()
                 mineSwipeActionOpen = false
             }
+            // Restore full topBar on tab switch so the new tab's header is always visible
+            withAnimation(AppTheme.Motion.topBarCompact) { topBarCompact = false }
         }
     }
 
@@ -77,7 +80,7 @@ struct RootTabContainer: View {
 
     private var contentArea: some View {
         ZStack {
-            TodayView()
+            TodayView(topBarCompact: $topBarCompact, isActive: selectedTab == .today)
                 .opacity(selectedTab == .today ? 1 : 0)
                 .allowsHitTesting(selectedTab == .today)
             MineView(listResetToken: mineListResetToken, swipeActionOpen: $mineSwipeActionOpen, detailActive: $mineDetailActive, topInset: topBarHeight)
@@ -130,7 +133,7 @@ struct RootTabContainer: View {
 
             Spacer()
 
-            TopTabSelector(selectedTab: $selectedTab)
+            TopTabSelector(selectedTab: $selectedTab, compact: selectedTab == .today && topBarCompact)
                 .padding(.trailing, AppTheme.Space.paddingPage)
         }
         .padding(.vertical, AppTheme.Space.paddingS)
