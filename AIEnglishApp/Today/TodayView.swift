@@ -9,9 +9,13 @@ struct TodayView: View {
     @State private var network = NetworkMonitor.shared
     /// Written by the scroll view; read by RootTabContainer to drive topBar compact mode
     @Binding var topBarCompact: Bool
+    /// Only the visible tab may drive compact — a backgrounded TodayView must not
+    /// keep writing compact and fight the tab-switch reset (caused labels to vanish on Mine)
+    private let isActive: Bool
 
-    init(topBarCompact: Binding<Bool> = .constant(false)) {
+    init(topBarCompact: Binding<Bool> = .constant(false), isActive: Bool = true) {
         self._topBarCompact = topBarCompact
+        self.isActive = isActive
     }
 
     var body: some View {
@@ -92,7 +96,7 @@ struct TodayView: View {
                 .padding(AppTheme.Space.paddingPage)
             }
             .topEdgeFade()
-            .modifier(ScrollCompactDetector(compact: $topBarCompact))
+            .modifier(ScrollCompactDetector(compact: $topBarCompact, active: isActive))
             .scrollDismissesKeyboard(.interactively)
             // simultaneousGesture instead of onTapGesture: lets InputBar buttons
             // (e.g. the thumbnail × button) handle the tap first without
@@ -114,23 +118,34 @@ struct TodayView: View {
 // iOS 17 gets no compact mode; the existing topEdgeFade keeps content readable there.
 private struct ScrollCompactDetector: ViewModifier {
     @Binding var compact: Bool
+    var active: Bool
+    /// True only while the user is actively dragging or the scroll is decelerating.
+    /// Geometry callbacks from tab switches / layout settles fire while idle — we skip
+    /// those so they can't re-collapse the bar right after a tab switch resets it.
+    @State private var isScrolling = false
 
     func body(content: Content) -> some View {
         if #available(iOS 18, *) {
-            content.onScrollGeometryChange(
-                // Distance actually scrolled down from the top, normalised to start at 0.
-                // The ScrollView sits under the topBar's safe-area inset, so raw
-                // contentOffset.y rests at a negative value; adding contentInsets.top
-                // cancels that out so the thresholds below are measured from the top edge.
-                for: CGFloat.self,
-                of: { $0.contentOffset.y + $0.contentInsets.top }
-            ) { _, scrolled in
-                if scrolled > 40 && !compact {
-                    withAnimation(AppTheme.Motion.topBarCompact) { compact = true }
-                } else if scrolled <= 8 && compact {
-                    withAnimation(AppTheme.Motion.topBarCompact) { compact = false }
+            content
+                .onScrollPhaseChange { _, phase in
+                    isScrolling = phase != .idle
                 }
-            }
+                .onScrollGeometryChange(
+                    // Distance actually scrolled down from the top, normalised to start at 0.
+                    // The ScrollView sits under the topBar's safe-area inset, so raw
+                    // contentOffset.y rests at a negative value; adding contentInsets.top
+                    // cancels that out so the thresholds below are measured from the top edge.
+                    for: CGFloat.self,
+                    of: { $0.contentOffset.y + $0.contentInsets.top }
+                ) { _, scrolled in
+                    // Only a visible tab AND a real user scroll may drive compact.
+                    guard active, isScrolling else { return }
+                    if scrolled > 40 && !compact {
+                        withAnimation(AppTheme.Motion.topBarCompact) { compact = true }
+                    } else if scrolled <= 8 && compact {
+                        withAnimation(AppTheme.Motion.topBarCompact) { compact = false }
+                    }
+                }
         } else {
             content
         }

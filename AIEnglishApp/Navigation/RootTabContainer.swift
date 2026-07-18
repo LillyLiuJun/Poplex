@@ -80,7 +80,7 @@ struct RootTabContainer: View {
 
     private var contentArea: some View {
         ZStack {
-            TodayView(topBarCompact: $topBarCompact)
+            TodayView(topBarCompact: $topBarCompact, isActive: selectedTab == .today)
                 .opacity(selectedTab == .today ? 1 : 0)
                 .allowsHitTesting(selectedTab == .today)
             MineView(listResetToken: mineListResetToken, swipeActionOpen: $mineSwipeActionOpen, detailActive: $mineDetailActive, topInset: topBarHeight)
@@ -133,7 +133,7 @@ struct RootTabContainer: View {
 
             Spacer()
 
-            TopTabSelector(selectedTab: $selectedTab, compact: topBarCompact)
+            TopTabSelector(selectedTab: $selectedTab, compact: selectedTab == .today && topBarCompact)
                 .padding(.trailing, AppTheme.Space.paddingPage)
         }
         .padding(.vertical, AppTheme.Space.paddingS)
