@@ -55,7 +55,7 @@ struct S2GrammarCardView: View {
             y: AppTheme.Shadow.cardY
         )
         .overlay(alignment: .topTrailing) {
-            CardTypeChip(label: "Polish", color: AppTheme.Color.chipPolish)
+            CardTypeChip(label: "Polish", color: AppTheme.Color.chipPolish, textColor: AppTheme.Color.textPrimary)
                 .padding(AppTheme.Space.paddingCard)
         }
     }

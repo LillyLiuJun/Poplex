@@ -7,11 +7,12 @@ struct ChatBubbleView: View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: AppTheme.Space.paddingS) {
                 Text(content.text)
-                    .font(.body)
+                    .font(AppTheme.Font.englishBody)
+                    .foregroundStyle(AppTheme.Color.textPrimary)
 
                 if let connection = content.sceneConnection {
                     Text(connection)
-                        .font(.callout)
+                        .font(AppTheme.Font.chineseBody)
                         .foregroundStyle(AppTheme.Color.textSecondary)
                         .italic()
                 }

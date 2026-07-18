@@ -36,36 +36,92 @@ private enum Primitive {
     static let radius20: CGFloat = 20
     static let radius28: CGFloat = 28
 
-    // ── 底与面（浅色锁定，固定 hex）──────────────────────────────────────
-    static let pureWhite    = Color(hex: 0xFFFFFF)  // 页面底 / 卡片底
-    static let surfaceInput = Color(hex: 0xFAF9F7)  // 输入框底
+    // ── Supa Palette 色板（围绕品牌色 F97B0A 构建，浅色锁定）─────────────────
+    // 说明：色阶方向为 50 = 最浅、950 = 最深/最饱和；primary950 即品牌种子色。
+    // 深色模式数值 Supa Palette 尚未导出，先只做浅色，勿自行补深色值。
 
-    // ── 文字：近黑锚系 ────────────────────────────────────────────────────
-    static let nearBlack    = Color(hex: 0x1B1A18)  // 主文字 / CTA 锚
-    static let charcoal     = Color(hex: 0x4A4844)  // 次要文字
-    static let stone        = Color(hex: 0x85817A)  // 音标 / 词性 / 说明
-    static let ash          = Color(hex: 0xB4B0A8)  // 最弱文字 / 占位
+    // Primary — 品牌橙
+    static let primary50  = Color(hex: 0xF9F2EB)
+    static let primary100 = Color(hex: 0xF6E9DC)
+    static let primary200 = Color(hex: 0xF5E0CC)
+    static let primary300 = Color(hex: 0xF4DAC0)
+    static let primary400 = Color(hex: 0xF5D3B3)
+    static let primary500 = Color(hex: 0xF5CCA6)
+    static let primary600 = Color(hex: 0xF8C18F)
+    static let primary700 = Color(hex: 0xFBB16E)
+    static let primary800 = Color(hex: 0xFBA04E)
+    static let primary900 = Color(hex: 0xFA8E2C)
+    static let primary950 = Color(hex: 0xF97B0A)
 
-    // ── 糖果四色 · 全浓度（chip / 贴纸 / 小圆点 —— 仅用于小块点缀）────────
-    static let candyBlue    = Color(hex: 0x84E2FA)
-    static let candyPink    = Color(hex: 0xFF88D3)
-    static let candyGreen   = Color(hex: 0xA6F686)
-    static let candyYellow  = Color(hex: 0xFFCD20)
+    // Neutral — 暖灰（与品牌同色相）
+    static let neutral50  = Color(hex: 0xF8F0E6)
+    static let neutral100 = Color(hex: 0xEEE0CE)
+    static let neutral200 = Color(hex: 0xE3CFB9)
+    static let neutral300 = Color(hex: 0xD9C3AB)
+    static let neutral400 = Color(hex: 0xCEB79E)
+    static let neutral500 = Color(hex: 0xC2AB92)
+    static let neutral600 = Color(hex: 0xAB9782)
+    static let neutral700 = Color(hex: 0x897A6B)
+    static let neutral800 = Color(hex: 0x665B50)
+    static let neutral900 = Color(hex: 0x413A33)
+    static let neutral950 = Color(hex: 0x1C1916)
 
-    // ── 糖果四色 · 淡染（气泡 / 胶囊 / 大面积底色）──────────────────────
-    static let tintBlue     = Color(hex: 0xDDF5FD)
-    static let tintPink     = Color(hex: 0xFFE3F4)
-    static let tintGreen    = Color(hex: 0xE4FBD9)
-    static let tintYellow   = Color(hex: 0xFFF3C4)
+    // Warning — 金黄（黄色系物理上做不出高对比度深色，只作浅底 + 深色文字用）
+    static let warning50  = Color(hex: 0xFAF8EC)
+    static let warning100 = Color(hex: 0xF6F3DB)
+    static let warning200 = Color(hex: 0xF3EECA)
+    static let warning300 = Color(hex: 0xF2EABE)
+    static let warning400 = Color(hex: 0xF0E7B1)
+    static let warning500 = Color(hex: 0xEFE5A4)
+    static let warning600 = Color(hex: 0xEDE18E)
+    static let warning700 = Color(hex: 0xEBDB6D)
+    static let warning800 = Color(hex: 0xE7D24C)
+    static let warning900 = Color(hex: 0xE2CA29)
+    static let warning950 = Color(hex: 0xC8B11B)
 
-    // ── AI 追问 / 核心词组 ────────────────────────────────────────────────
-    static let triggerGreen = Color(hex: 0x3E9D4E)  // 全浓度绿加深至 AA 可读
+    // Success — 绿
+    static let success50  = Color(hex: 0xF2F8F5)
+    static let success100 = Color(hex: 0xE4F1EA)
+    static let success200 = Color(hex: 0xD6E9E0)
+    static let success300 = Color(hex: 0xCCE4D8)
+    static let success400 = Color(hex: 0xC2DFD0)
+    static let success500 = Color(hex: 0xB8DAC8)
+    static let success600 = Color(hex: 0xA8D2BB)
+    static let success700 = Color(hex: 0x90C5A9)
+    static let success800 = Color(hex: 0x76B894)
+    static let success900 = Color(hex: 0x5AAA7F)
+    static let success950 = Color(hex: 0x4A8F6A)
 
-    // ── 描边 / 状态 ───────────────────────────────────────────────────────
-    static let warmBorder   = Color(hex: 0xF1EFEB)
-    static let dangerRed    = Color(hex: 0xDC2626)
+    // Error — 珊瑚红
+    static let error50  = Color(hex: 0xFAF0EB)
+    static let error100 = Color(hex: 0xF7E6DF)
+    static let error200 = Color(hex: 0xF5DCD2)
+    static let error300 = Color(hex: 0xF3D4C9)
+    static let error400 = Color(hex: 0xF2CCC0)
+    static let error500 = Color(hex: 0xF1C3B7)
+    static let error600 = Color(hex: 0xEFB4A7)
+    static let error700 = Color(hex: 0xEC9D90)
+    static let error800 = Color(hex: 0xE88979)
+    static let error900 = Color(hex: 0xE47360)
+    static let error950 = Color(hex: 0xE05C46)
 
-    // ── 覆盖在实时媒体（相机画面）上的控件 ────────────────────────────────
+    // Info — 蓝
+    static let info50  = Color(hex: 0xF0F6F9)
+    static let info100 = Color(hex: 0xE2EDF4)
+    static let info200 = Color(hex: 0xD3E3F0)
+    static let info300 = Color(hex: 0xC8DCED)
+    static let info400 = Color(hex: 0xBDD4EA)
+    static let info500 = Color(hex: 0xB1CBE8)
+    static let info600 = Color(hex: 0x9EBCE4)
+    static let info700 = Color(hex: 0x81A4E0)
+    static let info800 = Color(hex: 0x658FD8)
+    static let info900 = Color(hex: 0x4679D1)
+    static let info950 = Color(hex: 0x3065C0)
+
+    // ── 近白暖底：比 neutral50 更接近白，用于卡片与页面之间的柔和分层 ────────
+    static let warmWhite = Color(hex: 0xFDFAF6)
+
+    // ── 覆盖在实时媒体（相机画面 / 用户照片）上的控件 ────────────────────────
     static let mediaSurface   = Color.black             // 相机全屏底
     static let controlOnMedia = Color.white             // 画面上的图标 / 快门
     static let scrimOnMedia    = Color.black.opacity(0.35) // 图标背后的半透明托底
@@ -85,56 +141,64 @@ enum AppTheme {
     }
 
     enum Color {
-        // 背景
-        static let pageBg   = Primitive.pureWhite
-        static let cardBg   = Primitive.pureWhite
-        static let inputBg  = Primitive.surfaceInput
+        // 背景（暖米色页面 + 近白暖卡片，靠层次而非纯白飘白区分）
+        static let pageBg   = Primitive.neutral50   // 暖米色页面（非纯白）
+        static let cardBg   = Primitive.warmWhite   // 近白暖卡片，比页面浅一档
+        static let inputBg  = Primitive.warmWhite
 
         // 文字（由重到轻）
-        static let textPrimary   = Primitive.nearBlack
-        static let textSecondary = Primitive.charcoal
-        static let textMuted     = Primitive.stone
-        static let textFaint     = Primitive.ash
+        static let textPrimary   = Primitive.neutral900
+        static let textSecondary = Primitive.neutral700
+        static let textMuted     = Primitive.neutral500
+        static let textFaint     = Primitive.neutral300
 
-        // 卡片类型 chip · 全浓度（仅用于小色块点缀，不做大面积填充）
-        static let chipMoment    = Primitive.candyPink    // S4 Moment
-        static let chipWord      = Primitive.candyBlue    // S1 Word
-        static let chipPolish    = Primitive.candyYellow  // S2 Polish
-        static let chipTranslate = Primitive.candyGreen   // S3 Translate
+        // 卡片类型 chip —— 四种卡片各用一色区分（PM：单色不好看）。
+        // 各取色阶较深/饱和一档以承载白字；warning（黄）物理上扛不住白字，
+        // 故 Polish 用浅金底 + 深色文字（见 S2GrammarCardView 传入的 textColor）。
+        static let chipMoment    = Primitive.primary900  // S4 Moment    · 橙 + 白字
+        static let chipWord      = Primitive.info900     // S1 Word      · 蓝 + 白字
+        static let chipPolish    = Primitive.warning700  // S2 Polish    · 浅金 + 深字
+        static let chipTranslate = Primitive.success950  // S3 Translate · 绿 + 白字
+        static let textOnChip    = Primitive.neutral50   // chip 胶囊上的浅色文字（默认）
 
-        // 淡染（大面积底：气泡 / 胶囊 / 插画底）
-        static let tintMoment    = Primitive.tintPink
-        static let tintWord      = Primitive.tintBlue
-        static let tintPolish    = Primitive.tintYellow
-        static let tintTranslate = Primitive.tintGreen
+        // 品牌 / 交互
+        // primary500 在无障碍配对检查中测出过孤立的低对比度异常（APCA -21），
+        // 承载文字的默认品牌色沿用 600，不回退到 500。
+        static let brandDefault  = Primitive.primary600  // 默认品牌色（浅底/描边等）
+        static let brandStrong   = Primitive.primary900  // 实心填充上承载浅色文字（如 chip / CTA）
+        static let brandSubtleBg = Primitive.primary50   // 品牌极淡底
 
-        // AI 追问区 / 核心词组
-        static let accentBuddy   = Primitive.triggerGreen
-        static let accentBuddyBg = Primitive.tintGreen
+        // AI 追问区 / 核心词组（原糖果绿收敛为中性 + 极淡暖底，绿色不再出现）
+        static let accentBuddy   = Primitive.neutral700
+        static let accentBuddyBg = Primitive.primary50
 
-        // 交互控件（发送键 / CTA）
-        static let interactive   = Primitive.nearBlack
+        // 交互控件（发送键 / CTA / 光标）—— 暖近黑
+        static let interactive   = Primitive.neutral950
 
-        // 用户气泡
-        static let bubbleUserBg   = Primitive.tintBlue
-        static let bubbleUserText = Primitive.nearBlack
-        static let bubbleAIBg     = Primitive.pureWhite
+        // 用户气泡（原糖果蓝 → 暖中性底 + 深色文字）
+        static let bubbleUserBg   = Primitive.neutral100
+        static let bubbleUserText = Primitive.neutral900
+        static let bubbleAIBg     = Primitive.warmWhite
 
         // 描边 / 分割
-        static let border       = Primitive.warmBorder
-        static let borderDashed = Primitive.warmBorder
-        static let divider      = Primitive.warmBorder
+        static let border       = Primitive.neutral200
+        static let borderDashed = Primitive.neutral200
+        static let divider      = Primitive.neutral200
 
-        // 语义状态
-        static let danger = Primitive.dangerRed
+        // 语义状态（承载文字，取最深一档珊瑚红以保可读性）
+        static let danger = Primitive.error950
+
+        // 图片加载占位底
+        static let imagePlaceholderBg = Primitive.neutral100
 
         // 相机全屏表面 + 覆盖控件（白控件浮在实时画面上，与浅色主题无关）
         static let cameraBg        = Primitive.mediaSurface
         static let cameraControl   = Primitive.controlOnMedia
         static let cameraControlBg = Primitive.scrimOnMedia
 
-        // MARK: 过渡别名（旧组件仍引用，横向迁移后废弃 —— 勿在新代码中使用）
-        static let textAccent = Primitive.triggerGreen
+        // MARK: 过渡别名（Mine 等未换肤界面仍引用；橘色化后指向品牌强色，
+        // 各界面换肤时再统一到 brandStrong / accent* —— 勿在新代码中使用）
+        static let textAccent = Primitive.primary900
     }
 
     enum Font {

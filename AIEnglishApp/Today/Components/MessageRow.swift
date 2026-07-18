@@ -77,7 +77,7 @@ private struct UserBubble: View {
                     Spacer()
                     CachedRemoteImage(signedUrl: urlStr, stableKey: imageStableKey ?? urlStr) {
                         RoundedRectangle(cornerRadius: AppTheme.Radius.bubble)
-                            .fill(Color(.systemGray5))
+                            .fill(AppTheme.Color.imagePlaceholderBg)
                             .overlay(ProgressView().scaleEffect(0.7))
                     }
                     .frame(width: imageSize, height: imageSize)
