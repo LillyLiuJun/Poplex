@@ -1,20 +1,15 @@
 import SwiftUI
 
+/// 卡片类型标签（温润极简：左上角单色灰 uppercase 文字，作 Meta 描述，不再彩色胶囊）。
+/// 放在卡片内容 VStack 首行、左对齐；颜色一律走 token。
 struct CardTypeChip: View {
     let label: String
-    let color: Color
-    // 默认白字（配深色实心胶囊）；黄色系（Polish）扛不住白字，由调用方传入深色文字。
-    var textColor: Color = AppTheme.Color.textOnChip
 
     var body: some View {
         Text(label.uppercased())
             .font(AppTheme.Font.pos)
             .fontWeight(.bold)
-            .tracking(0.5)
-            .foregroundStyle(textColor)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 4)
-            .background(color)
-            .clipShape(Capsule())
+            .tracking(0.8)
+            .foregroundStyle(AppTheme.Color.textMuted)
     }
 }

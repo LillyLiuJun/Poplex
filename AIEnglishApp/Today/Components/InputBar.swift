@@ -215,7 +215,7 @@ struct InputBar: View {
         } label: {
             Image(systemName: "plus")
                 .font(.system(size: 22))
-                .foregroundStyle(AppTheme.Color.textPrimary)
+                .foregroundStyle(AppTheme.Color.textMuted)
                 .frame(width: AppTheme.Size.barControl, height: AppTheme.Size.barControl)
                 .rotationEffect(.degrees(showAttachmentMenu ? 45 : 0))
                 .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showAttachmentMenu)
@@ -263,8 +263,10 @@ struct InputBar: View {
         } label: {
             ZStack {
                 Circle()
-                    .fill(AppTheme.Color.interactive)
+                    .fill(AppTheme.Color.brandStrong)
                     .frame(width: AppTheme.Size.barControl, height: AppTheme.Size.barControl)
+                    // 品牌橘发光（对齐参考稿 send-circle 的悬浮光晕）
+                    .shadow(color: AppTheme.Color.brandStrong.opacity(0.35), radius: 12, x: 0, y: 5)
                 rightButtonIcon
             }
             .animation(.spring(response: 0.28, dampingFraction: 0.72), value: rightButtonMode)

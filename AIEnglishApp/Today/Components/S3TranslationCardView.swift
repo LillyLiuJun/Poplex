@@ -5,6 +5,8 @@ struct S3TranslationCardView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Space.paddingCard) {
+            CardTypeChip(label: "Translate")
+
             VStack(alignment: .leading, spacing: AppTheme.Space.paddingXS) {
                 HStack(alignment: .firstTextBaseline, spacing: AppTheme.Space.paddingS) {
                     Text(content.chineseConcept)
@@ -15,7 +17,6 @@ struct S3TranslationCardView: View {
                         .font(AppTheme.Font.englishPrimary)
                         .foregroundStyle(AppTheme.Color.textPrimary)
                 }
-                .padding(.trailing, 72)
 
                 HStack(spacing: AppTheme.Space.paddingS) {
                     Text(content.pos)
@@ -38,20 +39,12 @@ struct S3TranslationCardView: View {
         .padding(AppTheme.Space.paddingCard)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(AppTheme.Color.cardBg)
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
-        .overlay(
-            RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
-                .stroke(AppTheme.Color.border, lineWidth: 0.5)
-        )
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.large))
         .shadow(
             color: AppTheme.Shadow.cardColor,
             radius: AppTheme.Shadow.cardRadius,
             x: AppTheme.Shadow.cardX,
             y: AppTheme.Shadow.cardY
         )
-        .overlay(alignment: .topTrailing) {
-            CardTypeChip(label: "Translate", color: AppTheme.Color.chipTranslate)
-                .padding(AppTheme.Space.paddingCard)
-        }
     }
 }

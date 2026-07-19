@@ -36,35 +36,41 @@ private enum Primitive {
     static let radius20: CGFloat = 20
     static let radius28: CGFloat = 28
 
-    // ── Supa Palette 色板（围绕品牌色 F97B0A 构建，浅色锁定）─────────────────
-    // 说明：色阶方向为 50 = 最浅、950 = 最深/最饱和；primary950 即品牌种子色。
-    // 深色模式数值 Supa Palette 尚未导出，先只做浅色，勿自行补深色值。
+    // ── Warm Minimalism 色板（温润极简，围绕品牌色 FF7622 构建，浅色锁定）──────
+    // 说明：primary 色阶方向沿用 50 = 最浅、950 = 最深/最饱和（=品牌种子色 FF7622），
+    //   低编号为种子色朝纯白的渐浅色阶（保留橘色相，不发灰发奶）。
+    //   neutral 为低彩度暖灰（类 Stone），提供近白底 + 中性暖灰文字的干净层次。
+    // 深色模式数值尚未导出，先只做浅色，勿自行补深色值。
 
-    // Primary — 品牌橙
-    static let primary50  = Color(hex: 0xF9F2EB)
-    static let primary100 = Color(hex: 0xF6E9DC)
-    static let primary200 = Color(hex: 0xF5E0CC)
-    static let primary300 = Color(hex: 0xF4DAC0)
-    static let primary400 = Color(hex: 0xF5D3B3)
-    static let primary500 = Color(hex: 0xF5CCA6)
-    static let primary600 = Color(hex: 0xF8C18F)
-    static let primary700 = Color(hex: 0xFBB16E)
-    static let primary800 = Color(hex: 0xFBA04E)
-    static let primary900 = Color(hex: 0xFA8E2C)
-    static let primary950 = Color(hex: 0xF97B0A)
+    // Primary — 品牌橙（种子 FF7622，浅色阶为其朝白渐变）
+    static let primary50  = Color(hex: 0xFFF8F4)
+    static let primary100 = Color(hex: 0xFFF3EB)
+    static let primary200 = Color(hex: 0xFFEADE)
+    static let primary300 = Color(hex: 0xFFDFCC)
+    static let primary400 = Color(hex: 0xFFD3B8)
+    static let primary500 = Color(hex: 0xFFC6A2)
+    static let primary600 = Color(hex: 0xFFB588)
+    static let primary700 = Color(hex: 0xFFA36B)
+    static let primary800 = Color(hex: 0xFF914E)
+    static let primary900 = Color(hex: 0xFF8438)
+    static let primary950 = Color(hex: 0xFF7622)
 
-    // Neutral — 暖灰（与品牌同色相）
-    static let neutral50  = Color(hex: 0xF8F0E6)
-    static let neutral100 = Color(hex: 0xEEE0CE)
-    static let neutral200 = Color(hex: 0xE3CFB9)
-    static let neutral300 = Color(hex: 0xD9C3AB)
-    static let neutral400 = Color(hex: 0xCEB79E)
-    static let neutral500 = Color(hex: 0xC2AB92)
-    static let neutral600 = Color(hex: 0xAB9782)
-    static let neutral700 = Color(hex: 0x897A6B)
-    static let neutral800 = Color(hex: 0x665B50)
-    static let neutral900 = Color(hex: 0x413A33)
-    static let neutral950 = Color(hex: 0x1C1916)
+    // Primary Deep — 比种子更深的橘（用于浅橘底上承载文字 / 深橘强调，
+    // 渐白色阶里没有更深的档，单列一枚 shade）
+    static let primaryDeep = Color(hex: 0xC2410C)
+
+    // Neutral — 暖灰（低彩度，类 Stone；近白底 + 中性暖灰文字）
+    static let neutral50  = Color(hex: 0xFCFBF8)
+    static let neutral100 = Color(hex: 0xF5F5F4)
+    static let neutral200 = Color(hex: 0xE7E5E4)
+    static let neutral300 = Color(hex: 0xD6D3D1)
+    static let neutral400 = Color(hex: 0xA8A29E)
+    static let neutral500 = Color(hex: 0x78716C)
+    static let neutral600 = Color(hex: 0x57534E)
+    static let neutral700 = Color(hex: 0x44403C)
+    static let neutral800 = Color(hex: 0x292524)
+    static let neutral900 = Color(hex: 0x1C1917)
+    static let neutral950 = Color(hex: 0x0C0A09)
 
     // Warning — 金黄（黄色系物理上做不出高对比度深色，只作浅底 + 深色文字用）
     static let warning50  = Color(hex: 0xFAF8EC)
@@ -118,8 +124,8 @@ private enum Primitive {
     static let info900 = Color(hex: 0x4679D1)
     static let info950 = Color(hex: 0x3065C0)
 
-    // ── 近白暖底：比 neutral50 更接近白，用于卡片与页面之间的柔和分层 ────────
-    static let warmWhite = Color(hex: 0xFDFAF6)
+    // ── 纯白卡片：在近白暖页面（neutral50）上靠纯白 + 柔阴影分层，对齐参考稿 ──
+    static let warmWhite = Color(hex: 0xFFFFFF)
 
     // ── 覆盖在实时媒体（相机画面 / 用户照片）上的控件 ────────────────────────
     static let mediaSurface   = Color.black             // 相机全屏底
@@ -162,22 +168,22 @@ enum AppTheme {
         static let textOnChip    = Primitive.neutral50   // chip 胶囊上的浅色文字（默认）
 
         // 品牌 / 交互
-        // primary500 在无障碍配对检查中测出过孤立的低对比度异常（APCA -21），
-        // 承载文字的默认品牌色沿用 600，不回退到 500。
-        static let brandDefault  = Primitive.primary600  // 默认品牌色（浅底/描边等）
-        static let brandStrong   = Primitive.primary900  // 实心填充上承载浅色文字（如 chip / CTA）
-        static let brandSubtleBg = Primitive.primary50   // 品牌极淡底
+        // brandStrong 指向种子橙 FF7622（实心填充承载白字）；brandDefault 取稍浅一档
+        // 作描边/浅底强调；brandSubtleBg 取浅橘淡底。
+        static let brandDefault  = Primitive.primary900  // 默认品牌色（浅底/描边等）
+        static let brandStrong   = Primitive.primary950  // 实心填充上承载浅色文字（如 CTA），=种子橙
+        static let brandSubtleBg = Primitive.primary100  // 品牌极淡橘底
 
-        // AI 追问区 / 核心词组（原糖果绿收敛为中性 + 极淡暖底，绿色不再出现）
+        // AI 追问区 / 核心词组（温润极简：透明底 + 橘色图标 + 顶部细分割线，不再整块底）
         static let accentBuddy   = Primitive.neutral700
-        static let accentBuddyBg = Primitive.primary50
+        static let accentBuddyBg = SwiftUI.Color.clear
 
         // 交互控件（发送键 / CTA / 光标）—— 暖近黑
         static let interactive   = Primitive.neutral950
 
-        // 用户气泡（原糖果蓝 → 暖中性底 + 深色文字）
-        static let bubbleUserBg   = Primitive.neutral100
-        static let bubbleUserText = Primitive.neutral900
+        // 用户气泡（浅橘底 + 深橘字：有品牌暖意但不刺眼，PM 确认收敛版）
+        static let bubbleUserBg   = Primitive.primary100
+        static let bubbleUserText = Primitive.primaryDeep
         static let bubbleAIBg     = Primitive.warmWhite
 
         // 描边 / 分割
@@ -191,25 +197,31 @@ enum AppTheme {
         // 图片加载占位底
         static let imagePlaceholderBg = Primitive.neutral100
 
+        // 首页画布装饰（网格点 = 暖灰底纹；aura = 底部品牌橘光晕）——
+        // 透明度在组件内按需施加，此处只定义基色
+        static let canvasGridDot = Primitive.neutral500
+        static let canvasAura     = Primitive.primary950
+
         // 相机全屏表面 + 覆盖控件（白控件浮在实时画面上，与浅色主题无关）
         static let cameraBg        = Primitive.mediaSurface
         static let cameraControl   = Primitive.controlOnMedia
         static let cameraControlBg = Primitive.scrimOnMedia
 
-        // MARK: 过渡别名（Mine 等未换肤界面仍引用；橘色化后指向品牌强色，
+        // MARK: 过渡别名（Mine 等未换肤界面仍引用；指向品牌强色 = 种子橙，
         // 各界面换肤时再统一到 brandStrong / accent* —— 勿在新代码中使用）
-        static let textAccent = Primitive.primary900
+        static let textAccent = Primitive.primary950
     }
 
     enum Font {
-        static let englishPrimary = SwiftUI.Font.system(.title2, weight: .semibold)   // 英文主内容 ~22
+        static let englishPrimary = SwiftUI.Font.system(.title3, weight: .semibold)   // 英文主内容（=参考稿 content-en 20/600 近黑）
+        static let wordTitle      = SwiftUI.Font.system(.title2, weight: .bold)       // 词条大标题（=参考稿 word-title 26/700 橘）
         static let englishBody    = SwiftUI.Font.system(.body)                        // 英文例句
-        static let buddy          = SwiftUI.Font.system(.callout).italic()            // scene trigger（绿斜体）
-        static let keyPhrase      = SwiftUI.Font.system(.callout, weight: .medium)    // 核心词组
+        static let buddy          = SwiftUI.Font.system(.subheadline, weight: .medium) // 场景追问（=参考稿 14.5/500）
+        static let keyPhrase      = SwiftUI.Font.system(.subheadline, weight: .bold)  // 核心词组（=参考稿 kp-word 15/700 加黑）
         static let phonetic       = SwiftUI.Font.system(.footnote, design: .monospaced) // IPA 音标（等宽）
-        static let pos            = SwiftUI.Font.system(.caption)                     // 词性
+        static let pos            = SwiftUI.Font.system(.caption2)                    // 词性 / 卡片 Meta（=参考稿 ~11-12px）
         static let chineseFaint   = SwiftUI.Font.system(.footnote)                    // 中文原文弱化
-        static let chineseBody    = SwiftUI.Font.system(.callout)                     // 中文翻译
+        static let chineseBody    = SwiftUI.Font.system(.subheadline)                 // 中文翻译（=参考稿 content-zh 14px 灰）
         static let date           = SwiftUI.Font.system(.caption2, weight: .semibold) // 日期分隔
         static let hero           = SwiftUI.Font.system(.largeTitle, weight: .bold)   // Onboarding 标题
         static let tabLabel       = SwiftUI.Font.system(.subheadline, weight: .semibold) // 顶部 Tab 名称
@@ -227,10 +239,12 @@ enum AppTheme {
     }
 
     enum Shadow {
-        static let cardColor: SwiftUI.Color = SwiftUI.Color.black.opacity(0.06)
-        static let cardRadius: CGFloat = 14
+        // 温润极简：无边框卡片靠暖黑（neutral900）低透明、大扩散阴影托起，
+        // 精确对齐参考稿 rgba(28,25,23,0.04) 0 12px 32px 的悬浮感。
+        static let cardColor: SwiftUI.Color = Primitive.neutral900.opacity(0.04)
+        static let cardRadius: CGFloat = 32
         static let cardX: CGFloat = 0
-        static let cardY: CGFloat = 2
+        static let cardY: CGFloat = 12
     }
 
     enum Size {

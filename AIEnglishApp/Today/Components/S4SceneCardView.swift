@@ -5,16 +5,16 @@ struct S4SceneCardView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Space.paddingCard) {
+            CardTypeChip(label: "Moment")
+
             if let original = content.chineseOriginal {
                 Text(original)
-                    .font(AppTheme.Font.chineseFaint)
-                    .foregroundStyle(AppTheme.Color.textFaint)
-                    .padding(.trailing, 72)
+                    .font(AppTheme.Font.chineseBody)
+                    .foregroundStyle(AppTheme.Color.textMuted)
             } else if let guess = content.aiSceneGuess {
                 Text(guess)
-                    .font(AppTheme.Font.chineseFaint)
-                    .foregroundStyle(AppTheme.Color.textFaint)
-                    .padding(.trailing, 72)
+                    .font(AppTheme.Font.chineseBody)
+                    .foregroundStyle(AppTheme.Color.textMuted)
             }
 
             Text(content.nativeTranslation)
@@ -22,14 +22,20 @@ struct S4SceneCardView: View {
                 .foregroundStyle(AppTheme.Color.textPrimary)
 
             if let kp = content.keyPhrase {
-                VStack(alignment: .leading, spacing: AppTheme.Space.paddingXS) {
-                    Text(kp.phrase)
-                        .font(AppTheme.Font.keyPhrase)
-                        .foregroundStyle(AppTheme.Color.accentBuddy)
-                    Text(kp.note)
-                        .font(AppTheme.Font.pos)
-                        .foregroundStyle(AppTheme.Color.textMuted)
+                HStack(alignment: .top, spacing: AppTheme.Space.paddingM) {
+                    Capsule()
+                        .fill(AppTheme.Color.brandStrong)
+                        .frame(width: 3)
+                    VStack(alignment: .leading, spacing: AppTheme.Space.paddingXS) {
+                        Text(kp.phrase)
+                            .font(AppTheme.Font.keyPhrase)
+                            .foregroundStyle(AppTheme.Color.textPrimary)
+                        Text(kp.note)
+                            .font(AppTheme.Font.pos)
+                            .foregroundStyle(AppTheme.Color.textMuted)
+                    }
                 }
+                .fixedSize(horizontal: false, vertical: true)
             }
 
             CardSceneTrigger(text: content.sceneTrigger)
@@ -37,20 +43,12 @@ struct S4SceneCardView: View {
         .padding(AppTheme.Space.paddingCard)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(AppTheme.Color.cardBg)
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
-        .overlay(
-            RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
-                .stroke(AppTheme.Color.border, lineWidth: 0.5)
-        )
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.large))
         .shadow(
             color: AppTheme.Shadow.cardColor,
             radius: AppTheme.Shadow.cardRadius,
             x: AppTheme.Shadow.cardX,
             y: AppTheme.Shadow.cardY
         )
-        .overlay(alignment: .topTrailing) {
-            CardTypeChip(label: "Moment", color: AppTheme.Color.chipMoment)
-                .padding(AppTheme.Space.paddingCard)
-        }
     }
 }

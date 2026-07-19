@@ -5,17 +5,19 @@ struct S1VocabCardView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Space.paddingCard) {
+            CardTypeChip(label: "Word")
+
             HStack(alignment: .firstTextBaseline, spacing: AppTheme.Space.paddingS) {
                 Text(content.pos)
                     .font(AppTheme.Font.pos)
                     .foregroundStyle(AppTheme.Color.textMuted)
                 Text(content.word)
-                    .font(AppTheme.Font.englishPrimary)
+                    .font(AppTheme.Font.wordTitle)
+                    .foregroundStyle(AppTheme.Color.brandStrong)
                 Text(content.phonetic)
                     .font(AppTheme.Font.phonetic)
                     .foregroundStyle(AppTheme.Color.textMuted)
             }
-            .padding(.trailing, 72)
 
             Text(content.definition)
                 .font(AppTheme.Font.chineseBody)
@@ -36,20 +38,12 @@ struct S1VocabCardView: View {
         .padding(AppTheme.Space.paddingCard)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(AppTheme.Color.cardBg)
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
-        .overlay(
-            RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
-                .stroke(AppTheme.Color.border, lineWidth: 0.5)
-        )
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.large))
         .shadow(
             color: AppTheme.Shadow.cardColor,
             radius: AppTheme.Shadow.cardRadius,
             x: AppTheme.Shadow.cardX,
             y: AppTheme.Shadow.cardY
         )
-        .overlay(alignment: .topTrailing) {
-            CardTypeChip(label: "Word", color: AppTheme.Color.chipWord)
-                .padding(AppTheme.Space.paddingCard)
-        }
     }
 }

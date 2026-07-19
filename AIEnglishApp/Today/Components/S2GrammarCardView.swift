@@ -5,10 +5,11 @@ struct S2GrammarCardView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Space.paddingCard) {
+            CardTypeChip(label: "Polish")
+
             Text(content.chineseTranslation)
                 .font(AppTheme.Font.chineseBody)
                 .foregroundStyle(AppTheme.Color.textSecondary)
-                .padding(.trailing, 72)
 
             if let grammar = content.grammarAnalysis {
                 Text(grammar)
@@ -43,20 +44,12 @@ struct S2GrammarCardView: View {
         .padding(AppTheme.Space.paddingCard)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(AppTheme.Color.cardBg)
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
-        .overlay(
-            RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
-                .stroke(AppTheme.Color.border, lineWidth: 0.5)
-        )
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.large))
         .shadow(
             color: AppTheme.Shadow.cardColor,
             radius: AppTheme.Shadow.cardRadius,
             x: AppTheme.Shadow.cardX,
             y: AppTheme.Shadow.cardY
         )
-        .overlay(alignment: .topTrailing) {
-            CardTypeChip(label: "Polish", color: AppTheme.Color.chipPolish, textColor: AppTheme.Color.textPrimary)
-                .padding(AppTheme.Space.paddingCard)
-        }
     }
 }

@@ -88,7 +88,8 @@ private struct UserBubble: View {
                 HStack {
                     Spacer(minLength: AppTheme.Space.paddingHero)
                     Text(text)
-                        .padding(AppTheme.Space.paddingCard)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, AppTheme.Space.paddingM)
                         .background(AppTheme.Color.bubbleUserBg)
                         .foregroundStyle(AppTheme.Color.bubbleUserText)
                         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.bubble))
