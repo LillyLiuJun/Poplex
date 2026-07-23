@@ -46,7 +46,7 @@ struct OnboardingView: View {
         HStack(spacing: 6) {
             ForEach(OnboardingStep.allCases, id: \.self) { s in
                 Capsule()
-                    .fill(s == step ? Color.primary : Color.secondary.opacity(0.25))
+                    .fill(s == step ? AppTheme.Color.interactive : AppTheme.Color.textFaint)
                     .frame(width: s == step ? 20 : 6, height: 6)
                     .animation(.spring(duration: 0.25), value: step)
             }

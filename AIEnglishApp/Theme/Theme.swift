@@ -250,6 +250,7 @@ enum AppTheme {
 
     enum Size {
         static let barControl: CGFloat = Primitive.size44  // 顶栏/工具栏可点控件标准边长
+        static let iconBadge: CGFloat  = Primitive.size44  // 图标徽章容器边长（圆形浅底托图标）
     }
 
     enum Motion {

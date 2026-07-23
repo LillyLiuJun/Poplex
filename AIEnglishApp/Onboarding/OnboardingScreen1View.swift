@@ -11,28 +11,27 @@ struct OnboardingScreen1View: View {
 
     var body: some View {
         ZStack {
-            AppTheme.Color.pageBg.ignoresSafeArea()
-            aura
+            OnboardingAuraBackground()
 
             VStack(alignment: .leading, spacing: 0) {
                 Spacer()
 
                 textBlock
                     .padding(.horizontal, AppTheme.Space.paddingPage)
-                    .entrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.05)
+                    .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.05)
 
                 Spacer().frame(height: AppTheme.Space.paddingHero)
 
                 sampleMomentCard
                     .padding(.horizontal, AppTheme.Space.paddingSection)
-                    .entrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.22)
+                    .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.22)
 
                 Spacer()
 
-                continueButton
+                OnboardingPrimaryButton(title: "Continue", action: onForward)
                     .padding(.horizontal, AppTheme.Space.paddingPage)
                     .padding(.bottom, AppTheme.Space.paddingScreenBottom)
-                    .entrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.38)
+                    .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.38)
             }
         }
         .contentShape(Rectangle())
@@ -93,53 +92,6 @@ struct OnboardingScreen1View: View {
         .rotationEffect(.degrees(-2))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Sample moment card: a photo of a dog shaking off rain, with the English sentence, Momo shakes off the rain after our morning walk.")
-    }
-
-    // MARK: - CTA：品牌橙实心胶囊，全宽，唯一主动作
-
-    private var continueButton: some View {
-        Button(action: onForward) {
-            Text("Continue")
-                .font(AppTheme.Font.ctaLabel)
-                .foregroundStyle(AppTheme.Color.textOnChip)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, AppTheme.Space.paddingCard)
-                .background(AppTheme.Color.brandStrong, in: Capsule())
-        }
-        .buttonStyle(PressableButtonStyle(pressedScale: 0.97, pressedOpacity: 0.85))
-    }
-
-    // MARK: - 底部品牌橙光晕（与首页 CanvasBackground 同一配方，仅取光晕层）
-
-    private var aura: some View {
-        VStack {
-            Spacer()
-            Ellipse()
-                .fill(
-                    RadialGradient(
-                        colors: [AppTheme.Color.canvasAura.opacity(0.22), .clear],
-                        center: .center,
-                        startRadius: 0,
-                        endRadius: 240
-                    )
-                )
-                .frame(width: 420, height: 340)
-                .blur(radius: 50)
-                .offset(y: 80)
-        }
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
-    }
-}
-
-// MARK: - 入场动效：淡入 + 上移；Reduce Motion 时只做淡入
-
-private extension View {
-    func entrance(appeared: Bool, reduceMotion: Bool, delay: Double) -> some View {
-        self
-            .opacity(appeared ? 1 : 0)
-            .offset(y: appeared || reduceMotion ? 0 : 20)
-            .animation(.easeOut(duration: 0.55).delay(delay), value: appeared)
     }
 }
 
