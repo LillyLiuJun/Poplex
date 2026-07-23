@@ -224,6 +224,7 @@ enum AppTheme {
         static let chineseBody    = SwiftUI.Font.system(.subheadline)                 // 中文翻译（=参考稿 content-zh 14px 灰）
         static let date           = SwiftUI.Font.system(.caption2, weight: .semibold) // 日期分隔
         static let hero           = SwiftUI.Font.system(.largeTitle, weight: .bold)   // Onboarding 标题
+        static let ctaLabel       = SwiftUI.Font.system(.body, weight: .semibold)     // 主按钮文字（Continue / Get Started）
         static let tabLabel       = SwiftUI.Font.system(.subheadline, weight: .semibold) // 顶部 Tab 名称
     }
 
