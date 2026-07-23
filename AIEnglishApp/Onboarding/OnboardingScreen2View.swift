@@ -4,6 +4,7 @@ import SwiftUI
 /// 结构 = 文案（怎么做）+ 三种输入方式列表（机制可视化，纯展示）+ 单一 CTA。
 /// 与第一页同节奏：入场渐次淡入上移，图标带轻微弹簧 pop。
 struct OnboardingScreen2View: View {
+    var isActive: Bool = true
     var onBack: () -> Void
     var onForward: () -> Void
 
@@ -60,7 +61,9 @@ struct OnboardingScreen2View: View {
         }
         .contentShape(Rectangle())
         .onHorizontalSwipe(onLeft: onForward, onRight: onBack)
-        .onAppear { appeared = true }
+        // 三页并排渲染，onAppear 启动即触发——入场动画必须在页面真正可见时才播
+        .onAppear { if isActive { appeared = true } }
+        .onChange(of: isActive) { _, active in if active { appeared = true } }
     }
 
     // MARK: - 返回

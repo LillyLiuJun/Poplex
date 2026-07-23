@@ -4,6 +4,7 @@ import SwiftUI
 /// 结构 = 排版（价值主张）+ 悬浮样品时刻卡（产品产出证据）+ 单一 CTA。
 /// 温润极简：暖米白底 + 底部品牌橙光晕，入场渐次淡入上移，之后静止。
 struct OnboardingScreen1View: View {
+    var isActive: Bool = true
     var onForward: () -> Void
 
     @State private var appeared = false
@@ -22,8 +23,14 @@ struct OnboardingScreen1View: View {
 
                 Spacer().frame(height: AppTheme.Space.paddingHero)
 
-                sampleMomentCard
+                OnboardingMomentCard(
+                    image: Image("card_morning_coffee"),
+                    sentence: "Momo shakes off the rain after our morning walk."
+                )
+                    .rotationEffect(.degrees(-2))
                     .padding(.horizontal, AppTheme.Space.paddingSection)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Sample moment card: a photo of a dog shaking off rain, with the English sentence, Momo shakes off the rain after our morning walk.")
                     .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.22)
 
                 Spacer()
@@ -36,7 +43,9 @@ struct OnboardingScreen1View: View {
         }
         .contentShape(Rectangle())
         .onHorizontalSwipe(onLeft: onForward)
-        .onAppear { appeared = true }
+        // 三页并排渲染，onAppear 启动即触发——入场动画必须在页面真正可见时才播
+        .onAppear { if isActive { appeared = true } }
+        .onChange(of: isActive) { _, active in if active { appeared = true } }
     }
 
     // MARK: - 文案区：大标题（品牌橙强调收尾短语）+ 一句支撑
@@ -53,45 +62,6 @@ struct OnboardingScreen1View: View {
                 .foregroundStyle(AppTheme.Color.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-    }
-
-    // MARK: - 样品时刻卡：第一页就看到第三页能亲手做出的产出（首尾呼应）
-
-    private var sampleMomentCard: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Image("card_morning_coffee")
-                .resizable()
-                .scaledToFill()
-                .frame(maxWidth: .infinity)
-                .frame(height: 168)
-                .clipped()
-
-            VStack(alignment: .leading, spacing: AppTheme.Space.paddingS) {
-                Text("MOMENT")
-                    .font(AppTheme.Font.pos)
-                    .foregroundStyle(AppTheme.Color.textOnChip)
-                    .padding(.horizontal, AppTheme.Space.paddingS)
-                    .padding(.vertical, AppTheme.Space.paddingXS)
-                    .background(AppTheme.Color.chipMoment, in: Capsule())
-
-                Text("Momo shakes off the rain after our morning walk.")
-                    .font(AppTheme.Font.englishPrimary)
-                    .foregroundStyle(AppTheme.Color.textPrimary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(AppTheme.Space.paddingCard)
-        }
-        .background(AppTheme.Color.cardBg)
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
-        .shadow(
-            color: AppTheme.Shadow.cardColor,
-            radius: AppTheme.Shadow.cardRadius,
-            x: AppTheme.Shadow.cardX,
-            y: AppTheme.Shadow.cardY
-        )
-        .rotationEffect(.degrees(-2))
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Sample moment card: a photo of a dog shaking off rain, with the English sentence, Momo shakes off the rain after our morning walk.")
     }
 }
 

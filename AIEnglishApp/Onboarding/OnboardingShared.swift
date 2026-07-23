@@ -50,6 +50,52 @@ struct OnboardingAuraBackground: View {
     }
 }
 
+// MARK: - 时刻卡：照片 + MOMENT chip + 英文句子
+/// 第一页展示"样品"、第三页展示"用户亲手做出的结果"，同构以形成闭环。
+
+struct OnboardingMomentCard: View {
+    let image: Image
+    let sentence: String
+    var photoHeight: CGFloat = 168
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            image
+                .resizable()
+                .scaledToFill()
+                .frame(maxWidth: .infinity)
+                .frame(height: photoHeight)
+                .clipped()
+                // aspect-fill 的图片实际布局会超出 frame，clip 只裁绘制不裁
+                // 命中区域——纯展示卡，整体放弃命中以防吞掉下方按钮的点击
+                .allowsHitTesting(false)
+
+            VStack(alignment: .leading, spacing: AppTheme.Space.paddingS) {
+                Text("MOMENT")
+                    .font(AppTheme.Font.pos)
+                    .foregroundStyle(AppTheme.Color.textOnChip)
+                    .padding(.horizontal, AppTheme.Space.paddingS)
+                    .padding(.vertical, AppTheme.Space.paddingXS)
+                    .background(AppTheme.Color.chipMoment, in: Capsule())
+
+                Text(sentence)
+                    .font(AppTheme.Font.englishPrimary)
+                    .foregroundStyle(AppTheme.Color.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(AppTheme.Space.paddingCard)
+        }
+        .background(AppTheme.Color.cardBg)
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
+        .shadow(
+            color: AppTheme.Shadow.cardColor,
+            radius: AppTheme.Shadow.cardRadius,
+            x: AppTheme.Shadow.cardX,
+            y: AppTheme.Shadow.cardY
+        )
+    }
+}
+
 // MARK: - 入场动效：淡入 + 上移；Reduce Motion 时只做淡入
 
 extension View {
