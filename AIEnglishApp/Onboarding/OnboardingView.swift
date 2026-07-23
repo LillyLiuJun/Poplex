@@ -18,14 +18,15 @@ struct OnboardingView: View {
             // so direction is always correct and pages never overlap or ghost.
             GeometryReader { geo in
                 HStack(spacing: 0) {
-                    OnboardingScreen1View(onForward: advance)
+                    OnboardingScreen1View(isActive: step == .screen1, onForward: advance)
                         .frame(width: geo.size.width, height: geo.size.height)
 
-                    OnboardingScreen2View(onBack: back, onForward: advance)
+                    OnboardingScreen2View(isActive: step == .screen2, onBack: back, onForward: advance)
                         .frame(width: geo.size.width, height: geo.size.height)
 
                     OnboardingCaptureView(
                         viewModel: viewModel,
+                        isActive: step == .screen4,
                         onBack: back,
                         onComplete: completeOnboarding
                     )
@@ -46,7 +47,7 @@ struct OnboardingView: View {
         HStack(spacing: 6) {
             ForEach(OnboardingStep.allCases, id: \.self) { s in
                 Capsule()
-                    .fill(s == step ? Color.primary : Color.secondary.opacity(0.25))
+                    .fill(s == step ? AppTheme.Color.interactive : AppTheme.Color.textFaint)
                     .frame(width: s == step ? 20 : 6, height: 6)
                     .animation(.spring(duration: 0.25), value: step)
             }

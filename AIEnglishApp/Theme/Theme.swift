@@ -224,6 +224,8 @@ enum AppTheme {
         static let chineseBody    = SwiftUI.Font.system(.subheadline)                 // 中文翻译（=参考稿 content-zh 14px 灰）
         static let date           = SwiftUI.Font.system(.caption2, weight: .semibold) // 日期分隔
         static let hero           = SwiftUI.Font.system(.largeTitle, weight: .bold)   // Onboarding 标题
+        static let screenTitle    = SwiftUI.Font.system(.title2, weight: .bold)       // 功能页大标题（onboarding 实操页等）
+        static let ctaLabel       = SwiftUI.Font.system(.body, weight: .semibold)     // 主按钮文字（Continue / Get Started）
         static let tabLabel       = SwiftUI.Font.system(.subheadline, weight: .semibold) // 顶部 Tab 名称
     }
 
@@ -249,6 +251,7 @@ enum AppTheme {
 
     enum Size {
         static let barControl: CGFloat = Primitive.size44  // 顶栏/工具栏可点控件标准边长
+        static let iconBadge: CGFloat  = Primitive.size44  // 图标徽章容器边长（圆形浅底托图标）
     }
 
     enum Motion {
