@@ -539,3 +539,106 @@ struct MessageRecordImageFieldsTests {
         #expect(text == "Describe this image")
     }
 }
+
+// MARK: - OnboardingViewModel tests
+
+struct OnboardingViewModelTests {
+
+    private let sampleCard = PresetCard.all[0]   // "Morning coffee"
+
+    // 初始态：全部清零，未选中任何输入
+    @Test func initialStateIsEmpty() {
+        let vm = OnboardingViewModel(service: SuccessMock())
+        #expect(vm.selectedCard == nil)
+        #expect(vm.selectedImage == nil)
+        #expect(vm.generationResult == nil)
+        #expect(vm.isLoading == false)
+        #expect(vm.errorMessage == nil)
+        #expect(vm.retryCount == 0)
+    }
+
+    // startWithCard 成功：selectedCard 已设、selectedImage 清空、generationResult 有值、loading 回 false
+    @Test func startWithCardSuccessSetsResult() async {
+        let vm = OnboardingViewModel(service: SuccessMock())
+        await vm.startWithCard(sampleCard)
+        #expect(vm.selectedCard?.id == sampleCard.id)
+        #expect(vm.selectedImage == nil)
+        #expect(vm.generationResult != nil)
+        #expect(vm.isLoading == false)
+        #expect(vm.errorMessage == nil)
+        #expect(vm.retryCount == 0)
+    }
+
+    // startWithImage 成功：selectedImage 已设、selectedCard 清空
+    @Test func startWithImageSuccessClearsCard() async {
+        let vm = OnboardingViewModel(service: SuccessMock())
+        // 先选一张卡，再用图片覆盖
+        vm.selectedCard = sampleCard
+        let image = UIImage(systemName: "photo")!
+        await vm.startWithImage(image)
+        #expect(vm.selectedCard == nil)
+        #expect(vm.selectedImage != nil)
+        #expect(vm.generationResult != nil)
+        #expect(vm.isLoading == false)
+    }
+
+    // startWithCard 会清掉之前设的 selectedImage
+    @Test func startWithCardClearsPreviousImage() async {
+        let vm = OnboardingViewModel(service: SuccessMock())
+        vm.selectedImage = UIImage(systemName: "photo")!
+        await vm.startWithCard(sampleCard)
+        #expect(vm.selectedImage == nil)
+    }
+
+    // generate 失败：errorMessage 有值、retryCount 为 1、generationResult 为 nil、loading 回 false
+    @Test func generateFailureSetsErrorAndIncrementsRetry() async {
+        let vm = OnboardingViewModel(service: FailingMock())
+        await vm.startWithCard(sampleCard)
+        #expect(vm.errorMessage != nil)
+        #expect(vm.retryCount == 1)
+        #expect(vm.generationResult == nil)
+        #expect(vm.isLoading == false)
+    }
+
+    // 连续失败两次：retryCount 累加到 2
+    @Test func repeatedFailuresAccumulateRetryCount() async {
+        let vm = OnboardingViewModel(service: FailingMock())
+        await vm.startWithCard(sampleCard)
+        await vm.retry()
+        #expect(vm.retryCount == 2)
+    }
+
+    // retry 成功（第一次失败后 retry）：retryCount 归零、generationResult 有值、errorMessage 清空
+    @Test func retryAfterFailureSucceeds() async {
+        let vm = OnboardingViewModel(service: FailOnceMock())
+        await vm.startWithCard(sampleCard)
+        #expect(vm.retryCount == 1)
+        await vm.retry()
+        #expect(vm.generationResult != nil)
+        #expect(vm.retryCount == 0)
+        #expect(vm.errorMessage == nil)
+        #expect(vm.isLoading == false)
+    }
+
+    // reset：所有状态回到初始值
+    @Test func resetClearsAllState() async {
+        let vm = OnboardingViewModel(service: SuccessMock())
+        await vm.startWithCard(sampleCard)
+        vm.reset()
+        #expect(vm.selectedCard == nil)
+        #expect(vm.selectedImage == nil)
+        #expect(vm.generationResult == nil)
+        #expect(vm.isLoading == false)
+        #expect(vm.errorMessage == nil)
+        #expect(vm.retryCount == 0)
+    }
+
+    // 无选中时 generate 早退：isLoading 回 false，不修改其他状态
+    @Test func generateWithNoSelectionExitsEarly() async {
+        let vm = OnboardingViewModel(service: SuccessMock())
+        await vm.generate()
+        #expect(vm.isLoading == false)
+        #expect(vm.generationResult == nil)
+        #expect(vm.errorMessage == nil)
+    }
+}
