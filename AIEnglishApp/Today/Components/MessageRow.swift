@@ -32,7 +32,7 @@ private struct SendFailedRow: View {
             HStack(spacing: AppTheme.Space.paddingXS) {
                 Image(systemName: "exclamationmark.arrow.circlepath")
                     .imageScale(.small)
-                Text("Couldn't send. Tap to retry.")
+                Text("No connection — tap to retry.")
                     .font(AppTheme.Font.chineseFaint)
             }
             .foregroundStyle(AppTheme.Color.danger)
@@ -105,11 +105,7 @@ private struct AICardView: View {
 
     var body: some View {
         switch card {
-        case .s1(let c):    S1VocabCardView(content: c)
-        case .s2(let c):    S2GrammarCardView(content: c)
-        case .s3(let c):    S3TranslationCardView(content: c)
-        case .s4(let c):    S4SceneCardView(content: c)
-        case .chat(let c):  ChatBubbleView(content: c)
+        case .card(let c):  AICardBody(content: c)
         case .error(let c): ErrorBanner(message: c.message)
         }
     }

@@ -32,20 +32,28 @@ struct AppTabTests {
 }
 
 // MARK: - AIEnvelope JSON decode tests
+// 第5刀后：s1–s4 统一解码为 .card(CardContent)，字段为 granularity/direction/
+// target_expression/native_meaning/learnable_units 等统一 schema。
 
 struct AIEnvelopeDecodeTests {
 
-    @Test func decodesS1VocabCard() throws {
+    // s1 = word + comprehend：音标、词性数组、释义、例句、可学单元
+    @Test func decodesWordComprehendCard() throws {
         let json = """
         {
             "card_type": "s1",
             "card_content": {
-                "word": "overtime",
+                "granularity": "word",
+                "direction": "comprehend",
+                "user_original": "overtime",
+                "target_expression": "overtime",
+                "native_meaning": "加班",
                 "phonetic": "/ˈoʊvərtaɪm/",
-                "pos": "n.",
-                "definition": "加班",
+                "pos": ["n."],
                 "examples": [{"en": "I work overtime tonight.", "zh": "我今晚加班。"}],
-                "scene_trigger": "Does this happen often?"
+                "learnable_units": [
+                    {"form": "overtime", "kind": "word", "note": "", "is_primary": true}
+                ]
             },
             "extracted_concept": "overtime"
         }
@@ -53,138 +61,200 @@ struct AIEnvelopeDecodeTests {
 
         let envelope = try JSONDecoder().decode(AIEnvelope.self, from: json)
 
-        guard case .s1(let c) = envelope.card else {
-            Issue.record("Expected .s1 card"); return
+        guard case .card(let c) = envelope.card else {
+            Issue.record("Expected .card"); return
         }
-        #expect(c.word == "overtime")
+        #expect(c.isWord)
+        #expect(c.isComprehend)
+        #expect(c.targetExpression == "overtime")
+        #expect(c.nativeMeaning == "加班")
         #expect(c.phonetic == "/ˈoʊvərtaɪm/")
-        #expect(c.pos == "n.")
-        #expect(c.definition == "加班")
+        #expect(c.pos == ["n."])
         #expect(c.examples.count == 1)
         #expect(c.examples[0].en == "I work overtime tonight.")
-        #expect(c.sceneTrigger == "Does this happen often?")
+        #expect(c.primaryUnit?.form == "overtime")
+        #expect(c.primaryUnit?.isPrimary == true)
         #expect(envelope.extractedConcept == "overtime")
     }
 
-    @Test func decodesS2GrammarCard() throws {
+    // s2 = sentence + comprehend，原句有误：revision_type=error、修正版、语法观察
+    @Test func decodesSentenceComprehendWithRevision() throws {
         let json = """
         {
             "card_type": "s2",
             "card_content": {
-                "chinese_translation": "我今晚又要加班了。",
-                "grammar_analysis": "注意 have to 表示外力强迫。",
-                "native_polish": null,
-                "key_phrase": {"phrase": "have to", "note": "比 must 更口语"},
-                "scene_trigger": "Is this a pattern?"
+                "granularity": "sentence",
+                "direction": "comprehend",
+                "revision_type": "error",
+                "user_original": "I am very sleep today",
+                "target_expression": "I am very sleepy today",
+                "native_meaning": "我今天很困。",
+                "grammar_note": "sleepy is the adjective for that drowsy feeling; sleep stays a verb or noun.",
+                "learnable_units": [
+                    {"form": "sleepy", "kind": "word", "note": "形容词", "is_primary": true}
+                ],
+                "examples": []
             }
         }
         """.data(using: .utf8)!
 
         let envelope = try JSONDecoder().decode(AIEnvelope.self, from: json)
 
-        guard case .s2(let c) = envelope.card else {
-            Issue.record("Expected .s2 card"); return
+        guard case .card(let c) = envelope.card else {
+            Issue.record("Expected .card"); return
         }
-        #expect(c.chineseTranslation == "我今晚又要加班了。")
-        #expect(c.grammarAnalysis == "注意 have to 表示外力强迫。")
-        #expect(c.nativePolish == nil)
-        #expect(c.keyPhrase?.phrase == "have to")
-        #expect(c.keyPhrase?.note == "比 must 更口语")
-        #expect(envelope.extractedConcept == nil)
+        #expect(!c.isWord)
+        #expect(c.isComprehend)
+        #expect(c.revisionType == "error")
+        #expect(c.userOriginal == "I am very sleep today")
+        #expect(c.displayTarget == "I am very sleepy today")
+        #expect(c.nativeMeaning == "我今天很困。")
+        #expect(c.grammarNote != nil)
     }
 
-    @Test func decodesS3TranslationCard() throws {
+    // s2 = sentence + comprehend，原句无误：target_expression 为 nil，displayTarget 落到 user_original
+    @Test func decodesSentenceComprehendNoRevision() throws {
+        let json = """
+        {
+            "card_type": "s2",
+            "card_content": {
+                "granularity": "sentence",
+                "direction": "comprehend",
+                "revision_type": null,
+                "user_original": "I have to work overtime tonight.",
+                "target_expression": null,
+                "native_meaning": "我今晚又得加班了。",
+                "grammar_note": null,
+                "learnable_units": [
+                    {"form": "have to", "kind": "phrase", "note": "比 must 更口语", "is_primary": true}
+                ],
+                "examples": []
+            }
+        }
+        """.data(using: .utf8)!
+
+        let envelope = try JSONDecoder().decode(AIEnvelope.self, from: json)
+
+        guard case .card(let c) = envelope.card else {
+            Issue.record("Expected .card"); return
+        }
+        #expect(c.revisionType == nil)
+        #expect(c.targetExpression == nil)
+        #expect(c.displayTarget == "I have to work overtime tonight.")
+        #expect(c.grammarNote == nil)
+    }
+
+    // s3 = word + express：母语词 → 目标语表达
+    @Test func decodesWordExpressCard() throws {
         let json = """
         {
             "card_type": "s3",
             "card_content": {
-                "chinese_concept": "摸鱼",
-                "english_translation": "slack off",
+                "granularity": "word",
+                "direction": "express",
+                "user_original": "摸鱼",
+                "target_expression": "slack off",
+                "native_meaning": "摸鱼",
                 "phonetic": "/slæk ɔːf/",
-                "pos": "v.",
-                "example": {"en": "I've been slacking off all day.", "zh": "我摸了一天鱼。"},
-                "scene_trigger": "What were you supposed to be doing?"
-            }
+                "pos": ["v."],
+                "examples": [{"en": "I've been slacking off all day.", "zh": "我摸了一天鱼。"}],
+                "learnable_units": [
+                    {"form": "slack off", "kind": "phrase", "note": "", "is_primary": true}
+                ]
+            },
+            "extracted_concept": "摸鱼"
         }
         """.data(using: .utf8)!
 
         let envelope = try JSONDecoder().decode(AIEnvelope.self, from: json)
 
-        guard case .s3(let c) = envelope.card else {
-            Issue.record("Expected .s3 card"); return
+        guard case .card(let c) = envelope.card else {
+            Issue.record("Expected .card"); return
         }
-        #expect(c.chineseConcept == "摸鱼")
-        #expect(c.englishTranslation == "slack off")
-        #expect(c.example.en == "I've been slacking off all day.")
-        #expect(c.example.zh == "我摸了一天鱼。")
+        #expect(c.isWord)
+        #expect(!c.isComprehend)
+        #expect(c.displayTarget == "slack off")
+        #expect(c.nativeMeaning == "摸鱼")
+        #expect(c.examples[0].zh == "我摸了一天鱼。")
+        #expect(envelope.extractedConcept == "摸鱼")
     }
 
-    @Test func decodesS4SceneCard() throws {
+    // s4 = sentence + express：母语句子 → 目标语句子，aiSceneGuess 仅纯图场景
+    @Test func decodesSentenceExpressCard() throws {
         let json = """
         {
             "card_type": "s4",
             "card_content": {
-                "chinese_original": "今天地铁挤死了。",
-                "native_translation": "The subway was absolutely packed this morning.",
-                "key_phrase": {"phrase": "absolutely packed", "note": "比 very crowded 更有力"},
-                "scene_trigger": "Is this your daily commute?"
+                "granularity": "sentence",
+                "direction": "express",
+                "user_original": "今天地铁挤死了。",
+                "target_expression": "The subway was absolutely packed this morning.",
+                "native_meaning": null,
+                "learnable_units": [
+                    {"form": "absolutely packed", "kind": "phrase", "note": "比 very crowded 更有力", "is_primary": true},
+                    {"form": "commute", "kind": "word", "note": "", "is_primary": false}
+                ],
+                "examples": []
             }
         }
         """.data(using: .utf8)!
 
         let envelope = try JSONDecoder().decode(AIEnvelope.self, from: json)
 
-        guard case .s4(let c) = envelope.card else {
-            Issue.record("Expected .s4 card"); return
+        guard case .card(let c) = envelope.card else {
+            Issue.record("Expected .card"); return
         }
-        #expect(c.chineseOriginal == "今天地铁挤死了。")
-        #expect(c.nativeTranslation == "The subway was absolutely packed this morning.")
-        #expect(c.keyPhrase?.phrase == "absolutely packed")
-        #expect(c.keyPhrase?.note == "比 very crowded 更有力")
+        #expect(c.displayTarget == "The subway was absolutely packed this morning.")
+        #expect(c.learnableUnits.count == 2)
+        // primaryUnit 优先取 is_primary=true 的那个，而不是数组第一个
+        #expect(c.primaryUnit?.form == "absolutely packed")
+        #expect(c.aiSceneGuess == nil)
     }
 
-    @Test func decodesChatCard() throws {
+    // error 卡：安全/无效拦截走 ErrorContent
+    @Test func decodesErrorCard() throws {
         let json = """
         {
-            "card_type": "chat",
+            "card_type": "error",
             "card_content": {
-                "text": "Great question! Would and could are both modal verbs...",
-                "scene_connection": null
-            }
+                "error_type": "meaningless",
+                "message": "好像没有接收到内容，再说一次？"
+            },
+            "extracted_concept": null
         }
         """.data(using: .utf8)!
 
         let envelope = try JSONDecoder().decode(AIEnvelope.self, from: json)
 
-        guard case .chat(let c) = envelope.card else {
-            Issue.record("Expected .chat card"); return
+        guard case .error(let c) = envelope.card else {
+            Issue.record("Expected .error card"); return
         }
-        #expect(c.text == "Great question! Would and could are both modal verbs...")
-        #expect(c.sceneConnection == nil)
+        #expect(c.errorType == "meaningless")
+        #expect(c.message == "好像没有接收到内容，再说一次？")
     }
 
-    @Test func decodesS2WithNullOptionals() throws {
+    // 容错：granularity/direction 缺失时用默认值（sentence + express），不抛错
+    @Test func missingRoutingFieldsFallBackToDefaults() throws {
         let json = """
         {
-            "card_type": "s2",
+            "card_type": "s4",
             "card_content": {
-                "chinese_translation": "她很开心。",
-                "grammar_analysis": null,
-                "native_polish": null,
-                "key_phrase": null,
-                "scene_trigger": "What made her happy?"
+                "user_original": "好累",
+                "target_expression": "So tired."
             }
         }
         """.data(using: .utf8)!
 
         let envelope = try JSONDecoder().decode(AIEnvelope.self, from: json)
 
-        guard case .s2(let c) = envelope.card else {
-            Issue.record("Expected .s2 card"); return
+        guard case .card(let c) = envelope.card else {
+            Issue.record("Expected .card"); return
         }
-        #expect(c.grammarAnalysis == nil)
-        #expect(c.nativePolish == nil)
-        #expect(c.keyPhrase == nil)
+        #expect(c.granularity == "sentence")
+        #expect(c.direction == "express")
+        #expect(c.learnableUnits.isEmpty)
+        #expect(c.pos.isEmpty)
+        #expect(c.displayTarget == "So tired.")
     }
 }
 
@@ -195,8 +265,17 @@ private struct SuccessMock: AIServicing {
                   presetCardId: String?, source: String?) async throws -> AIEnvelope {
         let json = """
         {
-            "card_type": "chat",
-            "card_content": {"text": "Test response", "scene_connection": null},
+            "card_type": "s4",
+            "card_content": {
+                "granularity": "sentence",
+                "direction": "express",
+                "user_original": "今天会议推迟了",
+                "target_expression": "Today's meeting got postponed.",
+                "learnable_units": [
+                    {"form": "got postponed", "kind": "phrase", "note": "", "is_primary": true}
+                ],
+                "examples": []
+            },
             "extracted_concept": null
         }
         """.data(using: .utf8)!
@@ -221,8 +300,15 @@ private final class FailOnceMock: AIServicing {
         if callCount == 1 { throw URLError(.notConnectedToInternet) }
         let json = """
         {
-            "card_type": "chat",
-            "card_content": {"text": "Recovered", "scene_connection": null},
+            "card_type": "s4",
+            "card_content": {
+                "granularity": "sentence",
+                "direction": "express",
+                "user_original": "今天会议推迟了",
+                "target_expression": "Today's meeting got postponed.",
+                "learnable_units": [],
+                "examples": []
+            },
             "extracted_concept": null
         }
         """.data(using: .utf8)!
@@ -354,45 +440,46 @@ struct OnboardingStateParsingTests {
 }
 
 // MARK: - LocalCache tombstone tests
+// LocalCache 已是 actor：所有调用都要 await。
 
 struct LocalCacheTombstoneTests {
 
     // 加墓碑 → 读缓存时该 ID 被过滤（不再出现）
-    @Test func tombstonedIdIsFilteredFromCache() {
+    @Test func tombstonedIdIsFilteredFromCache() async {
         let id = UUID()
-        LocalCache.shared.addTombstone(id, key: .scenes)
-        let tombstones = LocalCache.shared.tombstones(for: .scenes)
+        await LocalCache.shared.addTombstone(id, key: .scenes)
+        let tombstones = await LocalCache.shared.tombstones(for: .scenes)
         #expect(tombstones.contains(id.uuidString))
-        LocalCache.shared.removeTombstone(id, key: .scenes)
+        await LocalCache.shared.removeTombstone(id, key: .scenes)
     }
 
     // 撤销：移除墓碑后 ID 重新出现
-    @Test func removeTombstoneRestoresVisibility() {
+    @Test func removeTombstoneRestoresVisibility() async {
         let id = UUID()
-        LocalCache.shared.addTombstone(id, key: .scenes)
-        LocalCache.shared.removeTombstone(id, key: .scenes)
-        let tombstones = LocalCache.shared.tombstones(for: .scenes)
+        await LocalCache.shared.addTombstone(id, key: .scenes)
+        await LocalCache.shared.removeTombstone(id, key: .scenes)
+        let tombstones = await LocalCache.shared.tombstones(for: .scenes)
         #expect(tombstones.contains(id.uuidString) == false)
     }
 
     // 成功拉取服务器后清空墓碑（服务器为正本，已不含被删条目）
-    @Test func clearTombstonesEmptiesAll() {
+    @Test func clearTombstonesEmptiesAll() async {
         let id1 = UUID()
         let id2 = UUID()
-        LocalCache.shared.addTombstone(id1, key: .vocabs)
-        LocalCache.shared.addTombstone(id2, key: .vocabs)
-        LocalCache.shared.clearTombstones(for: .vocabs)
-        let tombstones = LocalCache.shared.tombstones(for: .vocabs)
+        await LocalCache.shared.addTombstone(id1, key: .vocabs)
+        await LocalCache.shared.addTombstone(id2, key: .vocabs)
+        await LocalCache.shared.clearTombstones(for: .vocabs)
+        let tombstones = await LocalCache.shared.tombstones(for: .vocabs)
         #expect(tombstones.isEmpty)
     }
 
     // scenes 和 vocabs 各自独立（不互相污染）
-    @Test func tombstonesAreScopedPerKey() {
+    @Test func tombstonesAreScopedPerKey() async {
         let id = UUID()
-        LocalCache.shared.addTombstone(id, key: .scenes)
-        let vocabTombstones = LocalCache.shared.tombstones(for: .vocabs)
+        await LocalCache.shared.addTombstone(id, key: .scenes)
+        let vocabTombstones = await LocalCache.shared.tombstones(for: .vocabs)
         #expect(vocabTombstones.contains(id.uuidString) == false)
-        LocalCache.shared.removeTombstone(id, key: .scenes)
+        await LocalCache.shared.removeTombstone(id, key: .scenes)
     }
 }
 
@@ -400,27 +487,27 @@ struct LocalCacheTombstoneTests {
 
 struct LocalCacheTests {
 
-    @Test func saveThenLoadRoundTrips() {
+    @Test func saveThenLoadRoundTrips() async {
         let payload = #"[{"hello":"world"}]"#.data(using: .utf8)!
-        LocalCache.shared.save(payload, key: .vocabs)
-        let loaded = LocalCache.shared.load(key: .vocabs)
+        await LocalCache.shared.save(payload, key: .vocabs)
+        let loaded = await LocalCache.shared.load(key: .vocabs)
         #expect(loaded == payload)
-        LocalCache.shared.remove(key: .vocabs)   // 清理，避免污染其它用例
+        await LocalCache.shared.remove(key: .vocabs)   // 清理，避免污染其它用例
     }
 
-    @Test func removeThenLoadReturnsNil() {
+    @Test func removeThenLoadReturnsNil() async {
         let payload = #"{"x":1}"#.data(using: .utf8)!
-        LocalCache.shared.save(payload, key: .scenes)
-        LocalCache.shared.remove(key: .scenes)
-        #expect(LocalCache.shared.load(key: .scenes) == nil)
+        await LocalCache.shared.save(payload, key: .scenes)
+        await LocalCache.shared.remove(key: .scenes)
+        #expect(await LocalCache.shared.load(key: .scenes) == nil)
     }
 
-    @Test func saveOverwritesPrevious() {
-        LocalCache.shared.save("old".data(using: .utf8)!, key: .messages)
-        LocalCache.shared.save("new".data(using: .utf8)!, key: .messages)
-        let loaded = LocalCache.shared.load(key: .messages)
+    @Test func saveOverwritesPrevious() async {
+        await LocalCache.shared.save("old".data(using: .utf8)!, key: .messages)
+        await LocalCache.shared.save("new".data(using: .utf8)!, key: .messages)
+        let loaded = await LocalCache.shared.load(key: .messages)
         #expect(loaded == "new".data(using: .utf8)!)
-        LocalCache.shared.remove(key: .messages)
+        await LocalCache.shared.remove(key: .messages)
     }
 }
 

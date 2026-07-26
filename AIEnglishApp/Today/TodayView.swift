@@ -5,8 +5,6 @@ struct TodayView: View {
     @State private var inputText = ""
     @State private var previewImage: UIImage?
     @State private var previewAnchor: UnitPoint = .center
-    /// 真实网络状态：离线横幅只在设备确实无网时显示，不再被单次请求失败误触发
-    @State private var network = NetworkMonitor.shared
     /// Written by the scroll view; read by RootTabContainer to drive topBar compact mode
     @Binding var topBarCompact: Bool
     /// Only the visible tab may drive compact — a backgrounded TodayView must not
@@ -22,13 +20,6 @@ struct TodayView: View {
         @Bindable var vm = viewModel
         timeline
             .task { await viewModel.loadHistory() }
-            .safeAreaInset(edge: .top) {
-                if !network.isConnected {
-                    OfflineBanner()
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                }
-            }
-            .animation(.easeInOut(duration: 0.25), value: network.isConnected)
             .safeAreaInset(edge: .bottom) {
                 InputBar(text: $inputText, image: $vm.pendingImage, isLoading: viewModel.isLoading) {
                     let toSend = inputText

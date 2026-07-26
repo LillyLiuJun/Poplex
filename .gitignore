@@ -2,3 +2,12 @@ DerivedData/
 .DS_Store
 *.xcuserstate
 supabase/.temp/
+
+# 编辑器 / 工具的本地状态，不该进版本库
+.obsidian/
+**/.obsidian/
+.playwright-mcp/
+
+# 机器本地的 Claude Code 设置。
+# ⚠️ 绝不提交：这个文件的 permissions.allow 里会留下带密钥的历史命令。
+.claude/settings.local.json

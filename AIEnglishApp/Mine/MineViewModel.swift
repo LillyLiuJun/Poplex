@@ -5,7 +5,7 @@ final class MineViewModel {
     var scenes: [Material] = []
     var isLoading = false
     var errorMessage: String?
-    var isOffline = false
+    var toastMessage: String?
     var selectedCategory: String? = nil   // nil = "全部"
 
     private var lastLoadedAt: Date = .distantPast
@@ -18,6 +18,7 @@ final class MineViewModel {
 
     // 软删除撤销状态：存最近一次删除的素材，4 秒内可撤销
     private(set) var lastDeletedMaterial: Material? = nil
+    private var lastDeletedIndex: Int? = nil   // 删除时的位置，撤销时插回原位
     private var undoTimer: Task<Void, Never>? = nil
 
     // Only categories that actually have materials (dynamic, not the full fixed list)
@@ -37,6 +38,10 @@ final class MineViewModel {
 
     // 切 Tab 时调用：超过 30 秒才真正刷新，避免频繁网络请求
     func loadScenesIfStale() async {
+        // 首次加载交给 .task（loadScenes）负责——冷启动时 .task 与本方法（onAppear）
+        // 几乎同时触发，若都发请求会重复打两遍 get-materials/get-vocabs、加剧冷启动拥堵。
+        // lastLoadedAt 仍是初始值即「从未成功加载过」，直接让路给 .task。
+        guard lastLoadedAt != .distantPast else { return }
         guard Date().timeIntervalSince(lastLoadedAt) > 30 else { return }
         Analytics.track("tab2_opened", properties: [
             "scene_count": scenes.count,
@@ -48,9 +53,9 @@ final class MineViewModel {
     func loadScenes() async {
         // 1. 先读本地缓存立即渲染（有缓存就不再是骨架），用墓碑过滤已删条目
         if scenes.isEmpty,
-           let cached = LocalCache.shared.load(key: .scenes),
+           let cached = await LocalCache.shared.load(key: .scenes),
            let decoded = try? Self.decodeMaterials(from: cached) {
-            let tombstones = LocalCache.shared.tombstones(for: .scenes)
+            let tombstones = await LocalCache.shared.tombstones(for: .scenes)
             scenes = decoded.filter { !tombstones.contains($0.id.uuidString) }
         }
 
@@ -63,22 +68,25 @@ final class MineViewModel {
             vocabCount = (try? await countResult) ?? 0
 
             // 请求成功：落盘、清墓碑、更新列表
-            LocalCache.shared.save(data, key: .scenes)
-            LocalCache.shared.clearTombstones(for: .scenes)
+            await LocalCache.shared.save(data, key: .scenes)
+            await LocalCache.shared.clearTombstones(for: .scenes)
             scenes = (try? Self.decodeMaterials(from: data)) ?? scenes
             lastLoadedAt = Date()
-            isOffline = false
+            toastMessage = nil
             UserDefaults.standard.set(scenes.count, forKey: "mine_last_scene_count")
         } catch {
-            // 有缓存在显示 → 静默失败，仅提示离线；无缓存才显示错误
-            isOffline = !scenes.isEmpty
-            if scenes.isEmpty { errorMessage = "Failed to load, please retry" }
+            if scenes.isEmpty {
+                errorMessage = "Failed to load, please retry"
+            } else {
+                toastMessage = "Couldn't update — showing saved content"
+            }
         }
         isLoading = false
     }
 
     private func fetchVocabCount() async throws -> Int {
         var req = URLRequest(url: SupabaseConfig.getVocabsFunctionURL)
+        req.timeoutInterval = 10
         try await SupabaseManager.setAuthHeaders(on: &req)
         let (data, _) = try await URLSession.shared.data(for: req)
         let array = try JSONSerialization.jsonObject(with: data) as? [Any]
@@ -87,8 +95,9 @@ final class MineViewModel {
 
     // 乐观删除：先从列表移除 + 立即写入墓碑（防幽灵素材），再调后端，4 秒撤销窗口
     func deleteMaterial(_ material: Material) async {
+        lastDeletedIndex = scenes.firstIndex { $0.id == material.id }
         scenes.removeAll { $0.id == material.id }
-        LocalCache.shared.addTombstone(material.id, key: .scenes)
+        await LocalCache.shared.addTombstone(material.id, key: .scenes)
         lastDeletedMaterial = material
 
         undoTimer?.cancel()
@@ -96,6 +105,7 @@ final class MineViewModel {
             try? await Task.sleep(for: .seconds(4))
             guard !Task.isCancelled else { return }
             lastDeletedMaterial = nil
+            lastDeletedIndex = nil
         }
 
         Analytics.track("material_deleted", properties: [
@@ -105,19 +115,23 @@ final class MineViewModel {
         await callMaterialEndpoint(SupabaseConfig.deleteMaterialFunctionURL, id: material.id)
     }
 
+    // 乐观撤销：先把素材插回原位置（UI 秒回），墓碑移除与服务器恢复放后台；
+    // 不再整表 loadScenes——本地已有数据，下次自然刷新时与服务器对齐。
     func restoreMaterial() async {
         guard let material = lastDeletedMaterial else { return }
         undoTimer?.cancel()
+        let index = min(lastDeletedIndex ?? scenes.count, scenes.count)
+        scenes.insert(material, at: index)
         lastDeletedMaterial = nil
-        // 撤销：移除墓碑，让缓存里的该条目重新可见
-        LocalCache.shared.removeTombstone(material.id, key: .scenes)
+        lastDeletedIndex = nil
+        await LocalCache.shared.removeTombstone(material.id, key: .scenes)
         await callMaterialEndpoint(SupabaseConfig.restoreMaterialFunctionURL, id: material.id)
-        await loadScenes()
     }
 
     private func callMaterialEndpoint(_ url: URL, id: UUID) async {
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
+        req.timeoutInterval = 10
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         try? await SupabaseManager.setAuthHeaders(on: &req)
         req.httpBody = try? JSONEncoder().encode(["id": id.uuidString])
@@ -126,6 +140,7 @@ final class MineViewModel {
 
     private func fetchMaterialsData() async throws -> Data {
         var req = URLRequest(url: SupabaseConfig.getMaterialsFunctionURL)
+        req.timeoutInterval = 10
         try await SupabaseManager.setAuthHeaders(on: &req)
         let (data, response) = try await URLSession.shared.data(for: req)
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {

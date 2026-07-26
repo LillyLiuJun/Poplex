@@ -13,6 +13,16 @@ struct AIEnglishAppApp: App {
     @Environment(\.scenePhase) private var scenePhase
     @State private var backgroundedAt: Date?
 
+    init() {
+        // 后台预热 Supabase：把 SDK 首次初始化 + Keychain 读会话赶出主线程，
+        // detached 确保它不继承主线程执行器，避免冷启动首屏被这段同步工作卡住。
+        // 用 .utility 而非 .high：预热不急，断网时它会挂在网络等待上，不该和
+        // 冷启动首屏渲染抢 CPU。
+        Task.detached(priority: .utility) {
+            await SupabaseManager.warmUp()
+        }
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView()

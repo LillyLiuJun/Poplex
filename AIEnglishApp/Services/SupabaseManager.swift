@@ -18,16 +18,24 @@ enum SupabaseManager {
 
     private static let gate = SignInGate()
 
+    /// App 启动时在后台线程预热：强制在 detached Task 里首次触碰 client，
+    /// 让 SupabaseClient 的初始化（建 auth/realtime/storage 子系统、读 Keychain 恢复
+    /// 会话）全部发生在后台，绝不在主线程同步执行——这是冷启动首屏卡顿的根因。
+    static func warmUp() async {
+        _ = try? await ensureSignedIn()
+    }
+
     /// App 启动时调用一次：确保存在一个会话（老用户从 Keychain 恢复，新用户静默匿名注册）。
     @discardableResult
     static func ensureSignedIn() async throws -> User {
         try await gate.ensureSession(client: client).user
     }
 
-    /// 当前会话的 access token（JWT）。若尚无会话会先静默匿名登录，token 过期时 SDK 自动刷新。
+    /// 当前会话的 access token（JWT）。若尚无会话会先静默匿名登录。
+    /// 使用 ensureSession 已取回的 session，避免 client.auth.session 在断网时触发刷新挂死。
     static func accessToken() async throws -> String {
-        _ = try await gate.ensureSession(client: client)
-        return try await client.auth.session.accessToken
+        let session = try await gate.ensureSession(client: client)
+        return session.accessToken
     }
 
     /// 给请求装上鉴权头：Authorization = 用户 JWT，apikey = publishable key。
@@ -36,6 +44,20 @@ enum SupabaseManager {
         let token = try await accessToken()
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue(SupabaseConfig.anonKey, forHTTPHeaderField: "apikey")
+    }
+}
+
+/// 带超时的 async 执行：超时后抛 CancellationError，避免断网时无限挂起。
+private func withTimeout<T: Sendable>(seconds: Double, operation: @Sendable @escaping () async throws -> T) async throws -> T {
+    try await withThrowingTaskGroup(of: T.self) { group in
+        group.addTask { try await operation() }
+        group.addTask {
+            try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+            throw CancellationError()
+        }
+        let result = try await group.next()!
+        group.cancelAll()
+        return result
     }
 }
 
@@ -53,7 +75,11 @@ private actor SignInGate {
         if let inFlight {
             return try await inFlight.value
         }
-        let task = Task { try await client.auth.signInAnonymously() }
+        let task = Task {
+            try await withTimeout(seconds: 10) {
+                try await client.auth.signInAnonymously()
+            }
+        }
         inFlight = task
         defer { inFlight = nil }
         return try await task.value

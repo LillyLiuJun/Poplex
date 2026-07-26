@@ -11,52 +11,108 @@ or text; AI generates scene-based English descriptions from that input. The
 product is built around these materials, helping users improve their English
 (especially speaking) across listening, speaking, reading, and writing.
 
+## Document Index — read the authoritative doc before touching a feature
+
+These are the current sources of truth. When a doc conflicts with an older one,
+the doc listed higher wins. When a doc conflicts with the code, **the code is
+the fact** — fix the doc and say so.
+
+| Doc (under `docs/`) | Authoritative for |
+|---|---|
+| `prd/整体架构_两个Tab与对话页_v1.md` | **Upper-level framework.** Responsibilities of Tab1 / Tab2 / dialogue page. No feature doc may conflict with it |
+| `prd/Agent内容组织与成长系统_PRD_v2.md` | Tab2 (practice & growth), the **lexicon ledger** (3 new tables), dialogue page, growth layer |
+| `prd/Tab1_Prompt与输出结构_改造方案_v2.md` | Tab1 prompt + output structure. **Supersedes `输入到成长` §1** |
+| `prd/Tab1_Prompt改造_第1刀验收样例_v1.md` | Acceptance criteria for the slice currently in flight |
+| `prd/输入到成长_链路现状与待敲定_v1.md` | §二 extraction/tagging rules, §三 recording & summarising — **still open, not yet decided** |
+| `prd/Agent系统PRD_逻辑审查_v1.md` | Review record behind the v1→v2 revision (rationale, historical reference) |
+| `design-system/*` | Brand colour (`#FF7622`, warm paper-grey neutrals) and typography |
+
+**Treat with care — partly outdated:**
+
+- `architecture/全局数据架构审计报告_v1.md` — dated 2026-07-04. Several findings
+  are already fixed (user_id isolation, missing migrations). See
+  `Agent内容组织与成长系统_PRD_v2.md` §二 for the corrected status.
+- `prd/Tab1_PRD_v1.md`, `prd/Tab2_PRD_v1.md`, `prd/Tab1_AI回复卡片需求设计_v1.md` —
+  early PRDs. Product *principles* in them still hold (and are cited by the newer
+  docs), but specific field/card designs have been superseded. Cross-check before
+  relying on them.
+
+## Current State (update this when a slice lands)
+
+- **In flight**: Tab1 prompt rework, slice 1 of 9 — `SYSTEM_PROMPT` rewritten as a
+  four-step ordered flow, `learnable_units[]` added to output and persisted.
+  Backend only, fully backward compatible, **no Xcode rebuild needed**.
+  Awaiting deploy + acceptance against `Tab1_Prompt改造_第1刀验收样例_v1.md`.
+- **Not started**: the lexicon tables, the dialogue page, the Tab2 rework.
+- Slice order and what blocks what: see `整体架构_两个Tab与对话页_v1.md` §五 and
+  `Tab1_Prompt与输出结构_改造方案_v2.md` §七.
+
 ## Overall Structure
 
-Onboarding → Tab1 (Content Capture & Generation) → Tab2 (Content Organization & Practice)
+**Tab1 exists to generate content from input. Tab2 exists to make the user
+practise and grow.** That is a split by *function stage* (Tab1 feeds, Tab2
+processes), not by "two views of the same content".
 
-- **Tab1 responsibilities**: User inputs a life scene via text/voice/camera/photo
-  library; AI generates scene-based English content; user can continue
-  follow-up questions to deepen it. Tab1 does NOT handle categorization or
-  practice.
+- **Tab1 — input & generation.** User inputs via text/photo (voice and long-form
+  content are planned, not built). AI turns it into a learning card. Tab1 does
+  NOT categorize, and does NOT host practice.
 
-- **Tab1 → Tab2 handoff**: Material generated in Tab1 gets categorized and
-  organized before entering Tab2. This handoff is asynchronous — the user is
-  NOT automatically taken from Tab1 to Tab2; they must manually switch tabs to
-  see that their material has been organized.
+- **Tab1 → Tab2 handoff is asynchronous.** The user is NOT auto-navigated to
+  Tab2; they switch tabs manually to see their material organized.
 
-- **Tab2 responsibilities**: Receives material from Tab1. Needs to account for
-  different material types — e.g. "scene-based material" (has full context)
-  vs. "standalone vocabulary" (vocabulary-level only, no scene support) — and
-  how each should be presented. Also hosts the practice feature. Tab2 does NOT
-  generate material; it only organizes and practices material that already
-  exists.
+- **Tab2 — practice & growth.** Three layers, all serving that one purpose:
+  - *What to practise* — the **lexicon ledger** (a de-duplicated, cross-input
+    aggregation of expressions) is the practice list. Every row must carry its
+    practice state (`○ not said yet` / `● said N times`).
+  - *How to practise* — the **dialogue page**: a separate, immersive, voice-based
+    page launched from Tab2. It is Tab2's practice feature; there is no other
+    practice module waiting to be designed.
+  - *How it's going* — the **growth layer**: reads the ledger against what the
+    user actually said, and states the gaps. States facts only; never scores or
+    judges.
 
-  These two material types likely have different underlying data structures —
-  do not force them into the same set of fields. Scene-based material and
-  standalone vocabulary should be modeled separately. Exact fields are to be
-  decided when the relevant feature is actually built; for now, only this
-  boundary ("the two types are structurally different and must not be merged")
-  is confirmed.
+- **The dialogue page is a child of Tab2, not a third top-level surface.** It is
+  never the default screen.
 
-## Currently Undecided (do not assume in CLAUDE.md — check the product doc for the latest conclusion when needed)
+- **Deciding where a new feature goes**: ask whether it is *creating material* or
+  *turning material into ability*. Former → Tab1. Latter → Tab2.
 
-- Product visual style and AI persona/tone: not yet decided. Any style
-  direction mentioned previously was an unvalidated early idea, not a
-  confirmed decision.
+## Decided (do not re-open without a reason)
+
+- **AI persona / tone**: **Warm Minimalism + efficiency first.** Warm but never
+  loud; restrained but never cold. Never praise the user's input, never use coach
+  voice, never lecture, no emoji, no self-description. Warmth comes from
+  describing the user's situation accurately, not from emotional words.
+  Full rules + worked examples: `Tab1_Prompt与输出结构_改造方案_v2.md` §4.1.
+- **Brand**: primary `#FF7622` (keep the saturation, do not tone it down);
+  neutrals are warm paper-grey (H 24–30°). See `design-system/`.
+- **Growth layer states current facts only** — no scoring, no anxiety-inducing
+  framing, even for negative gaps.
+- **Tab2 is word-centred**; scenes appear as a word's source context. Browsing
+  scenes end-to-end belongs to Tab1.
 
 ## Technology Choices (confirmed — do not change)
 
 - **Frontend**: SwiftUI (native, not UIKit/Storyboard)
 - **Target OS version**: iOS 17+
 - **Backend/database**: Supabase (free tier covers MVP)
-- **AI content generation provider**: TBD — currently testing cost across
-  options, do not hardcode to a specific provider yet
+- **AI content generation provider**: the code currently calls **Gemini 2.5 Flash**
+  (`supabase/functions/generate/index.ts`). The provider is not final — cost is
+  still being compared — so **do not let provider-specific behaviour leak into
+  design docs or the data contract**. Swapping providers should only touch the
+  Edge Function.
 - **AI call architecture**: The mobile client must NEVER connect directly to
   an AI provider. All AI requests must be routed through Supabase Edge
   Functions (or an equivalent backend middle layer). The API key may only
   exist in server-side environment variables — it must never appear in
   client-side code.
+- **Target / native language must not be hardcoded.** MVP is English-as-target and
+  Chinese-as-native, but prompts and field names reason in terms of "target" and
+  "native" (e.g. `native_meaning`, not `zh_meaning`) so neither is baked in.
+- **Verified security pattern for new tables** (follow it, don't reinvent):
+  Edge Function verifies the JWT via `/auth/v1/user` (never decode the token
+  locally), writes `user_id`, returns 401 when there is no uid, filters every read
+  by `user_id`, and the table has RLS enabled as defence in depth.
 
 ## Code & Design Hard Constraints (mandatory rules for all code)
 

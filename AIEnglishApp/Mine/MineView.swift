@@ -80,7 +80,8 @@ struct MineView: View {
                 detailActive = !newPath.isEmpty
             }
             .safeAreaInset(edge: .top, spacing: 0) { topInsetBar }
-            .animation(.easeInOut(duration: 0.25), value: vm.isOffline)
+            .toast(message: Binding(get: { vm.toastMessage }, set: { vm.toastMessage = $0 }),
+                   systemImage: "exclamationmark.triangle")
             .navigationDestination(for: MineRoute.self) { destination(for: $0) }
             .overlay(alignment: .bottom) {
                 if vm.lastDeletedMaterial != nil {
@@ -109,16 +110,9 @@ struct MineView: View {
         }
     }
 
-    // 顶部预留区：全局浮层顶栏等高空位 +（离线时）离线横幅
-    @ViewBuilder
+    // 顶部预留区：全局浮层顶栏等高空位
     private var topInsetBar: some View {
-        VStack(spacing: 0) {
-            Color.clear.frame(height: topInset)
-            if vm.isOffline {
-                OfflineBanner()
-                    .transition(.move(edge: .top).combined(with: .opacity))
-            }
-        }
+        Color.clear.frame(height: topInset)
     }
 
     private var sceneList: some View {

@@ -16,101 +16,79 @@ struct AIEnvelope: Decodable {
         let type_ = try c.decode(String.self, forKey: .cardType)
         extractedConcept = try c.decodeIfPresent(String.self, forKey: .extractedConcept)
 
+        // s1–s4 四种卡型统一解码为一个 CardContent（由 granularity/direction 驱动显隐）。
+        // card_type 仍作 error 判别符保留。
         switch type_ {
-        case "s1":   card = .s1(try c.decode(VocabContent.self, forKey: .cardContent))
-        case "s2":   card = .s2(try c.decode(GrammarContent.self, forKey: .cardContent))
-        case "s3":   card = .s3(try c.decode(TranslationContent.self, forKey: .cardContent))
-        case "s4":   card = .s4(try c.decode(SceneContent.self, forKey: .cardContent))
-        case "chat": card = .chat(try c.decode(ChatContent.self, forKey: .cardContent))
-        default:     card = .error(try c.decode(ErrorContent.self, forKey: .cardContent))
+        case "s1", "s2", "s3", "s4", "card":
+            card = .card(try c.decode(CardContent.self, forKey: .cardContent))
+        default:
+            card = .error(try c.decode(ErrorContent.self, forKey: .cardContent))
         }
     }
 }
 
 // MARK: - Card type discriminator
 enum AICard {
-    case s1(VocabContent)
-    case s2(GrammarContent)
-    case s3(TranslationContent)
-    case s4(SceneContent)
-    case chat(ChatContent)
+    case card(CardContent)      // 统一学习卡（word/sentence × comprehend/express）
     case error(ErrorContent)
 }
 
-// MARK: - s1 轻词典（英文单词/短语）
-struct VocabContent: Decodable {
-    let word: String
-    let phonetic: String
-    let pos: String
-    let definition: String
+// MARK: - 统一学习卡内容（一套字段，按两个维度取用）
+struct CardContent: Decodable {
+    let granularity: String          // "word" | "sentence"
+    let direction: String            // "comprehend" | "express"
+    let revisionType: String?        // "error" | "polish" | nil（仅 sentence+comprehend 有意义）
+    let learnableUnits: [LearnableUnit]
+
+    let userOriginal: String?        // 用户原样输入；纯图为 nil
+    let userOriginalLang: String?    // "target" | 具体语言码
+    let targetExpression: String?    // AI 产出的目标语言表达；sentence+comp 原句无误时为 nil
+    let nativeMeaning: String?       // 对 (targetExpression ?? userOriginal) 的母语释义/译文
+    let phonetic: String?            // 仅 word
+    let pos: [String]                // 仅 word，最多 3
     let examples: [BilingualExample]
-    let sceneTrigger: String
+    let grammarNote: String?         // word 讲形式 / sentence 讲语法
+    let aiSceneGuess: String?        // 仅纯图
 
     enum CodingKeys: String, CodingKey {
-        case word, phonetic, pos, definition, examples
-        case sceneTrigger = "scene_trigger"
-    }
-}
-
-// MARK: - s2 句子分析（英文句子）
-struct GrammarContent: Decodable {
-    let chineseTranslation: String
-    let grammarAnalysis: String?
-    let nativePolish: String?
-    let keyPhrase: KeyPhrase?
-    let sceneTrigger: String
-
-    enum CodingKeys: String, CodingKey {
-        case chineseTranslation = "chinese_translation"
-        case grammarAnalysis    = "grammar_analysis"
-        case nativePolish       = "native_polish"
-        case keyPhrase          = "key_phrase"
-        case sceneTrigger       = "scene_trigger"
-    }
-}
-
-// MARK: - s3 地道翻译（中文词/短语）
-struct TranslationContent: Decodable {
-    let chineseConcept: String
-    let englishTranslation: String
-    let phonetic: String
-    let pos: String
-    let example: BilingualExample
-    let sceneTrigger: String
-
-    enum CodingKeys: String, CodingKey {
-        case chineseConcept      = "chinese_concept"
-        case englishTranslation  = "english_translation"
-        case phonetic, pos, example
-        case sceneTrigger        = "scene_trigger"
-    }
-}
-
-// MARK: - s4 场景手帐（中文句子 或 纯图片）
-struct SceneContent: Decodable {
-    let chineseOriginal: String?   // nil for pure image input
-    let aiSceneGuess: String?      // AI's scene description; set only when chineseOriginal is nil
-    let nativeTranslation: String
-    let keyPhrase: KeyPhrase?
-    let sceneTrigger: String
-
-    enum CodingKeys: String, CodingKey {
-        case chineseOriginal   = "chinese_original"
+        case granularity, direction, phonetic, pos, examples
+        case revisionType      = "revision_type"
+        case learnableUnits    = "learnable_units"
+        case userOriginal      = "user_original"
+        case userOriginalLang  = "user_original_lang"
+        case targetExpression  = "target_expression"
+        case nativeMeaning     = "native_meaning"
+        case grammarNote       = "grammar_note"
         case aiSceneGuess      = "ai_scene_guess"
-        case nativeTranslation = "native_translation"
-        case keyPhrase         = "key_phrase"
-        case sceneTrigger      = "scene_trigger"
     }
-}
 
-// MARK: - chat 对话气泡
-struct ChatContent: Decodable {
-    let text: String
-    let sceneConnection: String?
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        granularity      = (try? c.decode(String.self, forKey: .granularity)) ?? "sentence"
+        direction        = (try? c.decode(String.self, forKey: .direction)) ?? "express"
+        revisionType     = try c.decodeIfPresent(String.self, forKey: .revisionType)
+        learnableUnits   = (try? c.decode([LearnableUnit].self, forKey: .learnableUnits)) ?? []
+        userOriginal     = try c.decodeIfPresent(String.self, forKey: .userOriginal)
+        userOriginalLang = try c.decodeIfPresent(String.self, forKey: .userOriginalLang)
+        targetExpression = try c.decodeIfPresent(String.self, forKey: .targetExpression)
+        nativeMeaning    = try c.decodeIfPresent(String.self, forKey: .nativeMeaning)
+        phonetic         = try c.decodeIfPresent(String.self, forKey: .phonetic)
+        pos              = (try? c.decode([String].self, forKey: .pos)) ?? []
+        examples         = (try? c.decode([BilingualExample].self, forKey: .examples)) ?? []
+        grammarNote      = try c.decodeIfPresent(String.self, forKey: .grammarNote)
+        aiSceneGuess     = try c.decodeIfPresent(String.self, forKey: .aiSceneGuess)
+    }
 
-    enum CodingKeys: String, CodingKey {
-        case text
-        case sceneConnection = "scene_connection"
+    // MARK: Derived
+    var isWord: Bool { granularity == "word" }
+    var isComprehend: Bool { direction == "comprehend" }
+
+    /// 卡片主推的目标语言表达（下游统一用这条规则，不分卡型）。
+    var displayTarget: String { targetExpression ?? userOriginal ?? "" }
+
+    /// 卡片主推的可学单元（高亮那个）。
+    var primaryUnit: LearnableUnit? {
+        learnableUnits.first(where: { $0.isPrimary }) ?? learnableUnits.first
     }
 }
 
@@ -129,11 +107,7 @@ struct ErrorContent: Decodable {
 extension AICard {
     var cardTypeName: String {
         switch self {
-        case .s1: return "s1"
-        case .s2: return "s2"
-        case .s3: return "s3"
-        case .s4: return "s4"
-        case .chat: return "chat"
+        case .card:  return "card"
         case .error: return "error"
         }
     }
@@ -142,68 +116,35 @@ extension AICard {
     // raw JSON context in the next generate request (multi-turn design).
     var contextRepresentation: [String: Any] {
         switch self {
-        case .s1(let c):
-            return [
-                "word": c.word, "phonetic": c.phonetic, "pos": c.pos,
-                "definition": c.definition,
+        case .card(let c):
+            var d: [String: Any] = [
+                "granularity": c.granularity,
+                "direction": c.direction,
+                "learnable_units": c.learnableUnits.map {
+                    ["form": $0.form, "kind": $0.kind, "note": $0.note, "is_primary": $0.isPrimary]
+                },
                 "examples": c.examples.map { ["en": $0.en, "zh": $0.zh] },
-                "scene_trigger": c.sceneTrigger,
+                "pos": c.pos,
             ]
-        case .s2(let c):
-            var d: [String: Any] = [
-                "chinese_translation": c.chineseTranslation,
-                "scene_trigger": c.sceneTrigger,
-            ]
-            if let v = c.grammarAnalysis { d["grammar_analysis"] = v }
-            if let v = c.nativePolish    { d["native_polish"] = v }
-            if let kp = c.keyPhrase      { d["key_phrase"] = ["phrase": kp.phrase, "note": kp.note] }
-            return d
-        case .s3(let c):
-            return [
-                "chinese_concept": c.chineseConcept,
-                "english_translation": c.englishTranslation,
-                "phonetic": c.phonetic, "pos": c.pos,
-                "example": ["en": c.example.en, "zh": c.example.zh],
-                "scene_trigger": c.sceneTrigger,
-            ]
-        case .s4(let c):
-            var d: [String: Any] = [
-                "native_translation": c.nativeTranslation,
-                "scene_trigger": c.sceneTrigger,
-            ]
-            if let v = c.chineseOriginal { d["chinese_original"] = v }
-            if let v = c.aiSceneGuess   { d["ai_scene_guess"] = v }
-            if let kp = c.keyPhrase     { d["key_phrase"] = ["phrase": kp.phrase, "note": kp.note] }
-            return d
-        case .chat(let c):
-            var d: [String: Any] = ["text": c.text]
-            if let v = c.sceneConnection { d["scene_connection"] = v }
+            if let v = c.revisionType     { d["revision_type"] = v }
+            if let v = c.userOriginal     { d["user_original"] = v }
+            if let v = c.userOriginalLang { d["user_original_lang"] = v }
+            if let v = c.targetExpression { d["target_expression"] = v }
+            if let v = c.nativeMeaning    { d["native_meaning"] = v }
+            if let v = c.phonetic         { d["phonetic"] = v }
+            if let v = c.grammarNote      { d["grammar_note"] = v }
+            if let v = c.aiSceneGuess     { d["ai_scene_guess"] = v }
             return d
         case .error(let c):
             return ["error_type": c.errorType, "message": c.message]
         }
     }
 
-    /// The primary English expression to display (e.g. on Screen 5 or TTS).
+    /// The primary target-language expression to display (e.g. on Screen 5 or TTS).
     var primaryEnglish: String {
         switch self {
-        case .s1(let c): return c.examples.first?.en ?? c.word
-        case .s2(let c): return c.nativePolish ?? ""
-        case .s3(let c): return c.englishTranslation
-        case .s4(let c): return c.nativeTranslation
-        case .chat(let c): return c.text
+        case .card(let c):  return c.displayTarget
         case .error(let c): return c.message
-        }
-    }
-
-    /// The AI's follow-up question for s1–s4 cards; nil for chat/error.
-    var sceneTrigger: String? {
-        switch self {
-        case .s1(let c): return c.sceneTrigger
-        case .s2(let c): return c.sceneTrigger
-        case .s3(let c): return c.sceneTrigger
-        case .s4(let c): return c.sceneTrigger
-        default: return nil
         }
     }
 }
@@ -214,7 +155,22 @@ struct BilingualExample: Decodable {
     let zh: String
 }
 
-struct KeyPhrase: Decodable {
-    let phrase: String
+struct LearnableUnit: Decodable {
+    let form: String
+    let kind: String
     let note: String
+    let isPrimary: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case form, kind, note
+        case isPrimary = "is_primary"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        form      = (try? c.decode(String.self, forKey: .form)) ?? ""
+        kind      = (try? c.decode(String.self, forKey: .kind)) ?? "word"
+        note      = (try? c.decode(String.self, forKey: .note)) ?? ""
+        isPrimary = (try? c.decode(Bool.self, forKey: .isPrimary)) ?? false
+    }
 }

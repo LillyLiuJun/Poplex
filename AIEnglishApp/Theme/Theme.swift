@@ -157,14 +157,14 @@ enum AppTheme {
         static let textSecondary = Primitive.neutral700
         static let textMuted     = Primitive.neutral500
         static let textFaint     = Primitive.neutral300
+        static let textLabel     = Primitive.neutral400  // 区块小标（例句 / 说明）
 
-        // 卡片类型 chip —— 四种卡片各用一色区分（PM：单色不好看）。
-        // 各取色阶较深/饱和一档以承载白字；warning（黄）物理上扛不住白字，
-        // 故 Polish 用浅金底 + 深色文字（见 S2GrammarCardView 传入的 textColor）。
-        static let chipMoment    = Primitive.primary900  // S4 Moment    · 橙 + 白字
-        static let chipWord      = Primitive.info900     // S1 Word      · 蓝 + 白字
-        static let chipPolish    = Primitive.warning700  // S2 Polish    · 浅金 + 深字
-        static let chipTranslate = Primitive.success950  // S3 Translate · 绿 + 白字
+        // 卡片类型 chip 配色。第5刀卡片合并后 CardTypeChip 改走单色 textMuted，
+        // 以下四色暂时无引用，留待 token 卫生轮决定合并/删除（勿在本刀顺手删）。
+        static let chipMoment    = Primitive.primary900  // Moment    · 橙 + 白字
+        static let chipWord      = Primitive.info900     // Word      · 蓝 + 白字
+        static let chipPolish    = Primitive.warning700  // Polish    · 浅金 + 深字
+        static let chipTranslate = Primitive.success950  // Translate · 绿 + 白字
         static let textOnChip    = Primitive.neutral50   // chip 胶囊上的浅色文字（默认）
 
         // 品牌 / 交互
@@ -220,6 +220,7 @@ enum AppTheme {
         static let keyPhrase      = SwiftUI.Font.system(.subheadline, weight: .bold)  // 核心词组（=参考稿 kp-word 15/700 加黑）
         static let phonetic       = SwiftUI.Font.system(.footnote, design: .monospaced) // IPA 音标（等宽）
         static let pos            = SwiftUI.Font.system(.caption2)                    // 词性 / 卡片 Meta（=参考稿 ~11-12px）
+        static let sectionLabel   = SwiftUI.Font.system(.caption2, weight: .semibold) // 区块小标（例句 / 说明，11/600）
         static let chineseFaint   = SwiftUI.Font.system(.footnote)                    // 中文原文弱化
         static let chineseBody    = SwiftUI.Font.system(.subheadline)                 // 中文翻译（=参考稿 content-zh 14px 灰）
         static let date           = SwiftUI.Font.system(.caption2, weight: .semibold) // 日期分隔

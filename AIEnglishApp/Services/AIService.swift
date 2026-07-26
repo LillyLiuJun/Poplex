@@ -68,6 +68,7 @@ struct LiveAIService: AIServicing {
     private func call(body: Data) async throws -> AIEnvelope {
         var request = URLRequest(url: SupabaseConfig.generateFunctionURL)
         request.httpMethod = "POST"
+        request.timeoutInterval = 60   // AI generation can take up to ~30 s; other endpoints use 10 s
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         try await SupabaseManager.setAuthHeaders(on: &request)
         request.httpBody = body

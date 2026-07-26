@@ -3,12 +3,16 @@ import Foundation
 /// 通用本地读缓存：把服务器返回的原始 JSON 字节（Data）按 key 存到本地，
 /// 读取时用现有 decoder 还原——写=落盘响应体、读=喂给现成解析器，零侵入现有模型。
 ///
+/// actor 保证：
+/// - 所有文件 I/O 在自己的线程执行，不阻塞 @MainActor（主线程）
+/// - 并发读写安全，无需额外锁
+///
 /// 存储位置选 Application Support 而非 Caches：
 ///   - Caches 在手机存储紧张时会被系统自动清空，无法兑现「永久缓存」；
 ///   - Application Support 系统绝不自动清、且在 App 沙盒内，无需任何权限。
 /// 文件标记「排除 iCloud 备份」：本地只是服务器数据的镜像（服务器为正本），
 ///   不必占用用户的备份空间，丢了也能联网重新拉取。
-final class LocalCache {
+actor LocalCache {
     static let shared = LocalCache()
 
     /// 缓存条目 key —— 每个来源一个文件
@@ -76,11 +80,11 @@ final class LocalCache {
 
     private func tombstoneKey(for key: Key) -> String { "cache_tombstone_\(key.rawValue)" }
 
-    private func fileURL(for key: Key) -> URL {
+    private nonisolated func fileURL(for key: Key) -> URL {
         dir.appendingPathComponent(key.rawValue + ".json")
     }
 
-    private func excludeFromBackup(_ url: URL) {
+    private nonisolated func excludeFromBackup(_ url: URL) {
         var target = url
         var values = URLResourceValues()
         values.isExcludedFromBackup = true

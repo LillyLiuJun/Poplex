@@ -26,7 +26,7 @@ final class TodayViewModel {
         // 1) 先读本地缓存并立即渲染——仅当时间线还空着、且本次会话未产生实时对话。
         //    有缓存 → 用户瞬间看到历史，不再是空白/骨架。
         if entries.isEmpty, !hasLiveActivity,
-           let cached = LocalCache.shared.load(key: .messages),
+           let cached = await LocalCache.shared.load(key: .messages),
            let records = try? Self.decodeRecords(from: cached) {
             entries = Self.buildEntries(from: records)
         }
@@ -43,10 +43,10 @@ final class TodayViewModel {
             return
         }
 
-        // 请求成功：更新缓存
-        LocalCache.shared.save(data, key: .messages)
-
         guard let records = try? Self.decodeRecords(from: data) else { return }
+
+        // 解码成功才更新缓存——防止服务器偶发坏数据污染本地缓存导致下次启动空屏
+        await LocalCache.shared.save(data, key: .messages)
 
         // 用户已在本次会话产生实时对话 → 不用历史覆盖，避免打断
         guard !isLoading, !hasLiveActivity else { return }
@@ -180,6 +180,7 @@ final class TodayViewModel {
     private func fetchMessageData() async throws -> Data {
         var request = URLRequest(url: SupabaseConfig.messagesFunctionURL)
         request.httpMethod = "GET"
+        request.timeoutInterval = 10
         try await SupabaseManager.setAuthHeaders(on: &request)
 
         let (data, response) = try await URLSession.shared.data(for: request)

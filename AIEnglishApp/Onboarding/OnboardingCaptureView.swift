@@ -310,13 +310,6 @@ struct OnboardingCaptureView: View {
             if let image = resultImage {
                 OnboardingMomentCard(image: image, sentence: card.primaryEnglish, photoHeight: 200)
             }
-
-            if let trigger = card.sceneTrigger {
-                Text(trigger)
-                    .font(AppTheme.Font.buddy)
-                    .foregroundStyle(AppTheme.Color.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
         }
     }
 
