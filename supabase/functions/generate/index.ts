@@ -5,6 +5,7 @@
 // 安全：GEMINI_API_KEY 只存在于这里的环境变量，绝不下发到 App。
 
 import { SCENE_CATEGORIES } from '../_shared/constants.ts';
+import { LEXICON_STOPWORDS, normalizeLemma, getTier } from '../_shared/lexicon.ts';
 
 const GEMINI_API_KEY    = Deno.env.get("GEMINI_API_KEY") ?? "";
 const GEMINI_URL        = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
@@ -115,7 +116,8 @@ const IMAGE_READING = `
          │
          └── Pure scene (no text) → sentence + comprehend (s2)
                · user_original = null (no text was input)
-               · user_original_lang = null
+               · input_lang = null, input_lang_code = null
+               · intent = null (comprehend card)
                · target_expression = a natural English sentence describing the scene
                  REQUIRED — never null. This is the primary content the user sees.
                · native_meaning = native-language translation of target_expression
@@ -349,7 +351,14 @@ NEVER extract:
 
 Each unit:
   form       — the expression in its base form
-  kind       — one of: word | phrase | collocation | slang | idiom | pattern
+  kind       — MUST be EXACTLY one of these six literal strings, nothing else:
+                 word | phrase | collocation | slang | idiom | pattern
+               Never invent a variant or a finer label. In particular:
+                 · a phrasal verb (set up, look after, run into) → "phrase"
+                 · a multi-word verb/noun chunk                  → "phrase"
+                 · a single standalone word                      → "word"
+               If unsure between two, pick the closest of the six — never output
+               anything outside this list (NOT "phrasal verb", "verb", "noun", …).
   note       — one short native-language explanation
   is_primary — boolean
 
@@ -387,9 +396,23 @@ MANDATORY: start every card_content with these four, IN THIS ORDER, never omit:
 Then the content fields:
   user_original      — the user's raw input, VERBATIM, never edited.
                         null only for pure-scene photos (no text was input).
-  user_original_lang — "target" if the input is in the target language; otherwise the source
-                       language ("native", "ja", "fr", …). Best effort.
-                       null for pure-scene photos.
+  input_lang         — the ROLE of the input language, NOT the language code. One of:
+                        · "target" — input is entirely in the target language
+                        · "native" — input contains ANY of the user's native language,
+                                     including mixed input ("今天工作好 stress",
+                                     "I have a 会议 at 3pm"). Judge by "what the user is
+                                     reaching for", not by character ratio: a native-mixed
+                                     sentence is itself a known gap (they couldn't say it fully).
+                        · "other"  — input is entirely in a THIRD language (neither target
+                                     nor native), e.g. looking up a Japanese phrase.
+                        null for pure-scene photos.
+  input_lang_code    — the specific language code ("ja", "fr", …). REQUIRED when input_lang
+                        = "other"; otherwise null.
+  intent             — express cards ONLY: a NORMALIZED native-language phrase for what the
+                        user meant to express (one intent per input, at the top level — not
+                        per unit). Normalize the meaning, do not copy the raw words:
+                        "累死了" / "太累了" / "累惨了" all become "很累".
+                        null for comprehend cards.
   target_expression  — the AI-produced target-language expression (see each flow):
                         · word+comprehend     → the canonical entry
                         · word+express        → the idiomatic translation
@@ -553,7 +576,9 @@ interface UnifiedRawContent {
   revision_type?: string | null;        // error | polish | null（仅 sentence+comprehend 有意义）
   learnable_units?: LearnableUnit[];
   user_original: string | null;         // 用户原样输入；纯场景图为 null
-  user_original_lang?: string | null;   // target | 具体语言码
+  input_lang?: string | null;           // 角色：native | target | other（§5.2.6）；纯场景图为 null
+  input_lang_code?: string | null;      // 具体语言码 ja|fr…；仅 other 必填，其余 null
+  intent?: string | null;               // 归一化母语意图短语（§5.2.7）；仅 express，comprehend 为 null
   target_expression: string | null;     // AI 产出的目标语言表达；sentence+comp 原句无误时为 null
   native_meaning?: string | null;       // 对 (target_expression ?? user_original) 的母语释义/译文
   phonetic?: string | null;             // 仅 word
@@ -611,7 +636,9 @@ function buildRawContent(
     revision_type: asStr(content.revision_type),
     learnable_units: Array.isArray(units) ? units as LearnableUnit[] : [],
     user_original: userOriginal,
-    user_original_lang: asStr(content.user_original_lang),
+    input_lang: asStr(content.input_lang),
+    input_lang_code: asStr(content.input_lang_code),
+    intent: asStr(content.intent),
     target_expression: asStr(content.target_expression),
     native_meaning: asStr(content.native_meaning),
     phonetic: asStr(content.phonetic),
@@ -644,6 +671,70 @@ async function classifySceneCategory(targetText: string, nativeText: string): Pr
     return (SCENE_CATEGORIES as readonly string[]).includes(result) ? result : '其他';
   } catch {
     return '其他';
+  }
+}
+
+// ── Stage 3 记账：把 learnable_units 灌进词汇账本（lexicon）──
+// 归一化（lemmatize/停用词/tier）在 _shared/lexicon.ts 里定义；此处只做 RPC 调用。
+
+// 调记账 RPC。非阻塞：任何失败只告警、不抛给主响应（素材此时已保存成功）。
+async function recordLexicon(
+  rawContent: UnifiedRawContent,
+  materialId: string,
+  userId: string | null,
+  sceneCategory: string | null
+): Promise<void> {
+  if (!SUPABASE_URL || !SUPABASE_SVC_KEY || !userId) return;
+
+  try {
+    const rawUnits = Array.isArray(rawContent.learnable_units) ? rawContent.learnable_units : [];
+    const units = rawUnits
+      .map(u => {
+        const lemma = normalizeLemma(u?.form);
+        return {
+          lemma,
+          display_form: (typeof u?.form === 'string' ? u.form.trim() : '') || null,
+          entry_kind: (typeof u?.kind === 'string' ? u.kind : '') || null,
+          tier: lemma ? getTier(lemma) : null,
+        };
+      })
+      .filter(u => u.lemma && !LEXICON_STOPWORDS.has(u.lemma));
+
+    if (units.length === 0) return;
+
+    // 样例句 = 该单元出现的那句：优先目标语言表达，兜底用户原句。
+    const sample = rawContent.target_expression ?? rawContent.user_original ?? null;
+
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/record_lexicon_material_units`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${SUPABASE_SVC_KEY}`,
+        'apikey': SUPABASE_SVC_KEY,
+      },
+      body: JSON.stringify({
+        p_user_id: userId,
+        p_source_id: materialId,
+        p_scene_category: sceneCategory,
+        p_input_lang: rawContent.input_lang ?? null,
+        p_input_lang_code: rawContent.input_lang_code ?? null,
+        p_source_granularity: rawContent.granularity ?? null,
+        p_source_direction: rawContent.direction ?? null,
+        p_intent_text: rawContent.intent ?? null,
+        p_sample_sentence: sample,
+        p_units: units,
+      }),
+    });
+
+    if (!res.ok) {
+      // §5.3.1：记账失败 → 跳过、告警、不阻塞；靠补账作业补回。
+      console.error('[recordLexicon] rpc failed (non-blocking):', await res.text());
+      return;
+    }
+    const recorded = await res.json();
+    console.log(`[recordLexicon] recorded ${recorded} occurrence(s) for material=${materialId}`);
+  } catch (e) {
+    console.error('[recordLexicon] error (non-blocking):', e);
   }
 }
 
@@ -692,16 +783,18 @@ async function saveMaterial(
       return;
     }
 
-    // Stage 2: 对 scene 调用 Gemini 分类，写回 scene_category
-    if (materialType === 'scene') {
-      const rows = await insertRes.json() as Array<{ id: string }>;
-      const materialId = rows[0]?.id;
-      if (!materialId) return;
+    // materialId 两类都要（Stage 3 记账要拿它当 occurrence 的 source_id）。
+    const rows = await insertRes.json() as Array<{ id: string }>;
+    const materialId = rows[0]?.id;
+    if (!materialId) return;
 
+    // Stage 2: 对 scene 调用 Gemini 分类，写回 scene_category。词卡无场景，category 为 null。
+    let sceneCategory: string | null = null;
+    if (materialType === 'scene') {
       // 分类用目标语言表达 + 母语侧文本；后者优先母语释义，兜底用户原句。
       const targetText = rawContent.target_expression ?? rawContent.user_original ?? '';
       const nativeText = rawContent.native_meaning ?? rawContent.user_original ?? '';
-      const category = await classifySceneCategory(targetText, nativeText);
+      sceneCategory = await classifySceneCategory(targetText, nativeText);
 
       await fetch(`${SUPABASE_URL}/rest/v1/materials?id=eq.${materialId}`, {
         method: 'PATCH',
@@ -711,13 +804,16 @@ async function saveMaterial(
           'apikey': SUPABASE_SVC_KEY,
           'Prefer': 'return=minimal',
         },
-        body: JSON.stringify({ scene_category: category, status: 'categorized' }),
+        body: JSON.stringify({ scene_category: sceneCategory, status: 'categorized' }),
       });
 
-      console.log(`[saveMaterial] scene saved id=${materialId} category=${category}`);
+      console.log(`[saveMaterial] scene saved id=${materialId} category=${sceneCategory}`);
     } else {
-      console.log(`[saveMaterial] vocab saved`);
+      console.log(`[saveMaterial] vocab saved id=${materialId}`);
     }
+
+    // Stage 3: 记账（非阻塞）。scene 在分类后调，occurrence 的 scene_category 才有值。
+    await recordLexicon(rawContent, materialId, userId, sceneCategory);
   } catch (e) {
     console.error('[saveMaterial] error:', e);
   }
