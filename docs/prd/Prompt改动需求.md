@@ -61,14 +61,10 @@
 
 模型对情绪化模糊表达归一化得好（`累死了`/`太累了` 都归成 `很累`，§5.2.7 聚合成立）；但对具体陈述倾向忠实复述（`I have a 会议 at 3pm` → `我下午三点有个会议`，未进一步归一）。当前够用，待有真实数据后再评估是否需要更强的归一化规则。
 
-### N3 · 收紧 learnable_units 的 kind 枚举输出（2026-07-28 记）
+### ✅ N3 · 收紧 learnable_units 的 kind 枚举输出（2026-07-28 记，同日已优化）
 
-**现象**：Slice 1 记账实测时，模型对 `set up` 输出 `"kind":"phrasal verb"`——但 prompt 的 `LEARNABLE UNITS` 段明确规定 `kind` 只能是六个值之一：`word | phrase | collocation | slang | idiom | pattern`。`phrasal verb` 不在其中，属**prompt 合规漂移**。
+**现象**：Slice 1 记账实测时，模型对 `set up` 输出 `"kind":"phrasal verb"`——但 prompt 的 `LEARNABLE UNITS` 段规定 `kind` 只能是六个值之一：`word | phrase | collocation | slang | idiom | pattern`。`phrasal verb` 不在其中，属 prompt 合规漂移。
 
-**影响与现状**：`entry_kind` 列有 CHECK 约束，`phrasal verb` 会撞约束、把整批记账带崩。已在 `record_lexicon_material_units` RPC 里做了**服务端收敛兜底**（`phrasal verb → phrase`，其余不认识的 → null），所以**当前不阻塞、账本数据是干净的**。
+**已优化**：在 `SYSTEM_PROMPT` 的 `Each unit → kind` 处收紧——明确"MUST be EXACTLY one of these six literal strings"，并给出映射（phrasal verb / 多词块 → `phrase`；单词 → `word`），禁止输出 `phrasal verb`/`verb`/`noun` 等变体。同时**保留** `record_lexicon_material_units` RPC 的服务端收敛作为双保险（模型仍可能偶发漂移，账本是只增不改的流水，必须兜底）。
 
-**待优化（不紧急）**：从 prompt 侧收紧 `kind` 的输出，让模型稳定只吐六个合法值之一（例如在 schema 里更醒目地列出枚举、或加一句"kind MUST be exactly one of these six, never a variant like 'phrasal verb'"）。这属于"减少对服务端兜底的依赖"，不是 bug 修复。
-
-**优先级**：低。服务端收敛已稳稳兜住；归入模型输出合规性的整体优化，与 N1/N2 同批处理即可。
-
-> 顺带记一笔通用原则（本轮验证过的经验）：**任何被 CHECK 约束的列、只要值来自模型输出，服务端都必须做"合法值或 null"的收敛**——模型枚举是概率性的，会飘。lexicon 的 `kind/input_lang/granularity/direction` 已按此办理。
+> 通用原则（本轮验证过的经验，留作规范）：**任何被 CHECK 约束、且值来自模型输出的列，服务端都必须做"合法值或 null"的收敛**——模型枚举是概率性的，会飘。lexicon 的 `kind/input_lang/granularity/direction` 均已按此办理。
