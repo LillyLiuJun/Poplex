@@ -213,7 +213,7 @@ enum AppTheme {
     }
 
     enum Font {
-        static let englishPrimary = SwiftUI.Font.system(.title3, weight: .semibold)   // 英文主内容（=参考稿 content-en 20/600 近黑）
+        static let englishPrimary = SwiftUI.Font.system(.body, weight: .medium)       // 英文主内容（content-en 17/500 近黑，收敛自 20/600——原字重偏大偏重）
         static let wordTitle      = SwiftUI.Font.system(.title2, weight: .bold)       // 词条大标题（=参考稿 word-title 26/700 橘）
         static let englishBody    = SwiftUI.Font.system(.body)                        // 英文例句
         static let buddy          = SwiftUI.Font.system(.subheadline, weight: .medium) // 场景追问（=参考稿 14.5/500）

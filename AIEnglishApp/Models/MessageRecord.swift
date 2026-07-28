@@ -32,10 +32,10 @@ struct MessageRecord: Decodable, Identifiable {
         imagePath      = try c.decodeIfPresent(String.self, forKey: .imagePath)
         createdAt      = try c.decode(Date.self,   forKey: .createdAt)
 
-        // s1–s4 与新写入的 "card" 统一解码为 .card；其余（含历史 chat）不渲染。
+        // s1–s6 与新写入的 "card" 统一解码为 .card；其余（含历史 chat）不渲染。
         let cardType = try c.decodeIfPresent(String.self, forKey: .cardType)
         switch cardType {
-        case "s1", "s2", "s3", "s4", "card":
+        case "s1", "s2", "s3", "s4", "s5", "s6", "card":
             // try? so a single bad card_content (null or malformed) silently becomes nil
             // instead of throwing and aborting the entire [MessageRecord] array decode.
             card = (try? c.decode(CardContent.self, forKey: .cardContent)).map { .card($0) }

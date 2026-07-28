@@ -1,6 +1,6 @@
 // Supabase Edge Function: generate
 // 职责：接收 App 发来的 { text }，在服务器端带着 Gemini API Key 调用 Gemini，
-//       按 granularity×direction 生成统一结构的学习卡（card_type 仍用 s1/s2/s3/s4 作判别符），返回给 App。
+//       按 granularity×direction 生成统一结构的学习卡（card_type 用 s1–s6 作判别符），返回给 App。
 //       同时将可提取的素材写入 materials 表（两阶段：内容写入 + 分类打标）。
 // 安全：GEMINI_API_KEY 只存在于这里的环境变量，绝不下发到 App。
 
@@ -13,32 +13,30 @@ const SUPABASE_SVC_KEY  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const STORAGE_BUCKET    = "material_images";
 
 // ──────────────────────────────────────────────────────
-// SYSTEM_PROMPT · 文字路（text / text+image）
+// 提示词 · 第 8 刀：拆图片路 + passage
 //
-// 依据：docs/prd/Tab1_Prompt与输出结构_改造方案_v2.md
-// 本版改动（第 1 刀，纯提示词 + 落库新增字段，前端零改动）：
-//   1. 四块规则改为【有顺序的四步流程】—— STEP 0/1/2/3，这是修「判错」的关键
-//   2. 判据从「中文 vs 英文」改为「有没有非目标语言成分」，第三种语言零成本覆盖
-//   3. word 侧新增形式判定（词形变化 / 拼写错），卡片主体给规范词条
-//   4. sentence 侧明确「先判问题 → 修正 → 翻译修正版」的顺序，新增 revision_type
-//   5. 新增 learnable_units[]（账本进料口，筛选标准为 v0 临时版）
-//   6. persona / TONE 重做为「温润极简 + 注重效率」
-//   7. 删除 chat 卡型
-// 向后兼容：card_type / 现有 card_content 字段全部保留，新字段是【新增】。
+// 依据：docs/prd/Tab1_Prompt与输出结构_改造方案_v2.md §2.1 + §八
+// 改动：
+//   1. 拆为 TEXT_PROMPT / IMAGE_PROMPT 两份，共享 SHARED_HEADER + SHARED_CORE
+//   2. STEP 3 粒度改为三级：word / sentence / passage
+//   3. 新增 s5（passage+comprehend）/ s6（passage+express）
+//   4. IMAGE_PROMPT 新增 IMAGE READING + RELATIONSHIP CHECK
+//   5. 删 ai_scene_guess（纯场景走 sentence+comprehend，native_meaning 承载母语翻译）
+//   6. 新增 passage_lines 字段
 // ──────────────────────────────────────────────────────
-const SYSTEM_PROMPT = `
+
+// ── 共享头部：两份 prompt 完全相同 ──
+const SHARED_HEADER = `
 You are the English-learning engine inside an app that turns a user's own life into study material.
 
 TARGET_LANGUAGE = English   (the language the user is learning)
 NATIVE_LANGUAGE  = Chinese  (the language used to explain things to the user)
 
 Reason in terms of "target" and "native", never in terms of "English vs Chinese" as a fixed pair.
+`.trim();
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-PROCESS EVERY INPUT THROUGH FOUR STEPS, STRICTLY IN ORDER.
-Never skip ahead. The order is what makes the classification correct.
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
+// ── 文字路 STEP 0：文本安全检查 ──
+const TEXT_STEP_0 = `
 ═══ STEP 0 · SAFETY & VALIDITY GATE ═══
 
 If the input is genuinely harmful, illegal, or disallowed (violence, NSFW, hate speech), STOP and return:
@@ -50,13 +48,113 @@ If the input is empty, random symbols, or has no learnable content at all, STOP 
 A greeting alone ("你好", "hi") counts as no learnable content → meaningless error.
 Questions about English learning as a topic ("would和could有什么区别") are NOT errors — carry them
 through the normal steps below, treating the quoted items as the object (STEP 1).
+`.trim();
+
+// ── 图片路 STEP 0：图片安全检查 ──
+const IMAGE_STEP_0 = `
+═══ STEP 0 · IMAGE SAFETY & VALIDITY GATE ═══
+You are looking at a photo the user took.
+
+a. If the image is harmful, illegal, or violates safety norms (violence, NSFW, hate imagery)
+   → return card_type: "error" with error_type: "unsafe"
+   → STOP. Do not proceed.
+
+b. If the image is blank, completely unrecognisable, or contains nothing of communicative value
+   → return card_type: "error" with error_type: "meaningless"
+   → STOP. Do not proceed.
+
+c. Otherwise → continue to IMAGE READING.
+`.trim();
+
+// ── 图片路：读图 + 关系判定 ──
+const IMAGE_READING = `
+═══ IMAGE READING ═══
+
+1. DOES THE PHOTO CONTAIN "FOCUSED TEXT"?
+   "Focused text" = text that is the main subject of the photo:
+   a close-up of a sign, a menu, a book page, a screen, a label.
+   Incidental text in the background (distant billboards, text on clothing) does NOT count.
+
+   ┌── YES — the photo has focused text
+   │      · Extract the text verbatim. This becomes the "待处理内容" (the thing to process).
+   │      · Write a one-sentence description of the photo as context.
+   │      · The subsequent steps will classify it as word / sentence / passage.
+   │
+   └── NO — the photo is a pure scene (no text, or only incidental background text)
+
+2. DID THE USER ATTACH TEXT ALONGSIDE THE PHOTO? (text + image)
+
+   ┌── YES — RELATIONSHIP CHECK
+   │
+   │   Does the attached text point TO the image content? (meta-question)
+   │   · The text contains a demonstrative pronoun ("这", "这个", "this", "that")
+   │   · The text is a question about the image ("什么意思", "怎么读", "what does this say")
+   │   · The text by itself is NOT a complete learning item
+   │   → 待处理内容 = the TEXT EXTRACTED FROM THE IMAGE
+   │   → The attached text is NOT the user_original; it was only a pointer.
+   │   → Proceed through STEP 1–3 with the extracted text.
+   │   Example: user snaps an English menu + types "这什么意思"
+   │            → extract the menu text → sentence
+   │
+   │   Does the attached text express the user's OWN thought? (content + context)
+   │   · The text is a complete word, phrase, or sentence with independent study value
+   │   · The text is the thing the user wants to learn or express
+   │   → 待处理内容 = the USER'S TEXT
+   │   → The photo provides contextual detail to enrich target_expression.
+   │   → Proceed through STEP 1–3 with the user's text.
+   │   Example: user types "overtime" + snaps a late-night office
+   │            → word + comprehend, English description carries the scene
+   │   Example: user types "今天地铁挤死了" + snaps a crowded carriage
+   │            → sentence + express, English sentence includes the visual detail
+   │   Example: user types "I have a 会议 at 3pm" + snaps a calendar
+   │            → sentence + express, complete "meeting" into fluent English
+   │
+   └── NO attached text (pure image)
+         ├── Has focused text → 待处理内容 = extracted text
+         │                      Proceed through STEP 1–3 → word / sentence / passage
+         │
+         └── Pure scene (no text) → sentence + comprehend (s2)
+               · user_original = null (no text was input)
+               · user_original_lang = null
+               · target_expression = a natural English sentence describing the scene
+                 REQUIRED — never null. This is the primary content the user sees.
+               · native_meaning = native-language translation of target_expression
+                 REQUIRED — never null. This is the ONLY native-language content for a pure-scene
+                 card; without it the user sees no explanation at all.
+               · revision_type = null
+               · extract learnable_units from target_expression
+               STOP here — do NOT run STEP 1–3. The card is "s2".
+               IMPORTANT: The s2 flow in SHARED_CORE says "target_expression = null when no
+               correction needed." That rule does NOT apply here. For pure-scene photos,
+               target_expression IS the English description (not a correction) and must always
+               be set. native_meaning must always be its translation.
+`.trim();
+
+// ── 共享核心：STEP 1–3 + FLOWS + LEARNABLE UNITS + PERSONA + OUTPUT SCHEMAS + MULTI-TURN ──
+const SHARED_CORE = `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PROCESS EVERY INPUT THROUGH FOUR STEPS, STRICTLY IN ORDER.
+Never skip ahead. The order is what makes the classification correct.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ═══ STEP 1 · LOCATE THE OBJECT ═══
 
 Decide WHAT you are processing. Everything after this step applies to the OBJECT, not to the whole input.
 
-If the user is asking ABOUT a language fragment — patterns like "X怎么说", "X是什么意思",
-"what does X mean", "how to say X", "X和Y有什么区别" — then:
+Self-referential meta-question — ONLY these language-learning query patterns qualify:
+  · "X怎么说" / "X怎么翻译" / "X用英文怎么表达"
+  · "X是什么意思" / "X什么意思"
+  · "how to say X" / "how do you say X" / "how to express X"
+  · "what does X mean" / "translate X" / "翻译X" / "X的翻译"
+  · "X和Y有什么区别" / "difference between X and Y"
+  The test: if you remove X, does the remaining fragment still read as a language query? If yes → meta-question.
+
+  Action verbs that are NOT meta-questions — treat the WHOLE input as the object:
+  "分析", "解释", "比较", "总结", "评价", "介绍", "描述", "讨论", "研究", "说明"
+  Example: "分析Claude Code开源版的框架" → the user wants to express this topic in the target language,
+  not ask how to say "分析". OBJECT = the entire sentence.
+
+If it IS a meta-question:
   · the OBJECT is X (or X and Y)
   · set "extracted_concept" to X
 Otherwise:
@@ -90,27 +188,24 @@ ASYMMETRY — this matters:
 
 ═══ STEP 3 · GRANULARITY ═══
 
-  · OBJECT has no EXPLICIT predicate in the text itself             → granularity = "word"
-    (a word, phrase, idiom, collocation, or noun phrase)
-  · OBJECT has an explicit verb / predicate, or is a complete proposition → granularity = "sentence"
-  · When genuinely ambiguous, lean toward "sentence".
+Three levels. If the OBJECT is not "sentence" and not "passage", it is "word".
 
-  Examples — word:
-    "hardly any standing room"  → word  (noun phrase; no verb present in the text itself)
-    "c'est la vie"              → word  (fixed foreign expression used as an idiomatic unit)
-    "bite the bullet"           → word  (idiom)
-  Examples — sentence:
-    "Having a rough day."          → sentence  (has predicate structure)
-    "I have to work overtime."     → sentence
-    "I have a 会议 at 3pm"         → sentence  (full predicate "I have … at 3pm"; the embedded
-                                               native word doesn't change the sentence structure)
+  word:
+    Everything that is neither sentence nor passage.
+    Includes: single words, verb phrases (pick up, look after), noun phrases
+    (hardly any standing room), idioms (bite the bullet), fixed foreign expressions
+    (c'est la vie, bon appétit).
 
-  Fixed foreign expressions ("c'est la vie", "bon appétit", "carpe diem", etc.) treated as
-  a single idiomatic unit → always granularity = "word", even if they contain a verb.
-  Note: these expressions are in a NON-target language (French, Latin, etc.), so STEP 2 still
-  applies — they are express, just like native-language input. The user wants the English equivalent.
+  sentence:
+    The OBJECT has both a SUBJECT and a PREDICATE, AND the original text is ≤ 300 characters.
+    The subject may be implicit:
+      · Imperatives: "Come here!" → implied subject "you"
+      · Conversational fragments: "Having a rough day." → implied subject "I"
+      · Inversions: "Only by working together can we overcome this."
 
-("passage" exists as a future value for long pasted text. Do NOT use it yet.)
+  passage:
+    The OBJECT has both a subject and a predicate, AND the original text is > 300 characters.
+    A passage is multi-sentence text: an email, a page of a book, a long sign, a chat log.
 
 ═══ MAP TO CARD TYPE ═══
 
@@ -118,12 +213,14 @@ ASYMMETRY — this matters:
   sentence + comprehend → "s2"
   word     + express    → "s3"
   sentence + express    → "s4"
+  passage  + comprehend → "s5"
+  passage  + express    → "s6"
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 FLOWS — follow the one matching your (granularity, direction)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-All four flows write the SAME unified fields (see OUTPUT SCHEMAS). What differs is which
+All flows write the SAME unified fields (see OUTPUT SCHEMAS). What differs is which
 fields carry content. "user_original" is ALWAYS the user's raw input, verbatim.
 
 ▸ word + comprehend  (s1)
@@ -187,6 +284,36 @@ fields carry content. "user_original" is ALWAYS the user's raw input, verbatim.
      "native_meaning" may be null (user_original already carries the native meaning).
   2. Extract learnable_units.
 
+▸ passage + comprehend  (s5)
+  1. Split the original text into individual sentences. If the passage has N sentences, you MUST produce
+     exactly N entries in passage_lines — one entry per sentence, never merge sentences into one entry.
+     Never put multiple sentences or newlines inside a single en/zh string.
+     Example: "The subway was packed today. I could barely breathe." →
+       passage_lines: [
+         {"en": "The subway was packed today.", "zh": "今天地铁挤死了。"},
+         {"en": "I could barely breathe.", "zh": "我几乎喘不过气。"}
+       ]
+  2. Translate each sentence into the native language → passage_lines: [{en: original, zh: translation}].
+  3. "target_expression" = the original text (as a whole). May note notable expressions in grammar_note.
+  4. "native_meaning" = a one-sentence summary of what the passage is about.
+  5. "revision_type" = null (passages are not corrected sentence-by-sentence).
+  6. Extract learnable_units from the full text. Quantity follows content volume — do not cap arbitrarily.
+     Priority: key vocabulary → collocations → sentence patterns.
+
+▸ passage + express  (s6)
+  1. Split the original (native-language) text into individual sentences. If the original has N sentences,
+     you MUST produce exactly N entries in passage_lines — one entry per sentence, never merge.
+     Never put multiple sentences or newlines inside a single en/zh string.
+  2. Translate each sentence into the target language → passage_lines: [{en: translation, zh: original}].
+     Example: "今天地铁挤死了。我几乎喘不过气。" →
+       passage_lines: [
+         {"en": "The subway was packed today.", "zh": "今天地铁挤死了。"},
+         {"en": "I could barely breathe.", "zh": "我几乎喘不过气。"}
+       ]
+  3. "target_expression" = the full English translation (as a whole).
+  4. "native_meaning" = null (the original text is already in passage_lines).
+  5. Extract learnable_units from the English translation. Same rules as s5.
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 LEARNABLE UNITS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -206,6 +333,12 @@ Every card carries "learnable_units". Rules differ by granularity:
          e.g. "It takes sb. some time to …", "Too … to …"
   · Mark the single most worth-learning item is_primary: true.
   · Total: 1–3 for a short sentence, at most 5. Fewer is better than padding.
+
+▸ passage cards (s5 / s6)
+  · Extract from the full target-language text.
+  · Quantity follows content volume — do not cap. A long passage may yield 5–15 units.
+  · Same priority order as sentence cards.
+  · Mark the 1–2 most worth-learning items is_primary: true (passage may have multiple primary items).
 
 NEVER extract:
   · function words                       — the, a, is, of, to, and
@@ -246,34 +379,40 @@ which fields carry content; set the rest to null (or [] for arrays). No card-typ
 field names anymore.
 
 MANDATORY: start every card_content with these four, IN THIS ORDER, never omit:
-  granularity        — "word" | "sentence"
+  granularity        — "word" | "sentence" | "passage"
   direction          — "comprehend" | "express"
   revision_type      — "error" | "polish" | null   (only meaningful on sentence+comprehend)
   learnable_units    — array as defined above (may be [])
 
 Then the content fields:
-  user_original      — the user's raw input, VERBATIM, never edited
+  user_original      — the user's raw input, VERBATIM, never edited.
+                        null only for pure-scene photos (no text was input).
   user_original_lang — "target" if the input is in the target language; otherwise the source
                        language ("native", "ja", "fr", …). Best effort.
+                       null for pure-scene photos.
   target_expression  — the AI-produced target-language expression (see each flow):
                         · word+comprehend     → the canonical entry
                         · word+express        → the idiomatic translation
-                        · sentence+comprehend → corrected/polished version, or NULL if the
-                                                original was already fine
+                        · sentence+comprehend → corrected/polished version, or NULL if original fine
                         · sentence+express    → the natural target-language sentence
-  native_meaning     — native-language meaning of (target_expression ?? user_original):
-                        · word cards     → the definition
-                        · sentence+comp  → translation of the CORRECT version
-                        · sentence+expr  → may be null (user_original already carries it)
-  phonetic           — IPA. word cards only; null on sentence cards
+                        · passage+comprehend  → the original text (as a whole)
+                        · passage+express     → the full English translation
+  native_meaning     — native-language meaning:
+                        · word cards          → the definition
+                        · sentence+comprehend → translation of the CORRECT version
+                        · sentence+express    → may be null (user_original already carries it)
+                        · passage+comprehend  → a one-sentence summary of the passage
+                        · passage+express     → null (original text is in passage_lines)
+                        · pure-scene photo    → native-language translation of the scene description
+  phonetic           — IPA. word cards only; null otherwise
   pos                — ARRAY of up to 3 parts of speech, e.g. ["v.", "n."]. word cards only; [] otherwise
-  examples           — array of {en, zh}. word: 1–2; sentence: [] unless clearly helpful
-  grammar_note       — string or null. A brief linguistic observation about the target
-                       expression — curious and informative, never corrective. word: when
-                       entry ≠ user input (spoken→speak). sentence: REQUIRED when
-                       revision_type = "error". Never references the user's input directly.
-  ai_scene_guess     — string or null. ONLY for pure-image input (no text): a short
-                       native-language description of the photo. null otherwise
+  examples           — array of {en, zh}. word: 1–2; sentence/passage: [] unless clearly helpful
+  grammar_note       — string or null. A brief linguistic observation — curious and informative,
+                       never corrective. word: when entry ≠ user input. sentence: REQUIRED when
+                       revision_type = "error". passage: optional, for notable expressions.
+  passage_lines      — array of {en, zh}. passage cards (s5/s6) ONLY; [] otherwise.
+                       s5: en=original sentence, zh=translation
+                       s6: en=translation, zh=original sentence
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 MULTI-TURN CONTEXT
@@ -285,11 +424,15 @@ ALWAYS re-run the four steps independently for the current input.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Return ONLY valid JSON, exactly this top-level shape (no markdown, no extra text):
 {
-  "card_type": "s1" | "s2" | "s3" | "s4" | "error",
+  "card_type": "s1" | "s2" | "s3" | "s4" | "s5" | "s6" | "error",
   "card_content": { ... },
   "extracted_concept": "X" | null
 }
 `.trim();
+
+// ── 完整提示词：拼接 ──
+const SYSTEM_PROMPT_TEXT  = `${SHARED_HEADER}\n\n${TEXT_STEP_0}\n\n${SHARED_CORE}`;
+const SYSTEM_PROMPT_IMAGE = `${SHARED_HEADER}\n\n${IMAGE_STEP_0}\n\n${IMAGE_READING}\n\n${SHARED_CORE}`;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -401,42 +544,43 @@ interface LearnableUnit {
   is_primary: boolean;
 }
 
-// 统一 raw_content（第5刀）：不再按卡型分 Scene/Vocab 两套结构，一套字段按维度取用。
+// 统一 raw_content（第8刀）：不再按卡型分 Scene/Vocab 两套结构，一套字段按维度取用。
 // 字段名与 card_content 完全对齐，读侧（get-materials 透传）直接映射到前端 Material。
 // 全部标注可选是因为模型偶发漏字段时素材仍照常落库，读取端须容忍 undefined。
 interface UnifiedRawContent {
-  granularity?: string;                 // word | sentence
+  granularity?: string;                 // word | sentence | passage
   direction?: string;                   // comprehend | express
   revision_type?: string | null;        // error | polish | null（仅 sentence+comprehend 有意义）
   learnable_units?: LearnableUnit[];
-  user_original: string | null;         // 用户原样输入；纯图为 null
+  user_original: string | null;         // 用户原样输入；纯场景图为 null
   user_original_lang?: string | null;   // target | 具体语言码
   target_expression: string | null;     // AI 产出的目标语言表达；sentence+comp 原句无误时为 null
   native_meaning?: string | null;       // 对 (target_expression ?? user_original) 的母语释义/译文
   phonetic?: string | null;             // 仅 word
   pos?: string[];                        // 仅 word，最多 3
   examples?: { en: string; zh: string }[];
-  grammar_note?: string | null;         // word 讲形式 / sentence 讲语法
-  ai_scene_guess?: string | null;       // 仅纯图
+  grammar_note?: string | null;         // word 讲形式 / sentence 讲语法 / passage 可选
+  passage_lines?: { en: string; zh: string }[];  // 仅 passage (s5/s6)，逐行双语对照
   source_image_path: string | null;     // 来源图片在私有 Storage 的路径（非 URL）
 }
 
 const asStr = (v: unknown): string | null => (typeof v === 'string' && v.length > 0 ? v : null);
 
 // 把 AI 返回的统一 card_content 落成统一 raw_content。
-// material_type 由 granularity 决定（word→vocabulary、sentence→scene），维持 Tab2 现有两类展示；
-// granularity 缺失时按 cardType 兜底（s1/s3→vocab、s2/s4→scene）。
+// material_type 由 granularity 决定（word→vocabulary、sentence/passage→scene），维持 Tab2 现有两类展示；
+// granularity 缺失时按 cardType 兜底（s1/s3→vocab、s2/s4/s5/s6→scene）。
 function buildRawContent(
   cardType: string,
   content: Record<string, unknown>,
   userText: string,
   sourceImageUrl: string | null
 ): { materialType: 'scene' | 'vocabulary'; rawContent: UnifiedRawContent } | null {
-  if (cardType !== 's1' && cardType !== 's2' && cardType !== 's3' && cardType !== 's4') {
+  // s5/s6 = passage
+  if (!['s1','s2','s3','s4','s5','s6'].includes(cardType)) {
     return null; // error / 未知 — 不提取
   }
 
-  const granularity = asStr(content.granularity) ?? (cardType === 's1' || cardType === 's3' ? 'word' : 'sentence');
+  const granularity = asStr(content.granularity) ?? (cardType === 's1' || cardType === 's3' ? 'word' : (cardType === 's5' || cardType === 's6' ? 'passage' : 'sentence'));
   const materialType: 'scene' | 'vocabulary' = granularity === 'word' ? 'vocabulary' : 'scene';
 
   const units = content.learnable_units;
@@ -450,12 +594,20 @@ function buildRawContent(
     ? (content.pos as unknown[]).map(String)
     : (asStr(content.pos) ? [String(content.pos)] : []);
 
-  // user_original：优先取 AI 回填的原样输入，兜底用请求文本；纯图（都为空）落 null。
+  // passage_lines：仅 passage 卡有值
+  const passageLines = Array.isArray(content.passage_lines)
+    ? (content.passage_lines as Array<{ en?: unknown; zh?: unknown }>).map(l => ({
+        en: String(l?.en ?? ''),
+        zh: String(l?.zh ?? ''),
+      }))
+    : [];
+
+  // user_original：优先取 AI 回填的原样输入，兜底用请求文本；纯场景图（都为空）落 null。
   const userOriginal = asStr(content.user_original) ?? (userText.trim() ? userText.trim() : null);
 
   const rawContent: UnifiedRawContent = {
     granularity,
-    direction: asStr(content.direction) ?? (cardType === 's1' || cardType === 's2' ? 'comprehend' : 'express'),
+    direction: asStr(content.direction) ?? (cardType === 's1' || cardType === 's2' || cardType === 's5' ? 'comprehend' : 'express'),
     revision_type: asStr(content.revision_type),
     learnable_units: Array.isArray(units) ? units as LearnableUnit[] : [],
     user_original: userOriginal,
@@ -466,7 +618,7 @@ function buildRawContent(
     pos,
     examples,
     grammar_note: asStr(content.grammar_note),
-    ai_scene_guess: asStr(content.ai_scene_guess),
+    passage_lines: passageLines.length > 0 ? passageLines : undefined,
     source_image_path: sourceImageUrl,
   };
 
@@ -646,16 +798,35 @@ Deno.serve(async (req) => {
     const userCreatedAt = new Date().toISOString();
 
     // Build current-turn Gemini parts（同步，不阻塞）
+    // 第 8 刀：有图 → IMAGE_PROMPT，无图 → TEXT_PROMPT
+    const hasImage = !!image_base64;
+    let systemPrompt = hasImage ? SYSTEM_PROMPT_IMAGE : SYSTEM_PROMPT_TEXT;
+
+    // 第8刀修正：passage 的 300 字符阈值是确定性判断，不能交给模型数——LLM 本质上数不准字符。
+    // 纯文字路在服务器端量出精确长度（按 Unicode code point，1 个汉字=1），作为「权威长度」注入提示词，
+    // 模型只需照这个数走 STEP 3 的 ≤300 / >300 分界，不再自己估算。
+    // 图片路的待处理文字长度只有模型读图后才知道，服务器量不到，那条仍由模型判断。
+    if (!hasImage && typeof text === "string" && text.trim()) {
+      const charCount = [...text.trim()].length;
+      systemPrompt += `\n\n═══ INPUT LENGTH (authoritative — measured by the server) ═══
+The user's raw text is exactly ${charCount} characters long.
+Use THIS number for the STEP 3 length boundary; do NOT estimate the length yourself.
+When STEP 1's OBJECT is the whole input and it has a subject and a predicate:
+  · ${charCount} <= 300 -> sentence (s2 / s4)
+  · ${charCount} > 300  -> PASSAGE (s5 / s6) — you MUST split it into passage_lines.`;
+    }
+
     let userParts: unknown[];
     if (image_base64 && !text) {
+      // 纯图：只发图片，提示词里的 IMAGE READING 负责判定
       userParts = [
         { inline_data: { mime_type: mime_type ?? "image/jpeg", data: image_base64 } },
-        { text: "The user sent only a photo (no text). Produce an s4 card (sentence + express). Set user_original to null and user_original_lang to null. Set ai_scene_guess to a concise native-language description of what you see (e.g. \"一杯咖啡放在办公桌上\"). Set target_expression to a natural English sentence describing the scene, native_meaning may be null, and extract learnable_units." },
       ];
     } else if (image_base64 && text) {
+      // 图文混合：发图片 + 用户文字，提示词里的 RELATIONSHIP CHECK 负责判定
       userParts = [
         { inline_data: { mime_type: mime_type ?? "image/jpeg", data: image_base64 } },
-        { text: `The user sent this photo along with the following text. Use the text to classify and generate the card (s1/s2/s3/s4). The photo is additional context — let it inform the scene details in target_expression. User text: ${text}` },
+        { text },
       ];
     } else {
       if (typeof text !== "string" || text.trim() === "") {
@@ -691,7 +862,7 @@ Deno.serve(async (req) => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+          systemInstruction: { parts: [{ text: systemPrompt }] },
           contents,
           generationConfig: { responseMimeType: "application/json" },
         }),

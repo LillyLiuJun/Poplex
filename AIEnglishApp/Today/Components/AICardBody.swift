@@ -3,17 +3,21 @@ import SwiftUI
 /// 统一学习卡（Tab1 输入输出卡片设计交付 v2）
 /// · word 卡：大词条 → 音标+词性同行 → 释义 → 例句区块 → 形式说明区块
 /// · sentence 卡：双行（comprehend: 目标语在前；express/图: 母语在前）→ 语法说明区块
+/// · passage 卡：逐行双语对照 + 折叠/展开
 struct AICardBody: View {
     let content: CardContent
+    @State private var passageExpanded = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Space.paddingCard) {
-            CardTypeChip(label: content.isWord ? "Word" : "Sentence")
+            CardTypeChip(label: cardTypeLabel)
 
             if content.isWord {
                 if let note = content.grammarNote, !note.isEmpty { noteSection(note: note) }
                 wordMainBlock
                 if !content.examples.isEmpty { examplesSection }
+            } else if content.isPassage {
+                passageContent
             } else {
                 sentenceContent
             }
@@ -28,6 +32,12 @@ struct AICardBody: View {
             x: AppTheme.Shadow.cardX,
             y: AppTheme.Shadow.cardY
         )
+    }
+
+    private var cardTypeLabel: String {
+        if content.isWord { return "Word" }
+        if content.isPassage { return "Passage" }
+        return "Sentence"
     }
 
     // MARK: - Word: 词条 → 音标+词性同行 → 释义
@@ -62,7 +72,61 @@ struct AICardBody: View {
         }
     }
 
-    // MARK: - Sentence container: revision 时 Note 在表达之前，否则在之后
+    // 收起态最多预览的句子对数（min/max：≤ 此数则整段全展示、无按钮；> 此数只预览前 N 句 + 展开按钮）
+    private let passageCollapsedLimit = 2
+
+    // 当前应渲染的行（收起态取前 passageCollapsedLimit 句，展开态取全部），带原始序号
+    private var visiblePassageLines: [(offset: Int, element: PassageLine)] {
+        let lines = content.passageLines
+        let slice = passageExpanded ? lines : Array(lines.prefix(passageCollapsedLimit))
+        return Array(slice.enumerated())
+    }
+
+    // MARK: - Passage: 逐行双语对照 + 折叠/展开
+    private var passageContent: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Space.paddingS) {
+            // 收起态预览前 N 句、展开态全量——两态都用完整双语对照，不再截断单句
+            ForEach(visiblePassageLines, id: \.offset) { index, line in
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(line.en)
+                        .font(AppTheme.Font.englishPrimary)
+                        .foregroundStyle(AppTheme.Color.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(line.zh)
+                        .font(AppTheme.Font.chineseBody)
+                        .foregroundStyle(AppTheme.Color.textMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if index < visiblePassageLines.count - 1 {
+                    Divider()
+                        .overlay(AppTheme.Color.textMuted.opacity(0.15))
+                }
+            }
+
+            // 展开/收起按钮：仅当句子对数超过收起态预览上限时显示
+            if content.passageLines.count > passageCollapsedLimit {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        passageExpanded.toggle()
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(passageExpanded ? "Collapse" : "Expand full text")
+                            .font(AppTheme.Font.pos)
+                        Image(systemName: passageExpanded ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 10, weight: .semibold))
+                    }
+                    .foregroundStyle(AppTheme.Color.textMuted)
+                }
+                .buttonStyle(.plain)
+            }
+
+            // grammar_note（如有）
+            if let note = content.grammarNote, !note.isEmpty {
+                noteSection(note: note)
+            }
+        }
+    }
     private var sentenceContent: some View {
         VStack(alignment: .leading, spacing: AppTheme.Space.paddingCard) {
             // revision 场景：先 Note（解释语言事实），再 revision label + 表达
@@ -87,10 +151,10 @@ struct AICardBody: View {
             }
 
             if content.isComprehend {
-                // comprehend: 目标语在前（大橙）、母语译文在后（小灰）
+                // comprehend: 目标语在前（近黑主内容）、母语译文在后（小灰）
                 Text(content.displayTarget)
                     .font(AppTheme.Font.englishPrimary)
-                    .foregroundStyle(AppTheme.Color.brandStrong)
+                    .foregroundStyle(AppTheme.Color.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
                 if let meaning = content.nativeMeaning, !meaning.isEmpty {
                     Text(meaning)
@@ -99,7 +163,7 @@ struct AICardBody: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             } else {
-                // express / 纯图: 母语在前（小灰）、目标语在后（大橙）
+                // express / 纯图: 母语在前（小灰）、目标语在后（近黑主内容）
                 if let native = expressNativeRow {
                     Text(native)
                         .font(AppTheme.Font.chineseBody)
@@ -108,7 +172,7 @@ struct AICardBody: View {
                 }
                 Text(content.displayTarget)
                     .font(AppTheme.Font.englishPrimary)
-                    .foregroundStyle(AppTheme.Color.brandStrong)
+                    .foregroundStyle(AppTheme.Color.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -158,10 +222,9 @@ struct AICardBody: View {
         }
     }
 
-    // express / 纯图 场景下的「母语行」——用户输入原文或 AI 看到的场景
+    // express 场景下的「母语行」——用户输入原文
     private var expressNativeRow: String? {
         if let original = content.userOriginal, !original.isEmpty { return original }
-        if let guess = content.aiSceneGuess, !guess.isEmpty { return "In the photo: \(guess)" }
         return nil
     }
 }

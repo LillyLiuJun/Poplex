@@ -179,7 +179,7 @@ struct AIEnvelopeDecodeTests {
         #expect(envelope.extractedConcept == "摸鱼")
     }
 
-    // s4 = sentence + express：母语句子 → 目标语句子，aiSceneGuess 仅纯图场景
+    // s4 = sentence + express：母语句子 → 目标语句子
     @Test func decodesSentenceExpressCard() throws {
         let json = """
         {
@@ -208,7 +208,118 @@ struct AIEnvelopeDecodeTests {
         #expect(c.learnableUnits.count == 2)
         // primaryUnit 优先取 is_primary=true 的那个，而不是数组第一个
         #expect(c.primaryUnit?.form == "absolutely packed")
-        #expect(c.aiSceneGuess == nil)
+        #expect(c.passageLines.isEmpty)
+    }
+
+    // s5 = passage + comprehend：长文本（目标语言）→ 逐行翻译对照
+    @Test func decodesPassageComprehendCard() throws {
+        let json = """
+        {
+            "card_type": "s5",
+            "card_content": {
+                "granularity": "passage",
+                "direction": "comprehend",
+                "user_original": "The subway was packed today. I could barely breathe.",
+                "target_expression": "The subway was packed today. I could barely breathe.",
+                "native_meaning": "一段关于地铁拥挤的描述",
+                "revision_type": null,
+                "learnable_units": [
+                    {"form": "packed", "kind": "word", "note": "拥挤的", "is_primary": true},
+                    {"form": "could barely breathe", "kind": "phrase", "note": "几乎喘不过气", "is_primary": false}
+                ],
+                "passage_lines": [
+                    {"en": "The subway was packed today.", "zh": "今天地铁挤死了。"},
+                    {"en": "I could barely breathe.", "zh": "我几乎喘不过气。"}
+                ],
+                "examples": []
+            }
+        }
+        """.data(using: .utf8)!
+
+        let envelope = try JSONDecoder().decode(AIEnvelope.self, from: json)
+
+        guard case .card(let c) = envelope.card else {
+            Issue.record("Expected .card"); return
+        }
+        #expect(c.granularity == "passage")
+        #expect(c.isPassage == true)
+        #expect(c.isWord == false)
+        #expect(c.passageLines.count == 2)
+        #expect(c.passageLines[0].en == "The subway was packed today.")
+        #expect(c.passageLines[0].zh == "今天地铁挤死了。")
+        #expect(c.learnableUnits.count == 2)
+        #expect(c.primaryUnit?.form == "packed")
+    }
+
+    // s6 = passage + express：长文本（母语）→ 逐行翻译对照
+    @Test func decodesPassageExpressCard() throws {
+        let json = """
+        {
+            "card_type": "s6",
+            "card_content": {
+                "granularity": "passage",
+                "direction": "express",
+                "user_original": "今天地铁挤死了。我几乎喘不过气。",
+                "target_expression": "The subway was packed today. I could barely breathe.",
+                "native_meaning": null,
+                "learnable_units": [
+                    {"form": "packed", "kind": "word", "note": "拥挤的", "is_primary": true}
+                ],
+                "passage_lines": [
+                    {"en": "The subway was packed today.", "zh": "今天地铁挤死了。"},
+                    {"en": "I could barely breathe.", "zh": "我几乎喘不过气。"}
+                ],
+                "examples": []
+            }
+        }
+        """.data(using: .utf8)!
+
+        let envelope = try JSONDecoder().decode(AIEnvelope.self, from: json)
+
+        guard case .card(let c) = envelope.card else {
+            Issue.record("Expected .card"); return
+        }
+        #expect(c.granularity == "passage")
+        #expect(c.isPassage == true)
+        #expect(c.direction == "express")
+        #expect(c.passageLines.count == 2)
+        #expect(c.passageLines[1].zh == "我几乎喘不过气。")
+        #expect(c.nativeMeaning == nil)
+    }
+
+    // 纯场景图 → sentence + comprehend（s2）：native_meaning 承载母语翻译
+    @Test func decodesPureScenePhotoCard() throws {
+        let json = """
+        {
+            "card_type": "s2",
+            "card_content": {
+                "granularity": "sentence",
+                "direction": "comprehend",
+                "user_original": null,
+                "user_original_lang": null,
+                "target_expression": "A cup of coffee sits on a wooden desk next to a laptop.",
+                "native_meaning": "一杯咖啡放在木桌上，旁边是一台笔记本电脑。",
+                "revision_type": null,
+                "learnable_units": [
+                    {"form": "wooden desk", "kind": "phrase", "note": "木桌", "is_primary": true}
+                ],
+                "passage_lines": [],
+                "examples": []
+            }
+        }
+        """.data(using: .utf8)!
+
+        let envelope = try JSONDecoder().decode(AIEnvelope.self, from: json)
+
+        guard case .card(let c) = envelope.card else {
+            Issue.record("Expected .card"); return
+        }
+        #expect(c.granularity == "sentence")
+        #expect(c.direction == "comprehend")
+        #expect(c.userOriginal == nil)
+        #expect(c.targetExpression == "A cup of coffee sits on a wooden desk next to a laptop.")
+        #expect(c.nativeMeaning == "一杯咖啡放在木桌上，旁边是一台笔记本电脑。")
+        #expect(c.passageLines.isEmpty)
     }
 
     // error 卡：安全/无效拦截走 ErrorContent
