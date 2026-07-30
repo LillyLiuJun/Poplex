@@ -28,3 +28,43 @@
 7. TONE--这块的内容我忘了你查下
 8. MULTI-TURN CONTEXT（带 1 轮）
 9. 输出 JSON 形状---结合架构分析存在的目的
+
+---
+
+## 待优化需求（记录，暂不做）
+
+### N1 · 第三语言（other）输入应判 comprehend，而非 express（2026-07-28 记）
+
+**现象**：Slice 0.5 验收时，输入纯日文 `お疲れ様です`，模型判成 `direction=express`，并给 `intent` 填了一句释义（"表达对他人辛勤工作的感谢或慰问"）。
+
+**为什么算问题**：
+- 现行 direction 规则（第 8 刀定的）是"OBJECT 含任何非目标语言内容 → express"，所以第三语言一律 express——字面没错。
+- 但语义上，用户查一句外语（既非母语也非目标语言）真实意图是**"想看懂"**，属 comprehend，不是"想表达"。
+- 连带副作用：comprehend 本该 `intent=null`；现在 other 被判 express，`intent` 装了个**释义**，而 §5.2.7 的 `intent` 是"用户想表达的归一化母语意图"。两者语义不同，若直接拿去做 Slice 1 的意图频率聚合/同义组，会污染账本。
+
+**⚠️ 调研结论（2026-07-28，勿再走"翻 direction"这条路）**：
+最初设想是"把纯第三语言判 comprehend"。**读 flow 后否掉了——它有害**：comprehend 侧
+（s1/s2）是为目标语言输入造的（判词形/改英文句），把日文路由过去，s1 会把日文原样
+当词条 + 只给中文释义、**完全给不出英文怎么说**，比现状更差。而现在的 express flow
+（s3）产出的内容其实是对的（`target_expression` = 英文等价表达、`native_meaning` = 该
+含义）——**只是"标签 express"和"intent 装了释义"两点别扭，标签下游不靠它区分**
+（`input_lang='other'` 已能单独识别第三语言）。
+
+**真正该修的两点（以后优化时）**：
+1. prompt 里 `intent` 加一句"`input_lang='other'` 时为 null"——第三语言查询没有"母语想
+   表达的意图"，从源头掐掉污染，flow 一行不动。（本可现在做，PM 决定连同整块以后再调。）
+2. 记账层兜底：`input_lang='other'` 时不把 intent 写入 `intent_text`（Slice 1 落地时一并处理）。
+
+**优先级**：非阻塞，不影响 Slice 0.5/1 主链路。归入模型 intent 归一化质量的整体优化。
+
+### N2 · intent 归一化力度（2026-07-28 记）
+
+模型对情绪化模糊表达归一化得好（`累死了`/`太累了` 都归成 `很累`，§5.2.7 聚合成立）；但对具体陈述倾向忠实复述（`I have a 会议 at 3pm` → `我下午三点有个会议`，未进一步归一）。当前够用，待有真实数据后再评估是否需要更强的归一化规则。
+
+### ✅ N3 · 收紧 learnable_units 的 kind 枚举输出（2026-07-28 记，同日已优化）
+
+**现象**：Slice 1 记账实测时，模型对 `set up` 输出 `"kind":"phrasal verb"`——但 prompt 的 `LEARNABLE UNITS` 段规定 `kind` 只能是六个值之一：`word | phrase | collocation | slang | idiom | pattern`。`phrasal verb` 不在其中，属 prompt 合规漂移。
+
+**已优化**：在 `SYSTEM_PROMPT` 的 `Each unit → kind` 处收紧——明确"MUST be EXACTLY one of these six literal strings"，并给出映射（phrasal verb / 多词块 → `phrase`；单词 → `word`），禁止输出 `phrasal verb`/`verb`/`noun` 等变体。同时**保留** `record_lexicon_material_units` RPC 的服务端收敛作为双保险（模型仍可能偶发漂移，账本是只增不改的流水，必须兜底）。
+
+> 通用原则（本轮验证过的经验，留作规范）：**任何被 CHECK 约束、且值来自模型输出的列，服务端都必须做"合法值或 null"的收敛**——模型枚举是概率性的，会飘。lexicon 的 `kind/input_lang/granularity/direction` 均已按此办理。
