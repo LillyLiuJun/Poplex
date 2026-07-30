@@ -24,10 +24,18 @@ struct RootTabContainer: View {
     }
 
     private var menuItems: [AccountMenuItem] {
-        [
+        var items = [
             AccountMenuItem(id: "settings", icon: "gearshape",   title: "Settings") {},
             AccountMenuItem(id: "about",    icon: "info.circle", title: "About")    {},
         ]
+        #if DEBUG
+        items.append(AccountMenuItem(id: "reset_library", icon: "arrow.counterclockwise", title: "[DEBUG] Reset Library unlock") {
+            UserDefaults.standard.removeObject(forKey: "tab2_permanently_unlocked")
+            UserDefaults.standard.removeObject(forKey: "tab2_first_unlock_shown")
+            mineListResetToken = UUID()   // 触发 vm.load() 感知 UserDefaults 变化
+        })
+        #endif
+        return items
     }
 
     var body: some View {
@@ -60,10 +68,13 @@ struct RootTabContainer: View {
                 .allowsHitTesting(showAccountMenu)
         }
         .background(AppTheme.Color.pageBg)
-        .onChange(of: selectedTab) { oldTab, _ in
+        .onChange(of: selectedTab) { oldTab, newTab in
             if oldTab == .mine {
-                mineListResetToken = UUID()
                 mineSwipeActionOpen = false
+            }
+            // 切到 Tab2 时刷新数据（view 永远在 hierarchy，onAppear 不会重触发）
+            if newTab == .mine {
+                mineListResetToken = UUID()
             }
             // Restore full topBar on tab switch so the new tab's header is always visible
             withAnimation(AppTheme.Motion.topBarCompact) { topBarCompact = false }
@@ -83,7 +94,9 @@ struct RootTabContainer: View {
             TodayView(topBarCompact: $topBarCompact, isActive: selectedTab == .today)
                 .opacity(selectedTab == .today ? 1 : 0)
                 .allowsHitTesting(selectedTab == .today)
-            MineView(listResetToken: mineListResetToken, swipeActionOpen: $mineSwipeActionOpen, detailActive: $mineDetailActive, topInset: topBarHeight)
+            MineView(listResetToken: mineListResetToken, swipeActionOpen: $mineSwipeActionOpen, detailActive: $mineDetailActive, topInset: topBarHeight, onSwitchToToday: {
+                            withAnimation(.easeInOut(duration: 0.2)) { selectedTab = .today }
+                        })
                 .opacity(selectedTab == .mine ? 1 : 0)
                 .allowsHitTesting(selectedTab == .mine)
         }

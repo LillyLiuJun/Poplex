@@ -36,4 +36,13 @@ enum SupabaseConfig {
     static var messagesFunctionURL: URL {
         projectURL.appending(path: "functions/v1/get-messages")
     }
+
+    // MARK: - Tab2 首页（Slice B）
+    static var getTab2HomeFunctionURL: URL {
+        projectURL.appending(path: "functions/v1/get-tab2-home")
+    }
+
+    static var getCategoryWordsFunctionURL: URL {
+        projectURL.appending(path: "functions/v1/get-category-words")
+    }
 }

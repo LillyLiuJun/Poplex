@@ -39,13 +39,34 @@ the fact** — fix the doc and say so.
 
 ## Current State (update this when a slice lands)
 
-- **In flight**: Tab1 prompt rework, slice 1 of 9 — `SYSTEM_PROMPT` rewritten as a
-  four-step ordered flow, `learnable_units[]` added to output and persisted.
-  Backend only, fully backward compatible, **no Xcode rebuild needed**.
-  Awaiting deploy + acceptance against `Tab1_Prompt改造_第1刀验收样例_v1.md`.
-- **Not started**: the lexicon tables, the dialogue page, the Tab2 rework.
+- **Tab2 rebuild in flight** (branch `feat/tab2-rebuild`, plan =
+  `Agent内容组织与成长系统_PRD_v2.md` §十三). Scope: Tab2 + dialogue + growth only;
+  Tab1 frontend untouched, `generate` backend gets the accounting stage.
+  - **Slice 0** (`source_message_id` backfill): **skipped** — the 8th-cut unified
+    `raw_content` made materials self-contained, no consumer for the link.
+  - **Slice 0.5 · DONE + verified** (backend only): split
+    `user_original_lang` → `input_lang` (role: native/target/other) +
+    `input_lang_code`; added `intent` (normalized native intent phrase, express
+    only). Deployed; live-verified — `累死了`/`太累了` both normalize to `很累`,
+    日文 → other/ja, `I have a 会议 at 3pm` → native.
+  - **Slice 1 (core) · DONE + verified**: created `lexicon_entries` /
+    `lexicon_occurrences` (migrations `20260728000000`), added the
+    `record_lexicon_material_units` accounting RPC (`20260728010000`) and
+    Stage 3 in `generate` (read `learnable_units[]` → normalize lemma →
+    stopword backstop → upsert entry + append occurrence, non-blocking).
+    The RPC coerces model-drifted enums (kind/input_lang/granularity/direction)
+    to valid-or-null so a stray value can't abort the batch. Live-verified:
+    "set up" ×2 → one entry `total_count=2`, `entry_kind` coerced
+    phrasal-verb→phrase, occurrences carry the inherited signals.
+  - **Next · Slice 1b + Slice 2**: 1b = failure/backfill/reconcile jobs +
+    backfill history into the ledger. Slice 2 = static word-list `tier` +
+    lemmatisation (meetings→meeting) + fuller stopword list.
+- **Prompt backlog** (`Prompt改动需求.md` §待优化需求): N1 — pure third-language
+  input should be `comprehend` not `express` (prompt direction rule + Slice 1
+  accounting must skip `intent_text` when `input_lang='other'`).
+- **Tab1 prompt rework** (slices 1–8) already landed on main (see 8th-cut commit).
 - Slice order and what blocks what: see `整体架构_两个Tab与对话页_v1.md` §五 and
-  `Tab1_Prompt与输出结构_改造方案_v2.md` §七.
+  `Agent内容组织与成长系统_PRD_v2.md` §十三.
 
 ## Overall Structure
 
