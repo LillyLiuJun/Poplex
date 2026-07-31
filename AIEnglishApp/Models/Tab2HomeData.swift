@@ -69,7 +69,11 @@ struct Tab2CategoryData: Decodable, Identifiable {
         previewWords   = try c.decodeIfPresent([String].self,       forKey: .previewWords) ?? []
 
         if let raw = try c.decodeIfPresent(String.self, forKey: .lastMaterialAt) {
-            lastMaterialAt = ISO8601DateFormatter().date(from: raw)
+            // Backend returns fractional-seconds format (e.g. "2026-07-25T10:00:00.000Z");
+            // the default ISO8601DateFormatter doesn't handle that, so try both.
+            let fmtMs = ISO8601DateFormatter()
+            fmtMs.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            lastMaterialAt = fmtMs.date(from: raw) ?? ISO8601DateFormatter().date(from: raw)
         } else {
             lastMaterialAt = nil
         }

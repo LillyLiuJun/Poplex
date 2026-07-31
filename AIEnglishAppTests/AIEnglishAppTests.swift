@@ -991,6 +991,257 @@ struct Tab2WordEntryBadgeTests {
     }
 }
 
+// MARK: - SceneCategoryMap tests
+
+struct SceneCategoryMapTests {
+
+    @Test func knownCategoryMapsToCorrectCase() {
+        #expect(SceneCategory.from("工作与学业") == .workStudy)
+        #expect(SceneCategory.from("饮食") == .food)
+        #expect(SceneCategory.from("家庭与人际") == .homeFamily)
+        #expect(SceneCategory.from("休闲娱乐") == .leisure)
+    }
+
+    @Test func nilRawValueFallsToOther() {
+        #expect(SceneCategory.from(nil) == .other)
+    }
+
+    @Test func unknownRawValueFallsToOther() {
+        #expect(SceneCategory.from("不存在的分类") == .other)
+    }
+
+    @Test func englishLabelsMatchExpected() {
+        #expect(SceneCategory.workStudy.englishLabel == "Work & study")
+        #expect(SceneCategory.food.englishLabel == "Food")
+        #expect(SceneCategory.homeFamily.englishLabel == "Home & people")
+        #expect(SceneCategory.other.englishLabel == "Other")
+        #expect(SceneCategory.leisure.englishLabel == "Leisure")
+    }
+}
+
+// MARK: - Tab2HomeData JSON decode tests
+
+struct Tab2HomeDataDecodeTests {
+
+    private let decoder = JSONDecoder()
+
+    @Test func decodesFullPayloadWithSubScenesAndDate() throws {
+        let json = """
+        {
+            "unlocked": true,
+            "input_count": 12,
+            "categories": [
+                {
+                    "scene_category": "工作与学业",
+                    "word_count": 8,
+                    "unlocked": true,
+                    "last_material_at": "2026-07-25T10:00:00.000Z",
+                    "sub_scenes": [
+                        {
+                            "scene_detail": "Team meeting",
+                            "occurrence_count": 3,
+                            "quote": "We had a long meeting",
+                            "image_url": null
+                        }
+                    ],
+                    "preview_words": ["overtime", "deadline"]
+                }
+            ]
+        }
+        """.data(using: .utf8)!
+
+        let home = try decoder.decode(Tab2HomeData.self, from: json)
+        #expect(home.unlocked == true)
+        #expect(home.inputCount == 12)
+        #expect(home.categories.count == 1)
+
+        let cat = home.categories[0]
+        #expect(cat.sceneCategory == "工作与学业")
+        #expect(cat.wordCount == 8)
+        #expect(cat.unlocked == true)
+        #expect(cat.lastMaterialAt != nil)
+        #expect(cat.englishLabel == "Work & study")
+        #expect(cat.previewWords == ["overtime", "deadline"])
+
+        let scene = cat.subScenes[0]
+        #expect(scene.sceneDetail == "Team meeting")
+        #expect(scene.occurrenceCount == 3)
+        #expect(scene.quote == "We had a long meeting")
+        #expect(scene.imageUrl == nil)
+    }
+
+    @Test func missingOptionalFieldsDefaultToEmpty() throws {
+        let json = """
+        {
+            "unlocked": false,
+            "input_count": 3,
+            "categories": [
+                {
+                    "scene_category": "饮食",
+                    "word_count": 2,
+                    "unlocked": false
+                }
+            ]
+        }
+        """.data(using: .utf8)!
+
+        let home = try decoder.decode(Tab2HomeData.self, from: json)
+        let cat = home.categories[0]
+        #expect(cat.subScenes.isEmpty)
+        #expect(cat.previewWords.isEmpty)
+        #expect(cat.lastMaterialAt == nil)
+    }
+
+    @Test func lastMaterialAtParsesISO8601() throws {
+        let json = """
+        {
+            "unlocked": true,
+            "input_count": 5,
+            "categories": [
+                {
+                    "scene_category": "其他",
+                    "word_count": 1,
+                    "unlocked": true,
+                    "last_material_at": "2026-07-20T08:30:00.000Z"
+                }
+            ]
+        }
+        """.data(using: .utf8)!
+
+        let home = try decoder.decode(Tab2HomeData.self, from: json)
+        let date = home.categories[0].lastMaterialAt
+        #expect(date != nil)
+        let after = ISO8601DateFormatter().date(from: "2026-07-01T00:00:00Z")!
+        #expect(date! > after)
+    }
+
+    @Test func emptyCategoriesArray() throws {
+        let json = """
+        {"unlocked": false, "input_count": 0, "categories": []}
+        """.data(using: .utf8)!
+
+        let home = try decoder.decode(Tab2HomeData.self, from: json)
+        #expect(home.categories.isEmpty)
+    }
+
+    @Test func unknownSceneCategoryFallsToOtherLabel() throws {
+        let json = """
+        {
+            "unlocked": true,
+            "input_count": 1,
+            "categories": [
+                {"scene_category": "未知分类", "word_count": 1, "unlocked": true}
+            ]
+        }
+        """.data(using: .utf8)!
+
+        let home = try decoder.decode(Tab2HomeData.self, from: json)
+        #expect(home.categories[0].englishLabel == "Other")
+    }
+}
+
+// MARK: - Tab2HomeViewModel.heroCategory() tests
+
+struct Tab2HeroCategoryTests {
+
+    private func makeCategory(
+        sceneCategory: String,
+        wordCount: Int,
+        unlocked: Bool,
+        lastMaterialAt: Date? = nil,
+        quotes: [String?] = []
+    ) -> Tab2CategoryData {
+        let subScenes = quotes.enumerated().map { i, q in
+            Tab2SubScene(sceneDetail: "Scene \(i)", occurrenceCount: i + 1, quote: q)
+        }
+        return Tab2CategoryData(
+            sceneCategory: sceneCategory,
+            wordCount: wordCount,
+            unlocked: unlocked,
+            lastMaterialAt: lastMaterialAt,
+            subScenes: subScenes
+        )
+    }
+
+    @Test func nilDataReturnsNil() {
+        let vm = Tab2HomeViewModel()
+        vm.data = nil
+        #expect(vm.heroCategory() == nil)
+    }
+
+    @Test func noUnlockedCategoriesReturnsNil() {
+        let vm = Tab2HomeViewModel()
+        vm.data = Tab2HomeData(unlocked: false, inputCount: 2, categories: [
+            makeCategory(sceneCategory: "工作与学业", wordCount: 5, unlocked: false),
+            makeCategory(sceneCategory: "饮食", wordCount: 3, unlocked: false)
+        ])
+        #expect(vm.heroCategory() == nil)
+    }
+
+    @Test func fewerThanTwoValidQuotesFallsBackToHighestWordCount() {
+        let vm = Tab2HomeViewModel()
+        // 有效引文阈值 = ≥6 字；"Short"(5字) 不达标
+        let lowQuoteCat = makeCategory(
+            sceneCategory: "工作与学业", wordCount: 10, unlocked: true,
+            quotes: ["Short"]
+        )
+        let highWordCat = makeCategory(
+            sceneCategory: "饮食", wordCount: 20, unlocked: true,
+            quotes: []
+        )
+        vm.data = Tab2HomeData(unlocked: true, inputCount: 5, categories: [lowQuoteCat, highWordCat])
+        let hero = vm.heroCategory()
+        #expect(hero?.sceneCategory == "饮食")
+        #expect(hero?.wordCount == 20)
+    }
+
+    @Test func prefersUnlockedCategoryWithTwoOrMoreValidQuotes() {
+        let vm = Tab2HomeViewModel()
+        let richCat = makeCategory(
+            sceneCategory: "工作与学业", wordCount: 5, unlocked: true,
+            lastMaterialAt: Date(),
+            quotes: ["We had a long team meeting", "Deadline is this Friday morning"]
+        )
+        let wordRichCat = makeCategory(
+            sceneCategory: "饮食", wordCount: 50, unlocked: true,
+            quotes: []
+        )
+        vm.data = Tab2HomeData(unlocked: true, inputCount: 8, categories: [wordRichCat, richCat])
+        let hero = vm.heroCategory()
+        #expect(hero?.sceneCategory == "工作与学业")
+    }
+
+    @Test func mostRecentLastMaterialAtWinsAmongRichCategories() {
+        let vm = Tab2HomeViewModel()
+        let olderDate = Date(timeIntervalSince1970: 1_750_000_000)
+        let newerDate = Date(timeIntervalSince1970: 1_760_000_000)
+        let oldCat = makeCategory(
+            sceneCategory: "家庭与人际", wordCount: 15, unlocked: true,
+            lastMaterialAt: olderDate,
+            quotes: ["Dinner with my parents last night", "My sister visited us this weekend"]
+        )
+        let newCat = makeCategory(
+            sceneCategory: "工作与学业", wordCount: 10, unlocked: true,
+            lastMaterialAt: newerDate,
+            quotes: ["Project deadline coming this Friday", "Team meeting went really well today"]
+        )
+        vm.data = Tab2HomeData(unlocked: true, inputCount: 10, categories: [oldCat, newCat])
+        let hero = vm.heroCategory()
+        #expect(hero?.sceneCategory == "工作与学业")
+    }
+
+    @Test func quotesWithExactlySixCharsPassThreshold() {
+        let vm = Tab2HomeViewModel()
+        let cat = makeCategory(
+            sceneCategory: "休闲娱乐", wordCount: 8, unlocked: true,
+            quotes: ["123456", "abcdef"]  // exactly 6 chars — boundary case
+        )
+        vm.data = Tab2HomeData(unlocked: true, inputCount: 3, categories: [cat])
+        let hero = vm.heroCategory()
+        #expect(hero?.sceneCategory == "休闲娱乐")
+    }
+}
+
 // MARK: - Tab2WordEntry stableImageKey tests
 
 struct Tab2WordEntryStableImageKeyTests {
