@@ -14,20 +14,28 @@ struct Tab2CategoryRow: View {
             HStack(alignment: .center, spacing: AppTheme.Space.paddingCard) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(category.englishLabel)
-                        .font(AppTheme.Font.englishPrimary)
+                        .font(.system(.body, weight: .semibold))
                         .foregroundStyle(AppTheme.Color.textPrimary)
 
-                    Text(descriptionLine)
-                        .font(AppTheme.Font.pos)
-                        .foregroundStyle(AppTheme.Color.textMuted)
-                        .lineLimit(1)
+                    HStack(spacing: AppTheme.Space.paddingXS) {
+                        Text(descriptionLine)
+                            .font(AppTheme.Font.pos)
+                            .foregroundStyle(AppTheme.Color.textMuted)
+                            .lineLimit(1)
+                            .layoutPriority(1)
+
+                        Text("· \(category.wordCount) words")
+                            .font(AppTheme.Font.pos)
+                            .foregroundStyle(AppTheme.Color.textFaint)
+                            .fixedSize()
+                    }
                 }
 
                 Spacer(minLength: 0)
 
                 talkCapsule
             }
-            .padding(.vertical, 12)
+            .padding(.vertical, 14)
             .padding(.horizontal, AppTheme.Space.paddingPage)
         }
         .buttonStyle(.plain)
@@ -38,13 +46,11 @@ struct Tab2CategoryRow: View {
     private var talkCapsule: some View {
         Text("Talk")
             .font(AppTheme.Font.sectionLabel)
-            .foregroundStyle(AppTheme.Color.brandStrong)
+            .foregroundStyle(.white)
             .padding(.horizontal, 14)
             .padding(.vertical, 6)
-            .overlay(
-                Capsule()
-                    .stroke(AppTheme.Color.brandStrong, lineWidth: 1.5)
-            )
+            .background(AppTheme.Color.brandStrong)
+            .clipShape(Capsule())
     }
 
     // MARK: - Description line

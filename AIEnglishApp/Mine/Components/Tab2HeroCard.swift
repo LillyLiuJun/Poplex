@@ -20,28 +20,33 @@ struct Tab2HeroCard: View {
 
     private var cardContent: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // ① 分类名（小字全大写）
-            Text(category.englishLabel.uppercased())
-                .font(AppTheme.Font.sectionLabel)
-                .foregroundStyle(AppTheme.Color.textMuted)
-                .padding(.bottom, AppTheme.Space.paddingS)
+            // Accent stripe — 品牌橙顶部细线，由 clipShape 负责圆角
+            AppTheme.Color.brandStrong.frame(height: 3)
 
-            // ② 首次解锁专属句（只出现一次）
-            if isFirstUnlock {
-                Text("You've got enough here to talk about it now.")
-                    .font(AppTheme.Font.keyPhrase)
-                    .foregroundStyle(AppTheme.Color.textPrimary)
-                    .padding(.bottom, AppTheme.Space.paddingM)
+            VStack(alignment: .leading, spacing: 0) {
+                // ① 分类名（小字全大写，品牌橙）
+                Text(category.englishLabel.uppercased())
+                    .font(AppTheme.Font.sectionLabel)
+                    .foregroundStyle(AppTheme.Color.brandStrong)
+                    .padding(.bottom, AppTheme.Space.paddingS)
+
+                // ② 首次解锁专属句（只出现一次）
+                if isFirstUnlock {
+                    Text("You've got enough here to talk about it now.")
+                        .font(AppTheme.Font.keyPhrase)
+                        .foregroundStyle(AppTheme.Color.textPrimary)
+                        .padding(.bottom, AppTheme.Space.paddingM)
+                }
+
+                // ③ 引文行 or 降级展示
+                quoteSection
+
+                // ④ CTA
+                Spacer().frame(height: AppTheme.Space.paddingCard)
+                ctaButton
             }
-
-            // ③ 引文行 or 降级展示
-            quoteSection
-
-            // ④ CTA
-            Spacer().frame(height: AppTheme.Space.paddingCard)
-            ctaButton
+            .padding(AppTheme.Space.paddingCard)
         }
-        .padding(AppTheme.Space.paddingCard)
         .background(AppTheme.Color.cardBg)
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
         .shadow(
@@ -85,16 +90,17 @@ struct Tab2HeroCard: View {
     // MARK: - CTA
 
     private var ctaButton: some View {
-        HStack {
-            Spacer()
+        HStack(spacing: AppTheme.Space.paddingS) {
+            Image(systemName: "mic.fill")
+                .imageScale(.small)
             Text("Start talking")
                 .font(AppTheme.Font.ctaLabel)
-                .foregroundStyle(AppTheme.Color.cardBg)
-                .padding(.horizontal, AppTheme.Space.paddingCard)
-                .padding(.vertical, AppTheme.Space.paddingS)
-                .background(AppTheme.Color.brandStrong)
-                .clipShape(Capsule())
         }
+        .foregroundStyle(AppTheme.Color.cardBg)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, AppTheme.Space.paddingM)
+        .background(AppTheme.Color.brandStrong)
+        .clipShape(Capsule())
     }
 
     // MARK: - Display scenes selection
@@ -155,10 +161,9 @@ private struct QuoteRow: View {
             .frame(width: 46, height: 34)
             .clipShape(RoundedRectangle(cornerRadius: 4))
         } else {
-            // 无图时用通用场景图标占位，保持行高一致
-            Image(systemName: "text.bubble")
+            Image(systemName: "quote.bubble.fill")
                 .imageScale(.medium)
-                .foregroundStyle(AppTheme.Color.textMuted)
+                .foregroundStyle(AppTheme.Color.brandStrong.opacity(0.35))
                 .frame(width: 46, height: 34)
         }
     }

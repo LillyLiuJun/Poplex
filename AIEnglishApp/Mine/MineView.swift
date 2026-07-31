@@ -475,22 +475,30 @@ private struct Tab2UnlockedView: View {
     let onTalk: (String) -> Void
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: AppTheme.Space.paddingCard) {
-                Text("Talk about something")
-                    .font(AppTheme.Font.screenTitle)
-                    .foregroundStyle(AppTheme.Color.textPrimary)
+        ZStack {
+            AppTheme.Color.pageBg.ignoresSafeArea()
+            CanvasBackground().ignoresSafeArea()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: AppTheme.Space.paddingCard) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Talk about something")
+                            .font(.system(size: 28, weight: .bold))
+                            .foregroundStyle(AppTheme.Color.textPrimary)
+
+                        Text("Scenarios built from your daily moments.")
+                            .font(AppTheme.Font.englishBody)
+                            .foregroundStyle(AppTheme.Color.textMuted)
+                    }
                     .padding(.horizontal, AppTheme.Space.paddingPage)
                     .padding(.top, AppTheme.Space.paddingPage)
 
-                contentSections
+                    contentSections
+                }
+                .padding(.bottom, AppTheme.Space.paddingPage)
             }
-            .padding(.bottom, AppTheme.Space.paddingPage)
         }
-        .background(AppTheme.Color.pageBg)
         .onAppear {
-            // 首次解锁动效：已在 vm.isPermanentlyUnlocked onChange 触发；
-            // 解锁文案出现后 0.5 s 标记已展示，防止再次显示
             if vm.isFirstUnlock {
                 Task {
                     try? await Task.sleep(nanoseconds: 500_000_000)
@@ -503,8 +511,8 @@ private struct Tab2UnlockedView: View {
     @ViewBuilder
     private var contentSections: some View {
         if let data = vm.data {
-            let hero    = vm.heroCategory()
-            let heroId  = hero?.id
+            let hero   = vm.heroCategory()
+            let heroId = hero?.id
 
             // Hero 卡
             if let hero {
@@ -516,18 +524,35 @@ private struct Tab2UnlockedView: View {
                 .padding(.horizontal, AppTheme.Space.paddingPage)
             }
 
-            // 其他已解锁分类行
+            // 其他已解锁分类——卡片容器包裹，顶部橙色 stripe 与 Hero 卡同语言
             let otherUnlocked = data.categories.filter { $0.unlocked && $0.id != heroId }
-            ForEach(otherUnlocked) { cat in
-                Tab2CategoryRow(
-                    category: cat,
-                    onTalk: { onTalk(cat.sceneCategory) }
+            if !otherUnlocked.isEmpty {
+                VStack(alignment: .leading, spacing: 0) {
+                    AppTheme.Color.brandStrong.frame(height: 3)
+
+                    ForEach(otherUnlocked) { cat in
+                        Tab2CategoryRow(
+                            category: cat,
+                            onTalk: { onTalk(cat.sceneCategory) }
+                        )
+                        if cat.id != otherUnlocked.last?.id {
+                            Divider()
+                                .padding(.horizontal, AppTheme.Space.paddingPage)
+                        }
+                    }
+                }
+                .background(AppTheme.Color.cardBg)
+                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
+                .shadow(
+                    color: AppTheme.Shadow.cardColor,
+                    radius: AppTheme.Shadow.cardRadius,
+                    x: AppTheme.Shadow.cardX,
+                    y: AppTheme.Shadow.cardY
                 )
-                Divider()
-                    .padding(.horizontal, AppTheme.Space.paddingPage)
+                .padding(.horizontal, AppTheme.Space.paddingPage)
             }
 
-            // Still filling up
+            // Still filling up——卡片容器包裹
             let stillFilling = data.categories.filter { !$0.unlocked && $0.wordCount >= 1 }
             if !stillFilling.isEmpty {
                 VStack(alignment: .leading, spacing: 0) {
@@ -535,7 +560,8 @@ private struct Tab2UnlockedView: View {
                         .font(AppTheme.Font.sectionLabel)
                         .foregroundStyle(AppTheme.Color.textMuted)
                         .padding(.horizontal, AppTheme.Space.paddingPage)
-                        .padding(.top, AppTheme.Space.paddingCard)
+                        .padding(.top, AppTheme.Space.paddingPage)
+                        .padding(.bottom, AppTheme.Space.paddingXS)
 
                     ForEach(stillFilling) { cat in
                         CategoryProgressRow(
@@ -543,10 +569,23 @@ private struct Tab2UnlockedView: View {
                             isHighlighted: false,
                             loadWords: { await vm.loadCategoryWords(for: cat.sceneCategory) }
                         )
-                        Divider()
-                            .padding(.horizontal, AppTheme.Space.paddingPage)
+                        if cat.id != stillFilling.last?.id {
+                            Divider()
+                                .padding(.horizontal, AppTheme.Space.paddingPage)
+                        } else {
+                            Color.clear.frame(height: AppTheme.Space.paddingS)
+                        }
                     }
                 }
+                .background(AppTheme.Color.cardBg)
+                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
+                .shadow(
+                    color: AppTheme.Shadow.cardColor,
+                    radius: AppTheme.Shadow.cardRadius,
+                    x: AppTheme.Shadow.cardX,
+                    y: AppTheme.Shadow.cardY
+                )
+                .padding(.horizontal, AppTheme.Space.paddingPage)
             }
         }
     }
