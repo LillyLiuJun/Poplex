@@ -840,3 +840,195 @@ struct OnboardingViewModelTests {
         #expect(vm.errorMessage == nil)
     }
 }
+
+// MARK: - Tab2WordEntry decode tests
+
+struct Tab2WordEntryDecodeTests {
+
+    // 辅助：从字段字典构造 Tab2WordEntry
+    private func entry(
+        lemma: String = "blanch",
+        entryKind: String? = nil,
+        granularity: String? = "sentence",
+        sourceType: String? = "material",
+        nativeMeaning: String? = nil,
+        imageUrl: String? = nil
+    ) throws -> Tab2WordEntry {
+        var fields: [String: Any] = ["lemma": lemma]
+        if let v = entryKind    { fields["entry_kind"]     = v }
+        if let v = granularity  { fields["granularity"]    = v }
+        if let v = sourceType   { fields["source_type"]    = v }
+        if let v = nativeMeaning { fields["native_meaning"] = v }
+        if let v = imageUrl     { fields["image_url"]      = v }
+        let data = try JSONSerialization.data(withJSONObject: fields)
+        return try JSONDecoder().decode(Tab2WordEntry.self, from: data)
+    }
+
+    // native_meaning 有值时正确解码
+    @Test func nativeMeaningDecoded() throws {
+        let e = try entry(nativeMeaning: "焯水")
+        #expect(e.nativeMeaning == "焯水")
+    }
+
+    // native_meaning 缺失时为 nil，不抛错
+    @Test func nativeMeaningMissingIsNil() throws {
+        let e = try entry()
+        #expect(e.nativeMeaning == nil)
+    }
+
+    // granularity=word → sourceTag=.word
+    @Test func sourceTagWordForWordGranularity() throws {
+        let e = try entry(granularity: "word", sourceType: "material")
+        #expect(e.sourceTag == .word)
+    }
+
+    // granularity=passage → sourceTag=.passage
+    @Test func sourceTagPassageForPassageGranularity() throws {
+        let e = try entry(granularity: "passage", sourceType: "material")
+        #expect(e.sourceTag == .passage)
+    }
+
+    // sourceType=dialogue 优先级高于 granularity
+    @Test func sourceTagDialogueTakesPriority() throws {
+        let e = try entry(granularity: "sentence", sourceType: "dialogue")
+        #expect(e.sourceTag == .dialogue)
+    }
+
+    // 默认（granularity=sentence）→ sourceTag=.sentence
+    @Test func sourceTagDefaultIsSentence() throws {
+        let e = try entry(granularity: "sentence", sourceType: "material")
+        #expect(e.sourceTag == .sentence)
+    }
+
+    // granularity=nil → 默认 .sentence（不崩溃）
+    @Test func sourceTagFallsBackToSentenceWhenNil() throws {
+        let e = try entry(granularity: nil)
+        #expect(e.sourceTag == .sentence)
+    }
+}
+
+// MARK: - Tab2WordEntry badge icon tests
+
+struct Tab2WordEntryBadgeTests {
+
+    private func entry(
+        granularity: String? = "sentence",
+        sourceType: String? = "material",
+        entryKind: String? = nil
+    ) throws -> Tab2WordEntry {
+        var fields: [String: Any] = ["lemma": "test"]
+        if let v = granularity  { fields["granularity"] = v }
+        if let v = sourceType   { fields["source_type"] = v }
+        if let v = entryKind    { fields["entry_kind"]  = v }
+        let data = try JSONSerialization.data(withJSONObject: fields)
+        return try JSONDecoder().decode(Tab2WordEntry.self, from: data)
+    }
+
+    // 主动查词 (.word sourceTag) → 放大镜
+    @Test func wordSourceTagUsesMagnifier() throws {
+        let e = try entry(granularity: "word", sourceType: "material")
+        #expect(e.badgeIconName == "text.magnifyingglass")
+    }
+
+    // 对话来源 (.dialogue) → 声波
+    @Test func dialogueSourceTagUsesWaveform() throws {
+        let e = try entry(granularity: "sentence", sourceType: "dialogue")
+        #expect(e.badgeIconName == "waveform")
+    }
+
+    // sentence 来源 + word 类型 → character.textbox（不再用放大镜）
+    @Test func sentenceSourceWordKindUsesCharacter() throws {
+        let e = try entry(granularity: "sentence", entryKind: "word")
+        #expect(e.badgeIconName == "character.textbox")
+    }
+
+    // passage 来源 + word 类型 → 同样 character.textbox
+    @Test func passageSourceWordKindUsesCharacter() throws {
+        let e = try entry(granularity: "passage", entryKind: "word")
+        #expect(e.badgeIconName == "character.textbox")
+    }
+
+    // phrase → text.bubble.fill
+    @Test func phraseKindUsesBubble() throws {
+        let e = try entry(entryKind: "phrase")
+        #expect(e.badgeIconName == "text.bubble.fill")
+    }
+
+    // collocation → text.bubble.fill
+    @Test func collocationKindUsesBubble() throws {
+        let e = try entry(entryKind: "collocation")
+        #expect(e.badgeIconName == "text.bubble.fill")
+    }
+
+    // pattern → text.bubble.fill
+    @Test func patternKindUsesBubble() throws {
+        let e = try entry(entryKind: "pattern")
+        #expect(e.badgeIconName == "text.bubble.fill")
+    }
+
+    // idiom → quote.bubble.fill
+    @Test func idiomKindUsesQuoteBubble() throws {
+        let e = try entry(entryKind: "idiom")
+        #expect(e.badgeIconName == "quote.bubble.fill")
+    }
+
+    // slang → quote.bubble.fill
+    @Test func slangKindUsesQuoteBubble() throws {
+        let e = try entry(entryKind: "slang")
+        #expect(e.badgeIconName == "quote.bubble.fill")
+    }
+
+    // 未知 entryKind → 默认 text.bubble.fill
+    @Test func unknownKindDefaultsBubble() throws {
+        let e = try entry(entryKind: "unknown_future_kind")
+        #expect(e.badgeIconName == "text.bubble.fill")
+    }
+
+    // entryKind=nil → 默认 text.bubble.fill
+    @Test func nilKindDefaultsBubble() throws {
+        let e = try entry(entryKind: nil)
+        #expect(e.badgeIconName == "text.bubble.fill")
+    }
+}
+
+// MARK: - Tab2WordEntry stableImageKey tests
+
+struct Tab2WordEntryStableImageKeyTests {
+
+    private func entry(imageUrl: String?) throws -> Tab2WordEntry {
+        var fields: [String: Any] = ["lemma": "test"]
+        if let v = imageUrl { fields["image_url"] = v }
+        let data = try JSONSerialization.data(withJSONObject: fields)
+        return try JSONDecoder().decode(Tab2WordEntry.self, from: data)
+    }
+
+    // 有签名 token 的 URL → 截掉查询参数，只保留路径
+    @Test func stripsTokenQueryParam() throws {
+        let e = try entry(imageUrl: "https://example.com/storage/img.jpg?token=abc123")
+        #expect(e.stableImageKey == "https://example.com/storage/img.jpg")
+    }
+
+    // 多个查询参数也一并截掉
+    @Test func stripsMultipleQueryParams() throws {
+        let e = try entry(imageUrl: "https://example.com/img.jpg?token=x&t=1234")
+        #expect(e.stableImageKey == "https://example.com/img.jpg")
+    }
+
+    // 没有查询参数的 URL → 原样返回
+    @Test func noQueryParamReturnsOriginal() throws {
+        let e = try entry(imageUrl: "https://example.com/storage/img.jpg")
+        #expect(e.stableImageKey == "https://example.com/storage/img.jpg")
+    }
+
+    // imageUrl=nil → stableImageKey=nil
+    @Test func nilImageUrlReturnsNil() throws {
+        let e = try entry(imageUrl: nil)
+        #expect(e.stableImageKey == nil)
+    }
+
+    // imageUrl="" → stableImageKey=nil
+    @Test func emptyImageUrlReturnsNil() throws {
+        let e = try entry(imageUrl: "")
+        #expect(e.stableImageKey == nil)
+    }
+}

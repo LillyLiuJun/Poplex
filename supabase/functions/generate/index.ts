@@ -611,15 +611,15 @@ sub_scene: complete activity, strip qualifiers ("做晚饭"→"做饭"). Anchors
 }
 
 
-// 词卡分类：仅判 scene_category（无时序场景上下文，判不准留 null 不计入任何分类桶）。
+// 词卡分类：按该词最高频的日常使用场景归类，不允许留空。
 async function classifyVocabCategory(wordText: string): Promise<string | null> {
   try {
-    const categories = SCENE_CATEGORIES.join('、');
+    const categories = SCENE_CATEGORIES.filter(c => c !== '其他').join('、');
     const prompt =
-`Classify the vocabulary item by its most likely usage context.
+`In everyday life, which category do people most often encounter or use this word/phrase?
 Categories: ${categories}
 Word/phrase: "${wordText}"
-If usage context is unclear, reply: 其他
+You MUST pick exactly one category from the list above — do not reply 其他 or anything else.
 Reply with the category name ONLY.`;
 
     const res = await fetch(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
@@ -631,13 +631,16 @@ Reply with the category name ONLY.`;
       }),
     });
     const data = await res.json();
-    // vocab classification asks for plain text (category name only), not JSON
-    const result = (data?.candidates?.[0]?.content?.parts?.find((p: {thought?: boolean; text?: string}) => !p.thought)?.text ?? '').trim();
-    // "其他" 视为判不准，留 null（不计入任何分类，符合设计方案 §1.05-3）
-    if (result === '其他') return null;
-    return (SCENE_CATEGORIES as readonly string[]).includes(result) ? result : null;
-  } catch {
-    return null;
+    // 去掉末尾标点（Gemini 偶尔在分类名后附加标点）
+    const raw = (data?.candidates?.[0]?.content?.parts?.find((p: {thought?: boolean; text?: string}) => !p.thought)?.text ?? '').trim();
+    const result = raw.replace(/[，。！？,.!?、；;：:]+$/, '').trim();
+    if ((SCENE_CATEGORIES as readonly string[]).includes(result)) return result;
+    // AI 未能匹配已知分类 → 兜底为「其他」，词条仍可进 Tab2
+    console.warn(`[classifyVocabCategory] unmatched "${raw}" for "${wordText}", fallback→其他`);
+    return '其他';
+  } catch (e) {
+    console.error(`[classifyVocabCategory] error for "${wordText}":`, e);
+    return '其他';
   }
 }
 
@@ -656,13 +659,18 @@ async function recordLexicon(
 
   try {
     const rawUnits = Array.isArray(rawContent.learnable_units) ? rawContent.learnable_units : [];
-    const baseUnits = rawUnits
+    // 词卡（granularity=word）只记主词条，AI 造的例句搭配词不算用户真实接触的内容
+    const filteredUnits = rawContent.granularity === 'word'
+      ? rawUnits.filter(u => u?.is_primary === true)
+      : rawUnits;
+    const baseUnits = filteredUnits
       .map(u => {
         const lemma = normalizeLemma(u?.form);
         return {
           lemma,
           display_form: (typeof u?.form === 'string' ? u.form.trim() : '') || null,
           entry_kind: (typeof u?.kind === 'string' ? u.kind : '') || null,
+          note: (typeof u?.note === 'string' ? u.note.trim() : '') || null,
           tier: lemma ? getTier(lemma) : null,
         };
       })
@@ -723,69 +731,6 @@ async function recordLexicon(
   }
 }
 
-// ── Stage 3 记账：把 learnable_units 灌进词汇账本（lexicon）──
-// 归一化（lemmatize/停用词/tier）在 _shared/lexicon.ts 里定义；此处只做 RPC 调用。
-
-// 调记账 RPC。非阻塞：任何失败只告警、不抛给主响应（素材此时已保存成功）。
-async function recordLexicon(
-  rawContent: UnifiedRawContent,
-  materialId: string,
-  userId: string | null,
-  sceneCategory: string | null
-): Promise<void> {
-  if (!SUPABASE_URL || !SUPABASE_SVC_KEY || !userId) return;
-
-  try {
-    const rawUnits = Array.isArray(rawContent.learnable_units) ? rawContent.learnable_units : [];
-    const units = rawUnits
-      .map(u => {
-        const lemma = normalizeLemma(u?.form);
-        return {
-          lemma,
-          display_form: (typeof u?.form === 'string' ? u.form.trim() : '') || null,
-          entry_kind: (typeof u?.kind === 'string' ? u.kind : '') || null,
-          tier: lemma ? getTier(lemma) : null,
-        };
-      })
-      .filter(u => u.lemma && !LEXICON_STOPWORDS.has(u.lemma));
-
-    if (units.length === 0) return;
-
-    // 样例句 = 该单元出现的那句：优先目标语言表达，兜底用户原句。
-    const sample = rawContent.target_expression ?? rawContent.user_original ?? null;
-
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/record_lexicon_material_units`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${SUPABASE_SVC_KEY}`,
-        'apikey': SUPABASE_SVC_KEY,
-      },
-      body: JSON.stringify({
-        p_user_id: userId,
-        p_source_id: materialId,
-        p_scene_category: sceneCategory,
-        p_input_lang: rawContent.input_lang ?? null,
-        p_input_lang_code: rawContent.input_lang_code ?? null,
-        p_source_granularity: rawContent.granularity ?? null,
-        p_source_direction: rawContent.direction ?? null,
-        p_intent_text: rawContent.intent ?? null,
-        p_sample_sentence: sample,
-        p_units: units,
-      }),
-    });
-
-    if (!res.ok) {
-      // §5.3.1：记账失败 → 跳过、告警、不阻塞；靠补账作业补回。
-      console.error('[recordLexicon] rpc failed (non-blocking):', await res.text());
-      return;
-    }
-    const recorded = await res.json();
-    console.log(`[recordLexicon] recorded ${recorded} occurrence(s) for material=${materialId}`);
-  } catch (e) {
-    console.error('[recordLexicon] error (non-blocking):', e);
-  }
-}
 
 async function saveMaterial(
   cardType: string,

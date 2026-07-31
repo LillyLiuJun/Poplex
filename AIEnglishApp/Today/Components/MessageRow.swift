@@ -133,22 +133,21 @@ struct ErrorBanner: View {
     }
 }
 
-// MARK: - Date separator
+// MARK: - Date separator (悬浮居中小胶囊，消除硬分割线)
 private struct DateSeparatorView: View {
     let label: String
 
     var body: some View {
-        HStack(spacing: AppTheme.Space.paddingS) {
-            Rectangle()
-                .fill(AppTheme.Color.textSecondary.opacity(0.25))
-                .frame(height: 0.5)
+        HStack {
+            Spacer()
             Text(label)
                 .font(AppTheme.Font.date)
-                .foregroundStyle(AppTheme.Color.textSecondary)
-                .fixedSize()
-            Rectangle()
-                .fill(AppTheme.Color.textSecondary.opacity(0.25))
-                .frame(height: 0.5)
+                .foregroundStyle(AppTheme.Color.textMuted)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 4)
+                .background(AppTheme.Color.border.opacity(0.5))
+                .clipShape(Capsule())
+            Spacer()
         }
         .padding(.vertical, AppTheme.Space.paddingS)
     }

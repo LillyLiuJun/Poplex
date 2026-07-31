@@ -181,9 +181,9 @@ enum AppTheme {
         // 交互控件（发送键 / CTA / 光标）—— 暖近黑
         static let interactive   = Primitive.neutral950
 
-        // 用户气泡（浅橘底 + 深橘字：有品牌暖意但不刺眼，PM 确认收敛版）
-        static let bubbleUserBg   = Primitive.primary100
-        static let bubbleUserText = Primitive.primaryDeep
+        // 用户气泡（极简暖灰底 + 深暖灰字：提问容器降权，凸显 AI 单词/语法卡片）
+        static let bubbleUserBg   = Primitive.neutral100
+        static let bubbleUserText = Primitive.neutral900
         static let bubbleAIBg     = Primitive.warmWhite
 
         // 描边 / 分割
@@ -206,6 +206,16 @@ enum AppTheme {
         static let cameraBg        = Primitive.mediaSurface
         static let cameraControl   = Primitive.controlOnMedia
         static let cameraControlBg = Primitive.scrimOnMedia
+
+        // Tab2 词条 badge 配色（按表达类型区分，而非来源材料粒度）
+        static let badgeWordBg       = Primitive.info100     // 单词（word）
+        static let badgeWordIcon     = Primitive.info700
+        static let badgePhraseBg     = Primitive.primary100  // 短语/搭配/句型（phrase/collocation/pattern）
+        static let badgePhraseIcon   = Primitive.primary800
+        static let badgeIdiomBg      = Primitive.warning200  // 习语/俚语（idiom/slang）
+        static let badgeIdiomIcon    = Primitive.warning800
+        static let badgeDialogueBg   = Primitive.success100  // 对话来源（dialogue source type）
+        static let badgeDialogueIcon = Primitive.success800
 
         // MARK: 过渡别名（Mine 等未换肤界面仍引用；指向品牌强色 = 种子橙，
         // 各界面换肤时再统一到 brandStrong / accent* —— 勿在新代码中使用）

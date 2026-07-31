@@ -76,8 +76,54 @@ Deno.serve(async (req) => {
       return json({ error: "rpc_failed" }, 500);
     }
 
-    const data = await res.json();
-    return json(data);
+    const rows = await res.json() as Array<Record<string, unknown>>;
+
+    // 收集需要签名的 Storage 路径
+    const paths: string[] = [];
+    for (const row of rows) {
+      const p = row.source_image_path;
+      if (typeof p === "string" && p) paths.push(p);
+    }
+
+    // 批量签发（与 get-materials 相同模式，有效期 1 小时）
+    const signedMap = new Map<string, string>();
+    if (paths.length > 0) {
+      try {
+        const signRes = await fetch(
+          `${SUPABASE_URL}/storage/v1/object/sign/material_images`,
+          {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${SUPABASE_SVC_KEY}`,
+              "apikey": SUPABASE_SVC_KEY,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ paths, expiresIn: 3600 }),
+          }
+        );
+        if (signRes.ok) {
+          const signed = await signRes.json() as Array<{ path: string; signedURL: string; error: string | null }>;
+          for (const s of signed) {
+            if (s.signedURL && !s.error) {
+              signedMap.set(s.path, `${SUPABASE_URL}/storage/v1${s.signedURL}`);
+            }
+          }
+        }
+      } catch (e) {
+        console.error("[get-category-words] sign failed:", e);
+      }
+    }
+
+    // 把签名 URL 注入为 image_url，移除原始路径字段
+    const result = rows.map(row => {
+      const path = row.source_image_path;
+      const { source_image_path: _, ...rest } = row;
+      if (typeof path !== "string" || !path) return rest;
+      const signedUrl = signedMap.get(path);
+      return signedUrl ? { ...rest, image_url: signedUrl } : rest;
+    });
+
+    return json(result);
   } catch (e) {
     console.error("[get-category-words] error:", e);
     return json({ error: "internal_error" }, 500);

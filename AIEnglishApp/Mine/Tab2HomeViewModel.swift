@@ -99,6 +99,7 @@ final class Tab2HomeViewModel {
             let fresh = try await fetchHomeData()
             await LocalCache.shared.save(fresh, key: .tab2Home)
             data = try JSONDecoder().decode(Tab2HomeData.self, from: fresh)
+            wordCache.removeAll()
             lastLoadedAt = Date()
             toastMessage = nil
             // isReadyToUnlock is computed — no manual trigger needed
@@ -114,7 +115,13 @@ final class Tab2HomeViewModel {
 
     // MARK: - 按需拉词（分类展开）
 
+    // 内存缓存：同一 session 内折叠再展开同一分类无需重新请求。
+    // load() 刷新首页数据时清空，保证词数变化后下次展开能拿到最新词条。
+    private var wordCache: [String: [Tab2WordEntry]] = [:]
+
     func loadCategoryWords(for sceneCategory: String) async -> [Tab2WordEntry] {
+        if let cached = wordCache[sceneCategory] { return cached }
+
         do {
             var req = URLRequest(url: SupabaseConfig.getCategoryWordsFunctionURL)
             req.httpMethod = "POST"
@@ -124,7 +131,9 @@ final class Tab2HomeViewModel {
 
             let (data, resp) = try await URLSession.shared.data(for: req)
             guard (resp as? HTTPURLResponse)?.statusCode == 200 else { return [] }
-            return (try? JSONDecoder().decode([Tab2WordEntry].self, from: data)) ?? []
+            let words = (try? JSONDecoder().decode([Tab2WordEntry].self, from: data)) ?? []
+            wordCache[sceneCategory] = words
+            return words
         } catch {
             return []
         }

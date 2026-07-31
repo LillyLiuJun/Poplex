@@ -100,56 +100,129 @@ struct MineView: View {
 
 // MARK: - Locked view
 
+private enum UnlockState {
+    case idle
+    case charging   // 蓄力：压实下沉，阴影收拢，图标微调
+    case releasing  // 舒张释放：蓬勃膨胀至1.14，光晕绽放，图标旋转放大
+}
+
 private struct Tab2LockedView: View {
     let vm: Tab2HomeViewModel
     let onCapture: () -> Void
 
     private let inputTarget = 5
     private let wordTarget  = 20
+    
+    @State private var unlockState: UnlockState = .idle
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: AppTheme.Space.paddingPage) {
-                headerSection
-                inputsSection
-                areasSection
-                captureButton
+        ZStack {
+            AppTheme.Color.pageBg.ignoresSafeArea()
+            CanvasBackground().ignoresSafeArea()
+            
+            // 1. 待解锁页面内容（固定顶栏空间，卡片与 Header 独立协同避让）
+            ScrollView {
+                VStack(alignment: .leading, spacing: AppTheme.Space.paddingPage) {
+                    headerSection
+                    
+                    VStack(spacing: AppTheme.Space.paddingPage) {
+                        inputsCard
+                        topicsCard
+                    }
+                    .scaleEffect(unlockState == .charging ? 0.95 : (unlockState == .releasing ? 0.88 : 1.0))
+                    .offset(y: unlockState == .charging ? 6 : (unlockState == .releasing ? 12 : 0))
+                    .opacity(unlockState == .releasing ? 0.0 : 1.0)
+                    .blur(radius: unlockState == .releasing ? 8 : 0)
+                    .animation(.easeInOut(duration: 0.35), value: unlockState)
+                    
+                    captureButton
+                }
+                .padding(.vertical, AppTheme.Space.paddingPage)
             }
-            .padding(.vertical, AppTheme.Space.paddingPage)
+
+            // 2. 震撼全屏多重能量爆破浪潮 (Multi-layer Fullscreen Shockwave)
+            GeometryReader { geo in
+                let center = CGPoint(x: geo.size.width / 2, y: geo.size.height - 70)
+                
+                ZStack {
+                    // (1) 先行亮白高光爆破核心 (White Flash Core)
+                    Circle()
+                        .fill(Color.white)
+                        .frame(width: 100, height: 100)
+                        .position(center)
+                        .scaleEffect(unlockState == .releasing ? 4.0 : 0.01)
+                        .opacity(unlockState == .releasing ? 0.0 : (unlockState == .charging ? 0.3 : 0.0))
+                        .animation(unlockState == .releasing ? .easeOut(duration: 0.25) : .none, value: unlockState)
+
+                    // (2) 领头冲击波环 (Outer Shockwave Ring)
+                    Circle()
+                        .stroke(AppTheme.Color.brandStrong.opacity(0.8), lineWidth: 16)
+                        .frame(width: 120, height: 120)
+                        .position(center)
+                        .scaleEffect(unlockState == .releasing ? 32 : 0.01)
+                        .opacity(unlockState == .releasing ? 0.0 : 0.9)
+                        .animation(unlockState == .releasing ? .easeOut(duration: 0.4) : .none, value: unlockState)
+
+                    // (3) 物理全屏实心能量巨浪 (Main Solid Orange Wave Sweep)
+                    Circle()
+                        .fill(AppTheme.Color.brandStrong)
+                        .frame(width: 120, height: 120)
+                        .position(center)
+                        .scaleEffect(unlockState == .releasing ? 45 : 0.001)
+                        .opacity(unlockState == .releasing ? 1.0 : 0.0)
+                        .animation(
+                            unlockState == .releasing 
+                                ? .spring(response: 0.38, dampingFraction: 0.65) 
+                                : .none, 
+                            value: unlockState
+                        )
+                }
+            }
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
         }
-        .background(AppTheme.Color.pageBg)
     }
 
     // ── 待解锁 header ────────────────────────────────────────────────────
     private var headerSection: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Space.paddingCard) {
-            Text("LOCKED")
-                .font(AppTheme.Font.sectionLabel)
-                .foregroundStyle(AppTheme.Color.textMuted)
-                .padding(.horizontal, AppTheme.Space.paddingPage)
-
-            RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
-                .fill(Color(.systemGray6))
-                .frame(width: 80, height: 80)
-                .overlay(
-                    Image(systemName: "lock")
-                        .font(.system(size: 26, weight: .medium))
-                        .foregroundStyle(AppTheme.Color.textMuted)
-                )
-                .padding(.horizontal, AppTheme.Space.paddingPage)
-
-            VStack(alignment: .leading, spacing: AppTheme.Space.paddingXS) {
-                Text("Not open yet")
-                    .font(AppTheme.Font.hero)
-                    .foregroundStyle(AppTheme.Color.textPrimary)
-                hintText
-                    .fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: AppTheme.Space.paddingS) {
+            // 左对齐的精简 Lock Icon + LOCKED 标签 (适当放大，增强存在感)
+            HStack(spacing: AppTheme.Space.paddingS) {
+                ZStack {
+                    Circle()
+                        .fill(AppTheme.Color.brandSubtleBg)
+                        .frame(width: 56, height: 56)
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundStyle(AppTheme.Color.brandStrong)
+                        .rotationEffect(.degrees(unlockState == .charging ? -12 : (unlockState == .releasing ? 30 : 0)))
+                }
+                
+                Text("LOCKED")
+                    .font(AppTheme.Font.sectionLabel)
+                    .foregroundStyle(AppTheme.Color.brandStrong)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(AppTheme.Color.brandStrong.opacity(0.1))
+                    .clipShape(Capsule())
             }
-            .padding(.horizontal, AppTheme.Space.paddingPage)
+            .padding(.bottom, AppTheme.Space.paddingXS)
+
+            Text("Not open yet")
+                .font(.system(size: 32, weight: .bold))
+                .foregroundStyle(AppTheme.Color.textPrimary)
+            
+            hintText
+                .fixedSize(horizontal: false, vertical: true)
         }
+        .padding(.horizontal, AppTheme.Space.paddingPage)
+        .padding(.bottom, AppTheme.Space.paddingS)
+        // 顶部 Header 动效处理：蓄力时平稳贴合(y:+3)，释放时向上顺畅离场(y:-28, opacity:0)
+        .offset(y: unlockState == .charging ? 3 : (unlockState == .releasing ? -28 : 0))
+        .opacity(unlockState == .releasing ? 0.0 : (unlockState == .charging ? 0.85 : 1.0))
+        .animation(.easeInOut(duration: 0.35), value: unlockState)
     }
 
-    // hint 分两段渲染，让 tab 名 "Capture" 加粗，区别于普通正文
     private var hintText: some View {
         Text("Add 5 moments in ")
             .font(AppTheme.Font.englishBody)
@@ -162,54 +235,101 @@ private struct Tab2LockedView: View {
             .foregroundStyle(AppTheme.Color.textSecondary)
     }
 
-    // ── INPUTS progress ─────────────────────────────────────────────────
-    private var inputsSection: some View {
+    // ── INPUTS progress (Card) ──────────────────────────────────────────
+    private var inputsCard: some View {
         let count  = vm.data?.inputCount ?? 0
         let fill   = min(CGFloat(count) / CGFloat(inputTarget), 1.0)
-        return VStack(alignment: .leading, spacing: AppTheme.Space.paddingS) {
-            sectionHeader("MOMENTS", note: "\(count) of \(inputTarget)")
+        
+        return VStack(alignment: .leading, spacing: AppTheme.Space.paddingM) {
+            HStack(alignment: .firstTextBaseline, spacing: AppTheme.Space.paddingS) {
+                Text("MOMENTS")
+                    .font(AppTheme.Font.sectionLabel)
+                    .foregroundStyle(AppTheme.Color.textMuted)
+                Spacer()
+                momentsCountLabel(count: count, target: inputTarget)
+            }
+            
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(Color(.systemGray5))
-                        .frame(height: 4)
-                    RoundedRectangle(cornerRadius: 2)
+                    Capsule()
+                        .fill(Color(.systemGray6))
+                        .frame(height: 6)
+                    Capsule()
                         .fill(AppTheme.Color.brandStrong)
-                        .frame(width: geo.size.width * fill, height: 4)
+                        .frame(width: max(geo.size.width * fill, count > 0 ? 6 : 0), height: 6)
                         .animation(.easeOut(duration: 0.4), value: count)
                 }
             }
-            .frame(height: 4)
-            .padding(.horizontal, AppTheme.Space.paddingPage)
+            .frame(height: 6)
+        }
+        .padding(AppTheme.Space.paddingPage)
+        .background(AppTheme.Color.cardBg)
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
+        .shadow(
+            color: AppTheme.Shadow.cardColor,
+            radius: AppTheme.Shadow.cardRadius,
+            x: AppTheme.Shadow.cardX,
+            y: AppTheme.Shadow.cardY
+        )
+        .padding(.horizontal, AppTheme.Space.paddingPage)
+    }
+
+    @ViewBuilder
+    private func momentsCountLabel(count: Int, target: Int) -> some View {
+        let isReached = count >= target
+        HStack(spacing: 2) {
+            Text("\(count)")
+                .font(.system(size: 13, weight: isReached ? .bold : .semibold))
+                .foregroundStyle(isReached ? AppTheme.Color.brandStrong : AppTheme.Color.textPrimary)
+            Text(" of \(target)")
+                .font(.system(size: 12, weight: .regular))
+                .foregroundStyle(AppTheme.Color.textMuted)
         }
     }
 
-    // ── AREAS list ───────────────────────────────────────────────────────
-    private var areasSection: some View {
+    // ── TOPICS list (Card) ───────────────────────────────────────────────
+    private var topicsCard: some View {
         VStack(alignment: .leading, spacing: 0) {
-            sectionHeader("AREAS", note: "Any one reaching 20 opens it.")
-                .padding(.bottom, AppTheme.Space.paddingS)
+            sectionHeader("TOPICS", note: "Any one reaching 20 opens it.")
+                .padding(.horizontal, AppTheme.Space.paddingPage)
+                .padding(.top, AppTheme.Space.paddingPage)
+                .padding(.bottom, AppTheme.Space.paddingM)
 
             let cats  = categoriesWithWords
             let topId = closestCategory?.id
-            ForEach(cats) { cat in
-                CategoryProgressRow(
-                    category: cat,
-                    isHighlighted: cat.id == topId,
-                    loadWords: { await vm.loadCategoryWords(for: cat.sceneCategory) }
-                )
-                Divider()
-                    .padding(.horizontal, AppTheme.Space.paddingPage)
-            }
-
+            
             if cats.isEmpty {
                 Text("Capture a moment to get started.")
                     .font(AppTheme.Font.englishBody)
                     .foregroundStyle(AppTheme.Color.textMuted)
                     .padding(.horizontal, AppTheme.Space.paddingPage)
-                    .padding(.vertical, AppTheme.Space.paddingCard)
+                    .padding(.bottom, AppTheme.Space.paddingPage)
+            } else {
+                ForEach(cats) { cat in
+                    CategoryProgressRow(
+                        category: cat,
+                        isHighlighted: cat.id == topId,
+                        loadWords: { await vm.loadCategoryWords(for: cat.sceneCategory) }
+                    )
+                    
+                    if cat.id != cats.last?.id {
+                        Divider()
+                            .padding(.horizontal, AppTheme.Space.paddingPage)
+                    } else {
+                        Color.clear.frame(height: AppTheme.Space.paddingS)
+                    }
+                }
             }
         }
+        .background(AppTheme.Color.cardBg)
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
+        .shadow(
+            color: AppTheme.Shadow.cardColor,
+            radius: AppTheme.Shadow.cardRadius,
+            x: AppTheme.Shadow.cardX,
+            y: AppTheme.Shadow.cardY
+        )
+        .padding(.horizontal, AppTheme.Space.paddingPage)
     }
 
     // ── CTA ──────────────────────────────────────────────────────────────
@@ -217,23 +337,113 @@ private struct Tab2LockedView: View {
         let isReady = vm.isReadyToUnlock
         return Button {
             if isReady {
-                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                vm.confirmUnlock()
+                // 1. 蓄力阶段 (Heavy Impact + 深入压实下沉)
+                UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    unlockState = .charging
+                }
+                
+                Task {
+                    // 延长蓄力停顿到 450ms - 增强蓄势凝结感
+                    try? await Task.sleep(nanoseconds: 450_000_000)
+                    
+                    // 2. 舒张全屏释放阶段 (Heavy Impact + 能量波扫过全屏)
+                    UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+                    withAnimation(.spring(response: 0.55, dampingFraction: 0.55)) {
+                        unlockState = .releasing
+                    }
+                    
+                    // 3. 能量波覆盖全屏后平滑解锁 (480ms)
+                    try? await Task.sleep(nanoseconds: 480_000_000)
+                    vm.confirmUnlock()
+                }
             } else {
                 onCapture()
             }
         } label: {
-            Text(isReady ? "You're all set" : "Capture something")
+            ZStack {
+                // 舒张发光的背影光晕层 (Bloom Glow Layer)
+                Capsule()
+                    .fill(AppTheme.Color.brandStrong)
+                    .blur(radius: unlockState == .releasing ? 24 : 0)
+                    .scaleEffect(unlockState == .releasing ? 1.4 : 0.8)
+                    .opacity(unlockState == .releasing ? 0.7 : 0.0)
+
+                HStack(spacing: AppTheme.Space.paddingS) {
+                    if isReady {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 16, weight: .bold))
+                            .scaleEffect(sparkleScale)
+                            .rotationEffect(.degrees(sparkleRotation))
+                    }
+                    Text(isReady ? "You're all set" : "Capture something")
+                }
                 .font(AppTheme.Font.ctaLabel)
                 .foregroundStyle(AppTheme.Color.cardBg)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
+                .padding(.vertical, 16)
                 .background(AppTheme.Color.brandStrong)
                 .clipShape(Capsule())
-                .animation(.easeInOut(duration: 0.2), value: isReady)
+                .shadow(
+                    color: AppTheme.Color.brandStrong.opacity(shadowOpacity),
+                    radius: shadowRadius,
+                    x: 0,
+                    y: shadowY
+                )
+                .scaleEffect(buttonScale)
+            }
         }
         .buttonStyle(.plain)
         .padding(.horizontal, AppTheme.Space.paddingPage)
+        .padding(.top, AppTheme.Space.paddingS)
+    }
+
+    private var buttonScale: CGFloat {
+        switch unlockState {
+        case .idle: return 1.0
+        case .charging: return 0.84
+        case .releasing: return 1.18
+        }
+    }
+
+    private var shadowRadius: CGFloat {
+        switch unlockState {
+        case .idle: return 10
+        case .charging: return 2
+        case .releasing: return 24
+        }
+    }
+
+    private var shadowY: CGFloat {
+        switch unlockState {
+        case .idle: return 4
+        case .charging: return 1
+        case .releasing: return 10
+        }
+    }
+
+    private var shadowOpacity: Double {
+        switch unlockState {
+        case .idle: return 0.3
+        case .charging: return 0.1
+        case .releasing: return 0.6
+        }
+    }
+
+    private var sparkleScale: CGFloat {
+        switch unlockState {
+        case .idle: return 1.0
+        case .charging: return 0.7
+        case .releasing: return 1.6
+        }
+    }
+
+    private var sparkleRotation: Double {
+        switch unlockState {
+        case .idle: return 0
+        case .charging: return -30
+        case .releasing: return 60
+        }
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────
@@ -250,11 +460,11 @@ private struct Tab2LockedView: View {
             Text(title)
                 .font(AppTheme.Font.sectionLabel)
                 .foregroundStyle(AppTheme.Color.textMuted)
+            Spacer()
             Text(note)
                 .font(AppTheme.Font.pos)
                 .foregroundStyle(AppTheme.Color.textMuted)
         }
-        .padding(.horizontal, AppTheme.Space.paddingPage)
     }
 }
 
