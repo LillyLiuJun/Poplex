@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Tab2 首页 hero 卡——展示已解锁分类的用户原话引文，尺寸统一放大至（335 x 255）。
+/// Tab2 首页 hero 卡——展示已解锁分类的用户原话引文，尺寸统一放大至（335 x 280），完美展示 3 条用户引文。
 struct Tab2HeroCard: View {
     let category: Tab2CategoryData
     let isFirstUnlock: Bool
@@ -34,9 +34,9 @@ struct Tab2HeroCard: View {
                     .foregroundStyle(AppTheme.Color.textMuted)
             }
 
-            Spacer(minLength: 14)
+            Spacer(minLength: 12)
 
-            // ② 引文行 or 降级展示
+            // ② 引文行 (完整展示 3 条用户原话)
             quoteSection
 
             Spacer(minLength: 14)
@@ -45,7 +45,7 @@ struct Tab2HeroCard: View {
             ctaButton
         }
         .padding(22)
-        .frame(width: 335, height: 255, alignment: .topLeading)
+        .frame(width: 335, height: 280, alignment: .topLeading)
         .background(AppTheme.Color.cardBg)
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
         .shadow(
@@ -56,7 +56,7 @@ struct Tab2HeroCard: View {
         )
     }
 
-    /// 引文行区域：展示精致引文，放宽至 2 行限制，排版呼吸感更好
+    /// 引文行区域：完整展示 3 条用户真实引文
     @ViewBuilder
     private var quoteSection: some View {
         let scenes = displayScenes
@@ -112,8 +112,9 @@ struct Tab2HeroCard: View {
             .filter { effectiveQuote($0).count >= 4 }
     }
 
+    /// 完整恢复为展示 3 条引文
     private var displayScenes: [Tab2SubScene] {
-        Array(goodScenes.prefix(2))
+        Array(goodScenes.prefix(3))
     }
 }
 
@@ -142,8 +143,7 @@ private struct QuoteRow: View {
             Text(quoteText)
                 .font(.system(size: 15, weight: .regular))
                 .foregroundStyle(AppTheme.Color.textPrimary)
-                .lineSpacing(3)
-                .lineLimit(2)
+                .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
     }

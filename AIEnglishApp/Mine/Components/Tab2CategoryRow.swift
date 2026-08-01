@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 已解锁分类卡片——尺寸统一放大至（335 x 255），保障横向轮播整体视觉更具冲击力与呼吸感。
+/// 已解锁分类卡片——展示已解锁分类的用户原话引文，尺寸统一为（335 x 280），完整展示 3 条用户真实引文。
 struct Tab2CategoryRow: View {
     let category: Tab2CategoryData
     let onTalk: () -> Void
@@ -33,9 +33,9 @@ struct Tab2CategoryRow: View {
                     .foregroundStyle(AppTheme.Color.textMuted)
             }
 
-            Spacer(minLength: 14)
+            Spacer(minLength: 12)
 
-            // ② 用户原话引文行
+            // ② 用户原话引文行（完整展示 3 条用户原话）
             quoteSection
 
             Spacer(minLength: 14)
@@ -44,7 +44,7 @@ struct Tab2CategoryRow: View {
             ctaButton
         }
         .padding(22)
-        .frame(width: 335, height: 255, alignment: .topLeading)
+        .frame(width: 335, height: 280, alignment: .topLeading)
         .background(AppTheme.Color.cardBg)
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
         .shadow(
@@ -55,7 +55,7 @@ struct Tab2CategoryRow: View {
         )
     }
 
-    /// 引文行区域：读取 subScenes 中的 quote 原话引文
+    /// 引文行区域：完整展示 3 条用户真实引文
     @ViewBuilder
     private var quoteSection: some View {
         let scenes = displayScenes
@@ -111,8 +111,9 @@ struct Tab2CategoryRow: View {
             .filter { effectiveQuote($0).count >= 4 }
     }
 
+    /// 完整恢复为展示 3 条引文
     private var displayScenes: [Tab2SubScene] {
-        Array(goodScenes.prefix(2))
+        Array(goodScenes.prefix(3))
     }
 }
 
@@ -141,8 +142,7 @@ private struct QuoteRow: View {
             Text(quoteText)
                 .font(.system(size: 15, weight: .regular))
                 .foregroundStyle(AppTheme.Color.textPrimary)
-                .lineSpacing(3)
-                .lineLimit(2)
+                .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
