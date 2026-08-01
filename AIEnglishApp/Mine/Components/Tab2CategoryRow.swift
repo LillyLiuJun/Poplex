@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 已解锁分类卡片——展示已解锁分类的用户原话引文，尺寸统一为（335 x 280），完整展示 3 条用户真实引文。
+/// 已解锁分类卡片——展示已解锁分类的用户原话引文与 "+N more moments" 离散补充。
 struct Tab2CategoryRow: View {
     let category: Tab2CategoryData
     let onTalk: () -> Void
@@ -35,7 +35,7 @@ struct Tab2CategoryRow: View {
 
             Spacer(minLength: 12)
 
-            // ② 用户原话引文行（完整展示 3 条用户原话）
+            // ② 引文行 + "+N more moments"
             quoteSection
 
             Spacer(minLength: 14)
@@ -44,7 +44,7 @@ struct Tab2CategoryRow: View {
             ctaButton
         }
         .padding(22)
-        .frame(width: 335, height: 280, alignment: .topLeading)
+        .frame(width: 335, height: 295, alignment: .topLeading)
         .background(AppTheme.Color.cardBg)
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
         .shadow(
@@ -55,7 +55,7 @@ struct Tab2CategoryRow: View {
         )
     }
 
-    /// 引文行区域：完整展示 3 条用户真实引文
+    /// 引文行区域：展示前 3 条精选原话，多于 3 条时自动附带 "+N more moments"
     @ViewBuilder
     private var quoteSection: some View {
         let scenes = displayScenes
@@ -68,9 +68,17 @@ struct Tab2CategoryRow: View {
                     .lineLimit(2)
             }
         } else {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 8) {
                 ForEach(scenes) { scene in
                     QuoteRow(scene: scene)
+                }
+
+                let remaining = goodScenes.count - scenes.count
+                if remaining > 0 {
+                    Text("+\(remaining) more moments")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(AppTheme.Color.textMuted)
+                        .padding(.top, 2)
                 }
             }
         }
@@ -111,7 +119,6 @@ struct Tab2CategoryRow: View {
             .filter { effectiveQuote($0).count >= 4 }
     }
 
-    /// 完整恢复为展示 3 条引文
     private var displayScenes: [Tab2SubScene] {
         Array(goodScenes.prefix(3))
     }
