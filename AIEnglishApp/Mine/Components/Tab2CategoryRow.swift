@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// Tab2 首页 Secondary 已解锁分类卡片——展示已解锁场景，与 Hero 卡片共享【统一标头】，通过【微标签 + 次级 CTA】拉开权重区分。
+/// 已解锁分类的非 hero 行——分类名 + 子场景描述 + Talk 胶囊。
+/// 整行 + Talk 按钮触发同一个 onTalk 动作，无详情页中转。
 struct Tab2CategoryRow: View {
     let category: Tab2CategoryData
     let onTalk: () -> Void
@@ -11,21 +12,20 @@ struct Tab2CategoryRow: View {
             onTalk()
         } label: {
             VStack(alignment: .leading, spacing: 14) {
-                // ① 统一标头：分类名（大写粗体，与 Hero 卡完全一致） + 词数（右侧灰字）
+                // 第一行：分类大标题 + 词量
                 HStack(alignment: .center) {
-                    Text(category.englishLabel.uppercased())
-                        .font(.system(size: 16, weight: .bold))
-                        .tracking(0.8)
+                    Text(category.englishLabel)
+                        .font(.system(size: 20, weight: .bold))
                         .foregroundStyle(AppTheme.Color.textPrimary)
 
                     Spacer()
 
                     Text("\(category.wordCount) words")
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(AppTheme.Color.textMuted)
                 }
 
-                // ② 第二行：子场景离散微标签（轻量预览，区别于 Hero 卡的详细引文）
+                // 第二行：子场景标签
                 HStack(alignment: .center, spacing: 6) {
                     ForEach(subSceneTags, id: \.self) { tag in
                         Text(tag)
@@ -38,7 +38,7 @@ struct Tab2CategoryRow: View {
                     }
                 }
 
-                // ③ 第三行：次级 CTA 按钮（右对齐淡彩胶囊，区别于 Hero 卡的全宽实心按钮）
+                // 第三行：右对齐高权重 Talk 按钮
                 HStack {
                     Spacer()
                     talkCapsule
@@ -48,8 +48,8 @@ struct Tab2CategoryRow: View {
             .background(AppTheme.Color.cardBg)
             .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
             .shadow(
-                color: Color.black.opacity(0.04),
-                radius: 12,
+                color: Color.black.opacity(0.05),
+                radius: 14,
                 x: 0,
                 y: 4
             )
@@ -57,24 +57,25 @@ struct Tab2CategoryRow: View {
         .buttonStyle(.plain)
     }
 
-    // MARK: - Secondary Talk capsule
+    // MARK: - Talk capsule
 
     private var talkCapsule: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: 6) {
             Image(systemName: "mic.fill")
                 .font(.system(size: 12, weight: .bold))
             Text("Start talking")
                 .font(.system(size: 13, weight: .bold))
         }
         .foregroundStyle(AppTheme.Color.brandStrong)
-        .padding(.horizontal, 14)
+        .padding(.horizontal, 16)
         .padding(.vertical, 8)
-        .background(AppTheme.Color.brandSubtleBg)
+        .background(AppTheme.Color.brandStrong.opacity(0.12))
         .clipShape(Capsule())
     }
 
     // MARK: - Description tags
 
+    /// 子场景前 2 名 + "+N more" 离散微标签列表。
     private var subSceneTags: [String] {
         if !category.subScenes.isEmpty {
             let sorted = category.subScenes.sorted { $0.occurrenceCount > $1.occurrenceCount }

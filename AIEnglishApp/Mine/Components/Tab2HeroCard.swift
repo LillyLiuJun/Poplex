@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Tab2 首页 Hero 卡片——今日主推已解锁场景卡（高权重：用户真实引文 + 全宽主 CTA + 淡光感衬底）
+/// Tab2 首页 hero 卡——展示已解锁分类的用户原话引文，整张卡点击进入对话页。
 struct Tab2HeroCard: View {
     let category: Tab2CategoryData
     let isFirstUnlock: Bool
@@ -20,17 +20,17 @@ struct Tab2HeroCard: View {
 
     private var cardContent: some View {
         VStack(alignment: .leading, spacing: 16) {
-            // ① 统一标头：分类名（大写粗体） + 词数（右侧灰字）
+            // ① 分类标头（大写分类名 + 词数）
             HStack(alignment: .center) {
                 Text(category.englishLabel.uppercased())
-                    .font(.system(size: 16, weight: .bold))
-                    .tracking(0.8)
-                    .foregroundStyle(AppTheme.Color.textPrimary)
-
+                    .font(.system(size: 12, weight: .bold))
+                    .tracking(1.2)
+                    .foregroundStyle(AppTheme.Color.brandStrong)
+                
                 Spacer()
-
+                
                 Text("\(category.wordCount) words")
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(AppTheme.Color.textMuted)
             }
 
@@ -38,34 +38,24 @@ struct Tab2HeroCard: View {
             if isFirstUnlock {
                 Text("You've got enough here to talk about it now.")
                     .font(AppTheme.Font.keyPhrase)
-                    .foregroundStyle(AppTheme.Color.brandStrong)
+                    .foregroundStyle(AppTheme.Color.textPrimary)
             }
 
-            // ③ 引文行（故事性内容）
+            // ③ 引文行 or 降级展示
             quoteSection
 
-            // ④ 全宽主 CTA 按钮
+            // ④ CTA
             ctaButton
                 .padding(.top, 4)
         }
         .padding(20)
-        .background(
-            LinearGradient(
-                colors: [AppTheme.Color.brandSubtleBg.opacity(0.4), AppTheme.Color.cardBg],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        )
+        .background(AppTheme.Color.cardBg)
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
-        .overlay(
-            RoundedRectangle(cornerRadius: AppTheme.Radius.card)
-                .strokeBorder(AppTheme.Color.brandStrong.opacity(0.12), lineWidth: 1)
-        )
         .shadow(
-            color: AppTheme.Color.brandStrong.opacity(0.08),
-            radius: 16,
+            color: Color.black.opacity(0.05),
+            radius: 14,
             x: 0,
-            y: 6
+            y: 4
         )
     }
 
@@ -97,7 +87,7 @@ struct Tab2HeroCard: View {
         }
     }
 
-    // MARK: - Primary Hero CTA Button
+    // MARK: - CTA
 
     private var ctaButton: some View {
         HStack(spacing: AppTheme.Space.paddingS) {
@@ -121,17 +111,20 @@ struct Tab2HeroCard: View {
 
     // MARK: - Display scenes selection
 
+    /// 有效引文 = quote ≥6 字，或 sceneDetail ≥4 字（避免显示「呼喊」等短标签）
     private func effectiveQuote(_ scene: Tab2SubScene) -> String {
         if let q = scene.quote, q.count >= 6 { return q }
         return scene.sceneDetail
     }
 
+    /// 所有通过长度筛选的子场景，按出现次数降序
     private var goodScenes: [Tab2SubScene] {
         category.subScenes
             .sorted { $0.occurrenceCount > $1.occurrenceCount }
             .filter { effectiveQuote($0).count >= 4 }
     }
 
+    /// 实际展示（最多 3 条）
     private var displayScenes: [Tab2SubScene] {
         Array(goodScenes.prefix(3))
     }
@@ -147,7 +140,7 @@ private struct HeroCardPressStyle: ButtonStyle {
     }
 }
 
-// MARK: - Quote row (无边框轻量对话引文)
+// MARK: - Quote row (极简无框对话引文)
 
 private struct QuoteRow: View {
     let scene: Tab2SubScene
@@ -168,6 +161,7 @@ private struct QuoteRow: View {
         }
     }
 
+    /// 有效 quote（≥6 字）→ 显示 quote；否则降为子场景名
     private var quoteText: String {
         if let q = scene.quote, q.count >= 6 { return q }
         return scene.sceneDetail
