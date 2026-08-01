@@ -55,7 +55,7 @@ struct MineView: View {
                 .navigationDestination(for: MineRoute.self) { route in
                     switch route {
                     case .conversation(let cat):
-                        ConversationStubView(sceneCategory: cat)
+                        ConversationView(sceneCategory: cat)
                     }
                 }
         }
@@ -186,7 +186,7 @@ private struct Tab2LockedView: View {
     // ── 待解锁 header ────────────────────────────────────────────────────
     private var headerSection: some View {
         VStack(alignment: .leading, spacing: AppTheme.Space.paddingS) {
-            // 左对齐的精简 Lock Icon + LOCKED 标签 (适当放大，增强存在感)
+            // 左对齐的精简 Lock Icon + LOCKED 标签
             HStack(spacing: AppTheme.Space.paddingS) {
                 ZStack {
                     Circle()
@@ -209,7 +209,7 @@ private struct Tab2LockedView: View {
             .padding(.bottom, AppTheme.Space.paddingXS)
 
             Text("Not open yet")
-                .font(.system(size: 32, weight: .bold))
+                .font(.system(size: 32, weight: .bold, design: .serif))
                 .foregroundStyle(AppTheme.Color.textPrimary)
             
             hintText
@@ -264,12 +264,12 @@ private struct Tab2LockedView: View {
         }
         .padding(AppTheme.Space.paddingPage)
         .background(AppTheme.Color.cardBg)
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
         .shadow(
-            color: AppTheme.Shadow.cardColor,
-            radius: AppTheme.Shadow.cardRadius,
-            x: AppTheme.Shadow.cardX,
-            y: AppTheme.Shadow.cardY
+            color: Color.black.opacity(0.04),
+            radius: 12,
+            x: 0,
+            y: 4
         )
         .padding(.horizontal, AppTheme.Space.paddingPage)
     }
@@ -293,7 +293,7 @@ private struct Tab2LockedView: View {
             sectionHeader("TOPICS", note: "Any one reaching 20 opens it.")
                 .padding(.horizontal, AppTheme.Space.paddingPage)
                 .padding(.top, AppTheme.Space.paddingPage)
-                .padding(.bottom, AppTheme.Space.paddingM)
+                .padding(.bottom, 12)
 
             let cats  = categoriesWithWords
             let topId = closestCategory?.id
@@ -305,29 +305,25 @@ private struct Tab2LockedView: View {
                     .padding(.horizontal, AppTheme.Space.paddingPage)
                     .padding(.bottom, AppTheme.Space.paddingPage)
             } else {
-                ForEach(cats) { cat in
-                    CategoryProgressRow(
-                        category: cat,
-                        isHighlighted: cat.id == topId,
-                        loadWords: { await vm.loadCategoryWords(for: cat.sceneCategory) }
-                    )
-                    
-                    if cat.id != cats.last?.id {
-                        Divider()
-                            .padding(.horizontal, AppTheme.Space.paddingPage)
-                    } else {
-                        Color.clear.frame(height: AppTheme.Space.paddingS)
+                VStack(spacing: 4) {
+                    ForEach(cats) { cat in
+                        CategoryProgressRow(
+                            category: cat,
+                            isHighlighted: cat.id == topId,
+                            loadWords: { await vm.loadCategoryWords(for: cat.sceneCategory) }
+                        )
                     }
                 }
+                .padding(.bottom, AppTheme.Space.paddingPage)
             }
         }
         .background(AppTheme.Color.cardBg)
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
         .shadow(
-            color: AppTheme.Shadow.cardColor,
-            radius: AppTheme.Shadow.cardRadius,
-            x: AppTheme.Shadow.cardX,
-            y: AppTheme.Shadow.cardY
+            color: Color.black.opacity(0.04),
+            radius: 12,
+            x: 0,
+            y: 4
         )
         .padding(.horizontal, AppTheme.Space.paddingPage)
     }
