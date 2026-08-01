@@ -171,8 +171,8 @@ private struct WordRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(alignment: .firstTextBaseline) {
-                Text(entry.word)
-                    .font(AppTheme.Font.englishTitle)
+                Text(entry.displayForm ?? entry.lemma)
+                    .font(AppTheme.Font.keyPhrase)
                     .foregroundStyle(AppTheme.Color.textPrimary)
 
                 if let pos = entry.pos, !pos.isEmpty {
@@ -182,19 +182,15 @@ private struct WordRow: View {
                 }
 
                 Spacer()
-
-                Text(formattedDate(entry.createdAt))
-                    .font(AppTheme.Font.pos)
-                    .foregroundStyle(AppTheme.Color.textMuted)
             }
 
-            if let exp = entry.chineseExplanation, !exp.isEmpty {
+            if let exp = entry.nativeMeaning, !exp.isEmpty {
                 Text(exp)
-                    .font(AppTheme.Font.chineseSub)
+                    .font(AppTheme.Font.chineseBody)
                     .foregroundStyle(AppTheme.Color.textSecondary)
             }
 
-            if let ex = entry.exampleSentence, !ex.isEmpty {
+            if let ex = entry.sampleSentence, !ex.isEmpty {
                 Text(ex)
                     .font(AppTheme.Font.englishBody)
                     .foregroundStyle(AppTheme.Color.textMuted)
@@ -202,11 +198,5 @@ private struct WordRow: View {
             }
         }
         .padding(.vertical, 4)
-    }
-
-    private func formattedDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "M/d"
-        return formatter.string(from: date)
     }
 }
