@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Tab2 首页 hero 卡——展示已解锁分类的用户原话引文与 "+N more moments" 离散补充。
+/// Tab2 首页 hero 卡——展示已解锁分类的用户原话引文，拥有专属柔和暖光流彩背景与精致微描边，突出 Hero 推荐权重。
 struct Tab2HeroCard: View {
     let category: Tab2CategoryData
     let isFirstUnlock: Bool
@@ -46,13 +46,26 @@ struct Tab2HeroCard: View {
         }
         .padding(22)
         .frame(width: 335, height: 295, alignment: .topLeading)
-        .background(AppTheme.Color.cardBg)
+        .background(
+            LinearGradient(
+                colors: [
+                    AppTheme.Color.brandSubtleBg.opacity(0.65),
+                    AppTheme.Color.cardBg
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
+        .overlay(
+            RoundedRectangle(cornerRadius: AppTheme.Radius.card)
+                .strokeBorder(AppTheme.Color.brandStrong.opacity(0.12), lineWidth: 1)
+        )
         .shadow(
-            color: Color.black.opacity(0.06),
+            color: AppTheme.Color.brandStrong.opacity(0.08),
             radius: 16,
             x: 0,
-            y: 5
+            y: 6
         )
     }
 
