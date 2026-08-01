@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Tab2 首页 hero 卡——展示已解锁分类的用户原话引文，整张卡点击进入对话页。
+/// Tab2 首页 hero 卡——展示已解锁分类的用户原话引文，尺寸与 Secondary 已解锁卡片完全固定一致（315 x 215）。
 struct Tab2HeroCard: View {
     let category: Tab2CategoryData
     let isFirstUnlock: Bool
@@ -19,7 +19,7 @@ struct Tab2HeroCard: View {
     // MARK: - Card layout
 
     private var cardContent: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 0) {
             // ① 分类标头（大写分类名 + 词数）
             HStack(alignment: .center) {
                 Text(category.englishLabel.uppercased())
@@ -34,21 +34,18 @@ struct Tab2HeroCard: View {
                     .foregroundStyle(AppTheme.Color.textMuted)
             }
 
-            // ② 首次解锁专属句（只出现一次）
-            if isFirstUnlock {
-                Text("You've got enough here to talk about it now.")
-                    .font(AppTheme.Font.keyPhrase)
-                    .foregroundStyle(AppTheme.Color.textPrimary)
-            }
+            Spacer(minLength: 10)
 
-            // ③ 引文行 or 降级展示
+            // ② 引文行 or 降级展示
             quoteSection
 
-            // ④ CTA
+            Spacer(minLength: 12)
+
+            // ③ 探底对齐的主 CTA 按钮
             ctaButton
-                .padding(.top, 4)
         }
         .padding(20)
+        .frame(width: 315, height: 215, alignment: .topLeading)
         .background(AppTheme.Color.cardBg)
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
         .shadow(
@@ -59,30 +56,23 @@ struct Tab2HeroCard: View {
         )
     }
 
-    /// 引文行区域：有有效引文 → 逐行展示；否则 → 预览词降级
+    /// 引文行区域：最多展示 2 条精致引文，保证固定高度下绝对不溢出
     @ViewBuilder
     private var quoteSection: some View {
         let scenes = displayScenes
         if scenes.isEmpty {
-            let words = category.previewWords.prefix(5)
+            let words = category.previewWords.prefix(4)
             if !words.isEmpty {
                 Text(words.joined(separator: "  ·  "))
                     .font(AppTheme.Font.englishBody)
                     .foregroundStyle(AppTheme.Color.textMuted)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(2)
             }
         } else {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 8) {
                 ForEach(scenes) { scene in
                     QuoteRow(scene: scene)
                 }
-            }
-            let more = goodScenes.count - scenes.count
-            if more > 0 {
-                Text("+\(more) more moments")
-                    .font(AppTheme.Font.pos)
-                    .foregroundStyle(AppTheme.Color.textMuted)
-                    .padding(.top, 2)
             }
         }
     }
@@ -94,39 +84,37 @@ struct Tab2HeroCard: View {
             Image(systemName: "mic.fill")
                 .font(.system(size: 15, weight: .bold))
             Text("Start talking")
-                .font(.system(size: 16, weight: .bold))
+                .font(.system(size: 15, weight: .bold))
         }
         .foregroundStyle(.white)
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 14)
+        .padding(.vertical, 12)
         .background(AppTheme.Color.brandStrong)
         .clipShape(Capsule())
         .shadow(
-            color: AppTheme.Color.brandStrong.opacity(0.3),
-            radius: 10,
+            color: AppTheme.Color.brandStrong.opacity(0.25),
+            radius: 8,
             x: 0,
-            y: 4
+            y: 3
         )
     }
 
     // MARK: - Display scenes selection
 
-    /// 有效引文 = quote ≥6 字，或 sceneDetail ≥4 字（避免显示「呼喊」等短标签）
     private func effectiveQuote(_ scene: Tab2SubScene) -> String {
         if let q = scene.quote, q.count >= 6 { return q }
         return scene.sceneDetail
     }
 
-    /// 所有通过长度筛选的子场景，按出现次数降序
     private var goodScenes: [Tab2SubScene] {
         category.subScenes
             .sorted { $0.occurrenceCount > $1.occurrenceCount }
             .filter { effectiveQuote($0).count >= 4 }
     }
 
-    /// 实际展示（最多 3 条）
+    /// 固定卡片高度下精致展示 2 条引文
     private var displayScenes: [Tab2SubScene] {
-        Array(goodScenes.prefix(3))
+        Array(goodScenes.prefix(2))
     }
 }
 
@@ -146,22 +134,20 @@ private struct QuoteRow: View {
     let scene: Tab2SubScene
 
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
+        HStack(alignment: .top, spacing: 6) {
             Text("“")
-                .font(.system(size: 18, weight: .bold, design: .serif))
+                .font(.system(size: 16, weight: .bold, design: .serif))
                 .foregroundStyle(AppTheme.Color.brandStrong.opacity(0.6))
                 .offset(y: -2)
 
             Text(quoteText)
-                .font(.system(size: 15, weight: .regular))
+                .font(.system(size: 14, weight: .regular))
                 .foregroundStyle(AppTheme.Color.textPrimary)
-                .lineSpacing(3)
-                .fixedSize(horizontal: false, vertical: true)
+                .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
-    /// 有效 quote（≥6 字）→ 显示 quote；否则降为子场景名
     private var quoteText: String {
         if let q = scene.quote, q.count >= 6 { return q }
         return scene.sceneDetail
