@@ -45,4 +45,9 @@ enum SupabaseConfig {
     static var getCategoryWordsFunctionURL: URL {
         projectURL.appending(path: "functions/v1/get-category-words")
     }
+
+    // MARK: - 对话页（E1）
+    static var dialogueFunctionURL: URL {
+        projectURL.appending(path: "functions/v1/dialogue")
+    }
 }

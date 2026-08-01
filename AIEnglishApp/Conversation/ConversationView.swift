@@ -175,9 +175,7 @@ struct ConversationView: View {
                 .foregroundStyle(AppTheme.Color.textSecondary)
             Spacer()
             Button("Retry") {
-                withAnimation(AppTheme.Motion.tabSelection) {
-                    vm.pageState = .active
-                }
+                withAnimation(AppTheme.Motion.tabSelection) { vm.retry() }
             }
             .font(AppTheme.Font.sectionLabel)
             .foregroundStyle(AppTheme.Color.brandDefault)

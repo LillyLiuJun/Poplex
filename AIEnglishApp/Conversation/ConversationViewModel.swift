@@ -33,7 +33,7 @@ enum MicState {
     case disabled
 }
 
-// MARK: - Suggestion (stub, expanded in E1b)
+// MARK: - Suggestion
 
 struct DialogueSuggestion: Identifiable {
     var id = UUID()
@@ -47,44 +47,61 @@ struct DialogueSuggestion: Identifiable {
 class ConversationViewModel {
     var pageState: ConversationPageState = .preparing
     var sceneCategory: String
-    var sceneDetail: String = "Mornings at the office"
+    var sceneDetail: String = ""
     var lines: [DialogueLine] = []
     var micState: MicState = .idle
     var isSuggestionsExpanded: Bool = false
     var suggestions: [DialogueSuggestion] = []
 
+    // Session state (Step 5)
+    var sessionId: String? = nil
+
     init(sceneCategory: String) {
         self.sceneCategory = sceneCategory
-        lines = ConversationViewModel.fakeLinesForActive()
-        suggestions = ConversationViewModel.fakeSuggestions()
     }
 
-    // MARK: - Permission (Step 2)
+    // MARK: - Permission + Session start (Steps 2 & 5)
 
     /// Called on view appear and on every return from background.
-    /// • Already granted → stay in .preparing (Step 5 starts the session).
-    /// • Undetermined    → request; denied result → .permissionNeeded.
-    /// • Denied          → .permissionNeeded immediately.
+    /// • Already granted  → start session if still in .preparing.
+    /// • Undetermined     → request; then start session if granted.
+    /// • Denied anywhere  → .permissionNeeded immediately.
     func checkPermissions() async {
-        // Only act when the page is in a state where permission matters.
         guard pageState == .preparing || pageState == .permissionNeeded else { return }
 
         if PermissionService.areBothGranted {
-            if pageState == .permissionNeeded {
-                pageState = .preparing   // user just granted in Settings, unblock
-            }
+            if pageState == .permissionNeeded { pageState = .preparing }
+            await beginSession()
             return
         }
 
-        // One or both are denied → show gate immediately, no dialog.
         if PermissionService.micStatus == .denied || PermissionService.speechStatus == .denied {
             pageState = .permissionNeeded
             return
         }
 
-        // Undetermined → request (system dialogs appear here).
         let granted = await PermissionService.requestNeeded()
-        pageState = granted ? .preparing : .permissionNeeded
+        if granted {
+            await beginSession()
+        } else {
+            pageState = .permissionNeeded
+        }
+    }
+
+    // MARK: - Session start (Step 5)
+
+    func beginSession() async {
+        guard pageState == .preparing else { return }
+        do {
+            let response = try await DialogueService.start(sceneCategory: sceneCategory)
+            sessionId = response.sessionId
+            lines = [DialogueLine(role: .ai, text: response.reply)]
+            suggestions = response.suggestions.map { DialogueSuggestion(lemma: $0.lemma, hint: $0.hint) }
+            pageState = .active
+        } catch {
+            print("[ConversationViewModel] beginSession failed:", error)
+            pageState = .failed
+        }
     }
 
     @MainActor
@@ -183,8 +200,7 @@ class ConversationViewModel {
     func interruptAI() {
         guard micState == .aiSpeaking else { return }
         micState = .idle
-        // The stub Task in finalizeSpeech checks micState == .aiSpeaking before appending,
-        // so it will silently bail out without adding the fake response.
+        // finalizeSpeech's Task checks micState == .aiSpeaking before appending, so it bails cleanly.
     }
 
     private func tearDownAudio() {
@@ -202,69 +218,77 @@ class ConversationViewModel {
         guard micState == .listening else { return }  // re-entry guard
         micState = .aiSpeaking                         // block concurrent calls immediately
 
-        // Remove the placeholder if user said nothing recognizable
-        if let idx = liveLineIndex, idx < lines.count,
-           lines[idx].text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            lines.remove(at: idx)
+        // Extract and clean up the live placeholder line
+        var userText = ""
+        if let idx = liveLineIndex, idx < lines.count {
+            userText = lines[idx].text.trimmingCharacters(in: .whitespacesAndNewlines)
+            if userText.isEmpty { lines.remove(at: idx) }
         }
         liveLineIndex = nil
 
-        // Stub: fake AI reply after a short pause — Step 5 replaces this with the real backend call.
+        // Nothing was transcribed — release mic without calling the backend
+        guard !userText.isEmpty else {
+            micState = .idle
+            return
+        }
+
+        let sid = sessionId
+        let turnId = UUID().uuidString
+
         Task { @MainActor [weak self] in
             guard let self else { return }
-            try? await Task.sleep(for: .seconds(1.5))
-            guard self.micState == .aiSpeaking else { return }  // interrupt guard
-            let stubs = [
-                "That's a good point. Can you say more about that?",
-                "Right. And how did you feel about that?",
-                "I see. What happened next?",
-                "Interesting. Would you do anything differently?",
-                "Good. Can you give me an example?",
-            ]
-            self.lines.append(DialogueLine(role: .ai, text: stubs[self.lines.count % stubs.count]))
-            self.micState = .idle
+            do {
+                guard let sid else { throw DialogueError.notAuthenticated }
+                let response = try await DialogueService.turn(
+                    sessionId: sid,
+                    turnId: turnId,
+                    text: userText
+                )
+                guard self.micState == .aiSpeaking else { return }  // interrupt guard
+                self.lines.append(DialogueLine(role: .ai, text: response.reply))
+                self.suggestions = response.suggestions.map {
+                    DialogueSuggestion(lemma: $0.lemma, hint: $0.hint)
+                }
+                if let detail = response.sceneDetail, !detail.isEmpty {
+                    self.sceneDetail = detail
+                }
+                self.micState = .idle
+            } catch {
+                guard self.micState == .aiSpeaking else { return }
+                print("[ConversationViewModel] turn failed:", error)
+                // Show the error banner but keep the conversation alive
+                self.pageState = .failed
+                self.micState = .idle
+            }
         }
     }
 
-    // MARK: Fake data (step 1 skeleton — replaced by real data in E1b)
+    // MARK: - Retry (error banner)
 
-    static func fakeLinesForActive() -> [DialogueLine] {
-        [
-            DialogueLine(role: .ai,   text: "You've got mornings at the office and client calls in here. Which one's on your mind?"),
-            DialogueLine(role: .user, text: "I set up the room but the projector no work"),
-            DialogueLine(role: .ai,   text: "So you were troubleshooting before the day even started. Did you manage to sort it out before the meeting began?"),
-            DialogueLine(role: .user, text: "Yes we run late about ten minute"),
-            DialogueLine(role: .ai,   text: "That kind of slow start before a big presentation is rough. What happened with the projector?"),
-            DialogueLine(role: .user, text: "The cable was wrong type, our IT guy bring adapter"),
-            DialogueLine(role: .ai,   text: "So the IT team came through in the end. How did the client react when you finally got connected?"),
-            DialogueLine(role: .user, text: "They were okay, the manager explain the delay"),
-            DialogueLine(role: .ai,   text: "Your manager helped smooth it over — that's good support. Did you get through the whole presentation?"),
-            DialogueLine(role: .user, text: "Yes we finish all the slide but I very nervous the whole time"),
-            DialogueLine(role: .ai,   text: "First time presenting with tech issues is tough. What would you do differently next time?"),
-        ]
+    func retry() {
+        if sessionId == nil {
+            pageState = .preparing
+            Task { await beginSession() }
+        } else {
+            pageState = .active
+        }
     }
 
-    // Cycles through extra lines so the debug "+ Line" button always adds something new.
+    // MARK: - Debug helpers (debug picker only — not production paths)
+
+    // Cycles through fake lines so the debug "+ Line" button always adds something new.
     private static let debugLineCycle: [(DialogueRole, String)] = [
-        (.user, "Maybe check equipment one day before"),
-        (.ai,   "That's a smart habit — arriving early to test everything. Have you had any tricky presentations since then?"),
-        (.user, "Not yet but I will be more prepare"),
-        (.ai,   "Good mindset. Being prepared takes the anxiety out of it. Anything else from that morning you want to talk through?"),
-        (.user, "No I think that is all, thank you"),
-        (.ai,   "You covered it well. 'Run late,' 'sort it out,' 'set up the room' — those came up a lot today. Nice work."),
+        (.user, "I set up the room but the projector no work"),
+        (.ai,   "So you were troubleshooting before the day even started."),
+        (.user, "Yes we run late about ten minute"),
+        (.ai,   "That kind of slow start is rough. What happened with the projector?"),
+        (.user, "The cable was wrong type, our IT guy bring adapter"),
+        (.ai,   "So the IT team came through in the end. How did the client react?"),
     ]
 
     func debugAddLine() {
         let idx = lines.count % Self.debugLineCycle.count
         let (role, text) = Self.debugLineCycle[idx]
         lines.append(DialogueLine(role: role, text: text))
-    }
-
-    static func fakeSuggestions() -> [DialogueSuggestion] {
-        [
-            DialogueSuggestion(lemma: "run late",    hint: "if things ran behind"),
-            DialogueSuggestion(lemma: "set up",      hint: "when preparing the room"),
-            DialogueSuggestion(lemma: "sort it out", hint: "to fix the problem"),
-        ]
     }
 }
