@@ -122,20 +122,24 @@ struct ConversationView: View {
     private var dialogueScrollView: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: AppTheme.Space.paddingM) {
+                // VStack (not Lazy) so all items are laid out immediately —
+                // required for scrollTo to work reliably on first appear.
+                VStack(alignment: .leading, spacing: AppTheme.Space.paddingM) {
                     ForEach(vm.lines) { line in
                         DialogueLineRow(text: line.text, role: line.role)
                             .id(line.id)
                     }
                 }
                 .padding(.vertical, AppTheme.Space.paddingM)
+                .padding(.bottom, AppTheme.Space.paddingCard)
             }
             .topEdgeFade()
+            .onAppear {
+                // Snap to last item without animation on first load.
+                proxy.scrollTo(vm.lines.last?.id, anchor: .bottom)
+            }
             .onChange(of: vm.lines.count) { _, _ in
-                // Auto-scroll to the newest line
-                if let last = vm.lines.last {
-                    withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
-                }
+                withAnimation { proxy.scrollTo(vm.lines.last?.id, anchor: .bottom) }
             }
         }
     }
@@ -231,6 +235,19 @@ struct ConversationView: View {
                             in: Capsule()
                         )
                     }
+
+                    Divider().frame(height: 16)
+
+                    // "+ Line" — appends a fake dialogue line to test auto-scroll-to-bottom
+                    Button("+ Line") {
+                        vm.debugAddLine()
+                    }
+                    .font(AppTheme.Font.sectionLabel)
+                    .foregroundStyle(AppTheme.Color.textMuted)
+                    .padding(.horizontal, AppTheme.Space.paddingM)
+                    .padding(.vertical, AppTheme.Space.paddingS)
+                    .background(AppTheme.Color.pageBg, in: Capsule())
+                    .padding(.trailing, AppTheme.Space.paddingM)
                 }
                 .padding(.horizontal, AppTheme.Space.paddingS)
                 .padding(.vertical, AppTheme.Space.paddingS)
