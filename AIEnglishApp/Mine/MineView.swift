@@ -511,7 +511,7 @@ private struct Tab2UnlockedView: View {
             let heroId = hero?.id
             let otherUnlocked = data.categories.filter { $0.unlocked && $0.id != heroId }
 
-            // 已解锁分类：大体量横向 Peek 轮播卡片（整个卡片区域带有柔和暖色背景衬底）
+            // 已解锁分类：大体量横向 Peek 轮播卡片（带有柔和暖色背景衬底）
             if hero != nil || !otherUnlocked.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(alignment: .top, spacing: 14) {
@@ -542,13 +542,14 @@ private struct Tab2UnlockedView: View {
                 .padding(.horizontal, AppTheme.Space.paddingS)
             }
 
-            // Topics in Progress——无割裂分割线卡片容器
+            // Topics in Progress——标题独立拎出坐在白卡外面，下方为纯列表圆角白卡容器
             let stillFilling = data.categories.filter { !$0.unlocked && $0.wordCount >= 1 }
             if !stillFilling.isEmpty {
-                VStack(alignment: .leading, spacing: 0) {
+                VStack(alignment: .leading, spacing: 12) {
+                    // 独立拎出的区隔标题
                     HStack(alignment: .center, spacing: 6) {
                         Image(systemName: "sparkles")
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(AppTheme.Color.brandStrong)
 
                         Text("Topics in Progress")
@@ -556,9 +557,8 @@ private struct Tab2UnlockedView: View {
                             .foregroundStyle(AppTheme.Color.textPrimary)
                     }
                     .padding(.horizontal, AppTheme.Space.paddingPage)
-                    .padding(.top, AppTheme.Space.paddingPage)
-                    .padding(.bottom, 12)
 
+                    // 下方纯列表白卡容器
                     VStack(spacing: 4) {
                         ForEach(stillFilling) { cat in
                             CategoryProgressRow(
@@ -568,17 +568,17 @@ private struct Tab2UnlockedView: View {
                             )
                         }
                     }
-                    .padding(.bottom, AppTheme.Space.paddingPage)
+                    .padding(.vertical, 8)
+                    .background(AppTheme.Color.cardBg)
+                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
+                    .shadow(
+                        color: Color.black.opacity(0.04),
+                        radius: 12,
+                        x: 0,
+                        y: 4
+                    )
+                    .padding(.horizontal, AppTheme.Space.paddingPage)
                 }
-                .background(AppTheme.Color.cardBg)
-                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
-                .shadow(
-                    color: Color.black.opacity(0.04),
-                    radius: 12,
-                    x: 0,
-                    y: 4
-                )
-                .padding(.horizontal, AppTheme.Space.paddingPage)
             }
         }
     }
