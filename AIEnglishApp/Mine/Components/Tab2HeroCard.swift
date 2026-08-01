@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Tab2 首页 hero 卡——展示已解锁分类的用户原话引文，拥有专属柔和暖光流彩背景与精致微描边，突出 Hero 推荐权重。
+/// Tab2 首页 hero 卡——全解锁卡片统一采用微暖夕阳流彩渐变与精致橙光微描边。
 struct Tab2HeroCard: View {
     let category: Tab2CategoryData
     let isFirstUnlock: Bool
@@ -59,13 +59,13 @@ struct Tab2HeroCard: View {
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
         .overlay(
             RoundedRectangle(cornerRadius: AppTheme.Radius.card)
-                .strokeBorder(AppTheme.Color.brandStrong.opacity(0.12), lineWidth: 1)
+                .strokeBorder(AppTheme.Color.brandStrong.opacity(0.18), lineWidth: 1.5)
         )
         .shadow(
             color: AppTheme.Color.brandStrong.opacity(0.08),
             radius: 16,
             x: 0,
-            y: 6
+            y: 5
         )
     }
 

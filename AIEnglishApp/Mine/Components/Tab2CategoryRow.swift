@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 已解锁分类卡片——展示已解锁分类的用户原话引文与 "+N more moments" 离散补充。
+/// 已解锁分类卡片——全解锁卡片统一采用微暖夕阳流彩渐变与精致橙光微描边（与 Hero 卡保持一致视觉基因）。
 struct Tab2CategoryRow: View {
     let category: Tab2CategoryData
     let onTalk: () -> Void
@@ -45,10 +45,23 @@ struct Tab2CategoryRow: View {
         }
         .padding(22)
         .frame(width: 335, height: 295, alignment: .topLeading)
-        .background(AppTheme.Color.cardBg)
+        .background(
+            LinearGradient(
+                colors: [
+                    AppTheme.Color.brandSubtleBg.opacity(0.65),
+                    AppTheme.Color.cardBg
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
+        .overlay(
+            RoundedRectangle(cornerRadius: AppTheme.Radius.card)
+                .strokeBorder(AppTheme.Color.brandStrong.opacity(0.18), lineWidth: 1.5)
+        )
         .shadow(
-            color: Color.black.opacity(0.06),
+            color: AppTheme.Color.brandStrong.opacity(0.08),
             radius: 16,
             x: 0,
             y: 5
