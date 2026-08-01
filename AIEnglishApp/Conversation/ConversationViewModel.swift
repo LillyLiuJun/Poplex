@@ -1,4 +1,6 @@
 import SwiftUI
+import AVFoundation
+import Speech
 
 // MARK: - Page state machine (§2)
 
@@ -55,6 +57,39 @@ class ConversationViewModel {
         self.sceneCategory = sceneCategory
         lines = ConversationViewModel.fakeLinesForActive()
         suggestions = ConversationViewModel.fakeSuggestions()
+    }
+
+    // MARK: - Permission (Step 2)
+
+    /// Called on view appear and on every return from background.
+    /// • Already granted → stay in .preparing (Step 5 starts the session).
+    /// • Undetermined    → request; denied result → .permissionNeeded.
+    /// • Denied          → .permissionNeeded immediately.
+    func checkPermissions() async {
+        // Only act when the page is in a state where permission matters.
+        guard pageState == .preparing || pageState == .permissionNeeded else { return }
+
+        if PermissionService.areBothGranted {
+            if pageState == .permissionNeeded {
+                pageState = .preparing   // user just granted in Settings, unblock
+            }
+            return
+        }
+
+        // One or both are denied → show gate immediately, no dialog.
+        if PermissionService.micStatus == .denied || PermissionService.speechStatus == .denied {
+            pageState = .permissionNeeded
+            return
+        }
+
+        // Undetermined → request (system dialogs appear here).
+        let granted = await PermissionService.requestNeeded()
+        pageState = granted ? .preparing : .permissionNeeded
+    }
+
+    @MainActor
+    func openSettings() {
+        PermissionService.openSettings()
     }
 
     // MARK: Fake data (step 1 skeleton — replaced by real data in E1b)

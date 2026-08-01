@@ -2,19 +2,19 @@ import SwiftUI
 
 /// Conversation page — the practice execution surface launched from Tab2's category card (§4.1).
 ///
-/// This is the container and state machine (§2). Step 1 content is fake data; real ASR and
-/// backend connections arrive in steps 4–5 (§九 实现顺序).
-///
-/// Five states (§2):
-///   permissionNeeded → MicPermissionView
-///   preparing        → topic name + PreparingIndicator
+/// State machine (§2):
+///   permissionNeeded → MicPermissionView (mic / speech-rec denied)
+///   preparing        → topic name + PreparingIndicator (permission OK, awaiting session)
 ///   active           → three-zone layout (§3)
-///   failed           → same as active + inline error banner (dialogue NOT cleared, §2)
+///   failed           → active + inline error banner at foot of chat
 ///   ended            → ConversationSummaryView
+///
+/// Step 2 wires real permission checks; Steps 4–5 add ASR + backend.
 struct ConversationView: View {
     let sceneCategory: String
 
     @State private var vm: ConversationViewModel
+    @Environment(\.scenePhase) private var scenePhase
 
     init(sceneCategory: String) {
         self.sceneCategory = sceneCategory
@@ -29,7 +29,7 @@ struct ConversationView: View {
             Group {
                 switch vm.pageState {
                 case .permissionNeeded:
-                    MicPermissionView(onOpenSettings: { /* step 2 */ })
+                    MicPermissionView(onOpenSettings: vm.openSettings)
                         .transition(.opacity)
 
                 case .preparing:
@@ -54,10 +54,16 @@ struct ConversationView: View {
             }
             .animation(AppTheme.Motion.tabSelection, value: vm.pageState)
 
-            // Debug state picker — visible in step 1 only so the PM can screenshot all 5 states
+            // Debug state picker — lets PM switch all 5 states without a build
             debugStatePicker
         }
         .toolbar(.hidden, for: .navigationBar)
+        // Step 2: check permissions on first appear
+        .task { await vm.checkPermissions() }
+        // Re-check when returning from Settings after the user may have granted access
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await vm.checkPermissions() } }
+        }
     }
 
     // MARK: - Preparing (§4.3)
