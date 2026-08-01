@@ -11,10 +11,11 @@ struct Tab2CategoryRow: View {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             onTalk()
         } label: {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 14) {
+                // 第一行：分类大标题 + 词量
                 HStack(alignment: .center) {
                     Text(category.englishLabel)
-                        .font(.system(size: 17, weight: .bold))
+                        .font(.system(size: 20, weight: .bold))
                         .foregroundStyle(AppTheme.Color.textPrimary)
 
                     Spacer()
@@ -24,24 +25,34 @@ struct Tab2CategoryRow: View {
                         .foregroundStyle(AppTheme.Color.textMuted)
                 }
 
+                // 第二行：子场景标签
                 HStack(alignment: .center, spacing: 6) {
                     ForEach(subSceneTags, id: \.self) { tag in
                         Text(tag)
-                            .font(.system(size: 11, weight: .medium))
+                            .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(AppTheme.Color.textSecondary)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
                             .background(Color(.systemGray6))
                             .clipShape(RoundedRectangle(cornerRadius: 6))
                     }
+                }
 
-                    Spacer(minLength: 0)
-
+                // 第三行：右对齐高权重 Talk 按钮
+                HStack {
+                    Spacer()
                     talkCapsule
                 }
             }
-            .padding(.vertical, 14)
-            .padding(.horizontal, AppTheme.Space.paddingPage)
+            .padding(20)
+            .background(AppTheme.Color.cardBg)
+            .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
+            .shadow(
+                color: Color.black.opacity(0.05),
+                radius: 14,
+                x: 0,
+                y: 4
+            )
         }
         .buttonStyle(.plain)
     }
@@ -49,15 +60,15 @@ struct Tab2CategoryRow: View {
     // MARK: - Talk capsule
 
     private var talkCapsule: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 6) {
             Image(systemName: "mic.fill")
-                .font(.system(size: 10, weight: .bold))
-            Text("Talk")
                 .font(.system(size: 12, weight: .bold))
+            Text("Start talking")
+                .font(.system(size: 13, weight: .bold))
         }
         .foregroundStyle(AppTheme.Color.brandStrong)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
         .background(AppTheme.Color.brandStrong.opacity(0.12))
         .clipShape(Capsule())
     }

@@ -480,7 +480,7 @@ private struct Tab2UnlockedView: View {
             CanvasBackground().ignoresSafeArea()
 
             ScrollView {
-                VStack(alignment: .leading, spacing: AppTheme.Space.paddingCard + 4) {
+                VStack(alignment: .leading, spacing: 24) {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("PRACTICE LIBRARY")
                             .font(.system(size: 11, weight: .bold))
@@ -488,7 +488,7 @@ private struct Tab2UnlockedView: View {
                             .foregroundStyle(AppTheme.Color.brandStrong.opacity(0.85))
 
                         Text("Talk about something")
-                            .font(.system(size: 30, weight: .bold, design: .rounded))
+                            .font(.system(size: 32, weight: .bold, design: .serif))
                             .foregroundStyle(AppTheme.Color.textPrimary)
 
                         Text("Scenarios built from your daily moments.")
@@ -529,85 +529,52 @@ private struct Tab2UnlockedView: View {
                 .padding(.horizontal, AppTheme.Space.paddingPage)
             }
 
-            // 其他已解锁分类——卡片容器包裹
+            // 其他已解锁分类——各自独立的高权重卡片
             let otherUnlocked = data.categories.filter { $0.unlocked && $0.id != heroId }
             if !otherUnlocked.isEmpty {
-                VStack(alignment: .leading, spacing: 0) {
+                VStack(alignment: .leading, spacing: 16) {
                     ForEach(otherUnlocked) { cat in
                         Tab2CategoryRow(
                             category: cat,
                             onTalk: { onTalk(cat.sceneCategory) }
                         )
-                        if cat.id != otherUnlocked.last?.id {
-                            Divider()
-                                .padding(.horizontal, AppTheme.Space.paddingPage)
-                        }
                     }
                 }
-                .background(AppTheme.Color.cardBg)
-                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
-                .overlay(
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.card)
-                        .strokeBorder(Color.black.opacity(0.04), lineWidth: 1)
-                )
-                .shadow(
-                    color: AppTheme.Shadow.cardColor,
-                    radius: 12,
-                    x: 0,
-                    y: 4
-                )
                 .padding(.horizontal, AppTheme.Space.paddingPage)
             }
 
-            // Topics in Progress——卡片容器包裹
+            // Topics in Progress——无割裂分割线卡片容器
             let stillFilling = data.categories.filter { !$0.unlocked && $0.wordCount >= 1 }
             if !stillFilling.isEmpty {
                 VStack(alignment: .leading, spacing: 0) {
                     HStack(alignment: .center, spacing: 6) {
                         Image(systemName: "sparkles")
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(AppTheme.Color.brandStrong.opacity(0.85))
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(AppTheme.Color.brandStrong)
 
                         Text("Topics in Progress")
-                            .font(.system(size: 15, weight: .bold))
+                            .font(.system(size: 16, weight: .bold))
                             .foregroundStyle(AppTheme.Color.textPrimary)
-
-                        Spacer()
-
-                        Text("20 words to unlock")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(AppTheme.Color.textMuted)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(Color(.systemGray6))
-                            .clipShape(Capsule())
                     }
                     .padding(.horizontal, AppTheme.Space.paddingPage)
                     .padding(.top, AppTheme.Space.paddingPage)
-                    .padding(.bottom, AppTheme.Space.paddingS)
+                    .padding(.bottom, 12)
 
-                    ForEach(stillFilling) { cat in
-                        CategoryProgressRow(
-                            category: cat,
-                            isHighlighted: false,
-                            loadWords: { await vm.loadCategoryWords(for: cat.sceneCategory) }
-                        )
-                        if cat.id != stillFilling.last?.id {
-                            Divider()
-                                .padding(.horizontal, AppTheme.Space.paddingPage)
-                        } else {
-                            Color.clear.frame(height: AppTheme.Space.paddingS)
+                    VStack(spacing: 4) {
+                        ForEach(stillFilling) { cat in
+                            CategoryProgressRow(
+                                category: cat,
+                                isHighlighted: false,
+                                loadWords: { await vm.loadCategoryWords(for: cat.sceneCategory) }
+                            )
                         }
                     }
+                    .padding(.bottom, AppTheme.Space.paddingPage)
                 }
                 .background(AppTheme.Color.cardBg)
                 .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
-                .overlay(
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.card)
-                        .strokeBorder(Color.black.opacity(0.04), lineWidth: 1)
-                )
                 .shadow(
-                    color: AppTheme.Shadow.cardColor,
+                    color: Color.black.opacity(0.04),
                     radius: 12,
                     x: 0,
                     y: 4

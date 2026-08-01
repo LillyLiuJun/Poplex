@@ -19,64 +19,43 @@ struct Tab2HeroCard: View {
     // MARK: - Card layout
 
     private var cardContent: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // ① 分类标头（大写分类名 + Word Count 徽章）
-            HStack(alignment: .center, spacing: AppTheme.Space.paddingXS) {
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(AppTheme.Color.brandStrong)
-                        .frame(width: 6, height: 6)
-                    Text(category.englishLabel.uppercased())
-                        .font(.system(size: 11, weight: .bold))
-                        .tracking(1.2)
-                        .foregroundStyle(AppTheme.Color.brandStrong)
-                }
+        VStack(alignment: .leading, spacing: 16) {
+            // ① 分类标头（大写分类名 + 词数）
+            HStack(alignment: .center) {
+                Text(category.englishLabel.uppercased())
+                    .font(.system(size: 12, weight: .bold))
+                    .tracking(1.2)
+                    .foregroundStyle(AppTheme.Color.brandStrong)
                 
                 Spacer()
                 
                 Text("\(category.wordCount) words")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(AppTheme.Color.brandStrong)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(AppTheme.Color.brandStrong.opacity(0.1))
-                    .clipShape(Capsule())
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(AppTheme.Color.textMuted)
             }
-            .padding(.bottom, AppTheme.Space.paddingM)
 
             // ② 首次解锁专属句（只出现一次）
             if isFirstUnlock {
                 Text("You've got enough here to talk about it now.")
                     .font(AppTheme.Font.keyPhrase)
                     .foregroundStyle(AppTheme.Color.textPrimary)
-                    .padding(.bottom, AppTheme.Space.paddingM)
             }
 
             // ③ 引文行 or 降级展示
             quoteSection
 
             // ④ CTA
-            Spacer().frame(height: AppTheme.Space.paddingCard)
             ctaButton
+                .padding(.top, 4)
         }
-        .padding(AppTheme.Space.paddingCard)
-        .background(
-            LinearGradient(
-                colors: [AppTheme.Color.brandSubtleBg.opacity(0.6), AppTheme.Color.cardBg],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        )
+        .padding(20)
+        .background(AppTheme.Color.cardBg)
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
-        .overlay(
-            RoundedRectangle(cornerRadius: AppTheme.Radius.card)
-                .strokeBorder(AppTheme.Color.brandStrong.opacity(0.15), lineWidth: 1)
-        )
         .shadow(
-            color: AppTheme.Color.brandStrong.opacity(0.08),
-            radius: 16,
+            color: Color.black.opacity(0.05),
+            radius: 14,
             x: 0,
-            y: 6
+            y: 4
         )
     }
 
@@ -85,14 +64,12 @@ struct Tab2HeroCard: View {
     private var quoteSection: some View {
         let scenes = displayScenes
         if scenes.isEmpty {
-            // 无有效引文时用 previewWords 兜底，至少让卡片有内容
             let words = category.previewWords.prefix(5)
             if !words.isEmpty {
                 Text(words.joined(separator: "  ·  "))
                     .font(AppTheme.Font.englishBody)
                     .foregroundStyle(AppTheme.Color.textMuted)
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(.bottom, AppTheme.Space.paddingS)
             }
         } else {
             VStack(alignment: .leading, spacing: 10) {
@@ -105,8 +82,7 @@ struct Tab2HeroCard: View {
                 Text("+\(more) more moments")
                     .font(AppTheme.Font.pos)
                     .foregroundStyle(AppTheme.Color.textMuted)
-                    .padding(.top, 4)
-                    .padding(.leading, 4)
+                    .padding(.top, 2)
             }
         }
     }
@@ -122,20 +98,14 @@ struct Tab2HeroCard: View {
         }
         .foregroundStyle(.white)
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 15)
-        .background(
-            LinearGradient(
-                colors: [AppTheme.Color.brandStrong, Color(red: 242/255, green: 101/255, blue: 16/255)],
-                startPoint: .leading,
-                endPoint: .trailing
-            )
-        )
+        .padding(.vertical, 14)
+        .background(AppTheme.Color.brandStrong)
         .clipShape(Capsule())
         .shadow(
-            color: AppTheme.Color.brandStrong.opacity(0.35),
-            radius: 12,
+            color: AppTheme.Color.brandStrong.opacity(0.3),
+            radius: 10,
             x: 0,
-            y: 5
+            y: 4
         )
     }
 
@@ -170,55 +140,28 @@ private struct HeroCardPressStyle: ButtonStyle {
     }
 }
 
-// MARK: - Quote row (对话质感引文胶囊)
+// MARK: - Quote row (极简无框对话引文)
 
 private struct QuoteRow: View {
     let scene: Tab2SubScene
 
     var body: some View {
-        HStack(alignment: .center, spacing: 10) {
-            leftSlot
+        HStack(alignment: .top, spacing: 8) {
+            Text("“")
+                .font(.system(size: 18, weight: .bold, design: .serif))
+                .foregroundStyle(AppTheme.Color.brandStrong.opacity(0.6))
+                .offset(y: -2)
+
             Text(quoteText)
-                .font(.system(size: 14, weight: .medium))
+                .font(.system(size: 15, weight: .regular))
                 .foregroundStyle(AppTheme.Color.textPrimary)
-                .lineSpacing(2)
+                .lineSpacing(3)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(Color.white.opacity(0.85))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .strokeBorder(AppTheme.Color.brandStrong.opacity(0.08), lineWidth: 1)
-        )
     }
 
-    /// 有图 → 缩略图；无图 → 精致温润气泡指示
-    @ViewBuilder
-    private var leftSlot: some View {
-        if let urlStr = scene.imageUrl, !urlStr.isEmpty {
-            CachedRemoteImage(signedUrl: urlStr, stableKey: urlStr) {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(AppTheme.Color.imagePlaceholderBg)
-                    .frame(width: 38, height: 38)
-            }
-            .frame(width: 38, height: 38)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-        } else {
-            ZStack {
-                Circle()
-                    .fill(AppTheme.Color.brandSubtleBg)
-                    .frame(width: 28, height: 28)
-                Image(systemName: "quote.opening")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(AppTheme.Color.brandStrong)
-            }
-        }
-    }
-
-    /// 有有效 quote（≥6 字）→ 显示 quote；否则降为子场景名
+    /// 有效 quote（≥6 字）→ 显示 quote；否则降为子场景名
     private var quoteText: String {
         if let q = scene.quote, q.count >= 6 { return q }
         return scene.sceneDetail
