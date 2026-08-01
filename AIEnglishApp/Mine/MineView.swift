@@ -252,15 +252,15 @@ private struct Tab2LockedView: View {
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     Capsule()
-                        .fill(Color(.systemGray6))
-                        .frame(height: 6)
+                        .fill(AppTheme.Color.brandStrong.opacity(0.08))
+                        .frame(height: 4)
                     Capsule()
                         .fill(AppTheme.Color.brandStrong)
-                        .frame(width: max(geo.size.width * fill, count > 0 ? 6 : 0), height: 6)
+                        .frame(width: max(geo.size.width * fill, count > 0 ? 4 : 0), height: 4)
                         .animation(.easeOut(duration: 0.4), value: count)
                 }
             }
-            .frame(height: 6)
+            .frame(height: 4)
         }
         .padding(AppTheme.Space.paddingPage)
         .background(AppTheme.Color.cardBg)
@@ -524,12 +524,10 @@ private struct Tab2UnlockedView: View {
                 .padding(.horizontal, AppTheme.Space.paddingPage)
             }
 
-            // 其他已解锁分类——卡片容器包裹，顶部橙色 stripe 与 Hero 卡同语言
+            // 其他已解锁分类——卡片容器包裹
             let otherUnlocked = data.categories.filter { $0.unlocked && $0.id != heroId }
             if !otherUnlocked.isEmpty {
                 VStack(alignment: .leading, spacing: 0) {
-                    AppTheme.Color.brandStrong.frame(height: 3)
-
                     ForEach(otherUnlocked) { cat in
                         Tab2CategoryRow(
                             category: cat,

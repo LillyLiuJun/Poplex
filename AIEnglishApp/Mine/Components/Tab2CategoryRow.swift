@@ -44,13 +44,17 @@ struct Tab2CategoryRow: View {
     // MARK: - Talk capsule
 
     private var talkCapsule: some View {
-        Text("Talk")
-            .font(AppTheme.Font.sectionLabel)
-            .foregroundStyle(.white)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 6)
-            .background(AppTheme.Color.brandStrong)
-            .clipShape(Capsule())
+        HStack(spacing: 4) {
+            Image(systemName: "mic.fill")
+                .font(.system(size: 10, weight: .bold))
+            Text("Talk")
+                .font(AppTheme.Font.sectionLabel)
+        }
+        .foregroundStyle(AppTheme.Color.brandStrong)
+        .padding(.horizontal, 13)
+        .padding(.vertical, 6)
+        .background(AppTheme.Color.brandStrong.opacity(0.1))
+        .clipShape(Capsule())
     }
 
     // MARK: - Description line

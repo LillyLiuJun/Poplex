@@ -87,22 +87,22 @@ struct CategoryProgressRow: View {
             let progress = min(CGFloat(category.wordCount) / CGFloat(targetCount), 1.0)
             ZStack(alignment: .leading) {
                 Capsule()
-                    .fill(Color(.systemGray6))
-                    .frame(height: 6)
+                    .fill(AppTheme.Color.brandStrong.opacity(0.08))
+                    .frame(height: 4)
                 Capsule()
                     .fill(
                         isHighlighted || category.wordCount >= targetCount
                             ? AppTheme.Color.brandStrong
-                            : Color(.systemGray4)
+                            : AppTheme.Color.brandStrong.opacity(0.4)
                     )
                     .frame(
-                        width: max(geo.size.width * progress, category.wordCount > 0 ? 6 : 0),
-                        height: 6
+                        width: max(geo.size.width * progress, category.wordCount > 0 ? 4 : 0),
+                        height: 4
                     )
                     .animation(.easeOut(duration: 0.4), value: category.wordCount)
             }
         }
-        .frame(height: 6)
+        .frame(height: 4)
     }
 
     // MARK: - Expanded word list
