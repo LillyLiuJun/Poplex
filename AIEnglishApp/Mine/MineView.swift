@@ -477,12 +477,7 @@ private struct Tab2UnlockedView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("PRACTICE LIBRARY")
-                            .font(.system(size: 11, weight: .bold))
-                            .tracking(1.4)
-                            .foregroundStyle(AppTheme.Color.brandStrong.opacity(0.85))
-
+                    VStack(alignment: .leading, spacing: 4) {
                         Text("Talk about something")
                             .font(.system(size: 32, weight: .bold, design: .serif))
                             .foregroundStyle(AppTheme.Color.textPrimary)
@@ -492,7 +487,7 @@ private struct Tab2UnlockedView: View {
                             .foregroundStyle(AppTheme.Color.textMuted)
                     }
                     .padding(.horizontal, AppTheme.Space.paddingPage)
-                    .padding(.top, AppTheme.Space.paddingPage + 4)
+                    .padding(.top, AppTheme.Space.paddingPage)
 
                     contentSections
                 }
