@@ -509,29 +509,32 @@ private struct Tab2UnlockedView: View {
         if let data = vm.data {
             let hero   = vm.heroCategory()
             let heroId = hero?.id
-
-            // Hero 卡
-            if let hero {
-                Tab2HeroCard(
-                    category: hero,
-                    isFirstUnlock: vm.isFirstUnlock,
-                    onTalk: { onTalk(hero.sceneCategory) }
-                )
-                .padding(.horizontal, AppTheme.Space.paddingPage)
-            }
-
-            // 其他已解锁分类——各自独立的高权重卡片
             let otherUnlocked = data.categories.filter { $0.unlocked && $0.id != heroId }
-            if !otherUnlocked.isEmpty {
-                VStack(alignment: .leading, spacing: 16) {
-                    ForEach(otherUnlocked) { cat in
-                        Tab2CategoryRow(
-                            category: cat,
-                            onTalk: { onTalk(cat.sceneCategory) }
-                        )
+
+            // 已解锁分类：横向 Peek 轮播卡片（第二张卡片在右侧露出一角）
+            if hero != nil || !otherUnlocked.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(alignment: .top, spacing: 14) {
+                        if let hero {
+                            Tab2HeroCard(
+                                category: hero,
+                                isFirstUnlock: vm.isFirstUnlock,
+                                onTalk: { onTalk(hero.sceneCategory) }
+                            )
+                            .frame(width: 315)
+                        }
+
+                        ForEach(otherUnlocked) { cat in
+                            Tab2CategoryRow(
+                                category: cat,
+                                onTalk: { onTalk(cat.sceneCategory) }
+                            )
+                            .frame(width: 315)
+                        }
                     }
+                    .padding(.horizontal, AppTheme.Space.paddingPage)
+                    .padding(.vertical, 6) // 容纳卡片温润浮动阴影
                 }
-                .padding(.horizontal, AppTheme.Space.paddingPage)
             }
 
             // Topics in Progress——无割裂分割线卡片容器
