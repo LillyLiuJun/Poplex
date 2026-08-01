@@ -20,23 +20,29 @@ struct Tab2HeroCard: View {
 
     private var cardContent: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // ① 分类标头（大写分类名 + Word Count 微章）
+            // ① 分类标头（大写分类名 + Word Count 徽章）
             HStack(alignment: .center, spacing: AppTheme.Space.paddingXS) {
-                Text(category.englishLabel.uppercased())
-                    .font(AppTheme.Font.sectionLabel)
-                    .foregroundStyle(AppTheme.Color.brandStrong)
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(AppTheme.Color.brandStrong)
+                        .frame(width: 6, height: 6)
+                    Text(category.englishLabel.uppercased())
+                        .font(.system(size: 11, weight: .bold))
+                        .tracking(1.2)
+                        .foregroundStyle(AppTheme.Color.brandStrong)
+                }
                 
                 Spacer()
                 
                 Text("\(category.wordCount) words")
-                    .font(AppTheme.Font.pos)
+                    .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(AppTheme.Color.brandStrong)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(AppTheme.Color.brandStrong.opacity(0.08))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(AppTheme.Color.brandStrong.opacity(0.1))
                     .clipShape(Capsule())
             }
-            .padding(.bottom, AppTheme.Space.paddingS)
+            .padding(.bottom, AppTheme.Space.paddingM)
 
             // ② 首次解锁专属句（只出现一次）
             if isFirstUnlock {
@@ -54,17 +60,23 @@ struct Tab2HeroCard: View {
             ctaButton
         }
         .padding(AppTheme.Space.paddingCard)
-        .background(AppTheme.Color.cardBg)
+        .background(
+            LinearGradient(
+                colors: [AppTheme.Color.brandSubtleBg.opacity(0.6), AppTheme.Color.cardBg],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
         .overlay(
             RoundedRectangle(cornerRadius: AppTheme.Radius.card)
-                .strokeBorder(AppTheme.Color.brandStrong.opacity(0.12), lineWidth: 1)
+                .strokeBorder(AppTheme.Color.brandStrong.opacity(0.15), lineWidth: 1)
         )
         .shadow(
-            color: AppTheme.Color.brandStrong.opacity(0.06),
-            radius: 12,
+            color: AppTheme.Color.brandStrong.opacity(0.08),
+            radius: 16,
             x: 0,
-            y: 4
+            y: 6
         )
     }
 
@@ -83,17 +95,18 @@ struct Tab2HeroCard: View {
                     .padding(.bottom, AppTheme.Space.paddingS)
             }
         } else {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 10) {
                 ForEach(scenes) { scene in
                     QuoteRow(scene: scene)
                 }
             }
             let more = goodScenes.count - scenes.count
             if more > 0 {
-                Text("+\(more) more")
+                Text("+\(more) more moments")
                     .font(AppTheme.Font.pos)
                     .foregroundStyle(AppTheme.Color.textMuted)
-                    .padding(.top, AppTheme.Space.paddingS)
+                    .padding(.top, 4)
+                    .padding(.leading, 4)
             }
         }
     }
@@ -103,20 +116,26 @@ struct Tab2HeroCard: View {
     private var ctaButton: some View {
         HStack(spacing: AppTheme.Space.paddingS) {
             Image(systemName: "mic.fill")
-                .imageScale(.small)
+                .font(.system(size: 15, weight: .bold))
             Text("Start talking")
-                .font(AppTheme.Font.ctaLabel)
+                .font(.system(size: 16, weight: .bold))
         }
-        .foregroundStyle(AppTheme.Color.cardBg)
+        .foregroundStyle(.white)
         .frame(maxWidth: .infinity)
-        .padding(.vertical, AppTheme.Space.paddingM)
-        .background(AppTheme.Color.brandStrong)
+        .padding(.vertical, 15)
+        .background(
+            LinearGradient(
+                colors: [AppTheme.Color.brandStrong, Color(red: 242/255, green: 101/255, blue: 16/255)],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+        )
         .clipShape(Capsule())
         .shadow(
-            color: AppTheme.Color.brandStrong.opacity(0.28),
-            radius: 10,
+            color: AppTheme.Color.brandStrong.opacity(0.35),
+            radius: 12,
             x: 0,
-            y: 4
+            y: 5
         )
     }
 
@@ -151,7 +170,7 @@ private struct HeroCardPressStyle: ButtonStyle {
     }
 }
 
-// MARK: - Quote row
+// MARK: - Quote row (对话质感引文胶囊)
 
 private struct QuoteRow: View {
     let scene: Tab2SubScene
@@ -160,30 +179,40 @@ private struct QuoteRow: View {
         HStack(alignment: .center, spacing: 10) {
             leftSlot
             Text(quoteText)
-                .font(AppTheme.Font.englishPrimary)
+                .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(AppTheme.Color.textPrimary)
+                .lineSpacing(2)
                 .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(Color.white.opacity(0.85))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(AppTheme.Color.brandStrong.opacity(0.08), lineWidth: 1)
+        )
     }
 
-    /// 有图 → 缩略图；无图 → 精致温润气泡/竖线指示
+    /// 有图 → 缩略图；无图 → 精致温润气泡指示
     @ViewBuilder
     private var leftSlot: some View {
         if let urlStr = scene.imageUrl, !urlStr.isEmpty {
             CachedRemoteImage(signedUrl: urlStr, stableKey: urlStr) {
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: 8)
                     .fill(AppTheme.Color.imagePlaceholderBg)
-                    .frame(width: 40, height: 30)
+                    .frame(width: 38, height: 38)
             }
-            .frame(width: 40, height: 30)
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .frame(width: 38, height: 38)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
         } else {
             ZStack {
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(AppTheme.Color.brandStrong.opacity(0.08))
+                Circle()
+                    .fill(AppTheme.Color.brandSubtleBg)
                     .frame(width: 28, height: 28)
                 Image(systemName: "quote.opening")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: 11, weight: .bold))
                     .foregroundStyle(AppTheme.Color.brandStrong)
             }
         }

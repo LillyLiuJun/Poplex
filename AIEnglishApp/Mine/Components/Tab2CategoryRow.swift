@@ -11,29 +11,34 @@ struct Tab2CategoryRow: View {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             onTalk()
         } label: {
-            HStack(alignment: .center, spacing: AppTheme.Space.paddingCard) {
-                VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .center) {
                     Text(category.englishLabel)
-                        .font(.system(.body, weight: .semibold))
+                        .font(.system(size: 17, weight: .bold))
                         .foregroundStyle(AppTheme.Color.textPrimary)
 
-                    HStack(spacing: AppTheme.Space.paddingXS) {
-                        Text(descriptionLine)
-                            .font(AppTheme.Font.pos)
-                            .foregroundStyle(AppTheme.Color.textMuted)
-                            .lineLimit(1)
-                            .layoutPriority(1)
+                    Spacer()
 
-                        Text("· \(category.wordCount) words")
-                            .font(AppTheme.Font.pos)
-                            .foregroundStyle(AppTheme.Color.textFaint)
-                            .fixedSize()
-                    }
+                    Text("\(category.wordCount) words")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(AppTheme.Color.textMuted)
                 }
 
-                Spacer(minLength: 0)
+                HStack(alignment: .center, spacing: 6) {
+                    ForEach(subSceneTags, id: \.self) { tag in
+                        Text(tag)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(AppTheme.Color.textSecondary)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color(.systemGray6))
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                    }
 
-                talkCapsule
+                    Spacer(minLength: 0)
+
+                    talkCapsule
+                }
             }
             .padding(.vertical, 14)
             .padding(.horizontal, AppTheme.Space.paddingPage)
@@ -48,29 +53,29 @@ struct Tab2CategoryRow: View {
             Image(systemName: "mic.fill")
                 .font(.system(size: 10, weight: .bold))
             Text("Talk")
-                .font(AppTheme.Font.sectionLabel)
+                .font(.system(size: 12, weight: .bold))
         }
         .foregroundStyle(AppTheme.Color.brandStrong)
-        .padding(.horizontal, 13)
+        .padding(.horizontal, 12)
         .padding(.vertical, 6)
-        .background(AppTheme.Color.brandStrong.opacity(0.1))
+        .background(AppTheme.Color.brandStrong.opacity(0.12))
         .clipShape(Capsule())
     }
 
-    // MARK: - Description line
+    // MARK: - Description tags
 
-    /// 子场景前 2 名 + "+N more"。
-    /// 降级：子场景为空 → 词本身前 2 个 lemma。
-    private var descriptionLine: String {
+    /// 子场景前 2 名 + "+N more" 离散微标签列表。
+    private var subSceneTags: [String] {
         if !category.subScenes.isEmpty {
             let sorted = category.subScenes.sorted { $0.occurrenceCount > $1.occurrenceCount }
-            let top2   = sorted.prefix(2).map(\.sceneDetail)
-            let rest   = max(0, sorted.count - top2.count)
-            return top2.joined(separator: ", ") + (rest > 0 ? ", +\(rest) more" : "")
+            var tags = Array(sorted.prefix(2).map(\.sceneDetail))
+            let rest = sorted.count - tags.count
+            if rest > 0 { tags.append("+\(rest) more") }
+            return tags
         }
-        // 降级到 previewWords
-        let words = category.previewWords.prefix(2)
-        let rest  = max(0, category.wordCount - words.count)
-        return words.joined(separator: ", ") + (rest > 0 ? ", +\(rest) more" : "")
+        var tags = Array(category.previewWords.prefix(2))
+        let rest = category.wordCount - tags.count
+        if rest > 0 { tags.append("+\(rest) more") }
+        return tags
     }
 }

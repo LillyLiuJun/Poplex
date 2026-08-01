@@ -480,10 +480,15 @@ private struct Tab2UnlockedView: View {
             CanvasBackground().ignoresSafeArea()
 
             ScrollView {
-                VStack(alignment: .leading, spacing: AppTheme.Space.paddingCard) {
-                    VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: AppTheme.Space.paddingCard + 4) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("PRACTICE LIBRARY")
+                            .font(.system(size: 11, weight: .bold))
+                            .tracking(1.4)
+                            .foregroundStyle(AppTheme.Color.brandStrong.opacity(0.85))
+
                         Text("Talk about something")
-                            .font(.system(size: 28, weight: .bold))
+                            .font(.system(size: 30, weight: .bold, design: .rounded))
                             .foregroundStyle(AppTheme.Color.textPrimary)
 
                         Text("Scenarios built from your daily moments.")
@@ -491,11 +496,11 @@ private struct Tab2UnlockedView: View {
                             .foregroundStyle(AppTheme.Color.textMuted)
                     }
                     .padding(.horizontal, AppTheme.Space.paddingPage)
-                    .padding(.top, AppTheme.Space.paddingPage)
+                    .padding(.top, AppTheme.Space.paddingPage + 4)
 
                     contentSections
                 }
-                .padding(.bottom, AppTheme.Space.paddingPage)
+                .padding(.bottom, AppTheme.Space.paddingPage * 2)
             }
         }
         .onAppear {
@@ -540,12 +545,16 @@ private struct Tab2UnlockedView: View {
                     }
                 }
                 .background(AppTheme.Color.cardBg)
-                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
+                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.card)
+                        .strokeBorder(Color.black.opacity(0.04), lineWidth: 1)
+                )
                 .shadow(
                     color: AppTheme.Shadow.cardColor,
-                    radius: AppTheme.Shadow.cardRadius,
-                    x: AppTheme.Shadow.cardX,
-                    y: AppTheme.Shadow.cardY
+                    radius: 12,
+                    x: 0,
+                    y: 4
                 )
                 .padding(.horizontal, AppTheme.Space.paddingPage)
             }
@@ -554,12 +563,18 @@ private struct Tab2UnlockedView: View {
             let stillFilling = data.categories.filter { !$0.unlocked && $0.wordCount >= 1 }
             if !stillFilling.isEmpty {
                 VStack(alignment: .leading, spacing: 0) {
-                    Text("STILL FILLING UP")
-                        .font(AppTheme.Font.sectionLabel)
-                        .foregroundStyle(AppTheme.Color.textMuted)
-                        .padding(.horizontal, AppTheme.Space.paddingPage)
-                        .padding(.top, AppTheme.Space.paddingPage)
-                        .padding(.bottom, AppTheme.Space.paddingXS)
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("STILL FILLING UP")
+                            .font(AppTheme.Font.sectionLabel)
+                            .foregroundStyle(AppTheme.Color.textMuted)
+                        Spacer()
+                        Text("20 words opens a topic")
+                            .font(.system(size: 11, weight: .regular))
+                            .foregroundStyle(AppTheme.Color.textFaint)
+                    }
+                    .padding(.horizontal, AppTheme.Space.paddingPage)
+                    .padding(.top, AppTheme.Space.paddingPage)
+                    .padding(.bottom, AppTheme.Space.paddingS)
 
                     ForEach(stillFilling) { cat in
                         CategoryProgressRow(
@@ -576,12 +591,16 @@ private struct Tab2UnlockedView: View {
                     }
                 }
                 .background(AppTheme.Color.cardBg)
-                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
+                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.card)
+                        .strokeBorder(Color.black.opacity(0.04), lineWidth: 1)
+                )
                 .shadow(
                     color: AppTheme.Shadow.cardColor,
-                    radius: AppTheme.Shadow.cardRadius,
-                    x: AppTheme.Shadow.cardX,
-                    y: AppTheme.Shadow.cardY
+                    radius: 12,
+                    x: 0,
+                    y: 4
                 )
                 .padding(.horizontal, AppTheme.Space.paddingPage)
             }

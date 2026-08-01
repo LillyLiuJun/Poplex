@@ -72,12 +72,16 @@ struct CategoryProgressRow: View {
         let isReached = category.wordCount >= targetCount
         HStack(spacing: 2) {
             Text("\(category.wordCount)")
-                .font(.system(size: 13, weight: isReached || isHighlighted ? .bold : .semibold))
-                .foregroundStyle(isReached || isHighlighted ? AppTheme.Color.brandStrong : AppTheme.Color.textPrimary)
-            Text(" of \(targetCount)")
-                .font(.system(size: 12, weight: .regular))
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(isReached || isHighlighted ? AppTheme.Color.brandStrong : AppTheme.Color.textSecondary)
+            Text("/ \(targetCount)")
+                .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(AppTheme.Color.textMuted)
         }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 3)
+        .background(isReached || isHighlighted ? AppTheme.Color.brandStrong.opacity(0.1) : Color(.systemGray6))
+        .clipShape(Capsule())
     }
 
     // MARK: - Progress bar
