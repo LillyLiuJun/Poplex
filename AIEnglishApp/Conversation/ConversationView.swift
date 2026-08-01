@@ -58,9 +58,8 @@ struct ConversationView: View {
             debugStatePicker
         }
         .toolbar(.hidden, for: .navigationBar)
-        // Step 2: check permissions on first appear
+        .onDisappear { vm.cancelListening() }
         .task { await vm.checkPermissions() }
-        // Re-check when returning from Settings after the user may have granted access
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await vm.checkPermissions() } }
         }
@@ -188,13 +187,13 @@ struct ConversationView: View {
         .background(AppTheme.Color.brandSubtleBg)
     }
 
-    // MARK: - Mic tap handler (stub — real logic in step 4)
+    // MARK: - Mic tap handler (Step 4 — real ASR)
 
     private func handleMicTap() {
         switch vm.micState {
-        case .idle:       vm.micState = .listening
-        case .listening:  vm.micState = .aiSpeaking
-        case .aiSpeaking: vm.micState = .idle
+        case .idle:       vm.startListening()
+        case .listening:  vm.stopListening()
+        case .aiSpeaking: vm.interruptAI()
         case .disabled:   break
         }
     }
