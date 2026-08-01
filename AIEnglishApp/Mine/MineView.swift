@@ -55,7 +55,7 @@ struct MineView: View {
                 .navigationDestination(for: MineRoute.self) { route in
                     switch route {
                     case .conversation(let cat):
-                        ConversationView(sceneCategory: cat)
+                        ConversationStubView(sceneCategory: cat)
                     }
                 }
         }
@@ -186,7 +186,7 @@ private struct Tab2LockedView: View {
     // ── 待解锁 header ────────────────────────────────────────────────────
     private var headerSection: some View {
         VStack(alignment: .leading, spacing: AppTheme.Space.paddingS) {
-            // 左对齐的精简 Lock Icon + LOCKED 标签
+            // 左对齐的精简 Lock Icon + LOCKED 标签 (适当放大，增强存在感)
             HStack(spacing: AppTheme.Space.paddingS) {
                 ZStack {
                     Circle()
@@ -209,7 +209,7 @@ private struct Tab2LockedView: View {
             .padding(.bottom, AppTheme.Space.paddingXS)
 
             Text("Not open yet")
-                .font(.system(size: 32, weight: .bold, design: .serif))
+                .font(.system(size: 32, weight: .bold))
                 .foregroundStyle(AppTheme.Color.textPrimary)
             
             hintText
@@ -252,24 +252,24 @@ private struct Tab2LockedView: View {
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     Capsule()
-                        .fill(AppTheme.Color.brandStrong.opacity(0.08))
-                        .frame(height: 4)
+                        .fill(Color(.systemGray6))
+                        .frame(height: 6)
                     Capsule()
                         .fill(AppTheme.Color.brandStrong)
-                        .frame(width: max(geo.size.width * fill, count > 0 ? 4 : 0), height: 4)
+                        .frame(width: max(geo.size.width * fill, count > 0 ? 6 : 0), height: 6)
                         .animation(.easeOut(duration: 0.4), value: count)
                 }
             }
-            .frame(height: 4)
+            .frame(height: 6)
         }
         .padding(AppTheme.Space.paddingPage)
         .background(AppTheme.Color.cardBg)
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
         .shadow(
-            color: Color.black.opacity(0.04),
-            radius: 12,
-            x: 0,
-            y: 4
+            color: AppTheme.Shadow.cardColor,
+            radius: AppTheme.Shadow.cardRadius,
+            x: AppTheme.Shadow.cardX,
+            y: AppTheme.Shadow.cardY
         )
         .padding(.horizontal, AppTheme.Space.paddingPage)
     }
@@ -293,7 +293,7 @@ private struct Tab2LockedView: View {
             sectionHeader("TOPICS", note: "Any one reaching 20 opens it.")
                 .padding(.horizontal, AppTheme.Space.paddingPage)
                 .padding(.top, AppTheme.Space.paddingPage)
-                .padding(.bottom, 12)
+                .padding(.bottom, AppTheme.Space.paddingM)
 
             let cats  = categoriesWithWords
             let topId = closestCategory?.id
@@ -305,25 +305,29 @@ private struct Tab2LockedView: View {
                     .padding(.horizontal, AppTheme.Space.paddingPage)
                     .padding(.bottom, AppTheme.Space.paddingPage)
             } else {
-                VStack(spacing: 4) {
-                    ForEach(cats) { cat in
-                        CategoryProgressRow(
-                            category: cat,
-                            isHighlighted: cat.id == topId,
-                            loadWords: { await vm.loadCategoryWords(for: cat.sceneCategory) }
-                        )
+                ForEach(cats) { cat in
+                    CategoryProgressRow(
+                        category: cat,
+                        isHighlighted: cat.id == topId,
+                        loadWords: { await vm.loadCategoryWords(for: cat.sceneCategory) }
+                    )
+                    
+                    if cat.id != cats.last?.id {
+                        Divider()
+                            .padding(.horizontal, AppTheme.Space.paddingPage)
+                    } else {
+                        Color.clear.frame(height: AppTheme.Space.paddingS)
                     }
                 }
-                .padding(.bottom, AppTheme.Space.paddingPage)
             }
         }
         .background(AppTheme.Color.cardBg)
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
         .shadow(
-            color: Color.black.opacity(0.04),
-            radius: 12,
-            x: 0,
-            y: 4
+            color: AppTheme.Shadow.cardColor,
+            radius: AppTheme.Shadow.cardRadius,
+            x: AppTheme.Shadow.cardX,
+            y: AppTheme.Shadow.cardY
         )
         .padding(.horizontal, AppTheme.Space.paddingPage)
     }
@@ -476,10 +480,10 @@ private struct Tab2UnlockedView: View {
             CanvasBackground().ignoresSafeArea()
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: AppTheme.Space.paddingCard) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Talk about something")
-                            .font(.system(size: 32, weight: .bold, design: .serif))
+                            .font(.system(size: 28, weight: .bold))
                             .foregroundStyle(AppTheme.Color.textPrimary)
 
                         Text("Scenarios built from your daily moments.")
@@ -491,7 +495,7 @@ private struct Tab2UnlockedView: View {
 
                     contentSections
                 }
-                .padding(.bottom, AppTheme.Space.paddingPage * 2)
+                .padding(.bottom, AppTheme.Space.paddingPage)
             }
         }
         .onAppear {
@@ -509,75 +513,79 @@ private struct Tab2UnlockedView: View {
         if let data = vm.data {
             let hero   = vm.heroCategory()
             let heroId = hero?.id
-            let otherUnlocked = data.categories.filter { $0.unlocked && $0.id != heroId }
 
-            // 已解锁分类：独立 Serif 标题 "Materials Yours" + 横向 Peek 轮播卡片
-            if hero != nil || !otherUnlocked.isEmpty {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Materials Yours")
-                        .font(.system(size: 24, weight: .bold, design: .serif))
-                        .foregroundStyle(AppTheme.Color.textPrimary)
-                        .padding(.horizontal, AppTheme.Space.paddingPage)
-
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(alignment: .top, spacing: 14) {
-                            if let hero {
-                                Tab2HeroCard(
-                                    category: hero,
-                                    isFirstUnlock: vm.isFirstUnlock,
-                                    onTalk: { onTalk(hero.sceneCategory) }
-                                )
-                                .frame(width: 335)
-                            }
-
-                            ForEach(otherUnlocked) { cat in
-                                Tab2CategoryRow(
-                                    category: cat,
-                                    onTalk: { onTalk(cat.sceneCategory) }
-                                )
-                                .frame(width: 335)
-                            }
-                        }
-                        .padding(.horizontal, AppTheme.Space.paddingPage)
-                        .padding(.vertical, 12)
-                    }
-                    .background(
-                        RoundedRectangle(cornerRadius: 24)
-                            .fill(AppTheme.Color.brandSubtleBg.opacity(0.4))
-                    )
-                    .padding(.horizontal, AppTheme.Space.paddingS)
-                }
+            // Hero 卡
+            if let hero {
+                Tab2HeroCard(
+                    category: hero,
+                    isFirstUnlock: vm.isFirstUnlock,
+                    onTalk: { onTalk(hero.sceneCategory) }
+                )
+                .padding(.horizontal, AppTheme.Space.paddingPage)
             }
 
-            // Topics in Progress——独立 Serif 标题 "Topics in Progress" + 纯列表圆角白卡容器
-            let stillFilling = data.categories.filter { !$0.unlocked && $0.wordCount >= 1 }
-            if !stillFilling.isEmpty {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Topics in Progress")
-                        .font(.system(size: 24, weight: .bold, design: .serif))
-                        .foregroundStyle(AppTheme.Color.textPrimary)
-                        .padding(.horizontal, AppTheme.Space.paddingPage)
+            // 其他已解锁分类——卡片容器包裹，顶部橙色 stripe 与 Hero 卡同语言
+            let otherUnlocked = data.categories.filter { $0.unlocked && $0.id != heroId }
+            if !otherUnlocked.isEmpty {
+                VStack(alignment: .leading, spacing: 0) {
+                    AppTheme.Color.brandStrong.frame(height: 3)
 
-                    VStack(spacing: 4) {
-                        ForEach(stillFilling) { cat in
-                            CategoryProgressRow(
-                                category: cat,
-                                isHighlighted: false,
-                                loadWords: { await vm.loadCategoryWords(for: cat.sceneCategory) }
-                            )
+                    ForEach(otherUnlocked) { cat in
+                        Tab2CategoryRow(
+                            category: cat,
+                            onTalk: { onTalk(cat.sceneCategory) }
+                        )
+                        if cat.id != otherUnlocked.last?.id {
+                            Divider()
+                                .padding(.horizontal, AppTheme.Space.paddingPage)
                         }
                     }
-                    .padding(.vertical, 8)
-                    .background(AppTheme.Color.cardBg)
-                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
-                    .shadow(
-                        color: Color.black.opacity(0.04),
-                        radius: 12,
-                        x: 0,
-                        y: 4
-                    )
-                    .padding(.horizontal, AppTheme.Space.paddingPage)
                 }
+                .background(AppTheme.Color.cardBg)
+                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
+                .shadow(
+                    color: AppTheme.Shadow.cardColor,
+                    radius: AppTheme.Shadow.cardRadius,
+                    x: AppTheme.Shadow.cardX,
+                    y: AppTheme.Shadow.cardY
+                )
+                .padding(.horizontal, AppTheme.Space.paddingPage)
+            }
+
+            // Still filling up——卡片容器包裹
+            let stillFilling = data.categories.filter { !$0.unlocked && $0.wordCount >= 1 }
+            if !stillFilling.isEmpty {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("STILL FILLING UP")
+                        .font(AppTheme.Font.sectionLabel)
+                        .foregroundStyle(AppTheme.Color.textMuted)
+                        .padding(.horizontal, AppTheme.Space.paddingPage)
+                        .padding(.top, AppTheme.Space.paddingPage)
+                        .padding(.bottom, AppTheme.Space.paddingXS)
+
+                    ForEach(stillFilling) { cat in
+                        CategoryProgressRow(
+                            category: cat,
+                            isHighlighted: false,
+                            loadWords: { await vm.loadCategoryWords(for: cat.sceneCategory) }
+                        )
+                        if cat.id != stillFilling.last?.id {
+                            Divider()
+                                .padding(.horizontal, AppTheme.Space.paddingPage)
+                        } else {
+                            Color.clear.frame(height: AppTheme.Space.paddingS)
+                        }
+                    }
+                }
+                .background(AppTheme.Color.cardBg)
+                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
+                .shadow(
+                    color: AppTheme.Shadow.cardColor,
+                    radius: AppTheme.Shadow.cardRadius,
+                    x: AppTheme.Shadow.cardX,
+                    y: AppTheme.Shadow.cardY
+                )
+                .padding(.horizontal, AppTheme.Space.paddingPage)
             }
         }
     }

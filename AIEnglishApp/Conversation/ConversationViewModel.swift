@@ -185,9 +185,19 @@ class ConversationViewModel {
     // MARK: - Fallback listening (en-US + zh-CN dual, same audio tap)
 
     func startFallbackListening() {
-        guard micState == .idle else { return }
+        guard !isFallbackListening else { return }
+        guard micState == .idle || micState == .listening else { return }
         guard let enRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US")),
               enRecognizer.isAvailable else { pageState = .failed; return }
+
+        // If already in normal listening mode, tear down audio first
+        if micState == .listening {
+            tearDownAudio()
+            if let idx = liveLineIndex, idx < lines.count, lines[idx].text.isEmpty {
+                lines.remove(at: idx)
+            }
+            liveLineIndex = nil
+        }
 
         isFallbackListening = true
         appendLiveLine()

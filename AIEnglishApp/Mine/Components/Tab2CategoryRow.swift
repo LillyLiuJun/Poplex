@@ -1,169 +1,72 @@
 import SwiftUI
 
-/// 已解锁分类卡片——方案二：温润印品纸白（Oatmeal Paper），全解锁卡片统一采用温暖匀净的印品纸色底与精致分类 Badge。
+/// 已解锁分类的非 hero 行——分类名 + 子场景描述 + Talk 胶囊。
+/// 整行 + Talk 按钮触发同一个 onTalk 动作，无详情页中转。
 struct Tab2CategoryRow: View {
     let category: Tab2CategoryData
     let onTalk: () -> Void
 
     var body: some View {
         Button {
-            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
             onTalk()
         } label: {
-            cardContent
-        }
-        .buttonStyle(CategoryCardPressStyle())
-    }
+            HStack(alignment: .center, spacing: AppTheme.Space.paddingCard) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(category.englishLabel)
+                        .font(.system(.body, weight: .semibold))
+                        .foregroundStyle(AppTheme.Color.textPrimary)
 
-    // MARK: - Card layout
+                    HStack(spacing: AppTheme.Space.paddingXS) {
+                        Text(descriptionLine)
+                            .font(AppTheme.Font.pos)
+                            .foregroundStyle(AppTheme.Color.textMuted)
+                            .lineLimit(1)
+                            .layoutPriority(1)
 
-    private var cardContent: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // ① 分类标头（Badge 分类名 + 词数）
-            HStack(alignment: .center) {
-                Text(category.englishLabel.uppercased())
-                    .font(.system(size: 12, weight: .bold))
-                    .tracking(1.2)
-                    .foregroundStyle(AppTheme.Color.brandStrong)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(AppTheme.Color.brandStrong.opacity(0.1))
-                    .clipShape(Capsule())
-
-                Spacer()
-
-                Text("\(category.wordCount) words")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(AppTheme.Color.textMuted)
-            }
-
-            Spacer(minLength: 12)
-
-            // ② 引文行 + "+N more moments"
-            quoteSection
-
-            Spacer(minLength: 14)
-
-            // ③ 探底对齐的主 CTA 按钮
-            ctaButton
-        }
-        .padding(22)
-        .frame(width: 335, height: 295, alignment: .topLeading)
-        .background(Color(red: 0.98, green: 0.97, blue: 0.96))
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
-        .overlay(
-            RoundedRectangle(cornerRadius: AppTheme.Radius.card)
-                .strokeBorder(Color(red: 0.92, green: 0.90, blue: 0.87), lineWidth: 1)
-        )
-        .shadow(
-            color: Color.black.opacity(0.03),
-            radius: 12,
-            x: 0,
-            y: 4
-        )
-    }
-
-    /// 引文行区域：展示前 3 条精选原话，多于 3 条时自动附带 "+N more moments"
-    @ViewBuilder
-    private var quoteSection: some View {
-        let scenes = displayScenes
-        if scenes.isEmpty {
-            let words = category.previewWords.prefix(5)
-            if !words.isEmpty {
-                Text(words.joined(separator: "  ·  "))
-                    .font(AppTheme.Font.englishBody)
-                    .foregroundStyle(AppTheme.Color.textMuted)
-                    .lineLimit(2)
-            }
-        } else {
-            VStack(alignment: .leading, spacing: 8) {
-                ForEach(scenes) { scene in
-                    QuoteRow(scene: scene)
+                        Text("· \(category.wordCount) words")
+                            .font(AppTheme.Font.pos)
+                            .foregroundStyle(AppTheme.Color.textFaint)
+                            .fixedSize()
+                    }
                 }
 
-                let remaining = goodScenes.count - scenes.count
-                if remaining > 0 {
-                    Text("+\(remaining) more moments")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(AppTheme.Color.textMuted)
-                        .padding(.top, 2)
-                }
+                Spacer(minLength: 0)
+
+                talkCapsule
             }
+            .padding(.vertical, 14)
+            .padding(.horizontal, AppTheme.Space.paddingPage)
         }
+        .buttonStyle(.plain)
     }
 
-    // MARK: - CTA
+    // MARK: - Talk capsule
 
-    private var ctaButton: some View {
-        HStack(spacing: AppTheme.Space.paddingS) {
-            Image(systemName: "mic.fill")
-                .font(.system(size: 15, weight: .bold))
-            Text("Start talking")
-                .font(.system(size: 16, weight: .bold))
+    private var talkCapsule: some View {
+        Text("Talk")
+            .font(AppTheme.Font.sectionLabel)
+            .foregroundStyle(.white)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 6)
+            .background(AppTheme.Color.brandStrong)
+            .clipShape(Capsule())
+    }
+
+    // MARK: - Description line
+
+    /// 子场景前 2 名 + "+N more"。
+    /// 降级：子场景为空 → 词本身前 2 个 lemma。
+    private var descriptionLine: String {
+        if !category.subScenes.isEmpty {
+            let sorted = category.subScenes.sorted { $0.occurrenceCount > $1.occurrenceCount }
+            let top2   = sorted.prefix(2).map(\.sceneDetail)
+            let rest   = max(0, sorted.count - top2.count)
+            return top2.joined(separator: ", ") + (rest > 0 ? ", +\(rest) more" : "")
         }
-        .foregroundStyle(.white)
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 14)
-        .background(AppTheme.Color.brandStrong)
-        .clipShape(Capsule())
-        .shadow(
-            color: AppTheme.Color.brandStrong.opacity(0.25),
-            radius: 10,
-            x: 0,
-            y: 4
-        )
-    }
-
-    // MARK: - Display scenes selection
-
-    private func effectiveQuote(_ scene: Tab2SubScene) -> String {
-        if let q = scene.quote, q.count >= 6 { return q }
-        return scene.sceneDetail
-    }
-
-    private var goodScenes: [Tab2SubScene] {
-        category.subScenes
-            .sorted { $0.occurrenceCount > $1.occurrenceCount }
-            .filter { effectiveQuote($0).count >= 4 }
-    }
-
-    private var displayScenes: [Tab2SubScene] {
-        Array(goodScenes.prefix(3))
-    }
-}
-
-// MARK: - Press style
-
-private struct CategoryCardPressStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
-            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
-    }
-}
-
-// MARK: - Quote row (极简无框对话引文)
-
-private struct QuoteRow: View {
-    let scene: Tab2SubScene
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 8) {
-            Text("“")
-                .font(.system(size: 18, weight: .bold, design: .serif))
-                .foregroundStyle(AppTheme.Color.brandStrong.opacity(0.6))
-                .offset(y: -2)
-
-            Text(quoteText)
-                .font(.system(size: 15, weight: .regular))
-                .foregroundStyle(AppTheme.Color.textPrimary)
-                .lineLimit(1)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-
-    private var quoteText: String {
-        if let q = scene.quote, q.count >= 6 { return q }
-        return scene.sceneDetail
+        // 降级到 previewWords
+        let words = category.previewWords.prefix(2)
+        let rest  = max(0, category.wordCount - words.count)
+        return words.joined(separator: ", ") + (rest > 0 ? ", +\(rest) more" : "")
     }
 }

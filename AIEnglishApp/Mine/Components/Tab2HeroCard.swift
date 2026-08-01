@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Tab2 首页 hero 卡——方案二：温润印品纸白（Oatmeal Paper），去除混合渐变，采用温暖匀净的印品纸色底与精致分类 Badge。
+/// Tab2 首页 hero 卡——展示已解锁分类的用户原话引文，整张卡点击进入对话页。
 struct Tab2HeroCard: View {
     let category: Tab2CategoryData
     let isFirstUnlock: Bool
@@ -20,75 +20,69 @@ struct Tab2HeroCard: View {
 
     private var cardContent: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // ① 分类标头（Badge 分类名 + 词数）
-            HStack(alignment: .center) {
+            // Accent stripe — 品牌橙顶部细线，由 clipShape 负责圆角
+            AppTheme.Color.brandStrong.frame(height: 3)
+
+            VStack(alignment: .leading, spacing: 0) {
+                // ① 分类名（小字全大写，品牌橙）
                 Text(category.englishLabel.uppercased())
-                    .font(.system(size: 12, weight: .bold))
-                    .tracking(1.2)
+                    .font(AppTheme.Font.sectionLabel)
                     .foregroundStyle(AppTheme.Color.brandStrong)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(AppTheme.Color.brandStrong.opacity(0.1))
-                    .clipShape(Capsule())
-                
-                Spacer()
-                
-                Text("\(category.wordCount) words")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(AppTheme.Color.textMuted)
+                    .padding(.bottom, AppTheme.Space.paddingS)
+
+                // ② 首次解锁专属句（只出现一次）
+                if isFirstUnlock {
+                    Text("You've got enough here to talk about it now.")
+                        .font(AppTheme.Font.keyPhrase)
+                        .foregroundStyle(AppTheme.Color.textPrimary)
+                        .padding(.bottom, AppTheme.Space.paddingM)
+                }
+
+                // ③ 引文行 or 降级展示
+                quoteSection
+
+                // ④ CTA
+                Spacer().frame(height: AppTheme.Space.paddingCard)
+                ctaButton
             }
-
-            Spacer(minLength: 12)
-
-            // ② 引文行 + "+N more moments"
-            quoteSection
-
-            Spacer(minLength: 14)
-
-            // ③ 探底对齐的主 CTA 按钮
-            ctaButton
+            .padding(AppTheme.Space.paddingCard)
         }
-        .padding(22)
-        .frame(width: 335, height: 295, alignment: .topLeading)
-        .background(Color(red: 0.98, green: 0.97, blue: 0.96))
+        .background(AppTheme.Color.cardBg)
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
-        .overlay(
-            RoundedRectangle(cornerRadius: AppTheme.Radius.card)
-                .strokeBorder(Color(red: 0.92, green: 0.90, blue: 0.87), lineWidth: 1)
-        )
         .shadow(
-            color: Color.black.opacity(0.03),
-            radius: 12,
-            x: 0,
-            y: 4
+            color: AppTheme.Shadow.cardColor,
+            radius: AppTheme.Shadow.cardRadius,
+            x: AppTheme.Shadow.cardX,
+            y: AppTheme.Shadow.cardY
         )
     }
 
-    /// 引文行区域：展示前 3 条精选原话，多于 3 条时自动附带 "+N more moments"
+    /// 引文行区域：有有效引文 → 逐行展示；否则 → 预览词降级
     @ViewBuilder
     private var quoteSection: some View {
         let scenes = displayScenes
         if scenes.isEmpty {
+            // 无有效引文时用 previewWords 兜底，至少让卡片有内容
             let words = category.previewWords.prefix(5)
             if !words.isEmpty {
                 Text(words.joined(separator: "  ·  "))
                     .font(AppTheme.Font.englishBody)
                     .foregroundStyle(AppTheme.Color.textMuted)
-                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.bottom, AppTheme.Space.paddingS)
             }
         } else {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 10) {
                 ForEach(scenes) { scene in
                     QuoteRow(scene: scene)
                 }
-
-                let remaining = goodScenes.count - scenes.count
-                if remaining > 0 {
-                    Text("+\(remaining) more moments")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(AppTheme.Color.textMuted)
-                        .padding(.top, 2)
-                }
+            }
+            let more = goodScenes.count - scenes.count
+            if more > 0 {
+                Text("+\(more) more")
+                    .font(AppTheme.Font.pos)
+                    .foregroundStyle(AppTheme.Color.textMuted)
+                    .padding(.top, AppTheme.Space.paddingS)
             }
         }
     }
@@ -98,36 +92,33 @@ struct Tab2HeroCard: View {
     private var ctaButton: some View {
         HStack(spacing: AppTheme.Space.paddingS) {
             Image(systemName: "mic.fill")
-                .font(.system(size: 15, weight: .bold))
+                .imageScale(.small)
             Text("Start talking")
-                .font(.system(size: 16, weight: .bold))
+                .font(AppTheme.Font.ctaLabel)
         }
-        .foregroundStyle(.white)
+        .foregroundStyle(AppTheme.Color.cardBg)
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 14)
+        .padding(.vertical, AppTheme.Space.paddingM)
         .background(AppTheme.Color.brandStrong)
         .clipShape(Capsule())
-        .shadow(
-            color: AppTheme.Color.brandStrong.opacity(0.25),
-            radius: 10,
-            x: 0,
-            y: 4
-        )
     }
 
     // MARK: - Display scenes selection
 
+    /// 有效引文 = quote ≥6 字，或 sceneDetail ≥4 字（避免显示「呼喊」等短标签）
     private func effectiveQuote(_ scene: Tab2SubScene) -> String {
         if let q = scene.quote, q.count >= 6 { return q }
         return scene.sceneDetail
     }
 
+    /// 所有通过长度筛选的子场景，按出现次数降序
     private var goodScenes: [Tab2SubScene] {
         category.subScenes
             .sorted { $0.occurrenceCount > $1.occurrenceCount }
             .filter { effectiveQuote($0).count >= 4 }
     }
 
+    /// 实际展示（最多 3 条）
     private var displayScenes: [Tab2SubScene] {
         Array(goodScenes.prefix(3))
     }
@@ -143,26 +134,41 @@ private struct HeroCardPressStyle: ButtonStyle {
     }
 }
 
-// MARK: - Quote row (极简无框对话引文)
+// MARK: - Quote row
 
 private struct QuoteRow: View {
     let scene: Tab2SubScene
 
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
-            Text("“")
-                .font(.system(size: 18, weight: .bold, design: .serif))
-                .foregroundStyle(AppTheme.Color.brandStrong.opacity(0.6))
-                .offset(y: -2)
-
+        HStack(alignment: .top, spacing: 10) {
+            leftSlot
             Text(quoteText)
-                .font(.system(size: 15, weight: .regular))
+                .font(AppTheme.Font.englishPrimary)
                 .foregroundStyle(AppTheme.Color.textPrimary)
-                .lineLimit(1)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
+    /// 有图 → 缩略图；无图 → 固定槽位（不为空）
+    @ViewBuilder
+    private var leftSlot: some View {
+        if let urlStr = scene.imageUrl, !urlStr.isEmpty {
+            CachedRemoteImage(signedUrl: urlStr, stableKey: urlStr) {
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(AppTheme.Color.imagePlaceholderBg)
+                    .frame(width: 46, height: 34)
+            }
+            .frame(width: 46, height: 34)
+            .clipShape(RoundedRectangle(cornerRadius: 4))
+        } else {
+            Image(systemName: "quote.bubble.fill")
+                .imageScale(.medium)
+                .foregroundStyle(AppTheme.Color.brandStrong.opacity(0.35))
+                .frame(width: 46, height: 34)
+        }
+    }
+
+    /// 有有效 quote（≥6 字）→ 显示 quote；否则降为子场景名
     private var quoteText: String {
         if let q = scene.quote, q.count >= 6 { return q }
         return scene.sceneDetail

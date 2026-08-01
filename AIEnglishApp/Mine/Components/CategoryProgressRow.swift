@@ -14,21 +14,6 @@ struct CategoryProgressRow: View {
 
     private let targetCount = 20
 
-    /// 根据分类场景自动映射 SF Symbol 图标
-    private var categoryIcon: String {
-        let key = category.sceneCategory.lowercased()
-        if key.contains("tech") || key.contains("数码") || key.contains("科技") { return "laptopcomputer" }
-        if key.contains("leisure") || key.contains("休闲") || key.contains("娱乐") { return "film" }
-        if key.contains("social") || key.contains("社交") { return "person.2.fill" }
-        if key.contains("routine") || key.contains("日常") { return "sun.max.fill" }
-        if key.contains("food") || key.contains("餐饮") || key.contains("食") { return "fork.knife" }
-        if key.contains("travel") || key.contains("旅游") || key.contains("出行") { return "airplane" }
-        if key.contains("work") || key.contains("工作") || key.contains("职场") { return "briefcase.fill" }
-        if key.contains("health") || key.contains("健康") { return "heart.fill" }
-        if key.contains("study") || key.contains("学习") { return "book.fill" }
-        return "tag.fill"
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             expandToggle
@@ -56,13 +41,8 @@ struct CategoryProgressRow: View {
             if isExpanded && words.isEmpty { fetchWords() }
         } label: {
             VStack(alignment: .leading, spacing: 8) {
-                // 第一行：分类图标 + 分类标题 + 动态计数 + 折叠箭头
-                HStack(alignment: .center, spacing: 8) {
-                    Image(systemName: categoryIcon)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(isHighlighted || category.wordCount >= targetCount ? AppTheme.Color.brandStrong : AppTheme.Color.brandStrong.opacity(0.75))
-                        .frame(width: 20, alignment: .center)
-
+                // 第一行：分类标题 + 动态计数 + 折叠箭头
+                HStack(alignment: .center, spacing: AppTheme.Space.paddingS) {
                     Text(category.englishLabel)
                         .font(.system(size: 15, weight: isHighlighted || category.wordCount >= targetCount ? .semibold : .medium))
                         .foregroundStyle(AppTheme.Color.textPrimary)
@@ -92,16 +72,12 @@ struct CategoryProgressRow: View {
         let isReached = category.wordCount >= targetCount
         HStack(spacing: 2) {
             Text("\(category.wordCount)")
-                .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(isReached || isHighlighted ? AppTheme.Color.brandStrong : AppTheme.Color.textSecondary)
-            Text("/ \(targetCount)")
-                .font(.system(size: 11, weight: .medium))
+                .font(.system(size: 13, weight: isReached || isHighlighted ? .bold : .semibold))
+                .foregroundStyle(isReached || isHighlighted ? AppTheme.Color.brandStrong : AppTheme.Color.textPrimary)
+            Text(" of \(targetCount)")
+                .font(.system(size: 12, weight: .regular))
                 .foregroundStyle(AppTheme.Color.textMuted)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 3)
-        .background(isReached || isHighlighted ? AppTheme.Color.brandStrong.opacity(0.1) : Color(.systemGray6))
-        .clipShape(Capsule())
     }
 
     // MARK: - Progress bar
@@ -111,18 +87,22 @@ struct CategoryProgressRow: View {
             let progress = min(CGFloat(category.wordCount) / CGFloat(targetCount), 1.0)
             ZStack(alignment: .leading) {
                 Capsule()
-                    .fill(AppTheme.Color.brandStrong.opacity(0.08))
-                    .frame(height: 4)
+                    .fill(Color(.systemGray6))
+                    .frame(height: 6)
                 Capsule()
                     .fill(
                         isHighlighted || category.wordCount >= targetCount
                             ? AppTheme.Color.brandStrong
-                            : AppTheme.Color.brandStrong.opacity(0.4)
+                            : Color(.systemGray4)
                     )
-                    .frame(width: max(geo.size.width * progress, 4), height: 4)
+                    .frame(
+                        width: max(geo.size.width * progress, category.wordCount > 0 ? 6 : 0),
+                        height: 6
+                    )
+                    .animation(.easeOut(duration: 0.4), value: category.wordCount)
             }
         }
-        .frame(height: 4)
+        .frame(height: 6)
     }
 
     // MARK: - Expanded word list
@@ -130,73 +110,163 @@ struct CategoryProgressRow: View {
     @ViewBuilder
     private var wordList: some View {
         if isLoadingWords {
-            HStack {
+            HStack(spacing: AppTheme.Space.paddingS) {
                 Spacer()
                 ProgressView()
-                    .padding(.vertical, AppTheme.Space.paddingM)
+                    .scaleEffect(0.85)
+                Text("Loading words...")
+                    .font(.system(size: 13))
+                    .foregroundStyle(AppTheme.Color.textMuted)
                 Spacer()
             }
+            .padding(.vertical, 14)
         } else if words.isEmpty {
             Text("No words in this topic yet.")
-                .font(AppTheme.Font.englishBody)
+                .font(.system(size: 13))
                 .foregroundStyle(AppTheme.Color.textMuted)
-                .padding(.vertical, AppTheme.Space.paddingS)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.vertical, 12)
         } else {
-            VStack(alignment: .leading, spacing: AppTheme.Space.paddingS) {
-                ForEach(words) { word in
-                    WordRow(entry: word)
+            VStack(spacing: 8) {
+                ForEach(words) { entry in
+                    WordEntryRow(entry: entry)
                 }
             }
-            .padding(.vertical, AppTheme.Space.paddingS)
+            .padding(.vertical, 4)
         }
     }
 
+    // MARK: - Async fetch
+
     private func fetchWords() {
+        guard !isLoadingWords, words.isEmpty else { return }
         isLoadingWords = true
         Task {
-            let result = await loadWords()
-            await MainActor.run {
-                self.words = result
-                self.isLoadingWords = false
+            var list = await loadWords()
+            // 插入测试长词组与长释义，方便在App上直接测试长度边界表现
+            list.append(Tab2WordEntry(
+                lemma: "kill two birds with one stone",
+                displayForm: "kill two birds with one stone",
+                entryKind: "idiom",
+                granularity: "sentence",
+                nativeMeaning: "一石二鸟，一举两得"
+            ))
+            list.append(Tab2WordEntry(
+                lemma: "unquestionably counterproductive",
+                displayForm: "unquestionably counterproductive",
+                entryKind: "phrase",
+                granularity: "sentence",
+                nativeMeaning: "毫无疑问地产生反效果与副作用"
+            ))
+            words = list
+            isLoadingWords = false
+        }
+    }
+}
+
+// MARK: - Expanded single-word row (方案一：左右分布 + 右侧微灰胶囊衬底，仅 2 个字段)
+
+private struct WordEntryRow: View {
+    let entry: Tab2WordEntry
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            leftSlot
+
+            // 1. 目标语言词/短语 (左侧主视觉加粗)
+            Text(entry.displayForm ?? entry.lemma)
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(AppTheme.Color.textPrimary)
+
+            Spacer(minLength: 8)
+
+            // 2. 母语释义 (方案 A：右侧微灰胶囊衬底对齐)
+            if let meaning = entry.nativeMeaning, !meaning.isEmpty {
+                Text(meaning)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(AppTheme.Color.textSecondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color(.systemGray6))
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppTheme.Color.cardBg)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .shadow(color: AppTheme.Shadow.cardColor, radius: 8, x: 0, y: 2)
+    }
+
+    @ViewBuilder
+    private var leftSlot: some View {
+        if let urlStr = entry.imageUrl, !urlStr.isEmpty {
+            let stableKey = entry.stableImageKey ?? urlStr
+            CachedRemoteImage(signedUrl: urlStr, stableKey: stableKey) {
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(AppTheme.Color.imagePlaceholderBg)
+            }
+            .frame(width: 36, height: 36)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+        } else {
+            ZStack {
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(entry.badgeBg)
+                    .frame(width: 36, height: 36)
+                Image(systemName: entry.badgeIconName)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(entry.badgeIconColor)
+            }
+            .frame(width: 36, height: 36)
+        }
+    }
+}
+
+// MARK: - Badge color helpers (view-only, color values not testable in unit tests)
+
+private extension Tab2WordEntry {
+    var badgeBg: SwiftUI.Color {
+        switch sourceTag {
+        case .word:     return AppTheme.Color.badgeWordBg
+        case .dialogue: return AppTheme.Color.badgeDialogueBg
+        case .sentence, .passage:
+            switch entryKind {
+            case "word":                                return AppTheme.Color.badgeWordBg
+            case "phrase", "collocation", "pattern":    return AppTheme.Color.badgePhraseBg
+            case "idiom", "slang":                      return AppTheme.Color.badgeIdiomBg
+            default:                                    return AppTheme.Color.badgePhraseBg
+            }
+        }
+    }
+
+    var badgeIconColor: SwiftUI.Color {
+        switch sourceTag {
+        case .word:     return AppTheme.Color.badgeWordIcon
+        case .dialogue: return AppTheme.Color.badgeDialogueIcon
+        case .sentence, .passage:
+            switch entryKind {
+            case "word":                                return AppTheme.Color.badgeWordIcon
+            case "phrase", "collocation", "pattern":    return AppTheme.Color.badgePhraseIcon
+            case "idiom", "slang":                      return AppTheme.Color.badgeIdiomIcon
+            default:                                    return AppTheme.Color.badgePhraseIcon
             }
         }
     }
 }
 
-// MARK: - Single word item
+// MARK: - String truncation
 
-private struct WordRow: View {
-    let entry: Tab2WordEntry
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(entry.displayForm ?? entry.lemma)
-                    .font(AppTheme.Font.keyPhrase)
-                    .foregroundStyle(AppTheme.Color.textPrimary)
-
-                if let pos = entry.pos, !pos.isEmpty {
-                    Text(pos)
-                        .font(AppTheme.Font.pos)
-                        .foregroundStyle(AppTheme.Color.brandStrong)
-                }
-
-                Spacer()
-            }
-
-            if let exp = entry.nativeMeaning, !exp.isEmpty {
-                Text(exp)
-                    .font(AppTheme.Font.chineseBody)
-                    .foregroundStyle(AppTheme.Color.textSecondary)
-            }
-
-            if let ex = entry.sampleSentence, !ex.isEmpty {
-                Text(ex)
-                    .font(AppTheme.Font.englishBody)
-                    .foregroundStyle(AppTheme.Color.textMuted)
-                    .lineLimit(2)
-            }
+private extension String {
+    /// 单行截断：约 30 个拉丁字符，优先在标点处断，尾部加 …。
+    func displayTruncated(limit: Int = 30) -> String {
+        guard count > limit else { return self }
+        let cut = prefix(limit)
+        let punctuation: Set<Character> = ["，", "。", "！", "？", ",", ";", "!", "?", ".", " "]
+        if let last = cut.lastIndex(where: { punctuation.contains($0) }) {
+            return String(cut[...last]) + "…"
         }
-        .padding(.vertical, 4)
+        let idx = index(startIndex, offsetBy: limit)
+        return String(self[..<idx]) + "…"
     }
 }

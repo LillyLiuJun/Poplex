@@ -53,8 +53,8 @@ struct ConversationView: View {
                 }
             }
             .animation(AppTheme.Motion.tabSelection, value: vm.pageState)
-
-            // Debug state picker — lets PM switch all 5 states without a build
+        }
+        .safeAreaInset(edge: .bottom) {
             debugStatePicker
         }
         .toolbar(.hidden, for: .navigationBar)
@@ -168,9 +168,14 @@ struct ConversationView: View {
 
                 NativeFallbackButton(
                     isListening: vm.isFallbackListening,
-                    isDisabled: vm.micState == .aiSpeaking
-                        || (vm.micState == .listening && !vm.isFallbackListening),
-                    onTap: vm.startFallbackListening
+                    isDisabled: vm.micState == .aiSpeaking,
+                    onTap: {
+                        if vm.isFallbackListening {
+                            vm.stopListening()
+                        } else {
+                            vm.startFallbackListening()
+                        }
+                    }
                 )
                 .padding(.bottom, AppTheme.Space.paddingCard)
             }
