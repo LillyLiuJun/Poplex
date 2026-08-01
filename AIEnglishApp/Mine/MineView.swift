@@ -559,18 +559,28 @@ private struct Tab2UnlockedView: View {
                 .padding(.horizontal, AppTheme.Space.paddingPage)
             }
 
-            // Still filling up——卡片容器包裹
+            // Topics in Progress——卡片容器包裹
             let stillFilling = data.categories.filter { !$0.unlocked && $0.wordCount >= 1 }
             if !stillFilling.isEmpty {
                 VStack(alignment: .leading, spacing: 0) {
-                    HStack(alignment: .firstTextBaseline) {
-                        Text("STILL FILLING UP")
-                            .font(AppTheme.Font.sectionLabel)
-                            .foregroundStyle(AppTheme.Color.textMuted)
+                    HStack(alignment: .center, spacing: 6) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(AppTheme.Color.brandStrong.opacity(0.85))
+
+                        Text("Topics in Progress")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(AppTheme.Color.textPrimary)
+
                         Spacer()
-                        Text("20 words opens a topic")
-                            .font(.system(size: 11, weight: .regular))
-                            .foregroundStyle(AppTheme.Color.textFaint)
+
+                        Text("20 words to unlock")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(AppTheme.Color.textMuted)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(Color(.systemGray6))
+                            .clipShape(Capsule())
                     }
                     .padding(.horizontal, AppTheme.Space.paddingPage)
                     .padding(.top, AppTheme.Space.paddingPage)
