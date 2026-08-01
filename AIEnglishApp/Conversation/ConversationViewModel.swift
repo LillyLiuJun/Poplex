@@ -101,7 +101,29 @@ class ConversationViewModel {
             DialogueLine(role: .ai,   text: "So you were troubleshooting before the day even started. Did you manage to sort it out before the meeting began?"),
             DialogueLine(role: .user, text: "Yes we run late about ten minute"),
             DialogueLine(role: .ai,   text: "That kind of slow start before a big presentation is rough. What happened with the projector?"),
+            DialogueLine(role: .user, text: "The cable was wrong type, our IT guy bring adapter"),
+            DialogueLine(role: .ai,   text: "So the IT team came through in the end. How did the client react when you finally got connected?"),
+            DialogueLine(role: .user, text: "They were okay, the manager explain the delay"),
+            DialogueLine(role: .ai,   text: "Your manager helped smooth it over — that's good support. Did you get through the whole presentation?"),
+            DialogueLine(role: .user, text: "Yes we finish all the slide but I very nervous the whole time"),
+            DialogueLine(role: .ai,   text: "First time presenting with tech issues is tough. What would you do differently next time?"),
         ]
+    }
+
+    // Cycles through extra lines so the debug "+ Line" button always adds something new.
+    private static let debugLineCycle: [(DialogueRole, String)] = [
+        (.user, "Maybe check equipment one day before"),
+        (.ai,   "That's a smart habit — arriving early to test everything. Have you had any tricky presentations since then?"),
+        (.user, "Not yet but I will be more prepare"),
+        (.ai,   "Good mindset. Being prepared takes the anxiety out of it. Anything else from that morning you want to talk through?"),
+        (.user, "No I think that is all, thank you"),
+        (.ai,   "You covered it well. 'Run late,' 'sort it out,' 'set up the room' — those came up a lot today. Nice work."),
+    ]
+
+    func debugAddLine() {
+        let idx = lines.count % Self.debugLineCycle.count
+        let (role, text) = Self.debugLineCycle[idx]
+        lines.append(DialogueLine(role: role, text: text))
     }
 
     static func fakeSuggestions() -> [DialogueSuggestion] {
