@@ -511,7 +511,7 @@ private struct Tab2UnlockedView: View {
             let heroId = hero?.id
             let otherUnlocked = data.categories.filter { $0.unlocked && $0.id != heroId }
 
-            // 已解锁分类：大体量横向 Peek 轮播卡片（第二张卡片在右侧自然露角）
+            // 已解锁分类：大体量横向 Peek 轮播卡片（整个卡片区域带有柔和暖色背景衬底）
             if hero != nil || !otherUnlocked.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(alignment: .top, spacing: 14) {
@@ -533,8 +533,13 @@ private struct Tab2UnlockedView: View {
                         }
                     }
                     .padding(.horizontal, AppTheme.Space.paddingPage)
-                    .padding(.vertical, 6) // 容纳卡片温润浮动阴影
+                    .padding(.vertical, 12)
                 }
+                .background(
+                    RoundedRectangle(cornerRadius: 24)
+                        .fill(AppTheme.Color.brandSubtleBg.opacity(0.4))
+                )
+                .padding(.horizontal, AppTheme.Space.paddingS)
             }
 
             // Topics in Progress——无割裂分割线卡片容器
