@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 已解锁分类卡片——全解锁卡片统一采用微暖夕阳流彩渐变与精致橙光微描边（与 Hero 卡保持一致视觉基因）。
+/// 已解锁分类卡片——方案二：温润印品纸白（Oatmeal Paper），全解锁卡片统一采用温暖匀净的印品纸色底与精致分类 Badge。
 struct Tab2CategoryRow: View {
     let category: Tab2CategoryData
     let onTalk: () -> Void
@@ -19,12 +19,16 @@ struct Tab2CategoryRow: View {
 
     private var cardContent: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // ① 分类标头（大写分类名 + 词数）
+            // ① 分类标头（Badge 分类名 + 词数）
             HStack(alignment: .center) {
                 Text(category.englishLabel.uppercased())
-                    .font(.system(size: 13, weight: .bold))
-                    .tracking(1.4)
+                    .font(.system(size: 12, weight: .bold))
+                    .tracking(1.2)
                     .foregroundStyle(AppTheme.Color.brandStrong)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(AppTheme.Color.brandStrong.opacity(0.1))
+                    .clipShape(Capsule())
 
                 Spacer()
 
@@ -45,26 +49,17 @@ struct Tab2CategoryRow: View {
         }
         .padding(22)
         .frame(width: 335, height: 295, alignment: .topLeading)
-        .background(
-            LinearGradient(
-                colors: [
-                    AppTheme.Color.brandSubtleBg.opacity(0.65),
-                    AppTheme.Color.cardBg
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        )
+        .background(Color(red: 0.98, green: 0.97, blue: 0.96))
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
         .overlay(
             RoundedRectangle(cornerRadius: AppTheme.Radius.card)
-                .strokeBorder(AppTheme.Color.brandStrong.opacity(0.18), lineWidth: 1.5)
+                .strokeBorder(Color(red: 0.92, green: 0.90, blue: 0.87), lineWidth: 1)
         )
         .shadow(
-            color: AppTheme.Color.brandStrong.opacity(0.08),
-            radius: 16,
+            color: Color.black.opacity(0.03),
+            radius: 12,
             x: 0,
-            y: 5
+            y: 4
         )
     }
 
@@ -112,7 +107,7 @@ struct Tab2CategoryRow: View {
         .background(AppTheme.Color.brandStrong)
         .clipShape(Capsule())
         .shadow(
-            color: AppTheme.Color.brandStrong.opacity(0.3),
+            color: AppTheme.Color.brandStrong.opacity(0.25),
             radius: 10,
             x: 0,
             y: 4
