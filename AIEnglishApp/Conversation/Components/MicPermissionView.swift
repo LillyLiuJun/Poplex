@@ -10,7 +10,7 @@ struct MicPermissionView: View {
             Spacer()
 
             Image(systemName: "mic.slash")
-                .font(AppTheme.Font.wordTitle)
+                .font(.system(size: 56))  // permission icon — intentionally large, exempt from token rule
                 .foregroundStyle(AppTheme.Color.textMuted)
 
             VStack(spacing: AppTheme.Space.paddingS) {

@@ -41,8 +41,7 @@ struct ConversationView: View {
                         .transition(.opacity)
 
                 case .failed:
-                    activeLayout
-                        .overlay(alignment: .top) { errorBanner }
+                    failedLayout
                         .transition(.opacity)
 
                 case .ended:
@@ -78,6 +77,15 @@ struct ConversationView: View {
     // MARK: - Active / Failed — three-zone layout (§3)
 
     private var activeLayout: some View {
+        conversationLayout(errorBetweenZones: false)
+    }
+
+    private var failedLayout: some View {
+        conversationLayout(errorBetweenZones: true)
+    }
+
+    @ViewBuilder
+    private func conversationLayout(errorBetweenZones: Bool) -> some View {
         VStack(spacing: 0) {
             // ── Zone 1: Top bar (44 pt) ──────────────────────────
             ConversationTopBar(
@@ -91,6 +99,11 @@ struct ConversationView: View {
 
             // ── Zone 2: Dialogue flow (fills remaining space) ────
             dialogueScrollView
+
+            // ── Error notice (failed state only) — sits at the foot of the chat ──
+            if errorBetweenZones {
+                errorBanner
+            }
 
             // ── Zone 3: Bottom controls (~140–160 pt) ────────────
             bottomControls
