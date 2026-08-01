@@ -511,7 +511,7 @@ private struct Tab2UnlockedView: View {
             let heroId = hero?.id
             let otherUnlocked = data.categories.filter { $0.unlocked && $0.id != heroId }
 
-            // 已解锁分类：横向 Peek 轮播卡片（第二张卡片在右侧露出一角）
+            // 已解锁分类：大体量横向 Peek 轮播卡片（第二张卡片在右侧自然露角）
             if hero != nil || !otherUnlocked.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(alignment: .top, spacing: 14) {
@@ -521,7 +521,7 @@ private struct Tab2UnlockedView: View {
                                 isFirstUnlock: vm.isFirstUnlock,
                                 onTalk: { onTalk(hero.sceneCategory) }
                             )
-                            .frame(width: 315)
+                            .frame(width: 335)
                         }
 
                         ForEach(otherUnlocked) { cat in
@@ -529,7 +529,7 @@ private struct Tab2UnlockedView: View {
                                 category: cat,
                                 onTalk: { onTalk(cat.sceneCategory) }
                             )
-                            .frame(width: 315)
+                            .frame(width: 335)
                         }
                     }
                     .padding(.horizontal, AppTheme.Space.paddingPage)
