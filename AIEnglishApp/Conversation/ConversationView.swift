@@ -105,6 +105,16 @@ struct ConversationView: View {
             // ── Zone 2: Dialogue flow (fills remaining space) ────
             dialogueScrollView
 
+            // ── Fallback result card (sits between dialogue and controls) ──
+            if let result = vm.fallbackResult {
+                NativeFallbackSheet(
+                    translation: result.translation,
+                    keyWords: result.keyWords.map { ($0.word, $0.phonetic) },
+                    onDismiss: vm.dismissFallback
+                )
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+
             // ── Error notice (failed state only) — sits at the foot of the chat ──
             if errorBetweenZones {
                 errorBanner
@@ -156,8 +166,13 @@ struct ConversationView: View {
                 MicButton(state: vm.micState, onTap: handleMicTap)
                     .padding(.top, AppTheme.Space.paddingM)
 
-                NativeFallbackButton(onTap: { /* step 6 */ })
-                    .padding(.bottom, AppTheme.Space.paddingCard)
+                NativeFallbackButton(
+                    isListening: vm.isFallbackListening,
+                    isDisabled: vm.micState == .aiSpeaking
+                        || (vm.micState == .listening && !vm.isFallbackListening),
+                    onTap: vm.startFallbackListening
+                )
+                .padding(.bottom, AppTheme.Space.paddingCard)
             }
         }
         .background(AppTheme.Color.pageBg)

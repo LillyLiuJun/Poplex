@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - Response types
+// MARK: - Response types (start / turn)
 
 struct DialogueStartResponse: Decodable {
     let sessionId: String
@@ -29,6 +29,25 @@ struct DialogueTurnResponse: Decodable {
 struct DialogueSuggestionDTO: Decodable {
     let lemma: String
     let hint: String
+}
+
+// MARK: - Response types (fallback)
+
+struct FallbackResponseDTO: Decodable {
+    let translation: String
+    let keyWords: [FallbackKeyWordDTO]
+    let hint: String
+
+    enum CodingKeys: String, CodingKey {
+        case translation
+        case keyWords = "key_words"
+        case hint
+    }
+}
+
+struct FallbackKeyWordDTO: Decodable {
+    let word: String
+    let phonetic: String
 }
 
 // MARK: - Errors
@@ -73,6 +92,22 @@ enum DialogueService {
         request.httpBody = try JSONEncoder().encode(body)
 
         return try await performRequest(request, as: DialogueTurnResponse.self)
+    }
+
+    static func fallback(sessionId: String, text: String) async throws -> FallbackResponseDTO {
+        var request = URLRequest(url: SupabaseConfig.dialogueFunctionURL)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        try await SupabaseManager.setAuthHeaders(on: &request)
+
+        let body: [String: String] = [
+            "action": "fallback",
+            "session_id": sessionId,
+            "text": text,
+        ]
+        request.httpBody = try JSONEncoder().encode(body)
+
+        return try await performRequest(request, as: FallbackResponseDTO.self)
     }
 
     // MARK: - Private

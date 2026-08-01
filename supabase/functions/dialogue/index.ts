@@ -554,6 +554,54 @@ async function handleTurn(
 }
 
 // ─────────────────────────────────────────────────────────────
+// action = "fallback"
+// ─────────────────────────────────────────────────────────────
+
+async function handleFallback(
+  userId: string,
+  sessionId: string,
+  text: string,
+): Promise<Response> {
+  if (!sessionId || !text) return json({ error: "missing_params" }, 400);
+
+  // Validate session ownership
+  const sessions = await dbGet(
+    `dialogue_sessions?id=eq.${sessionId}&select=user_id`
+  ) as Array<{ user_id: string }>;
+  if (sessions.length === 0) return json({ error: "session_not_found" }, 404);
+  if (sessions[0].user_id !== userId) return json({ error: "forbidden" }, 403);
+
+  const payload = {
+    mode: "FALLBACK",
+    languages: { target: "en", native: "zh" },
+    user_utterance: text,
+    output_schema: {
+      translation: "string — natural target-language version of what they said",
+      key_words: "array of { word: string, phonetic: string } — at most 2 genuinely hard words",
+      hint: "string — neutral nudge, e.g. 'Try saying it.'",
+    },
+  };
+
+  let geminiReply: {
+    translation: string;
+    key_words?: Array<{ word: string; phonetic: string }>;
+    hint?: string;
+  };
+  try {
+    geminiReply = await callGemini(payload) as typeof geminiReply;
+  } catch (e) {
+    console.error("[dialogue/fallback] Gemini failed:", e);
+    return json({ error: "ai_failed" }, 502);
+  }
+
+  return json({
+    translation: geminiReply.translation ?? "",
+    key_words: geminiReply.key_words ?? [],
+    hint: geminiReply.hint ?? "Try saying it.",
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
 // Entry point
 // ─────────────────────────────────────────────────────────────
 
@@ -586,6 +634,12 @@ Deno.serve(async (req) => {
           userId,
           body.session_id as string,
           body.turn_id as string ?? "",
+          body.text as string,
+        );
+      case "fallback":
+        return handleFallback(
+          userId,
+          body.session_id as string,
           body.text as string,
         );
       default:
