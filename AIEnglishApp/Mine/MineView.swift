@@ -14,6 +14,7 @@ struct MineView: View {
 
     @State private var vm = Tab2HomeViewModel()
     @State private var path: [MineRoute] = []
+    @State private var comingSoonToast: String? = nil
 
     init(
         listResetToken: UUID = UUID(),
@@ -52,6 +53,7 @@ struct MineView: View {
                     message: Binding(get: { vm.toastMessage }, set: { vm.toastMessage = $0 }),
                     systemImage: "exclamationmark.triangle"
                 )
+                .toast(message: $comingSoonToast, systemImage: "clock")
                 .navigationDestination(for: MineRoute.self) { route in
                     switch route {
                     case .conversation(let cat):
@@ -72,7 +74,13 @@ struct MineView: View {
         } else if vm.isPermanentlyUnlocked {
             Tab2UnlockedView(
                 vm: vm,
-                onTalk: { cat in path.append(.conversation(sceneCategory: cat)) }
+                onTalk: { cat in
+                    if FeatureFlags.conversationEnabled {
+                        path.append(.conversation(sceneCategory: cat))
+                    } else {
+                        comingSoonToast = "Coming soon"
+                    }
+                }
             )
         } else {
             Tab2LockedView(
