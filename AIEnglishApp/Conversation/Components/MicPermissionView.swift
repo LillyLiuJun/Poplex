@@ -14,12 +14,12 @@ struct MicPermissionView: View {
                 .foregroundStyle(AppTheme.Color.textMuted)
 
             VStack(spacing: AppTheme.Space.paddingS) {
-                Text("Microphone access needed")
+                Text("Voice access needed")
                     .font(AppTheme.Font.screenTitle)
                     .foregroundStyle(AppTheme.Color.textPrimary)
                     .multilineTextAlignment(.center)
 
-                Text("Practice happens out loud. Allow mic access so you can speak and be heard.")
+                Text("Practice happens out loud. Allow microphone and speech recognition so you can speak and be heard.")
                     .font(AppTheme.Font.englishBody)
                     .foregroundStyle(AppTheme.Color.textSecondary)
                     .multilineTextAlignment(.center)
