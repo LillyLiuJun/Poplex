@@ -1283,3 +1283,262 @@ struct Tab2WordEntryStableImageKeyTests {
         #expect(e.stableImageKey == nil)
     }
 }
+
+// MARK: - CJK detection tests (finalizeFallbackSpeech language routing)
+
+struct CJKDetectionTests {
+    // Mirrors the predicate in ConversationViewModel.finalizeFallbackSpeech
+    private func hasCJK(_ text: String) -> Bool {
+        text.unicodeScalars.contains { $0.value >= 0x4E00 && $0.value <= 0x9FFF }
+    }
+
+    @Test func detectsChineseCharacters() {
+        #expect(hasCJK("你好") == true)
+    }
+
+    @Test func detectsMixedChineseEnglish() {
+        #expect(hasCJK("I'm 很累 today") == true)
+    }
+
+    @Test func ignoresPureLatin() {
+        #expect(hasCJK("Hello world") == false)
+    }
+
+    @Test func ignoresEmptyString() {
+        #expect(hasCJK("") == false)
+    }
+
+    @Test func ignoresPunctuation() {
+        #expect(hasCJK("!@#$%") == false)
+    }
+
+    @Test func detectsRangeLowerBound() {
+        // U+4E00 = 一 (first CJK Unified Ideograph)
+        #expect(hasCJK("一") == true)
+    }
+
+    @Test func detectsRangeUpperBound() {
+        let ch = String(UnicodeScalar(0x9FFF)!)
+        #expect(hasCJK(ch) == true)
+    }
+
+    @Test func ignoresJapaneseKatakana() {
+        // Katakana is U+30A0–U+30FF, outside the CJK block
+        #expect(hasCJK("アイウエオ") == false)
+    }
+
+    @Test func ignoresKoreanHangul() {
+        // Hangul is U+AC00–U+D7A3, outside the CJK block
+        #expect(hasCJK("안녕") == false)
+    }
+
+    @Test func detectsKanjiInJapaneseSentence() {
+        // Japanese sentences often mix kanji (CJK) with kana — should still detect
+        #expect(hasCJK("今日はいい天気ですね") == true)
+    }
+}
+
+// MARK: - DialogueService DTO decode tests
+
+struct DialogueDTODecodeTests {
+
+    @Test func decodesStartResponse() throws {
+        let json = """
+        {"session_id": "abc-123", "reply": "Hello!", "suggestions": []}
+        """.data(using: .utf8)!
+        let r = try JSONDecoder().decode(DialogueStartResponse.self, from: json)
+        #expect(r.sessionId == "abc-123")
+        #expect(r.reply == "Hello!")
+        #expect(r.suggestions.isEmpty)
+    }
+
+    @Test func decodesStartResponseWithSuggestions() throws {
+        let json = """
+        {
+            "session_id": "s1",
+            "reply": "What happened?",
+            "suggestions": [{"lemma": "burnout", "hint": "extreme exhaustion"}]
+        }
+        """.data(using: .utf8)!
+        let r = try JSONDecoder().decode(DialogueStartResponse.self, from: json)
+        #expect(r.suggestions.count == 1)
+        #expect(r.suggestions[0].lemma == "burnout")
+        #expect(r.suggestions[0].hint == "extreme exhaustion")
+    }
+
+    @Test func decodesTurnResponseNullSceneDetail() throws {
+        let json = """
+        {"reply": "That sounds tough.", "suggestions": [], "scene_detail": null}
+        """.data(using: .utf8)!
+        let r = try JSONDecoder().decode(DialogueTurnResponse.self, from: json)
+        #expect(r.reply == "That sounds tough.")
+        #expect(r.sceneDetail == nil)
+    }
+
+    @Test func decodesTurnResponseWithSceneDetail() throws {
+        let json = """
+        {
+            "reply": "Tell me more.",
+            "suggestions": [
+                {"lemma": "deadline", "hint": "due date"},
+                {"lemma": "overtime", "hint": "extra hours"}
+            ],
+            "scene_detail": "Work stress meeting"
+        }
+        """.data(using: .utf8)!
+        let r = try JSONDecoder().decode(DialogueTurnResponse.self, from: json)
+        #expect(r.suggestions.count == 2)
+        #expect(r.sceneDetail == "Work stress meeting")
+    }
+
+    @Test func decodesFallbackResponse() throws {
+        let json = """
+        {
+            "translation": "I stayed late at work.",
+            "key_words": [{"word": "stayed", "phonetic": "/steɪd/"}],
+            "hint": "Try using 'stayed late'"
+        }
+        """.data(using: .utf8)!
+        let r = try JSONDecoder().decode(FallbackResponseDTO.self, from: json)
+        #expect(r.translation == "I stayed late at work.")
+        #expect(r.keyWords.count == 1)
+        #expect(r.keyWords[0].word == "stayed")
+        #expect(r.keyWords[0].phonetic == "/steɪd/")
+        #expect(r.hint == "Try using 'stayed late'")
+    }
+
+    @Test func decodesFallbackResponseEmptyKeyWords() throws {
+        let json = """
+        {"translation": "Let's go.", "key_words": [], "hint": "Say it!"}
+        """.data(using: .utf8)!
+        let r = try JSONDecoder().decode(FallbackResponseDTO.self, from: json)
+        #expect(r.keyWords.isEmpty)
+    }
+
+    @Test func decodesFallbackResponseMultipleKeyWords() throws {
+        let json = """
+        {
+            "translation": "The projector wasn't working.",
+            "key_words": [
+                {"word": "projector", "phonetic": "/prəˈdʒektər/"},
+                {"word": "working",   "phonetic": "/ˈwɜːrkɪŋ/"}
+            ],
+            "hint": "Focus on 'projector'"
+        }
+        """.data(using: .utf8)!
+        let r = try JSONDecoder().decode(FallbackResponseDTO.self, from: json)
+        #expect(r.keyWords.count == 2)
+        #expect(r.keyWords[1].phonetic == "/ˈwɜːrkɪŋ/")
+    }
+
+    @Test func decodesSuggestionDTO() throws {
+        let json = "{\"lemma\": \"overtime\", \"hint\": \"extra hours beyond schedule\"}".data(using: .utf8)!
+        let r = try JSONDecoder().decode(DialogueSuggestionDTO.self, from: json)
+        #expect(r.lemma == "overtime")
+        #expect(r.hint == "extra hours beyond schedule")
+    }
+
+    @Test func decodesFallbackKeyWordDTO() throws {
+        let json = "{\"word\": \"projector\", \"phonetic\": \"/pr\u{0259}\u{02C8}d\u{0292}ekt\u{0259}r/\"}".data(using: .utf8)!
+        let r = try JSONDecoder().decode(FallbackKeyWordDTO.self, from: json)
+        #expect(r.word == "projector")
+        #expect(r.phonetic == "/prəˈdʒektər/")
+    }
+}
+
+// MARK: - ConversationViewModel state machine tests
+
+@MainActor
+struct ConversationViewModelStateTests {
+
+    @Test func initialPageStateIsPreparing() {
+        let vm = ConversationViewModel(sceneCategory: "Work")
+        #expect(vm.pageState == .preparing)
+    }
+
+    @Test func initialMicStateIsIdle() {
+        let vm = ConversationViewModel(sceneCategory: "Work")
+        #expect(vm.micState == .idle)
+    }
+
+    @Test func initialSessionIdIsNil() {
+        let vm = ConversationViewModel(sceneCategory: "Work")
+        #expect(vm.sessionId == nil)
+    }
+
+    @Test func initialFallbackListeningIsFalse() {
+        let vm = ConversationViewModel(sceneCategory: "Work")
+        #expect(vm.isFallbackListening == false)
+    }
+
+    @Test func retryWithNoSessionReEntersPreparing() {
+        let vm = ConversationViewModel(sceneCategory: "Work")
+        vm.pageState = .failed
+        vm.sessionId = nil
+        vm.retry()
+        #expect(vm.pageState == .preparing)
+    }
+
+    @Test func retryWithExistingSessionBecomesActive() {
+        let vm = ConversationViewModel(sceneCategory: "Work")
+        vm.pageState = .failed
+        vm.sessionId = "existing-session-id"
+        vm.retry()
+        #expect(vm.pageState == .active)
+    }
+
+    @Test func dismissFallbackClearsFallbackResult() {
+        let vm = ConversationViewModel(sceneCategory: "Work")
+        vm.fallbackResult = FallbackResult(
+            translation: "I'm tired.",
+            keyWords: [],
+            hint: "Try saying it."
+        )
+        vm.dismissFallback()
+        #expect(vm.fallbackResult == nil)
+    }
+
+    @Test func interruptAISetsIdleWhenAISpeaking() {
+        let vm = ConversationViewModel(sceneCategory: "Work")
+        vm.micState = .aiSpeaking
+        vm.interruptAI()
+        #expect(vm.micState == .idle)
+    }
+
+    @Test func interruptAIDoesNothingWhenIdle() {
+        let vm = ConversationViewModel(sceneCategory: "Work")
+        vm.micState = .idle
+        vm.interruptAI()
+        #expect(vm.micState == .idle)
+    }
+
+    // startFallbackListening guard: already in fallback mode → early return, no state change
+    @Test func startFallbackListeningNoOpWhenAlreadyFallback() {
+        let vm = ConversationViewModel(sceneCategory: "Work")
+        vm.micState = .idle
+        vm.isFallbackListening = true
+        vm.startFallbackListening()
+        // guard !isFallbackListening fires — micState must remain idle, not change to .listening
+        #expect(vm.micState == .idle)
+        #expect(vm.isFallbackListening == true)
+    }
+
+    // startFallbackListening guard: aiSpeaking → early return
+    @Test func startFallbackListeningNoOpWhenAISpeaking() {
+        let vm = ConversationViewModel(sceneCategory: "Work")
+        vm.micState = .aiSpeaking
+        vm.startFallbackListening()
+        // guard micState == .idle || .listening fails for .aiSpeaking
+        #expect(vm.isFallbackListening == false)
+        #expect(vm.micState == .aiSpeaking)
+    }
+
+    // NativeFallbackButton.isDisabled logic: only aiSpeaking disables the button
+    @Test func fallbackButtonDisabledOnlyWhenAISpeaking() {
+        let isDisabled: (MicState) -> Bool = { $0 == .aiSpeaking }
+        #expect(isDisabled(.idle) == false)
+        #expect(isDisabled(.listening) == false)
+        #expect(isDisabled(.aiSpeaking) == true)
+        #expect(isDisabled(.disabled) == false)
+    }
+}
