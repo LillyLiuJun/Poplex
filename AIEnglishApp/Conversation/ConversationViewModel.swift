@@ -2,6 +2,16 @@ import SwiftUI
 import AVFoundation
 import Speech
 
+// MARK: - TTS delegate (NSObject wrapper — AVSpeechSynthesizerDelegate requires @objc)
+
+private final class TTSDelegateHandler: NSObject, AVSpeechSynthesizerDelegate {
+    var onFinish: (() -> Void)?
+
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        onFinish?()
+    }
+}
+
 // MARK: - Page state machine (§2)
 
 enum ConversationPageState: CaseIterable {
@@ -75,6 +85,48 @@ class ConversationViewModel {
 
     init(sceneCategory: String) {
         self.sceneCategory = sceneCategory
+        let handler = TTSDelegateHandler()
+        ttsDelegate = handler
+        synthesizer.delegate = handler
+        handler.onFinish = { [weak self] in
+            Task { @MainActor [weak self] in self?.didFinishSpeaking() }
+        }
+    }
+
+    // MARK: - TTS
+
+    @ObservationIgnored private let synthesizer = AVSpeechSynthesizer()
+    @ObservationIgnored private let ttsDelegate: TTSDelegateHandler
+
+    private func speakAIResponse(_ text: String) {
+        // Switch session to playAndRecord so speaker output works alongside future mic use
+        let session = AVAudioSession.sharedInstance()
+        try? session.setCategory(.playAndRecord, mode: .default,
+                                 options: [.defaultToSpeaker, .duckOthers])
+        try? session.setActive(true)
+
+        let utterance = AVSpeechUtterance(string: text)
+        utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
+        utterance.rate = 0.52           // slightly above default (0.5) for a natural pace
+        utterance.pitchMultiplier = 1.0
+        synthesizer.speak(utterance)
+    }
+
+    private func stopSpeaking() {
+        guard synthesizer.isSpeaking else { return }
+        synthesizer.stopSpeaking(at: .immediate)
+    }
+
+    // Called by TTSDelegateHandler when TTS finishes naturally
+    private func didFinishSpeaking() {
+        // Guard: only auto-continue if still in aiSpeaking and page is active
+        guard micState == .aiSpeaking, pageState == .active else { return }
+        // Brief pause (300ms) before opening mic — feels more like a natural conversational turn
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            guard let self, self.micState == .aiSpeaking, self.pageState == .active else { return }
+            self.micState = .idle
+            self.startListening()
+        }
     }
 
     // MARK: - Permission + Session start (Steps 2 & 5)
@@ -115,6 +167,8 @@ class ConversationViewModel {
             lines = [DialogueLine(role: .ai, text: response.reply)]
             suggestions = response.suggestions.map { DialogueSuggestion(lemma: $0.lemma, hint: $0.hint) }
             pageState = .active
+            micState = .aiSpeaking
+            speakAIResponse(response.reply)   // AI speaks the opening line; auto-mic fires on finish
         } catch {
             print("[ConversationViewModel] beginSession failed:", error)
             pageState = .failed
@@ -256,7 +310,6 @@ class ConversationViewModel {
 
     func stopListening() {
         guard micState == .listening else { return }
-        tearDownAudio()
         if isFallbackListening {
             finalizeFallbackSpeech()
         } else {
@@ -265,6 +318,7 @@ class ConversationViewModel {
     }
 
     func cancelListening() {
+        stopSpeaking()
         guard micState == .listening else { return }
         tearDownAudio()
         if let idx = liveLineIndex, idx < lines.count { lines.remove(at: idx) }
@@ -276,7 +330,9 @@ class ConversationViewModel {
 
     func interruptAI() {
         guard micState == .aiSpeaking else { return }
+        stopSpeaking()
         micState = .idle
+        startListening()
     }
 
     func dismissFallback() {
@@ -293,7 +349,9 @@ class ConversationViewModel {
 
     private func startAudioSession() throws {
         let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.record, mode: .measurement, options: .duckOthers)
+        // playAndRecord so TTS can resume after mic session without reconfiguring
+        try session.setCategory(.playAndRecord, mode: .measurement,
+                                options: [.defaultToSpeaker, .duckOthers])
         try session.setActive(true, options: .notifyOthersOnDeactivation)
     }
 
@@ -311,6 +369,7 @@ class ConversationViewModel {
     }
 
     private func tearDownAudio() {
+        stopSpeaking()
         audioEngine?.stop()
         audioEngine?.inputNode.removeTap(onBus: 0)
         recognitionRequest?.endAudio()
@@ -329,6 +388,10 @@ class ConversationViewModel {
 
     private func finalizeSpeech() {
         guard micState == .listening else { return }
+        // tearDownAudio here covers the auto-isFinal path (ASR fires isFinal without
+        // a manual stopListening call). Without this, the AudioEngine keeps running
+        // while speakAIResponse() tries to reconfigure the session → TTS silent fail.
+        tearDownAudio()
 
         var userText = ""
         if let idx = liveLineIndex, idx < lines.count {
@@ -344,6 +407,9 @@ class ConversationViewModel {
     // MARK: - Finalize: fallback (detect language, route)
 
     private func finalizeFallbackSpeech() {
+        guard micState == .listening else { return }
+        tearDownAudio()
+
         let zhText = zhLiveText.trimmingCharacters(in: .whitespacesAndNewlines)
         var enText = ""
         if let idx = liveLineIndex, idx < lines.count {
@@ -383,12 +449,12 @@ class ConversationViewModel {
                 self.lines.append(DialogueLine(role: .ai, text: response.reply))
                 self.suggestions = response.suggestions.map { DialogueSuggestion(lemma: $0.lemma, hint: $0.hint) }
                 if let detail = response.sceneDetail, !detail.isEmpty { self.sceneDetail = detail }
-                self.micState = .idle
+                self.speakAIResponse(response.reply)   // TTS plays reply; didFinishSpeaking auto-opens mic
             } catch {
                 guard self.micState == .aiSpeaking else { return }
                 print("[ConversationViewModel] turn failed:", error)
                 self.pageState = .failed
-                self.micState = .idle
+                self.micState = .idle   // fallback to idle on error — user can retry manually
             }
         }
     }
@@ -444,5 +510,14 @@ class ConversationViewModel {
         let idx = lines.count % Self.debugLineCycle.count
         let (role, text) = Self.debugLineCycle[idx]
         lines.append(DialogueLine(role: role, text: text))
+        // Simulate the TTS → auto-mic cycle for AI lines so the debug button
+        // exercises the full turn-taking flow without real speech.
+        guard role == .ai, pageState == .active else { return }
+        micState = .aiSpeaking
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+            guard let self, self.micState == .aiSpeaking, self.pageState == .active else { return }
+            self.micState = .idle
+            self.startListening()
+        }
     }
 }

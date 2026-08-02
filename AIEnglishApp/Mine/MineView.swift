@@ -55,7 +55,7 @@ struct MineView: View {
                 .navigationDestination(for: MineRoute.self) { route in
                     switch route {
                     case .conversation(let cat):
-                        ConversationView(sceneCategory: cat)
+                        ConversationView(sceneCategory: cat, onDismiss: { path.removeLast() })
                     }
                 }
         }

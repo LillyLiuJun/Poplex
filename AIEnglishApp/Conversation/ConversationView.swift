@@ -12,12 +12,14 @@ import SwiftUI
 /// Step 2 wires real permission checks; Steps 4–5 add ASR + backend.
 struct ConversationView: View {
     let sceneCategory: String
+    var onDismiss: () -> Void = {}
 
     @State private var vm: ConversationViewModel
     @Environment(\.scenePhase) private var scenePhase
 
-    init(sceneCategory: String) {
+    init(sceneCategory: String, onDismiss: @escaping () -> Void = {}) {
         self.sceneCategory = sceneCategory
+        self.onDismiss = onDismiss
         self._vm = State(wrappedValue: ConversationViewModel(sceneCategory: sceneCategory))
     }
 
@@ -47,7 +49,7 @@ struct ConversationView: View {
                 case .ended:
                     ConversationSummaryView(
                         sceneCategory: sceneCategory,
-                        onDismiss: { /* step 8: pop to Tab2 + force refresh */ }
+                        onDismiss: onDismiss
                     )
                     .transition(.opacity)
                 }
@@ -70,7 +72,7 @@ struct ConversationView: View {
     private var preparingView: some View {
         VStack(spacing: 0) {
             // Back button still reachable even while loading
-            ConversationTopBar(topicName: sceneCategory, onDismiss: { /* pop */ })
+            ConversationTopBar(topicName: sceneCategory, onDismiss: onDismiss)
 
             Spacer()
             PreparingIndicator()
