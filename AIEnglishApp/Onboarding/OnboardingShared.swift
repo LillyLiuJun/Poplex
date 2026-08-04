@@ -3,7 +3,7 @@ import SwiftUI
 /// Onboarding 共享 UI 单元：主按钮 / 背景 / 入场动效。
 /// 各页只组合这些组件，不在页面里重复拼装样式。
 
-// MARK: - 主按钮：品牌橙实心胶囊，全宽
+// MARK: - 主按钮：染色近黑实心胶囊，全宽（Warm Editorial：CTA 走 interactive，橙留作稀有强调）
 
 struct OnboardingPrimaryButton: View {
     let title: String
@@ -16,7 +16,7 @@ struct OnboardingPrimaryButton: View {
                 .foregroundStyle(AppTheme.Color.textOnChip)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, AppTheme.Space.paddingCard)
-                .background(AppTheme.Color.brandStrong, in: Capsule())
+                .background(AppTheme.Color.interactive, in: Capsule())
         }
         .buttonStyle(PressableButtonStyle(pressedScale: 0.97, pressedOpacity: 0.85))
     }

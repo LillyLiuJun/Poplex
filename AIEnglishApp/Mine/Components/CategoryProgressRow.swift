@@ -18,9 +18,8 @@ struct CategoryProgressRow: View {
         VStack(alignment: .leading, spacing: 0) {
             expandToggle
             if isExpanded {
-                Divider()
-                    .padding(.vertical, AppTheme.Space.paddingS)
                 wordList
+                    .padding(.top, AppTheme.Space.paddingXS)
             }
         }
         .padding(.horizontal, AppTheme.Space.paddingPage)
@@ -44,7 +43,7 @@ struct CategoryProgressRow: View {
                 // 第一行：分类标题 + 动态计数 + 折叠箭头
                 HStack(alignment: .center, spacing: AppTheme.Space.paddingS) {
                     Text(category.englishLabel)
-                        .font(.system(size: 15, weight: isHighlighted || category.wordCount >= targetCount ? .semibold : .medium))
+                        .font(.system(.callout, weight: isHighlighted || category.wordCount >= targetCount ? .semibold : .medium))
                         .foregroundStyle(AppTheme.Color.textPrimary)
 
                     Spacer()
@@ -69,13 +68,17 @@ struct CategoryProgressRow: View {
 
     @ViewBuilder
     private var countLabel: some View {
-        let isReached = category.wordCount >= targetCount
-        HStack(spacing: 2) {
+        let isHot = category.wordCount >= targetCount || isHighlighted
+        HStack(spacing: 4) {
             Text("\(category.wordCount)")
-                .font(.system(size: 13, weight: isReached || isHighlighted ? .bold : .semibold))
-                .foregroundStyle(isReached || isHighlighted ? AppTheme.Color.brandStrong : AppTheme.Color.textPrimary)
-            Text(" of \(targetCount)")
-                .font(.system(size: 12, weight: .regular))
+                // 统一 caption + 等宽 + 右对齐固定槽：位数不同也不左右跳，"of 20"/⌄ 对齐成列
+                // 最近解锁=品牌色，其余=与 "of 20" 同款灰（只靠颜色区分，不靠变大）
+                .font(.system(.caption))
+                .monospacedDigit()
+                .frame(minWidth: 18, alignment: .trailing)
+                .foregroundStyle(isHot ? AppTheme.Color.brandStrong : AppTheme.Color.textMuted)
+            Text("of \(targetCount)")
+                .font(.system(.caption))
                 .foregroundStyle(AppTheme.Color.textMuted)
         }
     }
@@ -83,26 +86,21 @@ struct CategoryProgressRow: View {
     // MARK: - Progress bar
 
     private var progressBar: some View {
-        GeometryReader { geo in
-            let progress = min(CGFloat(category.wordCount) / CGFloat(targetCount), 1.0)
-            ZStack(alignment: .leading) {
-                Capsule()
-                    .fill(Color(.systemGray6))
-                    .frame(height: 6)
+        let progress = min(CGFloat(category.wordCount) / CGFloat(targetCount), 1.0)
+        // 不用 GeometryReader：满宽 Capsule 作轨道，填充用 scaleEffect 缩放，避免撑宽
+        return Capsule()
+            .fill(Color(.systemGray6))
+            .frame(height: 6)
+            .overlay(alignment: .leading) {
                 Capsule()
                     .fill(
                         isHighlighted || category.wordCount >= targetCount
-                            ? AppTheme.Color.brandStrong
+                            ? AppTheme.Color.brandStrong.opacity(0.5)   // 品牌橙半透明，柔和不冲
                             : Color(.systemGray4)
                     )
-                    .frame(
-                        width: max(geo.size.width * progress, category.wordCount > 0 ? 6 : 0),
-                        height: 6
-                    )
+                    .scaleEffect(x: category.wordCount > 0 ? max(progress, 0.02) : 0, anchor: .leading)
                     .animation(.easeOut(duration: 0.4), value: category.wordCount)
             }
-        }
-        .frame(height: 6)
     }
 
     // MARK: - Expanded word list
@@ -133,6 +131,7 @@ struct CategoryProgressRow: View {
                 }
             }
             .padding(.vertical, 4)
+            .padding(.leading, AppTheme.Space.paddingM)   // 子项缩进，和分类头拉出层级
         }
     }
 
@@ -170,55 +169,56 @@ private struct WordEntryRow: View {
     let entry: Tab2WordEntry
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
+        HStack(spacing: AppTheme.Space.paddingM) {
             leftSlot
 
-            // 1. 目标语言词/短语 (左侧主视觉加粗)
-            Text(entry.displayForm ?? entry.lemma)
-                .font(.system(size: 15, weight: .bold))
-                .foregroundStyle(AppTheme.Color.textPrimary)
-
-            Spacer(minLength: 8)
-
-            // 2. 母语释义 (方案 A：右侧微灰胶囊衬底对齐)
-            if let meaning = entry.nativeMeaning, !meaning.isEmpty {
-                Text(meaning)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(AppTheme.Color.textSecondary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color(.systemGray6))
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
+            // 词 + 释义纵向排：释义移到词下方，长词不再把释义挤成右侧空药丸
+            VStack(alignment: .leading, spacing: 2) {
+                Text(entry.displayForm ?? entry.lemma)
+                    .font(.system(.subheadline, design: .serif, weight: .semibold))  // 英文词=学习内容，走衬线，与 Tab1 词卡呼应
+                    .foregroundStyle(AppTheme.Color.textPrimary)
+                    .lineLimit(1)
+                if let meaning = entry.nativeMeaning, !meaning.isEmpty {
+                    Text(meaning)
+                        .font(.system(.caption))
+                        .foregroundStyle(AppTheme.Color.textMuted)
+                        .lineLimit(1)
+                }
             }
+
+            Spacer(minLength: 0)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        // 扁平行：去掉每行的白卡与阴影，避免"白卡套白卡"的层叠感
+        .padding(.vertical, AppTheme.Space.paddingS)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.Color.cardBg)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .shadow(color: AppTheme.Shadow.cardColor, radius: 8, x: 0, y: 2)
     }
 
+    // 统一暖中性单色图标徽章（不再用蓝/黄/绿多色，与暖色系冲突）；类型仍靠图标形状区分
     @ViewBuilder
     private var leftSlot: some View {
         if let urlStr = entry.imageUrl, !urlStr.isEmpty {
             let stableKey = entry.stableImageKey ?? urlStr
             CachedRemoteImage(signedUrl: urlStr, stableKey: stableKey) {
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: 8)
                     .fill(AppTheme.Color.imagePlaceholderBg)
             }
-            .frame(width: 36, height: 36)
-            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .frame(width: 32, height: 32)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .saturation(0.75)                                   // 降饱和，弱化图片鲜艳度
+            .overlay(                                           // 叠一层暖纸薄蒙版，压低对比、融进暖色系
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(AppTheme.Color.pageBg.opacity(0.15))
+            )
         } else {
             ZStack {
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(entry.badgeBg)
-                    .frame(width: 36, height: 36)
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(AppTheme.Color.imagePlaceholderBg)     // 暖中性灰底
+                    .frame(width: 32, height: 32)
                 Image(systemName: entry.badgeIconName)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(entry.badgeIconColor)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(AppTheme.Color.textMuted)   // 灰图标
             }
-            .frame(width: 36, height: 36)
+            .frame(width: 32, height: 32)
         }
     }
 }

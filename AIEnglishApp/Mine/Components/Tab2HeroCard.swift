@@ -105,10 +105,10 @@ struct Tab2HeroCard: View {
         .foregroundStyle(.white)
         .frame(maxWidth: .infinity)
         .padding(.vertical, 14)
-        .background(AppTheme.Color.brandStrong)
+        .background(AppTheme.Color.interactive)   // 染色黑 CTA
         .clipShape(Capsule())
         .shadow(
-            color: AppTheme.Color.brandStrong.opacity(0.25),
+            color: AppTheme.Color.interactive.opacity(0.22),
             radius: 10,
             x: 0,
             y: 4

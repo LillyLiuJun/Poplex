@@ -45,7 +45,7 @@ struct AICardBody: View {
         VStack(alignment: .leading, spacing: AppTheme.Space.paddingXS) {
             Text(content.displayTarget)
                 .font(AppTheme.Font.wordTitle)
-                .foregroundStyle(AppTheme.Color.brandStrong)
+                .foregroundStyle(AppTheme.Color.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
 
             if content.phonetic != nil || !content.pos.isEmpty {

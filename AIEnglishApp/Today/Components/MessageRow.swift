@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 struct TimelineRow: View {
     let entry: TimelineEntry
@@ -111,12 +112,36 @@ private struct AICardView: View {
     }
 }
 
-// MARK: - AI loading placeholder
+// MARK: - AI loading placeholder（"Generating" + 三点依次出现，打字机式循环）
 private struct AILoadingCard: View {
+    @State private var dotCount = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    private let timer = Timer.publish(every: 0.35, on: .main, in: .common).autoconnect()
+
     var body: some View {
-        ProgressView()
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.vertical, AppTheme.Space.paddingCard)
+        HStack(spacing: 4) {
+            Text("Generating")
+                .font(AppTheme.Font.buddy)
+                .foregroundStyle(AppTheme.Color.textMuted)
+
+            HStack(spacing: 3) {
+                ForEach(0..<3, id: \.self) { i in
+                    Circle()
+                        .fill(AppTheme.Color.textMuted)
+                        .frame(width: 4, height: 4)
+                        .opacity(i < dotCount ? 1 : 0)
+                        .animation(.easeInOut(duration: 0.2), value: dotCount)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, AppTheme.Space.paddingCard)
+        // 减弱动态：直接显示静态三点，不循环
+        .onAppear { if reduceMotion { dotCount = 3 } }
+        .onReceive(timer) { _ in
+            guard !reduceMotion else { return }
+            dotCount = (dotCount + 1) % 4   // 0→1→2→3→0：点依次出现再清空
+        }
     }
 }
 

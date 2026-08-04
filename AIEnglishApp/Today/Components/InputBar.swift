@@ -263,10 +263,10 @@ struct InputBar: View {
         } label: {
             ZStack {
                 Circle()
-                    .fill(AppTheme.Color.brandStrong)
+                    .fill(AppTheme.Color.interactive)
                     .frame(width: AppTheme.Size.barControl, height: AppTheme.Size.barControl)
-                    // 品牌橘发光（对齐参考稿 send-circle 的悬浮光晕）
-                    .shadow(color: AppTheme.Color.brandStrong.opacity(0.35), radius: 12, x: 0, y: 5)
+                    // 染色近黑送出键（Warm Editorial：CTA 走 interactive，橙留作稀有强调）+ 中性柔影
+                    .shadow(color: AppTheme.Color.interactive.opacity(0.22), radius: 10, x: 0, y: 4)
                 rightButtonIcon
             }
             .animation(.spring(response: 0.28, dampingFraction: 0.72), value: rightButtonMode)

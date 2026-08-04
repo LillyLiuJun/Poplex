@@ -59,18 +59,20 @@ private enum Primitive {
     // 渐白色阶里没有更深的档，单列一枚 shade）
     static let primaryDeep = Color(hex: 0xC2410C)
 
-    // Neutral — 暖灰（低彩度，类 Stone；近白底 + 中性暖灰文字）
-    static let neutral50  = Color(hex: 0xFCFBF8)
-    static let neutral100 = Color(hex: 0xF5F5F4)
-    static let neutral200 = Color(hex: 0xE7E5E4)
-    static let neutral300 = Color(hex: 0xD6D3D1)
-    static let neutral400 = Color(hex: 0xA8A29E)
-    static let neutral500 = Color(hex: 0x78716C)
-    static let neutral600 = Color(hex: 0x57534E)
-    static let neutral700 = Color(hex: 0x44403C)
-    static let neutral800 = Color(hex: 0x292524)
-    static let neutral900 = Color(hex: 0x1C1917)
-    static let neutral950 = Color(hex: 0x0C0A09)
+    // Neutral — 品牌染色中性（Warm Editorial）：深色端从种子橙 FF7622 掺入橙色相
+    //   （黑带暖底，H≈24°），中/浅灰去棕回灰（低彩度、只留一丝暖），暖纸页面。
+    //   深色有温度、大面积灰干净。深色模式数值未导出，勿自行补。
+    static let neutral50  = Color(hex: 0xFBF6F1)  // 暖纸页面（pageBg）
+    static let neutral100 = Color(hex: 0xEBE8E3)  // 用户气泡 / 图片占位底
+    static let neutral200 = Color(hex: 0xE3DFD9)  // 描边 / 分割
+    static let neutral300 = Color(hex: 0xC7C3BD)  // 最弱文字（faint）
+    static let neutral400 = Color(hex: 0xA5A099)  // 区块小标（label）
+    static let neutral500 = Color(hex: 0x7C7773)  // 次要弱文字（muted）
+    static let neutral600 = Color(hex: 0x5C554B)
+    static let neutral700 = Color(hex: 0x4B4640)  // 次要文字（secondary）
+    static let neutral800 = Color(hex: 0x2E2820)
+    static let neutral900 = Color(hex: 0x211811)  // 主文字 · 品牌染色近黑
+    static let neutral950 = Color(hex: 0x17120C)  // interactive / CTA 近黑
 
     // Warning — 金黄（黄色系物理上做不出高对比度深色，只作浅底 + 深色文字用）
     static let warning50  = Color(hex: 0xFAF8EC)
@@ -124,8 +126,9 @@ private enum Primitive {
     static let info900 = Color(hex: 0x4679D1)
     static let info950 = Color(hex: 0x3065C0)
 
-    // ── 纯白卡片：在近白暖页面（neutral50）上靠纯白 + 柔阴影分层，对齐参考稿 ──
-    static let warmWhite = Color(hex: 0xFFFFFF)
+    // ── 暖近白卡片：比暖纸页面（neutral50 #FBF6F1）更亮，带一丝暖底，
+    //    靠"更亮 + 柔阴影"分层；不用纯白，避免冷白跳出整套暖色系 ──
+    static let warmWhite = Color(hex: 0xFFFDF8)
 
     // ── 覆盖在实时媒体（相机画面 / 用户照片）上的控件 ────────────────────────
     static let mediaSurface   = Color.black             // 相机全屏底
@@ -223,8 +226,10 @@ enum AppTheme {
     }
 
     enum Font {
-        static let englishPrimary = SwiftUI.Font.system(.body, weight: .medium)       // 英文主内容（content-en 17/500 近黑，收敛自 20/600——原字重偏大偏重）
-        static let wordTitle      = SwiftUI.Font.system(.title2, weight: .bold)       // 词条大标题（=参考稿 word-title 26/700 橘）
+        // 英文主内容 / 词条大标题走衬线（Warm Editorial：内容用 Newsreader；
+        // 暂以系统衬线 New York 顶位，待打包 Newsreader 后仅换 design/family）。
+        static let englishPrimary = SwiftUI.Font.system(.body, design: .serif)                    // 英文主内容（内容衬线，规则用 .body 保 Dynamic Type）
+        static let wordTitle      = SwiftUI.Font.system(.title2, design: .serif, weight: .semibold) // 词条大标题（内容衬线，半粗以有分量不过重）
         static let englishBody    = SwiftUI.Font.system(.body)                        // 英文例句
         static let buddy          = SwiftUI.Font.system(.subheadline, weight: .medium) // 场景追问（=参考稿 14.5/500）
         static let keyPhrase      = SwiftUI.Font.system(.subheadline, weight: .bold)  // 核心词组（=参考稿 kp-word 15/700 加黑）
@@ -236,6 +241,8 @@ enum AppTheme {
         static let date           = SwiftUI.Font.system(.caption2, weight: .semibold) // 日期分隔
         static let hero           = SwiftUI.Font.system(.largeTitle, weight: .bold)   // Onboarding 标题
         static let screenTitle    = SwiftUI.Font.system(.title2, weight: .bold)       // 功能页大标题（onboarding 实操页等）
+        static let pageTitleSerif = SwiftUI.Font.system(.largeTitle, design: .serif, weight: .semibold) // 页面衬线大标题（Warm Editorial：Tab2「Not open yet」等，与内容衬线同族）
+        static let sectionTitleSerif = SwiftUI.Font.system(.title2, design: .serif, weight: .semibold)  // 分区衬线小标题（Topics in progress / Materials Yours），比页面大标题小一档
         static let ctaLabel       = SwiftUI.Font.system(.body, weight: .semibold)     // 主按钮文字（Continue / Get Started）
         static let tabLabel       = SwiftUI.Font.system(.subheadline, weight: .semibold) // 顶部 Tab 名称
     }
