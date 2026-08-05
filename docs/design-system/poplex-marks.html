@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>Poplex — 符号方案 (mark only)</title>
+<style>
+  :root{
+    --orange:#FF7622; --orange-deep:#E8600F;
+    --page:#F5F0EC; --card:#FBF8F5; --white:#FFFFFF;
+    --line:#E6DED8; --ink:#2A2320; --ink-600:#726761; --ink-400:#948C86;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;padding:44px 28px 90px;background:var(--page);
+    font-family:-apple-system,'SF Pro Text','Inter','PingFang SC',sans-serif;color:#3A332F;
+  }
+  .wrap{max-width:900px;margin:0 auto}
+  h1{font-size:30px;font-weight:700;letter-spacing:-.02em;margin:0 0 8px}
+  .sub{color:var(--ink-600);font-size:14px;line-height:1.75;margin:0 0 36px;max-width:620px}
+  .card{background:var(--white);border-radius:22px;padding:32px;margin-bottom:20px;
+    box-shadow:0 1px 2px rgba(58,51,47,.04),0 6px 24px rgba(58,51,47,.05)}
+  .head{display:flex;align-items:baseline;gap:12px;margin-bottom:24px}
+  .num{font-size:11px;font-weight:700;letter-spacing:.12em;color:var(--ink-400)}
+  .name{font-size:17px;font-weight:600}
+  .body{display:flex;gap:34px;align-items:center;flex-wrap:wrap}
+  .hero{width:150px;height:150px;background:var(--card);border:1px solid var(--line);
+    border-radius:26px;display:flex;align-items:center;justify-content:center;flex:none}
+  .sizes{display:flex;gap:14px;align-items:center}
+  .box{border-radius:14px;display:flex;align-items:center;justify-content:center;flex:none}
+  .b-paper{background:var(--card);border:1px solid var(--line)}
+  .b-orange{background:var(--orange)}
+  .b-ink{background:var(--ink)}
+  .s56{width:60px;height:60px} .s28{width:34px;height:34px;border-radius:9px}
+  .note{font-size:13px;color:var(--ink-600);line-height:1.75;border-top:1px solid var(--line);
+    padding-top:16px;margin:24px 0 0}
+  .note b{color:#3A332F;font-weight:600}
+  svg{display:block}
+  .cap{font-size:10.5px;color:var(--ink-400);margin-top:8px;text-align:center}
+  .grp{display:flex;flex-direction:column;align-items:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>Poplex · 符号方案</h1>
+<p class="sub">
+只做 mark，不带字。五个都避开具象器物（镜头 / 气泡 / 麦克风），走抽象 + 手写笔意：
+笔画有粗细变化（呼应界面里那套高对比衬线），橙色 <b>#FF7622</b> 只做小面积落点，不整体填满。
+每个都给了 60px 和 34px 缩略，以及橙底 / 墨底反色。
+</p>
+
+<!-- ========== 01 ========== -->
+<div class="card">
+  <div class="head"><span class="num">01</span><span class="name">转 · The turn</span></div>
+  <div class="body">
+    <div class="hero">
+      <svg width="104" height="104" viewBox="0 0 120 120">
+        <path d="M28,96 C28,60 92,62 92,30" fill="none" stroke="#2A2320" stroke-width="13" stroke-linecap="round"/>
+        <circle cx="92" cy="30" r="6.5" fill="#FF7622"/>
+      </svg>
+    </div>
+    <div class="sizes">
+      <div class="grp"><div class="box b-paper s56"><svg width="34" height="34" viewBox="0 0 120 120"><path d="M28,96 C28,60 92,62 92,30" fill="none" stroke="#2A2320" stroke-width="15" stroke-linecap="round"/><circle cx="92" cy="30" r="7.5" fill="#FF7622"/></svg></div><div class="cap">60</div></div>
+      <div class="grp"><div class="box b-paper s28"><svg width="20" height="20" viewBox="0 0 120 120"><path d="M28,96 C28,60 92,62 92,30" fill="none" stroke="#2A2320" stroke-width="17" stroke-linecap="round"/><circle cx="92" cy="30" r="8.5" fill="#FF7622"/></svg></div><div class="cap">34</div></div>
+      <div class="grp"><div class="box b-orange s56"><svg width="34" height="34" viewBox="0 0 120 120"><path d="M28,96 C28,60 92,62 92,30" fill="none" stroke="#FBF8F5" stroke-width="15" stroke-linecap="round"/><circle cx="92" cy="30" r="7.5" fill="#FBF8F5" fill-opacity=".55"/></svg></div><div class="cap">橙底</div></div>
+      <div class="grp"><div class="box b-ink s56"><svg width="34" height="34" viewBox="0 0 120 120"><path d="M28,96 C28,60 92,62 92,30" fill="none" stroke="#F5F0EC" stroke-width="15" stroke-linecap="round"/><circle cx="92" cy="30" r="7.5" fill="#FF7622"/></svg></div><div class="cap">墨底</div></div>
+    </div>
+  </div>
+  <p class="note"><b>说的是：</b>一条线走着走着转了个向，尽头落下一个点。生活是那条线，语言是那个落点。<br>
+  最安静的一个，缩到 20px 也完全不糊。缺点是"独特性"靠得少，容易撞。</p>
+</div>
+
+<!-- ========== 02 ========== -->
+<div class="card">
+  <div class="head"><span class="num">02</span><span class="name">两笔 · The pair</span></div>
+  <div class="body">
+    <div class="hero">
+      <svg width="104" height="104" viewBox="0 0 120 120">
+        <g transform="translate(8,6)">
+          <path d="M40,10 C56,10 68,22 68,38 C68,58 52,72 34,78 C30,79 28,74 32,72 C44,66 52,58 54,48 C50,52 45,54 40,54 C28,54 18,44 18,32 C18,20 28,10 40,10 Z" fill="#2A2320"/>
+        </g>
+        <g transform="translate(112,114) rotate(180)">
+          <path d="M40,10 C56,10 68,22 68,38 C68,58 52,72 34,78 C30,79 28,74 32,72 C44,66 52,58 54,48 C50,52 45,54 40,54 C28,54 18,44 18,32 C18,20 28,10 40,10 Z" fill="#FF7622"/>
+        </g>
+      </svg>
+    </div>
+    <div class="sizes">
+      <div class="grp"><div class="box b-paper s56"><svg width="34" height="34" viewBox="0 0 120 120"><g transform="translate(8,6)"><path d="M40,10 C56,10 68,22 68,38 C68,58 52,72 34,78 C30,79 28,74 32,72 C44,66 52,58 54,48 C50,52 45,54 40,54 C28,54 18,44 18,32 C18,20 28,10 40,10 Z" fill="#2A2320"/></g><g transform="translate(112,114) rotate(180)"><path d="M40,10 C56,10 68,22 68,38 C68,58 52,72 34,78 C30,79 28,74 32,72 C44,66 52,58 54,48 C50,52 45,54 40,54 C28,54 18,44 18,32 C18,20 28,10 40,10 Z" fill="#FF7622"/></g></svg></div><div class="cap">60</div></div>
+      <div class="grp"><div class="box b-paper s28"><svg width="20" height="20" viewBox="0 0 120 120"><g transform="translate(8,6)"><path d="M40,10 C56,10 68,22 68,38 C68,58 52,72 34,78 C30,79 28,74 32,72 C44,66 52,58 54,48 C50,52 45,54 40,54 C28,54 18,44 18,32 C18,20 28,10 40,10 Z" fill="#2A2320"/></g><g transform="translate(112,114) rotate(180)"><path d="M40,10 C56,10 68,22 68,38 C68,58 52,72 34,78 C30,79 28,74 32,72 C44,66 52,58 54,48 C50,52 45,54 40,54 C28,54 18,44 18,32 C18,20 28,10 40,10 Z" fill="#FF7622"/></g></svg></div><div class="cap">34</div></div>
+      <div class="grp"><div class="box b-orange s56"><svg width="34" height="34" viewBox="0 0 120 120"><g transform="translate(8,6)"><path d="M40,10 C56,10 68,22 68,38 C68,58 52,72 34,78 C30,79 28,74 32,72 C44,66 52,58 54,48 C50,52 45,54 40,54 C28,54 18,44 18,32 C18,20 28,10 40,10 Z" fill="#FBF8F5"/></g><g transform="translate(112,114) rotate(180)"><path d="M40,10 C56,10 68,22 68,38 C68,58 52,72 34,78 C30,79 28,74 32,72 C44,66 52,58 54,48 C50,52 45,54 40,54 C28,54 18,44 18,32 C18,20 28,10 40,10 Z" fill="#FBF8F5" fill-opacity=".5"/></g></svg></div><div class="cap">橙底</div></div>
+      <div class="grp"><div class="box b-ink s56"><svg width="34" height="34" viewBox="0 0 120 120"><g transform="translate(8,6)"><path d="M40,10 C56,10 68,22 68,38 C68,58 52,72 34,78 C30,79 28,74 32,72 C44,66 52,58 54,48 C50,52 45,54 40,54 C28,54 18,44 18,32 C18,20 28,10 40,10 Z" fill="#F5F0EC"/></g><g transform="translate(112,114) rotate(180)"><path d="M40,10 C56,10 68,22 68,38 C68,58 52,72 34,78 C30,79 28,74 32,72 C44,66 52,58 54,48 C50,52 45,54 40,54 C28,54 18,44 18,32 C18,20 28,10 40,10 Z" fill="#FF7622"/></g></svg></div><div class="cap">墨底</div></div>
+    </div>
+  </div>
+  <p class="note"><b>说的是：</b>两个引号，一个开一个合，中间那段空白就是你说的话。纯标点，不是器物，所以不"机械"。<br>
+  和界面里的衬线是同一套笔意（有粗细、有收笔）。识别度高，但 20px 以下两笔会粘住，需要加大间距做小尺寸版。</p>
+</div>
+
+<!-- ========== 03 ========== -->
+<div class="card">
+  <div class="head"><span class="num">03</span><span class="name">落点 · The drop</span></div>
+  <div class="body">
+    <div class="hero">
+      <svg width="104" height="104" viewBox="0 0 120 120">
+        <path d="M60,14 C60,14 88,48 88,68 C88,85.6 75.5,98 60,98 C44.5,98 32,85.6 32,68 C32,48 60,14 60,14 Z" fill="#FF7622"/>
+        <path d="M60,52 C60,52 74,70 74,79 C74,87 67.7,93 60,93 C52.3,93 46,87 46,79 C46,70 60,52 60,52 Z" fill="#FBF8F5"/>
+      </svg>
+    </div>
+    <div class="sizes">
+      <div class="grp"><div class="box b-paper s56"><svg width="34" height="34" viewBox="0 0 120 120"><path d="M60,14 C60,14 88,48 88,68 C88,85.6 75.5,98 60,98 C44.5,98 32,85.6 32,68 C32,48 60,14 60,14 Z" fill="#FF7622"/><path d="M60,52 C60,52 74,70 74,79 C74,87 67.7,93 60,93 C52.3,93 46,87 46,79 C46,70 60,52 60,52 Z" fill="#FBF8F5"/></svg></div><div class="cap">60</div></div>
+      <div class="grp"><div class="box b-paper s28"><svg width="20" height="20" viewBox="0 0 120 120"><path d="M60,14 C60,14 88,48 88,68 C88,85.6 75.5,98 60,98 C44.5,98 32,85.6 32,68 C32,48 60,14 60,14 Z" fill="#FF7622"/><path d="M60,52 C60,52 74,70 74,79 C74,87 67.7,93 60,93 C52.3,93 46,87 46,79 C46,70 60,52 60,52 Z" fill="#FBF8F5"/></svg></div><div class="cap">34</div></div>
+      <div class="grp"><div class="box b-orange s56"><svg width="34" height="34" viewBox="0 0 120 120"><path d="M60,14 C60,14 88,48 88,68 C88,85.6 75.5,98 60,98 C44.5,98 32,85.6 32,68 C32,48 60,14 60,14 Z" fill="#FBF8F5"/><path d="M60,52 C60,52 74,70 74,79 C74,87 67.7,93 60,93 C52.3,93 46,87 46,79 C46,70 60,52 60,52 Z" fill="#FF7622"/></svg></div><div class="cap">橙底</div></div>
+      <div class="grp"><div class="box b-ink s56"><svg width="34" height="34" viewBox="0 0 120 120"><path d="M60,14 C60,14 88,48 88,68 C88,85.6 75.5,98 60,98 C44.5,98 32,85.6 32,68 C32,48 60,14 60,14 Z" fill="#FF7622"/><path d="M60,52 C60,52 74,70 74,79 C74,87 67.7,93 60,93 C52.3,93 46,87 46,79 C46,70 60,52 60,52 Z" fill="#2A2320"/></svg></div><div class="cap">墨底</div></div>
+    </div>
+  </div>
+  <p class="note"><b>说的是：</b>一滴里面还有一滴 —— 一个瞬间被记下来，又长出一个更小的、你自己的说法。<br>
+  唯一一个整体用橙的方案（因为它面积小、形状收），是最适合直接当 app icon 的。风险：水滴太常见。</p>
+</div>
+
+<!-- ========== 04 ========== -->
+<div class="card">
+  <div class="head"><span class="num">04</span><span class="name">叠 · The overlap</span></div>
+  <div class="body">
+    <div class="hero">
+      <svg width="104" height="104" viewBox="0 0 120 120">
+        <path d="M60,33.5 A30,30 0 0 1 60,86.5 A30,30 0 0 1 60,33.5 Z" fill="#FF7622"/>
+        <circle cx="46" cy="60" r="30" fill="none" stroke="#2A2320" stroke-width="7"/>
+        <circle cx="74" cy="60" r="30" fill="none" stroke="#2A2320" stroke-width="7"/>
+      </svg>
+    </div>
+    <div class="sizes">
+      <div class="grp"><div class="box b-paper s56"><svg width="34" height="34" viewBox="0 0 120 120"><path d="M60,33.5 A30,30 0 0 1 60,86.5 A30,30 0 0 1 60,33.5 Z" fill="#FF7622"/><circle cx="46" cy="60" r="30" fill="none" stroke="#2A2320" stroke-width="8"/><circle cx="74" cy="60" r="30" fill="none" stroke="#2A2320" stroke-width="8"/></svg></div><div class="cap">60</div></div>
+      <div class="grp"><div class="box b-paper s28"><svg width="20" height="20" viewBox="0 0 120 120"><path d="M60,33.5 A30,30 0 0 1 60,86.5 A30,30 0 0 1 60,33.5 Z" fill="#FF7622"/><circle cx="46" cy="60" r="30" fill="none" stroke="#2A2320" stroke-width="10"/><circle cx="74" cy="60" r="30" fill="none" stroke="#2A2320" stroke-width="10"/></svg></div><div class="cap">34</div></div>
+      <div class="grp"><div class="box b-orange s56"><svg width="34" height="34" viewBox="0 0 120 120"><path d="M60,33.5 A30,30 0 0 1 60,86.5 A30,30 0 0 1 60,33.5 Z" fill="#FBF8F5"/><circle cx="46" cy="60" r="30" fill="none" stroke="#FBF8F5" stroke-width="8"/><circle cx="74" cy="60" r="30" fill="none" stroke="#FBF8F5" stroke-width="8"/></svg></div><div class="cap">橙底</div></div>
+      <div class="grp"><div class="box b-ink s56"><svg width="34" height="34" viewBox="0 0 120 120"><path d="M60,33.5 A30,30 0 0 1 60,86.5 A30,30 0 0 1 60,33.5 Z" fill="#FF7622"/><circle cx="46" cy="60" r="30" fill="none" stroke="#F5F0EC" stroke-width="8"/><circle cx="74" cy="60" r="30" fill="none" stroke="#F5F0EC" stroke-width="8"/></svg></div><div class="cap">墨底</div></div>
+    </div>
+  </div>
+  <p class="note"><b>说的是：</b>两个圈交叠，橙色只出现在交集里 —— 你的生活 ∩ 英语。产品逻辑直接画出来了。<br>
+  也是最"几何"的一个，如果你觉得 01 的镜头太机械，这个可能同样偏冷，放在这里做对照。</p>
+</div>
+
+<!-- ========== 05 ========== -->
+<div class="card">
+  <div class="head"><span class="num">05</span><span class="name">开 · The bloom</span></div>
+  <div class="body">
+    <div class="hero">
+      <svg width="104" height="104" viewBox="0 0 120 120">
+        <g transform="translate(60,60)" fill="#FF7622">
+          <g id="p5"><path d="M0,-6 C10,-20 12,-34 0,-48 C-12,-34 -10,-20 0,-6 Z"/></g>
+          <use href="#p5" transform="rotate(72)"/>
+          <use href="#p5" transform="rotate(144)"/>
+          <use href="#p5" transform="rotate(216)"/>
+          <use href="#p5" transform="rotate(288)"/>
+          <circle r="7" fill="#2A2320"/>
+        </g>
+      </svg>
+    </div>
+    <div class="sizes">
+      <div class="grp"><div class="box b-paper s56"><svg width="34" height="34" viewBox="0 0 120 120"><g transform="translate(60,60)" fill="#FF7622"><g id="p5b"><path d="M0,-6 C10,-20 12,-34 0,-48 C-12,-34 -10,-20 0,-6 Z"/></g><use href="#p5b" transform="rotate(72)"/><use href="#p5b" transform="rotate(144)"/><use href="#p5b" transform="rotate(216)"/><use href="#p5b" transform="rotate(288)"/><circle r="7" fill="#2A2320"/></g></svg></div><div class="cap">60</div></div>
+      <div class="grp"><div class="box b-paper s28"><svg width="20" height="20" viewBox="0 0 120 120"><g transform="translate(60,60)" fill="#FF7622"><g id="p5c"><path d="M0,-6 C11,-20 13,-34 0,-50 C-13,-34 -11,-20 0,-6 Z"/></g><use href="#p5c" transform="rotate(72)"/><use href="#p5c" transform="rotate(144)"/><use href="#p5c" transform="rotate(216)"/><use href="#p5c" transform="rotate(288)"/><circle r="8" fill="#2A2320"/></g></svg></div><div class="cap">34</div></div>
+      <div class="grp"><div class="box b-orange s56"><svg width="34" height="34" viewBox="0 0 120 120"><g transform="translate(60,60)" fill="#FBF8F5"><g id="p5d"><path d="M0,-6 C10,-20 12,-34 0,-48 C-12,-34 -10,-20 0,-6 Z"/></g><use href="#p5d" transform="rotate(72)"/><use href="#p5d" transform="rotate(144)"/><use href="#p5d" transform="rotate(216)"/><use href="#p5d" transform="rotate(288)"/><circle r="7" fill="#FBF8F5"/></g></svg></div><div class="cap">橙底</div></div>
+      <div class="grp"><div class="box b-ink s56"><svg width="34" height="34" viewBox="0 0 120 120"><g transform="translate(60,60)" fill="#FF7622"><g id="p5e"><path d="M0,-6 C10,-20 12,-34 0,-48 C-12,-34 -10,-20 0,-6 Z"/></g><use href="#p5e" transform="rotate(72)"/><use href="#p5e" transform="rotate(144)"/><use href="#p5e" transform="rotate(216)"/><use href="#p5e" transform="rotate(288)"/><circle r="7" fill="#F5F0EC"/></g></svg></div><div class="cap">墨底</div></div>
+    </div>
+  </div>
+  <p class="note"><b>说的是：</b>参考图那个星号的有机化版本 —— 花瓣有收放、不是等宽切角，所以是"开"不是"符号"。<br>
+  五瓣不对称到人眼刚好察觉不出，看久了不呆。最接近你原本喜欢的那张参考图的气质。</p>
+</div>
+
+</div>
+</body>
+</html>

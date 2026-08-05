@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Onboarding 第一屏 · 色块减重 v3</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;0,6..72,700;1,6..72,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --pageBg:#FBF6F1; --cardBg:#FFFDF8;
+    --textPrimary:#211811; --textSecondary:#4B4640; --textMuted:#7C7773;
+    --textLabel:#A5A099; --textFaint:#C7C3BD;
+    --brand:#FF7622; --brandDeep:#C2410C;
+    --p100:#FFF3EB; --p200:#FFEADE; --p300:#FFDFCC;
+    --interactive:#17120C; --border:#E3DFD9;
+    --serif:'Newsreader',Georgia,serif;
+    --sans:'Inter',-apple-system,system-ui,sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-font-smoothing:antialiased;}
+  body{background:#EDE7E0;font-family:var(--sans);color:var(--textPrimary);padding:44px 24px 80px;}
+  .page-head{max-width:1100px;margin:0 auto;text-align:center;}
+  .page-head h1{font-family:var(--serif);font-weight:600;font-size:29px;letter-spacing:-.01em;margin-bottom:10px;}
+  .page-head p{color:var(--textMuted);font-size:14.5px;line-height:1.65;max-width:760px;margin:0 auto;}
+  .page-head b{color:var(--textSecondary);}
+
+  .row{display:flex;gap:34px;justify-content:center;align-items:flex-start;flex-wrap:wrap;max-width:1500px;margin:38px auto 0;}
+  .col{display:flex;flex-direction:column;align-items:center;gap:16px;width:324px;}
+
+  .phone{width:324px;height:702px;border-radius:50px;background:#0a0a0a;padding:10px;
+    box-shadow:0 34px 70px -22px rgba(40,30,20,.34);position:relative;flex-shrink:0;}
+  .screen{width:100%;height:100%;border-radius:41px;overflow:hidden;background:var(--pageBg);position:relative;}
+  .screen::before{content:"";position:absolute;inset:0;z-index:0;
+    background-image:radial-gradient(rgba(124,119,115,.09) 1px,transparent 1px);background-size:20px 20px;pointer-events:none;}
+  .island{position:absolute;top:13px;left:50%;transform:translateX(-50%);width:92px;height:28px;background:#000;border-radius:15px;z-index:30;}
+  .content{position:relative;z-index:5;height:100%;display:flex;flex-direction:column;}
+
+  /* 上方纸面文字区（三个方案共用） */
+  .top{flex:1;padding:64px 26px 0;}
+  .kicker{font-size:11px;font-weight:700;letter-spacing:.15em;color:var(--brand);text-transform:uppercase;margin-bottom:20px;}
+  .title{font-family:var(--serif);font-weight:600;font-size:44px;line-height:1.07;letter-spacing:-.025em;color:var(--textPrimary);}
+  .title .b{color:var(--brand);}
+  .sub{font-size:14.5px;line-height:1.55;color:var(--textSecondary);margin-top:18px;max-width:250px;}
+
+  .btn-dark{width:100%;height:54px;border-radius:27px;background:var(--interactive);color:#FBF6F1;
+    font-weight:600;font-size:15.5px;display:flex;align-items:center;justify-content:center;box-shadow:0 10px 24px rgba(28,25,23,.16);}
+  .btn-orange{width:100%;height:54px;border-radius:27px;background:var(--brand);color:#fff;
+    font-weight:700;font-size:15.5px;display:flex;align-items:center;justify-content:center;box-shadow:0 12px 26px rgba(255,118,34,.30);}
+  .dots{display:flex;gap:6px;justify-content:center;margin-top:15px;}
+  .dots i{width:6px;height:6px;border-radius:3px;background:var(--textFaint);}
+  .dots i.on{width:20px;background:var(--brand);}
+
+  .cap{width:324px;text-align:center;}
+  .cap .tag{display:inline-block;font-size:11.5px;font-weight:600;color:var(--brand);background:var(--p100);
+    padding:4px 12px;border-radius:20px;margin-bottom:8px;}
+  .cap.star .tag{color:#fff;background:var(--brand);}
+  .cap h3{font-family:var(--serif);font-weight:600;font-size:18px;margin-bottom:6px;}
+  .cap p{font-size:13px;line-height:1.6;color:var(--textMuted);}
+
+  /* ===== A · 浅色托盘（pale shelf）===== */
+  .shelf{background:var(--p200);border-radius:34px 34px 41px 41px;padding:24px 26px 26px;
+    box-shadow:0 -6px 24px rgba(255,118,34,.08);}
+
+  /* ===== B · 渐隐橙光（faded sunrise，无硬边）===== */
+  .sunrise{position:relative;padding:30px 26px 26px;}
+  .sunrise::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;
+    background:linear-gradient(to top,rgba(255,118,34,.42) 0%,rgba(255,118,34,.20) 40%,rgba(255,118,34,.06) 72%,transparent 100%);}
+
+  /* ===== C · 窄色带（slim saturated band）===== */
+  .slim{background:linear-gradient(160deg,#FF8A42,#FF7622 70%,#F2650F);border-radius:30px 30px 41px 41px;
+    padding:16px 18px 18px;box-shadow:0 -6px 26px rgba(255,118,34,.20);}
+  .btn-on-slim{width:100%;height:52px;border-radius:26px;background:#FFFDF8;color:var(--interactive);
+    font-weight:700;font-size:15.5px;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 18px rgba(120,50,10,.18);}
+  .dots-light i{background:rgba(255,255,255,.45);}
+  .dots-light i.on{background:#fff;}
+</style>
+</head>
+<body>
+  <div class="page-head">
+    <h1>Onboarding 第一屏 · 在方案 2 上「色块减重」</h1>
+    <p>保留你喜欢的<b>底部色块锚定感</b>，但两处改动：① 文案全部回到<b>上方纸面（深色编辑字）</b>，色块里不再放句子；② 色块<b>瘦身减重</b>，只托住 CTA。三种减重手法并排——浅色托盘 / 渐隐橙光 / 窄色带。</p>
+  </div>
+
+  <div class="row">
+
+    <!-- A 浅色托盘 -->
+    <div class="col">
+      <div class="phone"><div class="screen">
+        <div class="island"></div>
+        <div class="content">
+          <div class="top">
+            <div class="kicker">Your English, from life</div>
+            <div class="title">Build your expression from <span class="b">work&nbsp;&amp;&nbsp;life.</span></div>
+            <div class="sub">A photo, a voice note, a thought — turned into English you can actually say.</div>
+          </div>
+          <div class="shelf">
+            <div class="btn-orange">Get started</div>
+            <div class="dots"><i class="on"></i><i></i><i></i></div>
+          </div>
+        </div>
+      </div></div>
+      <div class="cap star">
+        <span class="tag">A · 浅色托盘 ★推荐</span>
+        <h3>Pale Shelf</h3>
+        <p>色块降为浅橘（primary200），高度收窄，只托 CTA。分量来自"托盘 + 柔阴影"，橙的punch集中在按钮上。最克制、最贴品牌，减重最彻底。</p>
+      </div>
+    </div>
+
+    <!-- B 渐隐橙光 -->
+    <div class="col">
+      <div class="phone"><div class="screen">
+        <div class="island"></div>
+        <div class="content">
+          <div class="top">
+            <div class="kicker">Your English, from life</div>
+            <div class="title">Build your expression from <span class="b">work&nbsp;&amp;&nbsp;life.</span></div>
+            <div class="sub">A photo, a voice note, a thought — turned into English you can actually say.</div>
+          </div>
+          <div class="sunrise">
+            <div class="btn-dark">Get started</div>
+            <div class="dots"><i class="on"></i><i></i><i></i></div>
+          </div>
+        </div>
+      </div></div>
+      <div class="cap">
+        <span class="tag">B · 渐隐橙光</span>
+        <h3>Faded Sunrise</h3>
+        <p>橙色从底部往上渐隐、无硬边，像暖光升起。因为没有"硬矩形"所以最轻盈，仍有明确橙色重心。CTA 用深色更稳。介于色块与光晕之间。</p>
+      </div>
+    </div>
+
+    <!-- C 窄色带 -->
+    <div class="col">
+      <div class="phone"><div class="screen">
+        <div class="island"></div>
+        <div class="content">
+          <div class="top" style="padding-bottom:8px">
+            <div class="kicker">Your English, from life</div>
+            <div class="title">Build your expression from <span class="b">work&nbsp;&amp;&nbsp;life.</span></div>
+            <div class="sub">A photo, a voice note, a thought — turned into English you can actually say.</div>
+          </div>
+          <div class="slim">
+            <div class="btn-on-slim">Get started</div>
+            <div class="dots dots-light"><i class="on"></i><i></i><i></i></div>
+          </div>
+        </div>
+      </div></div>
+      <div class="cap">
+        <span class="tag">C · 窄色带</span>
+        <h3>Slim Band</h3>
+        <p>保留原来的饱和橙，但色块大幅收窄成"只包住按钮"的窄带。占比小了就轻了，橙色浓度还在。品牌最外放，但饱和橙仍是三者里最"响"的。</p>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>

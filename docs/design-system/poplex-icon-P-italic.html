@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>Poplex · 图标 P · 斜体 + 居中</title>
+<style>
+  :root{--page:#F5F0EC;--line:#E6DED8;--ink:#2A2320;--ink-600:#726761;--ink-400:#948C86}
+  *{box-sizing:border-box}
+  body{margin:0;padding:64px 32px 110px;background:var(--page);
+    font-family:-apple-system,'SF Pro Text','Inter','PingFang SC',sans-serif;color:var(--ink)}
+  .wrap{max-width:900px;margin:0 auto}
+  h1{font-size:26px;font-weight:600;letter-spacing:-.02em;margin:0 0 12px}
+  .lede{color:var(--ink-600);font-size:14px;line-height:1.85;margin:0 0 36px;max-width:620px}
+  .lede b{color:var(--ink);font-weight:600}
+  hr{border:0;border-top:1px solid var(--line);margin:46px 0}
+  .sechead{display:flex;align-items:baseline;gap:14px;margin:0 0 26px}
+  .idx{font-size:11px;letter-spacing:.18em;color:var(--ink-400);font-weight:600}
+  .title{font-size:18px;font-weight:600}
+  .row{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start}
+  .grp{display:flex;flex-direction:column;align-items:center;width:128px}
+  .ic{border-radius:27px;display:flex;align-items:center;justify-content:center;flex:none;
+      overflow:hidden;box-shadow:0 1px 3px rgba(58,51,47,.07);background:#FBF8F5}
+  .i124{width:124px;height:124px;border-radius:27px}
+  .i56{width:56px;height:56px;border-radius:12px}
+  .i29{width:29px;height:29px;border-radius:6.5px}
+  .meta{font-size:10px;line-height:1.7;color:var(--ink-400);margin-top:11px;text-align:center;
+    font-family:ui-monospace,Menlo,monospace}
+  .verdict{font-size:11px;font-weight:600;margin-top:4px;text-align:center}
+  .rec{color:#4A7C4E}
+  p.body{font-size:13.5px;color:var(--ink-600);line-height:1.9;margin:26px 0 0;max-width:660px}
+  p.body b{color:var(--ink);font-weight:600}
+  code{background:#FBF8F5;border:1px solid var(--line);border-radius:5px;padding:1px 6px;
+    font-size:11.5px;font-family:ui-monospace,Menlo,monospace}
+  .home{border-radius:26px;padding:26px 22px;display:flex;gap:26px;flex-wrap:wrap;
+    background:linear-gradient(150deg,#BFE0E8 0%,#8FB6D8 38%,#3E63B0 100%)}
+  .lbl{font-size:9.5px;text-align:center;margin-top:8px;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.35)}
+  svg{display:block}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>加斜 + 居中</h1>
+<p class="lede">
+原来那版字是<b>偏左</b>的（字形 bbox 中心在 x=52.5，方框中心是 60），所以看着靠边。
+现在按<b>字 + 点整组的外接框</b>重新对齐，左右余量做到相等。<br><br>
+斜体给了三档。<b>那个墨点不跟着斜</b>——句点在任何斜体里都是正圆，斜了会像被撞歪。
+</p>
+
+<svg width="0" height="0" style="position:absolute"><defs>
+  <symbol id="P" viewBox="0 0 120 120">
+    <path fill-rule="evenodd" fill="currentColor" d="
+      M18,26 L55,26
+      C74,26.5 88,36 88,50
+      C88,64 75,73.5 56,74
+      L47,74 L47,88
+      C47,92 52,92.5 58,93
+      L58,97 L17,97 L17,93
+      C25,92.5 30,92 30,88
+      L30,33
+      C29.5,30 25,31 18,31 Z
+      M47,34
+      C62,34 72,39.5 72,50
+      C72,60.5 62,65.5 47,65.5 Z"/>
+  </symbol>
+</defs></svg>
+
+<hr>
+
+<div class="sechead"><span class="idx">01</span><span class="title">四档倾斜 · 都已重新居中</span></div>
+<div class="row">
+  <div class="grp">
+    <div class="ic i124"><svg width="124" height="124" viewBox="0 0 120 120">
+      <g transform="translate(7.5,-1.5)"><use href="#P" color="#FF7622"/></g>
+      <circle cx="76.5" cy="83.5" r="8" fill="#2A2320"/></svg></div>
+    <div class="meta">0°</div><div class="verdict">正体（仅居中）</div>
+  </div>
+  <div class="grp">
+    <div class="ic i124"><svg width="124" height="124" viewBox="0 0 120 120">
+      <g transform="translate(15.22,-1.5) skewX(-6)"><use href="#P" color="#FF7622"/></g>
+      <circle cx="75.3" cy="83.5" r="8" fill="#2A2320"/></svg></div>
+    <div class="meta">6°</div><div class="verdict rec">✓ 「略微」就是这一档</div>
+  </div>
+  <div class="grp">
+    <div class="ic i124"><svg width="124" height="124" viewBox="0 0 120 120">
+      <g transform="translate(20.45,-1.5) skewX(-10)"><use href="#P" color="#FF7622"/></g>
+      <circle cx="74.5" cy="83.5" r="8" fill="#2A2320"/></svg></div>
+    <div class="meta">10°</div><div class="verdict">标准斜体角度</div>
+  </div>
+  <div class="grp">
+    <div class="ic i124"><svg width="124" height="124" viewBox="0 0 120 120">
+      <g transform="translate(25.82,-1.5) skewX(-14)"><use href="#P" color="#FF7622"/></g>
+      <circle cx="73.6" cy="83.5" r="8" fill="#2A2320"/></svg></div>
+    <div class="meta">14°</div><div class="verdict">已经在"用力"</div>
+  </div>
+</div>
+<p class="body">
+四档的左右余量全部相等（0°: 22.5 / 22.5，6°: 22.0 / 22.0，10°: 20.4 / 20.4，14°: 18.6 / 18.6）。
+角度越大，字被拉得越宽，余量自然越小——这是对的，斜体本来就该占满一点。<br><br>
+<b>我推 6°。</b>再大一点点就从"有一丝倾向"变成"这是个斜体 logo"了，
+而你界面里所有大标题都是正体，图标斜太多会对不上。
+</p>
+
+<hr>
+
+<div class="sechead"><span class="idx">02</span><span class="title">6° 版 · 各尺寸 + 深色模式</span></div>
+<div class="row" style="align-items:flex-end;gap:18px">
+  <div class="grp" style="width:auto"><div class="ic i124"><svg width="124" height="124" viewBox="0 0 120 120">
+    <g transform="translate(15.22,-1.5) skewX(-6)"><use href="#P" color="#FF7622"/></g>
+    <circle cx="75.3" cy="83.5" r="8" fill="#2A2320"/></svg></div><div class="meta">124</div></div>
+  <div class="grp" style="width:auto"><div class="ic i56"><svg width="56" height="56" viewBox="0 0 120 120">
+    <g transform="translate(15.22,-1.5) skewX(-6)"><use href="#P" color="#FF7622"/></g>
+    <circle cx="75.3" cy="83.5" r="8" fill="#2A2320"/></svg></div><div class="meta">56</div></div>
+  <div class="grp" style="width:auto"><div class="ic i29"><svg width="29" height="29" viewBox="0 0 120 120">
+    <g transform="translate(15.22,-1.5) skewX(-6)"><use href="#P" color="#FF7622"/></g>
+    <circle cx="75.3" cy="83.5" r="9" fill="#2A2320"/></svg></div><div class="meta">29 · 点加大</div></div>
+  <div class="grp" style="width:auto;margin-left:22px"><div class="ic i124" style="background:#2A2320">
+    <svg width="124" height="124" viewBox="0 0 120 120">
+    <g transform="translate(15.22,-1.5) skewX(-6)"><use href="#P" color="#FF7622"/></g>
+    <circle cx="75.3" cy="83.5" r="8" fill="#FBF8F5"/></svg></div><div class="meta">深色模式</div></div>
+</div>
+
+<hr>
+
+<div class="sechead"><span class="idx">03</span><span class="title">和原版并排</span></div>
+<div class="home">
+  <div><div class="ic i56" style="background:#F2F1EE"><svg width="56" height="56" viewBox="0 0 120 120">
+    <use href="#P" color="#FF7622"/><circle cx="69" cy="85" r="8" fill="#2A2320"/></svg></div>
+    <div class="lbl">原图 · 冷底 · 偏左</div></div>
+  <div><div class="ic i56"><svg width="56" height="56" viewBox="0 0 120 120">
+    <g transform="translate(7.5,-1.5)"><use href="#P" color="#FF7622"/></g>
+    <circle cx="76.5" cy="83.5" r="8" fill="#2A2320"/></svg></div>
+    <div class="lbl">暖底 + 居中</div></div>
+  <div><div class="ic i56"><svg width="56" height="56" viewBox="0 0 120 120">
+    <g transform="translate(15.22,-1.5) skewX(-6)"><use href="#P" color="#FF7622"/></g>
+    <circle cx="75.3" cy="83.5" r="8" fill="#2A2320"/></svg></div>
+    <div class="lbl">+ 6° 斜</div></div>
+  <div><div class="ic i56"><svg width="56" height="56" viewBox="0 0 120 120">
+    <g transform="translate(20.45,-1.5) skewX(-10)"><use href="#P" color="#FF7622"/></g>
+    <circle cx="74.5" cy="83.5" r="8" fill="#2A2320"/></svg></div>
+    <div class="lbl">+ 10° 斜</div></div>
+  <div><div class="ic i56" style="background:#2A2320"><svg width="56" height="56" viewBox="0 0 120 120">
+    <g transform="translate(15.22,-1.5) skewX(-6)"><use href="#P" color="#FF7622"/></g>
+    <circle cx="75.3" cy="83.5" r="8" fill="#FBF8F5"/></svg></div>
+    <div class="lbl">深色模式</div></div>
+</div>
+
+<p class="body">
+<b>一个坦白：</b>这是把正体<b>切变</b>（skew）出来的斜，不是重画的真斜体。
+真斜体会把碗重新画窄、把衬线角度改掉；切变则会让碗的粗细轴跟着转，
+6° 这个角度肉眼看不出来，<b>10° 以上开始能看出碗左下有点"塌"</b>。
+如果最后要定 10° 或 14°，我再把碗单独修一遍。
+</p>
+
+<p class="body">
+<b>切图参数</b>（120 网格）：
+字 <code>translate(15.22,-1.5) skewX(-6)</code>
+点 <code>cx 75.3　cy 83.5　r 8</code>（&lt;40px 时 r 改 9）<br>
+色：底 <code>#FBF8F5</code>　字 <code>#FF7622</code>　点 <code>#2A2320</code>／深色版底 <code>#2A2320</code>、点 <code>#FBF8F5</code>
+</p>
+
+</div>
+</body>
+</html>

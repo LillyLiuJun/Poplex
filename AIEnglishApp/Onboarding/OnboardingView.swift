@@ -13,6 +13,8 @@ struct OnboardingView: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
+            OnboardingAuraBackground()
+            
             // Offset-based paging: all pages sit side by side in one HStack and
             // we slide the whole strip left/right. No insert/remove transitions,
             // so direction is always correct and pages never overlap or ghost.
@@ -47,7 +49,7 @@ struct OnboardingView: View {
         HStack(spacing: 6) {
             ForEach(OnboardingStep.allCases, id: \.self) { s in
                 Capsule()
-                    .fill(s == step ? AppTheme.Color.interactive : AppTheme.Color.textFaint)
+                    .fill(s == step ? AppTheme.Color.brandStrong : AppTheme.Color.textFaint)
                     .frame(width: s == step ? 20 : 6, height: 6)
                     .animation(.spring(duration: 0.25), value: step)
             }

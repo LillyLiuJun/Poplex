@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Onboarding 第三屏排版对冲实验</title>
+    <style>
+        :root {
+            --pageBg: #FBF6F1;
+            --cardBg: #FFFDF8;
+            --borderDashed: #E3DFD9;
+            --brandStrong: #FF7622;
+            --brandSubtleBg: #FFF3EB;
+            --textPrimary: #211811;
+            --textSecondary: #4B4640;
+            --textMuted: #7C7773;
+            --interactive: #17120C;
+            --textOnChip: #FBF6F1;
+            --imagePlaceholderBg: #EBE8E3;
+            --shadowLight: rgba(28, 25, 23, 0.04) 0 12px 32px;
+        }
+
+        body {
+            background-color: #F0EDE8;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 40px;
+            display: flex;
+            gap: 40px;
+            overflow-x: auto;
+            align-items: flex-start;
+        }
+
+        .phone-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .label {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--textSecondary);
+            text-align: center;
+        }
+
+        .desc {
+            font-size: 13px;
+            color: var(--textMuted);
+            text-align: center;
+            max-width: 320px;
+            line-height: 1.4;
+        }
+
+        .phone {
+            width: 393px;
+            height: 852px;
+            background-color: var(--pageBg);
+            border-radius: 40px;
+            box-shadow: 0 24px 48px rgba(0, 0, 0, 0.08);
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            box-sizing: border-box;
+            border: 8px solid #FFFFFF;
+        }
+
+        .content {
+            padding: 20px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 顶部占位 */
+        .spacer-top {
+            height: 52px; /* 36 + 16 */
+        }
+
+        .header-title {
+            font-family: 'Newsreader', 'Times New Roman', serif;
+            font-size: 28px;
+            font-weight: 600;
+            color: var(--textPrimary);
+            line-height: 1.2;
+            margin-bottom: 8px;
+        }
+
+        .header-subtitle {
+            font-size: 17px;
+            color: var(--textSecondary);
+            line-height: 1.4;
+            margin-bottom: 32px;
+        }
+
+        /* 中间 Action Card 基础样式 */
+        .action-card {
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+            border-radius: 20px;
+            margin-bottom: 32px;
+        }
+
+        /* 方案 A: 透明 + 1px 细虚线 (轻盈待放置感) */
+        .action-card.opt-a {
+            background: transparent;
+            border: 1px dashed var(--borderDashed);
+        }
+
+        /* 方案 B: 实心暖白底 + 淡淡悬浮阴影 (极简悬浮感) */
+        .action-card.opt-b {
+            background: var(--cardBg);
+            box-shadow: var(--shadowLight);
+        }
+
+        /* 原方案 (方案 C): 暖白底 + 2px 粗虚线 (较重) */
+        .action-card.opt-c {
+            background: var(--cardBg);
+            border: 2px dashed var(--borderDashed);
+        }
+
+        .camera-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: var(--brandSubtleBg);
+            color: var(--brandStrong);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .camera-icon svg {
+            width: 20px;
+            height: 20px;
+            fill: currentColor;
+        }
+
+        .action-hint {
+            font-size: 13px;
+            color: var(--textMuted);
+        }
+
+        .btn-take-photo {
+            width: 100%;
+            padding: 12px 0;
+            background: var(--brandSubtleBg);
+            color: var(--brandStrong);
+            font-size: 15px;
+            font-weight: 500;
+            border-radius: 24px;
+            text-align: center;
+            cursor: pointer;
+        }
+
+        .link-photos {
+            font-size: 15px;
+            font-weight: 500;
+            color: var(--textSecondary);
+            text-decoration: underline;
+            cursor: pointer;
+        }
+
+        /* 预设条 */
+        .carousel-title {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--textMuted);
+            letter-spacing: 0.6px;
+            margin-bottom: 16px;
+        }
+
+        .carousel {
+            display: flex;
+            gap: 12px;
+            overflow-x: hidden; /* 模拟横滑 */
+        }
+
+        .preset-tile {
+            background: var(--imagePlaceholderBg);
+            border-radius: 12px;
+            flex-shrink: 0;
+            /* 假装有图片在里面 */
+            background-image: url('https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?q=80&w=200&auto=format&fit=crop');
+            background-size: cover;
+            background-position: center;
+        }
+
+        /* Carousel 比例 */
+        .preset-tile.ratio-1-1 { width: 100px; height: 100px; }
+        .preset-tile.ratio-3-4 { width: 90px; height: 120px; }
+        .preset-tile.ratio-orig { width: 100px; height: 120px; }
+
+        /* 底部 CTA */
+        .bottom-cta {
+            position: absolute;
+            bottom: 56px;
+            left: 20px;
+            right: 20px;
+            height: 56px;
+            background: var(--interactive);
+            color: var(--textOnChip);
+            border-radius: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 17px;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.15);
+            /* 禁用态（没有选择时本不该显示，为了预览强制显示为低透明度或者灰色） */
+            opacity: 0.3;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 方案 A -->
+    <div class="phone-wrapper">
+        <div class="label">方案 A：最轻盈（推荐）</div>
+        <div class="desc">
+            <b>Action卡：</b>透明底 + 1px 细虚线<br>
+            <b>底部图：</b>1:1 正方形 (100x100)
+        </div>
+        <div class="phone">
+            <div class="content">
+                <div class="spacer-top"></div>
+                <div class="header-title">Snap what's around<br>you to start</div>
+                <div class="header-subtitle">Point at your desk, coffee, or view — no preparation needed.</div>
+
+                <div class="action-card opt-a">
+                    <div class="camera-icon">
+                        <svg viewBox="0 0 24 24"><path d="M4 8V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2m-3 4a5 5 0 1 1-10 0 5 5 0 0 1 10 0zM4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>
+                    </div>
+                    <div class="action-hint">Take a quick photo to see instant results</div>
+                    <div class="btn-take-photo">Take a Photo</div>
+                    <div class="link-photos">Choose from Photos</div>
+                </div>
+
+                <div class="carousel-title">NO PHOTO READY? TRY A SAMPLE</div>
+                <div class="carousel">
+                    <div class="preset-tile ratio-1-1"></div>
+                    <div class="preset-tile ratio-1-1" style="background-image: url('https://images.unsplash.com/photo-1511920170033-f8396924c348?q=80&w=200&auto=format&fit=crop')"></div>
+                    <div class="preset-tile ratio-1-1" style="background-image: url('https://images.unsplash.com/photo-1497935586351-b67a49e012bf?q=80&w=200&auto=format&fit=crop')"></div>
+                    <div class="preset-tile ratio-1-1"></div>
+                </div>
+            </div>
+            <div class="bottom-cta">Continue</div>
+        </div>
+    </div>
+
+    <!-- 方案 B -->
+    <div class="phone-wrapper">
+        <div class="label">方案 B：胶片悬浮感</div>
+        <div class="desc">
+            <b>Action卡：</b>暖白实心底 + 无边框阴影<br>
+            <b>底部图：</b>3:4 竖图 (90x120)
+        </div>
+        <div class="phone">
+            <div class="content">
+                <div class="spacer-top"></div>
+                <div class="header-title">Snap what's around<br>you to start</div>
+                <div class="header-subtitle">Point at your desk, coffee, or view — no preparation needed.</div>
+
+                <div class="action-card opt-b">
+                    <div class="camera-icon">
+                        <svg viewBox="0 0 24 24"><path d="M4 8V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2m-3 4a5 5 0 1 1-10 0 5 5 0 0 1 10 0zM4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>
+                    </div>
+                    <div class="action-hint">Take a quick photo to see instant results</div>
+                    <div class="btn-take-photo">Take a Photo</div>
+                    <div class="link-photos">Choose from Photos</div>
+                </div>
+
+                <div class="carousel-title">NO PHOTO READY? TRY A SAMPLE</div>
+                <div class="carousel">
+                    <div class="preset-tile ratio-3-4"></div>
+                    <div class="preset-tile ratio-3-4" style="background-image: url('https://images.unsplash.com/photo-1511920170033-f8396924c348?q=80&w=200&auto=format&fit=crop')"></div>
+                    <div class="preset-tile ratio-3-4" style="background-image: url('https://images.unsplash.com/photo-1497935586351-b67a49e012bf?q=80&w=200&auto=format&fit=crop')"></div>
+                    <div class="preset-tile ratio-3-4"></div>
+                </div>
+            </div>
+            <div class="bottom-cta">Continue</div>
+        </div>
+    </div>
+
+    <!-- 方案 C -->
+    <div class="phone-wrapper">
+        <div class="label">原方案 (对照)</div>
+        <div class="desc">
+            <b>Action卡：</b>暖白实心底 + 2px粗虚线<br>
+            <b>底部图：</b>5:6 原始长宽比 (100x120)
+        </div>
+        <div class="phone">
+            <div class="content">
+                <div class="spacer-top"></div>
+                <div class="header-title">Snap what's around<br>you to start</div>
+                <div class="header-subtitle">Point at your desk, coffee, or view — no preparation needed.</div>
+
+                <div class="action-card opt-c">
+                    <div class="camera-icon">
+                        <svg viewBox="0 0 24 24"><path d="M4 8V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2m-3 4a5 5 0 1 1-10 0 5 5 0 0 1 10 0zM4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>
+                    </div>
+                    <div class="action-hint">Take a quick photo to see instant results</div>
+                    <div class="btn-take-photo">Take a Photo</div>
+                    <div class="link-photos">Choose from Photos</div>
+                </div>
+
+                <div class="carousel-title">NO PHOTO READY? TRY A SAMPLE</div>
+                <div class="carousel">
+                    <div class="preset-tile ratio-orig"></div>
+                    <div class="preset-tile ratio-orig" style="background-image: url('https://images.unsplash.com/photo-1511920170033-f8396924c348?q=80&w=200&auto=format&fit=crop')"></div>
+                    <div class="preset-tile ratio-orig" style="background-image: url('https://images.unsplash.com/photo-1497935586351-b67a49e012bf?q=80&w=200&auto=format&fit=crop')"></div>
+                    <div class="preset-tile ratio-orig"></div>
+                </div>
+            </div>
+            <div class="bottom-cta">Continue</div>
+        </div>
+    </div>
+
+</body>
+</html>

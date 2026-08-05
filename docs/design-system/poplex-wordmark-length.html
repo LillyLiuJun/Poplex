@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>poplex 字标 · 长度检验</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--orange:#FF7622;--page:#F5F0EC;--card:#FBF8F5;--line:#E6DED8;
+        --ink:#2A2320;--ink-600:#726761;--ink-400:#948C86}
+  *{box-sizing:border-box}
+  body{margin:0;padding:44px 28px 90px;background:var(--page);
+    font-family:'Inter',-apple-system,'PingFang SC',sans-serif;color:#3A332F}
+  .wrap{max-width:880px;margin:0 auto}
+  h1{font-size:28px;font-weight:700;letter-spacing:-.02em;margin:0 0 8px}
+  .sub{color:var(--ink-600);font-size:14px;line-height:1.75;margin:0 0 34px;max-width:600px}
+  .card{background:#fff;border-radius:22px;padding:30px;margin-bottom:20px;
+    box-shadow:0 1px 2px rgba(58,51,47,.04),0 6px 24px rgba(58,51,47,.05)}
+  .tag{font-size:11px;font-weight:700;letter-spacing:.11em;text-transform:uppercase;
+    color:var(--ink-400);margin-bottom:22px;display:block}
+  .note{font-size:13px;color:var(--ink-600);line-height:1.75;border-top:1px solid var(--line);
+    padding-top:16px;margin:24px 0 0}
+  .note b{color:#3A332F;font-weight:600}
+  .wm{font-family:'Playfair Display',serif;font-weight:800;color:var(--ink);letter-spacing:-.025em}
+  .dot{color:var(--orange)}
+  /* phone */
+  .phones{display:flex;gap:22px;flex-wrap:wrap}
+  .phone{width:190px;height:390px;background:var(--page);border-radius:30px;
+    border:1px solid var(--line);padding:16px 14px;position:relative;overflow:hidden;flex:none}
+  .nav{display:flex;align-items:center;justify-content:space-between;margin-top:14px}
+  .avatar{width:26px;height:26px;border-radius:50%;background:#fff;border:1px solid var(--line)}
+  .pill{height:26px;border-radius:13px;background:#fff;border:1px solid var(--line);
+    padding:0 10px;display:flex;align-items:center;font-size:9px;color:var(--ink-600)}
+  .ph-title{font-family:'Playfair Display',serif;font-weight:800;font-size:26px;
+    line-height:1.15;letter-spacing:-.02em;margin:34px 0 6px}
+  .ph-sub{font-size:10.5px;color:var(--ink-600);line-height:1.5}
+  .skel{height:56px;background:#fff;border-radius:12px;margin-top:10px;border:1px solid var(--line)}
+  /* compare */
+  .cmp{display:flex;flex-direction:column;gap:14px}
+  .cmprow{display:flex;align-items:baseline;gap:16px}
+  .cmprow .n{font-size:10px;color:var(--ink-400);width:34px;flex:none;text-align:right}
+  .cmprow .w{font-family:'Inter';font-weight:700;font-size:30px;letter-spacing:-.03em;color:var(--ink-400)}
+  .cmprow.me .w{font-family:'Playfair Display',serif;font-weight:800;color:var(--ink);font-size:34px}
+  /* icons */
+  .icons{display:flex;gap:18px;align-items:flex-end;flex-wrap:wrap}
+  .ic{width:76px;height:76px;border-radius:18px;display:flex;align-items:center;
+    justify-content:center;overflow:hidden;flex:none}
+  .ic-p{background:var(--card);border:1px solid var(--line)}
+  .ic-o{background:var(--orange)}
+  .ic-i{background:var(--ink)}
+  .cap{font-size:10px;color:var(--ink-400);text-align:center;margin-top:7px}
+  .grp{display:flex;flex-direction:column;align-items:center}
+  .bad{outline:2px dashed #D14343;outline-offset:3px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>poplex 能不能直接当 logo？</h1>
+<p class="sub">
+短答：<b>能，而且不长</b>。六个字母，和 Notion / Airbnb 一样；比 Duolingo、Spotify 还短。
+真正的问题不是长度，是<b>方形</b>——App 图标是正方形，六个字母塞不进去。所以字标解决 90% 的场合，剩下 10% 需要一个方形版本。
+</p>
+
+<!-- 1 -->
+<div class="card">
+  <span class="tag">01 · 长度对比（同字号）</span>
+  <div class="cmp">
+    <div class="cmprow"><span class="n">6</span><span class="w">notion</span></div>
+    <div class="cmprow"><span class="n">6</span><span class="w">airbnb</span></div>
+    <div class="cmprow me"><span class="n">6</span><span class="w">poplex</span></div>
+    <div class="cmprow"><span class="n">7</span><span class="w">georgia</span></div>
+    <div class="cmprow"><span class="n">7</span><span class="w">spotify</span></div>
+    <div class="cmprow"><span class="n">8</span><span class="w">duolingo</span></div>
+  </div>
+  <p class="note">poplex 六个字母、无升部堆叠（只有 p 的降部和 l 的升部各一个），
+  重心平、辨识清楚。<b>长度完全不是问题</b>。</p>
+</div>
+
+<!-- 2 -->
+<div class="card">
+  <span class="tag">02 · 放进你现有的界面里看</span>
+  <div class="phones">
+    <div class="phone">
+      <div class="nav"><div class="avatar"></div><div class="pill">Library</div></div>
+      <div class="ph-title">Not open<br>yet</div>
+      <div class="ph-sub">Reach 20 words in any topic to start practicing.</div>
+      <div class="skel"></div><div class="skel"></div><div class="skel"></div>
+      <div style="position:absolute;left:14px;bottom:16px" class="wm">
+        <span style="font-size:19px">poplex</span>
+      </div>
+    </div>
+    <div class="phone" style="display:flex;flex-direction:column;justify-content:center;align-items:center">
+      <div class="wm" style="font-size:40px">poplex</div>
+      <div style="font-size:10px;color:var(--ink-600);margin-top:10px;letter-spacing:.04em">
+        from work &amp; life
+      </div>
+      <div style="width:34px;height:3px;border-radius:2px;background:var(--orange);
+        position:absolute;bottom:44px"></div>
+    </div>
+    <div class="phone">
+      <div class="nav">
+        <div class="wm" style="font-size:17px">poplex</div>
+        <div class="pill">Library</div>
+      </div>
+      <div class="ph-title" style="font-size:23px">Build your expression</div>
+      <div class="ph-sub">Not textbooks. Not drills.</div>
+      <div class="skel" style="height:90px"></div>
+      <div class="skel" style="height:90px"></div>
+    </div>
+  </div>
+  <p class="note">
+  <b>启动页 40px</b>、<b>导航栏 17px</b>、<b>页脚 19px</b> 三种都撑得住。
+  17px 是衬线字标的下限——再小 Playfair 的细笔画就开始断了，那一档要换 Inter 紧字距版。</p>
+</div>
+
+<!-- 3 -->
+<div class="card">
+  <span class="tag">03 · 唯一撑不住的场合：方形图标</span>
+  <div class="icons">
+    <div class="grp">
+      <div class="ic ic-p bad"><div class="wm" style="font-size:11px">poplex</div></div>
+      <div class="cap" style="color:#D14343">六字母塞方框 ✗</div>
+    </div>
+    <div class="grp">
+      <div class="ic ic-p"><div class="wm" style="font-size:44px;line-height:1">p</div></div>
+      <div class="cap">单字母 p</div>
+    </div>
+    <div class="grp">
+      <div class="ic ic-p">
+        <div class="wm" style="font-size:44px;line-height:1;position:relative">p<span
+          style="position:absolute;right:-9px;top:6px;width:8px;height:8px;border-radius:50%;background:var(--orange)"></span></div>
+      </div>
+      <div class="cap">p + 橙点</div>
+    </div>
+    <div class="grp">
+      <div class="ic ic-o"><div class="wm" style="font-size:44px;line-height:1;color:#FBF8F5">p</div></div>
+      <div class="cap">橙底反白</div>
+    </div>
+    <div class="grp">
+      <div class="ic ic-i"><div class="wm" style="font-size:44px;line-height:1;color:#F5F0EC;position:relative">p<span
+          style="position:absolute;right:-9px;top:6px;width:8px;height:8px;border-radius:50%;background:var(--orange)"></span></div></div>
+      <div class="cap">墨底</div>
+    </div>
+  </div>
+  <p class="note">
+  最省事的做法：<b>不另造符号，直接用字标里那个 p 当方形图标</b>——同一套字、同一个橙点，
+  图标和字标天然一致，不需要维护两套视觉资产。上面那个「p + 橙点」就是。<br>
+  这样你只有两个资产：<b>横版字标 poplex</b>（启动页 / 导航 / 官网 / 应用商店截图）+ <b>方版 p</b>（App 图标 / favicon / 头像）。</p>
+</div>
+
+</div>
+</body>
+</html>

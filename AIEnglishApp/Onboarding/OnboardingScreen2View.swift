@@ -25,39 +25,46 @@ struct OnboardingScreen2View: View {
     ]
 
     var body: some View {
-        ZStack {
-            OnboardingAuraBackground()
+        ZStack(alignment: .bottom) {
+            GeometryReader { geo in
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        // Dummy top bar area to match backButton
+                        Color.clear
+                            .frame(height: 36)
+                            .padding(.top, AppTheme.Space.paddingCard)
+                        
+                        textBlock
+                            .padding(.horizontal, AppTheme.Space.paddingPage)
+                            .padding(.top, AppTheme.Space.paddingCard)
+                            .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.05)
 
-            VStack(alignment: .leading, spacing: 0) {
-                backButton
+                        Spacer().frame(height: AppTheme.Space.paddingSection)
 
-                Spacer()
+                        VStack(spacing: AppTheme.Space.paddingM) {
+                            ForEach(Array(modes.enumerated()), id: \.element.id) { index, mode in
+                                cardModeRow(mode)
+                                    .onboardingEntrance(
+                                        appeared: appeared,
+                                        reduceMotion: reduceMotion,
+                                        delay: 0.18 + Double(index) * 0.1
+                                    )
+                            }
+                        }
+                        .padding(.horizontal, AppTheme.Space.paddingPage)
 
-                textBlock
-                    .padding(.horizontal, AppTheme.Space.paddingPage)
-                    .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.05)
-
-                Spacer().frame(height: AppTheme.Space.paddingSection)
-
-                VStack(alignment: .leading, spacing: AppTheme.Space.paddingSection) {
-                    ForEach(Array(modes.enumerated()), id: \.element.id) { index, mode in
-                        captureModeRow(mode, delay: 0.18 + Double(index) * 0.1)
-                            .onboardingEntrance(
-                                appeared: appeared,
-                                reduceMotion: reduceMotion,
-                                delay: 0.18 + Double(index) * 0.1
-                            )
+                        Spacer()
                     }
+                    .padding(.bottom, 120) // Give space for the absolute bottom button
+                    .frame(minHeight: geo.size.height) // Full height
                 }
-                .padding(.horizontal, AppTheme.Space.paddingPage)
-
-                Spacer()
-
-                OnboardingPrimaryButton(title: "Continue", action: onForward)
-                    .padding(.horizontal, AppTheme.Space.paddingPage)
-                    .padding(.bottom, AppTheme.Space.paddingScreenBottom)
-                    .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.5)
+                .scrollBounceBehavior(.basedOnSize)
             }
+            
+            OnboardingPrimaryButton(title: "Continue", action: onForward)
+                .padding(.horizontal, AppTheme.Space.paddingPage)
+                .padding(.bottom, AppTheme.Space.paddingScreenBottom)
+                .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.5)
         }
         .contentShape(Rectangle())
         .onHorizontalSwipe(onLeft: onForward, onRight: onBack)
@@ -66,60 +73,52 @@ struct OnboardingScreen2View: View {
         .onChange(of: isActive) { _, active in if active { appeared = true } }
     }
 
-    // MARK: - 返回
-
-    private var backButton: some View {
-        Button(action: onBack) {
-            Image(systemName: "chevron.left")
-                .font(.body.weight(.medium))
-                .foregroundStyle(AppTheme.Color.textSecondary)
-                .padding(AppTheme.Space.paddingS)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(PressableButtonStyle())
-        .padding(.leading, AppTheme.Space.paddingCard)
-        .padding(.top, AppTheme.Space.paddingCard)
-    }
-
     // MARK: - 文案区：标题（品牌橙强调收尾短语）+ 一句机制说明
 
     private var textBlock: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Space.paddingCard) {
-            (Text("Capture it\n")
-                + Text("your way.").foregroundStyle(AppTheme.Color.brandStrong))
-                .font(AppTheme.Font.hero)
+        VStack(alignment: .leading, spacing: AppTheme.Space.paddingS) {
+            Text("Share your context, in any format.")
+                .font(AppTheme.Font.pageTitleSerif)
                 .foregroundStyle(AppTheme.Color.textPrimary)
 
-            Text("A photo, a voice note, or a few typed words — AI turns it into English you can actually say.")
+            Text("Drop a photo, speak, or type. AI does the rest.")
                 .font(AppTheme.Font.englishBody)
                 .foregroundStyle(AppTheme.Color.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
 
-    // MARK: - 输入方式行（纯展示，无点击 affordance）
+    // MARK: - 输入方式行（独立卡片排版）
 
-    private func captureModeRow(_ mode: CaptureMode, delay: Double) -> some View {
-        HStack(alignment: .center, spacing: AppTheme.Space.paddingCard) {
+    private func cardModeRow(_ mode: CaptureMode) -> some View {
+        HStack(alignment: .center, spacing: AppTheme.Space.paddingM) {
+            // Icon in rounded orange box
             Image(systemName: mode.icon)
                 .font(.title3)
                 .foregroundStyle(AppTheme.Color.brandStrong)
-                .frame(width: AppTheme.Size.iconBadge, height: AppTheme.Size.iconBadge)
-                .background(AppTheme.Color.brandSubtleBg, in: Circle())
-                .scaleEffect(appeared && !reduceMotion ? 1 : 0.6)
-                .animation(AppTheme.Motion.tabSelection.delay(delay), value: appeared)
-
-            VStack(alignment: .leading, spacing: AppTheme.Space.paddingXS) {
+                .frame(width: 48, height: 48)
+                .background(
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.small)
+                        .fill(AppTheme.Color.brandStrong.opacity(0.1))
+                )
+            
+            // Text block
+            VStack(alignment: .leading, spacing: 4) {
                 Text(mode.title)
                     .font(AppTheme.Font.buddy)
                     .foregroundStyle(AppTheme.Color.textPrimary)
 
                 Text(mode.detail)
                     .font(AppTheme.Font.chineseFaint)
-                    .foregroundStyle(AppTheme.Color.textMuted)
+                    .foregroundStyle(AppTheme.Color.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            
+            Spacer(minLength: 0)
         }
+        .padding(AppTheme.Space.paddingM)
+        .background(AppTheme.Color.cardBg)
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.large))
         .accessibilityElement(children: .combine)
     }
 }

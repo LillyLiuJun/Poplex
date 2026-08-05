@@ -22,28 +22,53 @@ struct OnboardingPrimaryButton: View {
     }
 }
 
-// MARK: - 页面背景：暖米白 + 底部品牌橙光晕（与首页 CanvasBackground 同一光晕配方）
+// MARK: - 页面背景：暖米白 + 网格点底纹 + 底部品牌橙光晕（与 CanvasBackground 参数统一）
 
 struct OnboardingAuraBackground: View {
+    private let gridSpacing: CGFloat = 18
+    private let dotRadius: CGFloat = 0.6
+
     var body: some View {
         ZStack {
             AppTheme.Color.pageBg.ignoresSafeArea()
 
-            VStack {
-                Spacer()
-                Ellipse()
-                    .fill(
-                        RadialGradient(
-                            colors: [AppTheme.Color.canvasAura.opacity(0.22), .clear],
-                            center: .center,
-                            startRadius: 0,
-                            endRadius: 240
-                        )
-                    )
-                    .frame(width: 420, height: 340)
-                    .blur(radius: 50)
-                    .offset(y: 80)
+            // 网格点底纹（与 Tab1/Tab2 CanvasBackground 一致）
+            Canvas { context, size in
+                let dot = Path(
+                    ellipseIn: CGRect(x: 0, y: 0, width: dotRadius * 2, height: dotRadius * 2)
+                )
+                let color = GraphicsContext.Shading.color(
+                    AppTheme.Color.canvasGridDot.opacity(0.08)
+                )
+                var y: CGFloat = 0
+                while y < size.height {
+                    var x: CGFloat = 0
+                    while x < size.width {
+                        context.fill(dot.offsetBy(dx: x, dy: y), with: color)
+                        x += gridSpacing
+                    }
+                    y += gridSpacing
+                }
             }
+            .ignoresSafeArea()
+
+            // 底部橙光晕（参数与 CanvasBackground 对齐）
+            Color.clear
+                .overlay(alignment: .bottom) {
+                    Ellipse()
+                        .fill(
+                            RadialGradient(
+                                colors: [AppTheme.Color.canvasAura.opacity(0.24), .clear],
+                                center: .center,
+                                startRadius: 0,
+                                endRadius: 220
+                            )
+                        )
+                        .frame(width: 460, height: 260)
+                        .blur(radius: 44)
+                        .offset(y: 150)
+                }
+                .ignoresSafeArea()
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
@@ -57,42 +82,38 @@ struct OnboardingMomentCard: View {
     let image: Image
     let sentence: String
     var photoHeight: CGFloat = 168
+    
+    @State private var isBreathing = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: AppTheme.Space.paddingM) {
             image
                 .resizable()
                 .scaledToFill()
                 .frame(maxWidth: .infinity)
                 .frame(height: photoHeight)
-                .clipped()
-                // aspect-fill 的图片实际布局会超出 frame，clip 只裁绘制不裁
-                // 命中区域——纯展示卡，整体放弃命中以防吞掉下方按钮的点击
+                .scaleEffect(isBreathing ? 1.05 : 1.0)
+                .animation(
+                    .easeInOut(duration: 8.0).repeatForever(autoreverses: true),
+                    value: isBreathing
+                )
+                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
+                        .stroke(Color.black.opacity(0.06), lineWidth: 1)
+                )
                 .allowsHitTesting(false)
+                .onAppear {
+                    isBreathing = true
+                }
 
-            VStack(alignment: .leading, spacing: AppTheme.Space.paddingS) {
-                Text("MOMENT")
-                    .font(AppTheme.Font.pos)
-                    .foregroundStyle(AppTheme.Color.textOnChip)
-                    .padding(.horizontal, AppTheme.Space.paddingS)
-                    .padding(.vertical, AppTheme.Space.paddingXS)
-                    .background(AppTheme.Color.chipMoment, in: Capsule())
-
-                Text(sentence)
-                    .font(AppTheme.Font.englishPrimary)
-                    .foregroundStyle(AppTheme.Color.textPrimary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(AppTheme.Space.paddingCard)
+            Text(sentence)
+                .font(AppTheme.Font.englishPrimary)
+                .foregroundStyle(AppTheme.Color.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 4) // Slight inset to align optically with the image
         }
-        .background(AppTheme.Color.cardBg)
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
-        .shadow(
-            color: AppTheme.Shadow.cardColor,
-            radius: AppTheme.Shadow.cardRadius,
-            x: AppTheme.Shadow.cardX,
-            y: AppTheme.Shadow.cardY
-        )
+        // No background or shadow -> flat integrated design
     }
 }
 

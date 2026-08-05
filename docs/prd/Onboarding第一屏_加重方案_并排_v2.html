@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Onboarding 第一屏 · 加重方案 v2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;0,6..72,700;1,6..72,400;1,6..72,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --pageBg:#FBF6F1; --cardBg:#FFFDF8;
+    --textPrimary:#211811; --textSecondary:#4B4640; --textMuted:#7C7773;
+    --textLabel:#A5A099; --textFaint:#C7C3BD;
+    --brand:#FF7622; --brandDeep:#C2410C; --brandSubtle:#FFF3EB;
+    --interactive:#17120C; --border:#E3DFD9;
+    --serif:'Newsreader',Georgia,serif;
+    --sans:'Inter',-apple-system,system-ui,sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-font-smoothing:antialiased;}
+  body{background:#EDE7E0;font-family:var(--sans);color:var(--textPrimary);padding:44px 24px 80px;}
+  .page-head{max-width:1100px;margin:0 auto;text-align:center;}
+  .page-head h1{font-family:var(--serif);font-weight:600;font-size:29px;letter-spacing:-.01em;margin-bottom:10px;}
+  .page-head p{color:var(--textMuted);font-size:14.5px;line-height:1.65;max-width:720px;margin:0 auto;}
+  .page-head b{color:var(--textSecondary);}
+
+  .row{display:flex;gap:36px;justify-content:center;align-items:flex-start;flex-wrap:wrap;max-width:1300px;margin:38px auto 0;}
+  .col{display:flex;flex-direction:column;align-items:center;gap:16px;width:326px;}
+
+  .phone{width:326px;height:704px;border-radius:50px;background:#0a0a0a;padding:10px;
+    box-shadow:0 34px 70px -22px rgba(40,30,20,.34);position:relative;flex-shrink:0;}
+  .screen{width:100%;height:100%;border-radius:41px;overflow:hidden;background:var(--pageBg);position:relative;}
+  .dots-bg::before{content:"";position:absolute;inset:0;
+    background-image:radial-gradient(rgba(124,119,115,.10) 1px,transparent 1px);
+    background-size:20px 20px;pointer-events:none;z-index:0;}
+  .island{position:absolute;top:13px;left:50%;transform:translateX(-50%);width:92px;height:28px;background:#000;border-radius:15px;z-index:30;}
+  .content{position:relative;z-index:5;height:100%;display:flex;flex-direction:column;}
+
+  .cap{width:326px;text-align:center;}
+  .cap .tag{display:inline-block;font-size:11.5px;font-weight:600;color:var(--brand);background:var(--brandSubtle);
+    padding:4px 12px;border-radius:20px;margin-bottom:8px;letter-spacing:.02em;}
+  .cap h3{font-family:var(--serif);font-weight:600;font-size:18px;margin-bottom:6px;}
+  .cap p{font-size:13px;line-height:1.6;color:var(--textMuted);}
+  .cap.star .tag{color:#fff;background:var(--brand);}
+
+  .btn{width:100%;height:54px;border-radius:27px;background:var(--interactive);color:#FBF6F1;
+    font-weight:600;font-size:15.5px;display:flex;align-items:center;justify-content:center;
+    box-shadow:0 12px 30px rgba(28,25,23,.18);}
+  .progress{display:flex;gap:6px;justify-content:center;margin-top:16px;}
+  .progress i{width:6px;height:6px;border-radius:3px;background:var(--textFaint);}
+  .progress i.on{width:20px;background:var(--brand);}
+
+  /* ========== 方案 1 · 杂志封面（超大排版）========== */
+  .cover{padding:60px 26px 30px;}
+  .kicker{display:flex;align-items:center;gap:10px;font-size:11px;font-weight:700;letter-spacing:.16em;
+    color:var(--brand);text-transform:uppercase;margin-bottom:auto;}
+  .kicker .line{flex:1;height:1.5px;background:var(--border);}
+  .cover-title{font-family:var(--serif);font-weight:600;font-size:56px;line-height:1.02;letter-spacing:-.03em;
+    color:var(--textPrimary);margin:0 0 22px;}
+  .cover-title em{font-style:italic;font-weight:500;color:var(--brand);}
+  .cover-sub{font-size:15px;line-height:1.55;color:var(--textSecondary);max-width:250px;margin-bottom:30px;}
+  .cover-foot{margin-top:auto;}
+
+  /* ========== 方案 2 · 橙色块锚定 ========== */
+  .anchor-top{flex:1;padding:64px 26px 0;position:relative;z-index:2;}
+  .anchor-kicker{font-size:11px;font-weight:700;letter-spacing:.14em;color:var(--brand);text-transform:uppercase;margin-bottom:18px;}
+  .anchor-title{font-family:var(--serif);font-weight:600;font-size:46px;line-height:1.06;letter-spacing:-.025em;color:var(--textPrimary);}
+  .anchor-block{position:relative;background:linear-gradient(160deg,#FF8A42 0%,#FF7622 55%,#F2650F 100%);
+    border-radius:38px 38px 41px 41px;padding:34px 26px 34px;margin-top:20px;
+    box-shadow:0 -10px 40px rgba(255,118,34,.22);}
+  .anchor-block::after{content:"";position:absolute;top:-60px;left:0;right:0;height:60px;
+    background:linear-gradient(to top,rgba(255,118,34,.10),transparent);pointer-events:none;}
+  .anchor-sub{font-size:15px;line-height:1.5;color:rgba(255,253,248,.92);margin-bottom:22px;font-weight:500;}
+  .btn-on-orange{width:100%;height:54px;border-radius:27px;background:#FFFDF8;color:var(--interactive);
+    font-weight:700;font-size:15.5px;display:flex;align-items:center;justify-content:center;
+    box-shadow:0 10px 26px rgba(120,50,10,.22);}
+  .progress-light i{background:rgba(255,255,255,.4);}
+  .progress-light i.on{background:#fff;}
+
+  /* ========== 方案 3 · 深色封面（近黑 + 暖纸字）========== */
+  .dark{background:radial-gradient(120% 90% at 50% 10%,#2a2018 0%,#1a130d 55%,#120d08 100%);
+    padding:62px 26px 30px;}
+  .dark .kicker{color:var(--brand);}
+  .dark .kicker .line{background:rgba(255,255,255,.14);}
+  .dark-glow{position:absolute;left:50%;bottom:-40px;transform:translateX(-50%);width:420px;height:420px;
+    border-radius:50%;z-index:1;pointer-events:none;
+    background:radial-gradient(circle,rgba(255,118,34,.34) 0%,rgba(255,118,34,.08) 45%,transparent 70%);filter:blur(6px);}
+  .dark-title{font-family:var(--serif);font-weight:600;font-size:54px;line-height:1.03;letter-spacing:-.03em;
+    color:#FBF6F1;margin:0 0 20px;position:relative;z-index:5;}
+  .dark-title em{font-style:italic;font-weight:500;color:var(--brand);}
+  .dark-sub{font-size:15px;line-height:1.55;color:rgba(251,246,241,.66);max-width:250px;margin-bottom:28px;position:relative;z-index:5;}
+  .dark-foot{margin-top:auto;position:relative;z-index:5;}
+  .btn-on-dark{width:100%;height:54px;border-radius:27px;background:var(--brand);color:#fff;
+    font-weight:700;font-size:15.5px;display:flex;align-items:center;justify-content:center;
+    box-shadow:0 12px 34px rgba(255,118,34,.34);}
+</style>
+</head>
+<body>
+  <div class="page-head">
+    <h1>Onboarding 第一屏 · 三个「加重」方案</h1>
+    <p>都不放照片、不放卡片（把「照片→生成卡」的高潮留给第 3 屏）。分量来自：<b>超大排版</b> / <b>品牌色块锚定</b> / <b>深色封面对比</b>。文案沿用 "Build your expression from work and life."</p>
+  </div>
+
+  <div class="row">
+
+    <!-- 方案 1 · 杂志封面 -->
+    <div class="col">
+      <div class="phone"><div class="screen dots-bg">
+        <div class="island"></div>
+        <div class="content cover">
+          <div class="kicker"><span>Work &amp; Life · English</span><span class="line"></span></div>
+          <div style="margin-top:34px">
+            <div class="cover-title">Speak<br>from your<br><em>own life.</em></div>
+            <div class="cover-sub">The moments you live become the English you actually use.</div>
+          </div>
+          <div class="cover-foot">
+            <div class="btn">Get started</div>
+            <div class="progress"><i class="on"></i><i></i><i></i></div>
+          </div>
+        </div>
+      </div></div>
+      <div class="cap star">
+        <span class="tag">方案 1 · 杂志封面 ★推荐</span>
+        <h3>Editorial Cover</h3>
+        <p>靠超大衬线字（56px、斜体橙关键词）+ 顶部 kicker 细线做出封面的重量与结构。100% Warm Editorial 本体，最有"高级刊物"的分量感，零新素材。</p>
+      </div>
+    </div>
+
+    <!-- 方案 2 · 橙色块锚定 -->
+    <div class="col">
+      <div class="phone"><div class="screen dots-bg">
+        <div class="island"></div>
+        <div class="content">
+          <div class="anchor-top">
+            <div class="anchor-kicker">Your English, from life</div>
+            <div class="anchor-title">Build your expression from <span style="color:var(--brand)">work&nbsp;&amp;&nbsp;life.</span></div>
+          </div>
+          <div class="anchor-block">
+            <div class="anchor-sub">A photo, a voice note, a thought — turned into English you can say.</div>
+            <div class="btn-on-orange">Get started</div>
+            <div class="progress progress-light"><i class="on"></i><i></i><i></i></div>
+          </div>
+        </div>
+      </div></div>
+      <div class="cap">
+        <span class="tag">方案 2 · 橙色块锚定</span>
+        <h3>Orange Anchor</h3>
+        <p>底部一整块品牌橙色块托住 CTA，给屏幕一个实打实的色彩重心；上半部暖纸放大标题。品牌最强、最"敢"，橙色占比大需谨慎别显廉价。</p>
+      </div>
+    </div>
+
+    <!-- 方案 3 · 深色封面 -->
+    <div class="col">
+      <div class="phone"><div class="screen">
+        <div class="island"></div>
+        <div class="dark-glow"></div>
+        <div class="content dark">
+          <div class="kicker"><span>Work &amp; Life · English</span><span class="line"></span></div>
+          <div style="margin-top:34px;position:relative;z-index:5">
+            <div class="dark-title">Speak<br>from your<br><em>own life.</em></div>
+            <div class="dark-sub">The moments you live become the English you actually use.</div>
+          </div>
+          <div class="dark-foot">
+            <div class="btn-on-dark">Get started</div>
+            <div class="progress"><i class="on"></i><i></i><i></i></div>
+          </div>
+        </div>
+      </div></div>
+      <div class="cap">
+        <span class="tag">方案 3 · 深色封面</span>
+        <h3>Dark Cover</h3>
+        <p>近黑暖底 + 暖纸大字 + 橙光晕，靠明暗对比拿到最强重量与仪式感。注意：App 是"浅色锁定"，此屏是唯一深色，作为封面可接受但需你确认破例。</p>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>

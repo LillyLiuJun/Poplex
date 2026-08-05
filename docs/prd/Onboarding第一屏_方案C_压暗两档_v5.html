@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Onboarding 第一屏 · 方案C 压暗两档 v5</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600;6..72,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --pageBg:#FBF6F1; --textPrimary:#211811; --textSecondary:#4B4640;
+    --textMuted:#7C7773; --textFaint:#C7C3BD;
+    --brand:#FF7622; --p100:#FFF3EB; --interactive:#17120C;
+    --serif:'Newsreader',Georgia,serif; --sans:'Inter',-apple-system,system-ui,sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-font-smoothing:antialiased;}
+  body{background:#EDE7E0;font-family:var(--sans);color:var(--textPrimary);padding:44px 24px 80px;}
+  .page-head{max-width:1100px;margin:0 auto;text-align:center;}
+  .page-head h1{font-family:var(--serif);font-weight:600;font-size:29px;letter-spacing:-.01em;margin-bottom:10px;}
+  .page-head p{color:var(--textMuted);font-size:14.5px;line-height:1.65;max-width:760px;margin:0 auto;}
+  .page-head b{color:var(--textSecondary);}
+
+  .row{display:flex;gap:44px;justify-content:center;align-items:flex-start;flex-wrap:wrap;max-width:1100px;margin:38px auto 0;}
+  .col{display:flex;flex-direction:column;align-items:center;gap:16px;width:330px;}
+
+  .phone{width:330px;height:706px;border-radius:50px;background:#0a0a0a;padding:10px;
+    box-shadow:0 34px 70px -22px rgba(40,30,20,.34);position:relative;flex-shrink:0;}
+  .screen{width:100%;height:100%;border-radius:41px;overflow:hidden;background:var(--pageBg);position:relative;}
+  .screen::before{content:"";position:absolute;inset:0;z-index:0;
+    background-image:radial-gradient(rgba(124,119,115,.09) 1px,transparent 1px);background-size:20px 20px;pointer-events:none;}
+  .island{position:absolute;top:13px;left:50%;transform:translateX(-50%);width:92px;height:28px;background:#000;border-radius:15px;z-index:30;}
+  .content{position:relative;z-index:5;height:100%;display:flex;flex-direction:column;padding:66px 28px 32px;}
+
+  .hero{font-family:var(--serif);font-weight:600;font-size:40px;line-height:1.1;letter-spacing:-.02em;color:var(--textPrimary);}
+  .hero .brand{color:var(--brand);}
+  .sub{margin-top:16px;font-size:15px;line-height:1.55;color:var(--textMuted);max-width:250px;}
+  .cta{margin-top:auto;}
+  .btn{width:100%;height:56px;border-radius:28px;background:var(--interactive);color:#FBF6F1;
+    font-weight:600;font-size:16px;display:flex;align-items:center;justify-content:center;box-shadow:0 12px 26px rgba(28,25,23,.18);}
+  .dots{display:flex;gap:6px;justify-content:center;margin-top:16px;}
+  .dots i{width:6px;height:6px;border-radius:3px;background:var(--textFaint);}
+  .dots i.on{width:20px;background:var(--brand);}
+
+  .blob{position:absolute;z-index:1;border-radius:50%;pointer-events:none;}
+
+  /* 参照：原方案C（张扬）blob 峰值 alpha 约 .50/.55/.22，blur ~2px */
+
+  /* ===== 档1 · 中度压暗（峰值≈原来一半，更大 blur、更贴边）===== */
+  .m1 .blob1{top:-70px;right:-90px;width:300px;height:300px;filter:blur(10px);
+    background:radial-gradient(circle at 40% 40%,rgba(255,132,56,.26),rgba(255,118,34,.10) 55%,transparent 72%);}
+  .m1 .blob2{top:220px;left:-120px;width:260px;height:260px;filter:blur(12px);
+    background:radial-gradient(circle at 60% 40%,rgba(255,196,162,.28),rgba(255,196,162,.08) 58%,transparent 74%);}
+  .m1 .blob3{bottom:20px;right:-70px;width:230px;height:230px;filter:blur(14px);
+    background:radial-gradient(circle at 50% 50%,rgba(255,118,34,.14),transparent 70%);}
+
+  /* ===== 档2 · 深度压暗（只剩一丝暖意，几乎融进纸底）===== */
+  .m2 .blob1{top:-90px;right:-110px;width:320px;height:320px;filter:blur(16px);
+    background:radial-gradient(circle at 40% 40%,rgba(255,132,56,.14),rgba(255,118,34,.05) 55%,transparent 72%);}
+  .m2 .blob2{top:240px;left:-140px;width:280px;height:280px;filter:blur(18px);
+    background:radial-gradient(circle at 60% 40%,rgba(255,196,162,.15),rgba(255,196,162,.04) 60%,transparent 76%);}
+  .m2 .blob3{bottom:0;right:-90px;width:240px;height:240px;filter:blur(20px);
+    background:radial-gradient(circle at 50% 50%,rgba(255,118,34,.08),transparent 72%);}
+
+  .cap{width:330px;text-align:center;}
+  .cap .tag{display:inline-block;font-size:11.5px;font-weight:600;color:var(--brand);background:var(--p100);padding:4px 12px;border-radius:20px;margin-bottom:8px;}
+  .cap.star .tag{color:#fff;background:var(--brand);}
+  .cap h3{font-family:var(--serif);font-weight:600;font-size:18px;margin-bottom:6px;}
+  .cap p{font-size:13px;line-height:1.6;color:var(--textMuted);}
+</style>
+</head>
+<body>
+  <div class="page-head">
+    <h1>Onboarding 第一屏 · 方案 C「压暗两档」</h1>
+    <p>沿用方案 C（居中大标题 + 副文案 + 深色 CTA），只把背景光斑<b>整体压暗</b>：降饱和 + 加大模糊 + 更贴边，让它不再张扬。左右是<b>两档力度</b>，你挑合适的收敛程度。</p>
+  </div>
+
+  <div class="row">
+
+    <!-- 档 1 中度 -->
+    <div class="col">
+      <div class="phone"><div class="screen">
+        <div class="island"></div>
+        <div class="m1">
+          <div class="blob blob1"></div><div class="blob blob2"></div><div class="blob blob3"></div>
+        </div>
+        <div class="content">
+          <div>
+            <div class="hero">Build your<br>expression from<br><span class="brand">work and life.</span></div>
+            <div class="sub">Your own moments become the English you actually use.</div>
+          </div>
+          <div class="cta">
+            <div class="btn">Continue</div>
+            <div class="dots"><i class="on"></i><i></i><i></i></div>
+          </div>
+        </div>
+      </div></div>
+      <div class="cap star">
+        <span class="tag">档 1 · 中度压暗 ★推荐起点</span>
+        <h3>Toned — Medium</h3>
+        <p>光斑峰值降到原来约一半 + 更大模糊 + 更贴边。仍看得出暖色氛围与"高级空气感"，但不再抢标题。多数情况这一档就够。</p>
+      </div>
+    </div>
+
+    <!-- 档 2 深度 -->
+    <div class="col">
+      <div class="phone"><div class="screen">
+        <div class="island"></div>
+        <div class="m2">
+          <div class="blob blob1"></div><div class="blob blob2"></div><div class="blob blob3"></div>
+        </div>
+        <div class="content">
+          <div>
+            <div class="hero">Build your<br>expression from<br><span class="brand">work and life.</span></div>
+            <div class="sub">Your own moments become the English you actually use.</div>
+          </div>
+          <div class="cta">
+            <div class="btn">Continue</div>
+            <div class="dots"><i class="on"></i><i></i><i></i></div>
+          </div>
+        </div>
+      </div></div>
+      <div class="cap">
+        <span class="tag">档 2 · 深度压暗</span>
+        <h3>Toned — Subtle</h3>
+        <p>只剩一丝暖意、几乎融进纸底，接近纯排版但仍有极淡的橙色晕。若你要极致克制、纸感为主，选这档。</p>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>

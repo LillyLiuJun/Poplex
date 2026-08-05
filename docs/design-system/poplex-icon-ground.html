@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>Poplex · 图标底色处理（Granola 逻辑）</title>
+<style>
+  :root{--page:#F5F0EC;--card:#FBF8F5;--line:#E6DED8;--ink:#2A2320;
+        --ink-600:#726761;--ink-400:#948C86;--red:#C7453B;--green:#4A7C4E}
+  *{box-sizing:border-box}
+  body{margin:0;padding:44px 28px 90px;background:var(--page);
+    font-family:-apple-system,'SF Pro Text','Inter','PingFang SC',sans-serif;color:#3A332F}
+  .wrap{max-width:940px;margin:0 auto}
+  h1{font-size:28px;font-weight:700;letter-spacing:-.02em;margin:0 0 8px}
+  .sub{color:var(--ink-600);font-size:14px;line-height:1.75;margin:0 0 30px;max-width:660px}
+  .sub b{color:#3A332F}
+  .card{background:#fff;border-radius:22px;padding:30px;margin-bottom:18px;
+    box-shadow:0 1px 2px rgba(58,51,47,.04),0 6px 24px rgba(58,51,47,.05)}
+  .head{display:flex;align-items:baseline;gap:11px;margin-bottom:20px}
+  .num{font-size:11px;font-weight:700;letter-spacing:.12em;color:var(--ink-400)}
+  .name{font-size:16px;font-weight:600}
+  .row{display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap}
+  .grp{display:flex;flex-direction:column;align-items:center;width:104px}
+  .ic{width:96px;height:96px;border-radius:21px;display:flex;align-items:center;
+    justify-content:center;flex:none;overflow:hidden}
+  .ic.s60{width:60px;height:60px;border-radius:13px}
+  .ic.s40{width:40px;height:40px;border-radius:9px}
+  .ic.s29{width:29px;height:29px;border-radius:6.5px}
+  .meta{font-size:9.5px;line-height:1.6;color:var(--ink-400);margin-top:9px;text-align:center;
+    font-family:ui-monospace,Menlo,monospace}
+  .verdict{font-size:11px;font-weight:700;margin-top:6px;text-align:center}
+  .no{color:var(--red)} .ok{color:var(--green)}
+  .note{font-size:13px;color:var(--ink-600);line-height:1.75;border-top:1px solid var(--line);
+    padding-top:15px;margin:22px 0 0}
+  .note b{color:#3A332F;font-weight:600}
+  table{border-collapse:collapse;width:100%;font-size:12.5px}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line)}
+  th{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-400);font-weight:600}
+  td b{color:#2A2320}
+  .sw{display:inline-block;width:14px;height:14px;border-radius:4px;vertical-align:-2px;margin-right:6px;
+    box-shadow:inset 0 0 0 1px rgba(0,0,0,.08)}
+  code{background:var(--card);border:1px solid var(--line);border-radius:5px;padding:1px 6px;
+    font-size:11.5px;font-family:ui-monospace,Menlo,monospace}
+  .home{border-radius:26px;padding:24px 20px;display:flex;gap:22px;flex-wrap:wrap;
+    background:linear-gradient(150deg,#BFE0E8 0%,#8FB6D8 38%,#3E63B0 100%)}
+  .lbl{font-size:9.5px;text-align:center;margin-top:7px;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.35)}
+  svg{display:block}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>图标底色 · 该怎么处理 #FF7622</h1>
+<p class="sub">
+我去量了 Granola 那个橄榄底：<code>#B9C43A</code>，<b>HSL 65° / 饱和 54% / 明度 50%</b>，
+相对亮度 <b>Y = 0.50</b>，和上面那条黑线的对比度 <b>9.9 : 1</b>。<br><br>
+关键不是"把品牌色调深"或"调浅"，而是它做了两件事：
+<b>①底色明度提到中间偏亮（Y≈0.5），②对比全部交给深色线条去扛。</b>
+底不吵，字够狠。我们的 <code>#FF7622</code> 原色 Y 只有 0.36 且饱和拉满，
+配白线对比只有 2.45:1 —— <b>既吵又看不清</b>，正是你觉得别扭的地方。
+</p>
+
+<svg width="0" height="0" style="position:absolute"><defs>
+  <symbol id="pA" viewBox="0 0 120 120">
+    <path d="M26,106 L26,40 C26,26 44,18 64,18 C88,18 104,34 104,53
+             C104,72 88,88 64,88 C44,88 28,80 26,68"
+          fill="none" stroke="currentColor" stroke-width="14"
+          stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+</defs></svg>
+
+<!-- 01 诊断 -->
+<div class="card">
+  <div class="head"><span class="num">01</span><span class="name">三条路，只有一条对</span></div>
+  <div class="row">
+    <div class="grp">
+      <div class="ic" style="background:#FF7622"><svg width="96" height="96" viewBox="0 0 120 120"><use href="#pA" color="#FDF8F3"/></svg></div>
+      <div class="meta">#FF7622<br>Y .36 · 对比 2.45</div>
+      <div class="verdict no">✗ 太亮太吵，线还糊</div>
+    </div>
+    <div class="grp">
+      <div class="ic" style="background:#B66835"><svg width="96" height="96" viewBox="0 0 120 120"><use href="#pA" color="#FDF8F3"/></svg></div>
+      <div class="meta">#B66835<br>Y .20 · 对比 3.96</div>
+      <div class="verdict no">✗ 调深 → 发脏、变土</div>
+    </div>
+    <div class="grp">
+      <div class="ic" style="background:#8A5633"><svg width="96" height="96" viewBox="0 0 120 120"><use href="#pA" color="#FDF8F3"/></svg></div>
+      <div class="meta">#8A5633<br>Y .12 · 对比 5.75</div>
+      <div class="verdict no">✗ 再深 → 已经不是橙了</div>
+    </div>
+    <div class="grp">
+      <div class="ic" style="background:#F9AA76"><svg width="96" height="96" viewBox="0 0 120 120"><use href="#pA" color="#2A2320"/></svg></div>
+      <div class="meta">#F9AA76<br>Y .50 · 对比 8.12</div>
+      <div class="verdict ok">✓ Granola 的解法</div>
+    </div>
+  </div>
+  <p class="note">
+  往深了调（中间两个）是最直觉的做法，但橙色一压暗就往<b>棕/土</b>去，越深越不像品牌色。<br>
+  Granola 走的是<b>反方向</b>：底色往<b>亮</b>提、饱和往下收一点，然后<b>把线换成深色</b>。
+  底色变成一块"有颜色的纸"，深线在上面清清楚楚——这正好也是你 App 里"暖纸 + 墨字"的关系。</p>
+</div>
+
+<!-- 02 明度梯 -->
+<div class="card">
+  <div class="head"><span class="num">02</span><span class="name">明度梯 · 找 Y ≈ 0.50 那一档</span></div>
+  <div class="row">
+    <div class="grp"><div class="ic" style="background:#FF7622"><svg width="96" height="96" viewBox="0 0 120 120"><use href="#pA" color="#2A2320"/></svg></div><div class="meta">#FF7622<br>Y .36 / 5.96</div><div class="verdict no">底太重</div></div>
+    <div class="grp"><div class="ic" style="background:#FFA366"><svg width="96" height="96" viewBox="0 0 120 120"><use href="#pA" color="#2A2320"/></svg></div><div class="meta">#FFA366<br>Y .48 / 7.86</div><div class="verdict">可以，稍艳</div></div>
+    <div class="grp"><div class="ic" style="background:#F9AA76"><svg width="96" height="96" viewBox="0 0 120 120"><use href="#pA" color="#2A2320"/></svg></div><div class="meta">#F9AA76<br>Y .50 / 8.12</div><div class="verdict ok">✓ 推荐</div></div>
+    <div class="grp"><div class="ic" style="background:#F5B184"><svg width="96" height="96" viewBox="0 0 120 120"><use href="#pA" color="#2A2320"/></svg></div><div class="meta">#F5B184<br>Y .53 / 8.46</div><div class="verdict">更柔</div></div>
+    <div class="grp"><div class="ic" style="background:#E4AF8B"><svg width="96" height="96" viewBox="0 0 120 120"><use href="#pA" color="#2A2320"/></svg></div><div class="meta">#E4AF8B<br>Y .49 / 7.95</div><div class="verdict">最"陶土"</div></div>
+    <div class="grp"><div class="ic" style="background:#E8C6B0"><svg width="96" height="96" viewBox="0 0 120 120"><use href="#pA" color="#2A2320"/></svg></div><div class="meta">#E8C6B0<br>Y .61 / 9.66</div><div class="verdict no">✗ 淡到没颜色</div></div>
+  </div>
+  <p class="note">
+  <b>#F9AA76</b> 是把 <code>#FF7622</code> 保持同一个色相 24°、饱和 100→92%、明度 57→72% 得到的。
+  Y = 0.502，和 Granola 的 0.500 几乎一样；配墨线 8.12:1，也贴近它的 9.9:1。
+  <b>色相一度没动</b>，所以它和品牌橙是同一个颜色的两个明度，不是新颜色。</p>
+</div>
+
+<!-- 03 尺寸 -->
+<div class="card">
+  <div class="head"><span class="num">03</span><span class="name">推荐版 · 各尺寸</span></div>
+  <div class="row" style="align-items:flex-end">
+    <div class="grp" style="width:auto"><div class="ic" style="background:#F9AA76"><svg width="96" height="96" viewBox="0 0 120 120"><use href="#pA" color="#2A2320"/></svg></div><div class="meta">96</div></div>
+    <div class="grp" style="width:auto"><div class="ic s60" style="background:#F9AA76"><svg width="60" height="60" viewBox="0 0 120 120"><use href="#pA" color="#2A2320"/></svg></div><div class="meta">60</div></div>
+    <div class="grp" style="width:auto"><div class="ic s40" style="background:#F9AA76"><svg width="40" height="40" viewBox="0 0 120 120"><use href="#pA" color="#2A2320"/></svg></div><div class="meta">40</div></div>
+    <div class="grp" style="width:auto"><div class="ic s29" style="background:#F9AA76"><svg width="29" height="29" viewBox="0 0 120 120"><use href="#pA" color="#2A2320"/></svg></div><div class="meta">29</div></div>
+    <div class="grp" style="width:auto;margin-left:20px"><div class="ic" style="background:#2A2320"><svg width="96" height="96" viewBox="0 0 120 120"><use href="#pA" color="#F9AA76"/></svg></div><div class="meta">深色模式反色</div></div>
+  </div>
+  <p class="note">深色模式那版直接<b>把两个颜色对调</b>——墨底 + <code>#F9AA76</code> 线，
+  不引入第三个颜色，两版还是同一个东西。</p>
+</div>
+
+<!-- 04 桌面 -->
+<div class="card">
+  <div class="head"><span class="num">04</span><span class="name">放回桌面</span></div>
+  <div class="home">
+    <div><div class="ic s60" style="background:#FF7622"><svg width="60" height="60" viewBox="0 0 120 120"><use href="#pA" color="#FDF8F3"/></svg></div><div class="lbl">原色 + 白线</div></div>
+    <div><div class="ic s60" style="background:#F9AA76"><svg width="60" height="60" viewBox="0 0 120 120"><use href="#pA" color="#2A2320"/></svg></div><div class="lbl">推荐 · #F9AA76</div></div>
+    <div><div class="ic s60" style="background:#F5B184"><svg width="60" height="60" viewBox="0 0 120 120"><use href="#pA" color="#2A2320"/></svg></div><div class="lbl">更柔 · #F5B184</div></div>
+    <div><div class="ic s60" style="background:#E4AF8B"><svg width="60" height="60" viewBox="0 0 120 120"><use href="#pA" color="#2A2320"/></svg></div><div class="lbl">陶土 · #E4AF8B</div></div>
+    <div><div class="ic s60" style="background:#2A2320"><svg width="60" height="60" viewBox="0 0 120 120"><use href="#pA" color="#F9AA76"/></svg></div><div class="lbl">深色模式</div></div>
+  </div>
+  <p class="note">你那屏几乎全是<b>高饱和实色块</b>（1688、淘宝、Pinterest、微信）。
+  <code>#F9AA76</code> 反而因为"不参与比大声"而突出——和 Granola 那块橄榄绿在你桌面上被记住是同一个原理。</p>
+</div>
+
+<!-- 05 token -->
+<div class="card">
+  <div class="head"><span class="num">05</span><span class="name">要新增的 token（只给图标用）</span></div>
+  <table>
+    <tr><th>Token</th><th>值</th><th>用途</th></tr>
+    <tr><td><code>--color-brand</code></td><td><span class="sw" style="background:#FF7622"></span><b>#FF7622</b>（不动）</td><td>App 界面内一切品牌橙，维持现状</td></tr>
+    <tr><td><code>--color-icon-ground</code></td><td><span class="sw" style="background:#F9AA76"></span><b>#F9AA76</b></td><td><b>仅</b>App 图标 / favicon 底色</td></tr>
+    <tr><td><code>--color-icon-stroke</code></td><td><span class="sw" style="background:#2A2320"></span><b>#2A2320</b></td><td>图标笔画（浅底）</td></tr>
+    <tr><td><code>--color-icon-ground-dark</code></td><td><span class="sw" style="background:#2A2320"></span><b>#2A2320</b></td><td>深色模式图标底</td></tr>
+  </table>
+  <p class="note">
+  <b>关键一条：图标底色不等于品牌色</b>，它是品牌色的一个明度变体，只在图标里用。
+  写进 <code>品牌色彩系统规范</code> 时要标清楚边界，否则以后会有人把 <code>#F9AA76</code> 当成品牌橙用到界面里。<br>
+  同理，<code>#FEF5EF</code>（品牌浅区块底）和它也不是一回事——那个是 L97 的极浅底，这个是 L72 的图标底。</p>
+</div>
+
+</div>
+</body>
+</html>

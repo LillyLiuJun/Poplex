@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>Poplex · 墨点位置微调</title>
+<style>
+  :root{--page:#F5F0EC;--line:#E6DED8;--ink:#2A2320;--ink-600:#726761;--ink-400:#948C86}
+  *{box-sizing:border-box}
+  body{margin:0;padding:64px 32px 110px;background:var(--page);
+    font-family:-apple-system,'SF Pro Text','Inter','PingFang SC',sans-serif;color:var(--ink)}
+  .wrap{max-width:900px;margin:0 auto}
+  h1{font-size:26px;font-weight:600;letter-spacing:-.02em;margin:0 0 12px}
+  .lede{color:var(--ink-600);font-size:14px;line-height:1.85;margin:0 0 36px;max-width:620px}
+  .lede b{color:var(--ink);font-weight:600}
+  hr{border:0;border-top:1px solid var(--line);margin:44px 0}
+  .sechead{display:flex;align-items:baseline;gap:14px;margin:0 0 26px}
+  .idx{font-size:11px;letter-spacing:.18em;color:var(--ink-400);font-weight:600}
+  .title{font-size:18px;font-weight:600}
+  .row{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start}
+  .grp{display:flex;flex-direction:column;align-items:center;width:128px}
+  .ic{border-radius:27px;display:flex;align-items:center;justify-content:center;flex:none;
+      overflow:hidden;box-shadow:0 1px 3px rgba(58,51,47,.07);background:#FBF8F5}
+  .i124{width:124px;height:124px;border-radius:27px}
+  .i56{width:56px;height:56px;border-radius:12px}
+  .i29{width:29px;height:29px;border-radius:6.5px}
+  .meta{font-size:10px;line-height:1.7;color:var(--ink-400);margin-top:11px;text-align:center;
+    font-family:ui-monospace,Menlo,monospace}
+  .verdict{font-size:11px;font-weight:600;margin-top:4px;text-align:center}
+  .rec{color:#4A7C4E}
+  p.body{font-size:13.5px;color:var(--ink-600);line-height:1.9;margin:26px 0 0;max-width:660px}
+  p.body b{color:var(--ink);font-weight:600}
+  code{background:#FBF8F5;border:1px solid var(--line);border-radius:5px;padding:1px 6px;
+    font-size:11.5px;font-family:ui-monospace,Menlo,monospace}
+  .home{border-radius:26px;padding:26px 22px;display:flex;gap:26px;flex-wrap:wrap;
+    background:linear-gradient(150deg,#BFE0E8 0%,#8FB6D8 38%,#3E63B0 100%)}
+  .lbl{font-size:9.5px;text-align:center;margin-top:8px;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.35)}
+  svg{display:block}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>墨点 · 往右下挪</h1>
+<p class="lede">
+基准是 6° 斜体版，点原来在 <code>cx 75.3　cy 83.5</code>。三档幅度，字一动没动。<br><br>
+挪的时候发现一件事：<b>基线在 y=95.5</b>（P 的下衬线底边）。
+点半径 8，所以 <code>cy 87.5</code> 时它正好<b>坐在基线上</b>——
+和真正的句点是一个位置。B 档就是这一档。
+</p>
+
+<svg width="0" height="0" style="position:absolute"><defs>
+  <symbol id="P" viewBox="0 0 120 120">
+    <path fill-rule="evenodd" fill="currentColor" d="
+      M18,26 L55,26
+      C74,26.5 88,36 88,50
+      C88,64 75,73.5 56,74
+      L47,74 L47,88
+      C47,92 52,92.5 58,93
+      L58,97 L17,97 L17,93
+      C25,92.5 30,92 30,88
+      L30,33
+      C29.5,30 25,31 18,31 Z
+      M47,34
+      C62,34 72,39.5 72,50
+      C72,60.5 62,65.5 47,65.5 Z"/>
+  </symbol>
+</defs></svg>
+
+<hr>
+
+<div class="sechead"><span class="idx">01</span><span class="title">四档</span></div>
+<div class="row">
+  <div class="grp">
+    <div class="ic i124"><svg width="124" height="124" viewBox="0 0 120 120">
+      <g transform="translate(15.22,-1.5) skewX(-6)"><use href="#P" color="#FF7622"/></g>
+      <circle cx="75.3" cy="83.5" r="8" fill="#2A2320"/></svg></div>
+    <div class="meta">75.3 / 83.5</div><div class="verdict">原位</div>
+  </div>
+  <div class="grp">
+    <div class="ic i124"><svg width="124" height="124" viewBox="0 0 120 120">
+      <g transform="translate(15.22,-1.5) skewX(-6)"><use href="#P" color="#FF7622"/></g>
+      <circle cx="78.3" cy="85.5" r="8" fill="#2A2320"/></svg></div>
+    <div class="meta">78.3 / 85.5<br>+3 / +2</div><div class="verdict">A · 最轻</div>
+  </div>
+  <div class="grp">
+    <div class="ic i124"><svg width="124" height="124" viewBox="0 0 120 120">
+      <g transform="translate(15.22,-1.5) skewX(-6)"><use href="#P" color="#FF7622"/></g>
+      <circle cx="80.3" cy="87.5" r="8" fill="#2A2320"/></svg></div>
+    <div class="meta">80.3 / 87.5<br>+5 / +4</div><div class="verdict rec">✓ B · 坐在基线上</div>
+  </div>
+  <div class="grp">
+    <div class="ic i124"><svg width="124" height="124" viewBox="0 0 120 120">
+      <g transform="translate(15.22,-1.5) skewX(-6)"><use href="#P" color="#FF7622"/></g>
+      <circle cx="82.8" cy="89.5" r="8" fill="#2A2320"/></svg></div>
+    <div class="meta">82.8 / 89.5<br>+7.5 / +6</div><div class="verdict">C · 已经掉出基线</div>
+  </div>
+</div>
+<p class="body">
+<b>推 B。</b>它不只是"看着舒服"——点的底边和 P 的下衬线底边在<b>同一条线</b>上，
+所以整个图标的下沿是齐的，眼睛会认为它是稳的。<br>
+C 档点已经沉到基线以下，视觉上会变成"掉下去的一滴"，图标下沿也不齐了。
+A 档的问题相反：还悬在半空，和原位比几乎看不出差别。
+</p>
+
+<hr>
+
+<div class="sechead"><span class="idx">02</span><span class="title">B 档 · 各尺寸 + 深色模式</span></div>
+<div class="row" style="align-items:flex-end;gap:18px">
+  <div class="grp" style="width:auto"><div class="ic i124"><svg width="124" height="124" viewBox="0 0 120 120">
+    <g transform="translate(15.22,-1.5) skewX(-6)"><use href="#P" color="#FF7622"/></g>
+    <circle cx="80.3" cy="87.5" r="8" fill="#2A2320"/></svg></div><div class="meta">124</div></div>
+  <div class="grp" style="width:auto"><div class="ic i56"><svg width="56" height="56" viewBox="0 0 120 120">
+    <g transform="translate(15.22,-1.5) skewX(-6)"><use href="#P" color="#FF7622"/></g>
+    <circle cx="80.3" cy="87.5" r="8" fill="#2A2320"/></svg></div><div class="meta">56</div></div>
+  <div class="grp" style="width:auto"><div class="ic i29"><svg width="29" height="29" viewBox="0 0 120 120">
+    <g transform="translate(15.22,-1.5) skewX(-6)"><use href="#P" color="#FF7622"/></g>
+    <circle cx="79.8" cy="87" r="9" fill="#2A2320"/></svg></div><div class="meta">29 · r 加到 9</div></div>
+  <div class="grp" style="width:auto;margin-left:22px"><div class="ic i124" style="background:#2A2320">
+    <svg width="124" height="124" viewBox="0 0 120 120">
+    <g transform="translate(15.22,-1.5) skewX(-6)"><use href="#P" color="#FF7622"/></g>
+    <circle cx="80.3" cy="87.5" r="8" fill="#FBF8F5"/></svg></div><div class="meta">深色模式</div></div>
+</div>
+
+<hr>
+
+<div class="sechead"><span class="idx">03</span><span class="title">桌面</span></div>
+<div class="home">
+  <div><div class="ic i56"><svg width="56" height="56" viewBox="0 0 120 120">
+    <g transform="translate(15.22,-1.5) skewX(-6)"><use href="#P" color="#FF7622"/></g>
+    <circle cx="75.3" cy="83.5" r="8" fill="#2A2320"/></svg></div><div class="lbl">原位</div></div>
+  <div><div class="ic i56"><svg width="56" height="56" viewBox="0 0 120 120">
+    <g transform="translate(15.22,-1.5) skewX(-6)"><use href="#P" color="#FF7622"/></g>
+    <circle cx="78.3" cy="85.5" r="8" fill="#2A2320"/></svg></div><div class="lbl">A</div></div>
+  <div><div class="ic i56"><svg width="56" height="56" viewBox="0 0 120 120">
+    <g transform="translate(15.22,-1.5) skewX(-6)"><use href="#P" color="#FF7622"/></g>
+    <circle cx="80.3" cy="87.5" r="8" fill="#2A2320"/></svg></div><div class="lbl">B · 推荐</div></div>
+  <div><div class="ic i56"><svg width="56" height="56" viewBox="0 0 120 120">
+    <g transform="translate(15.22,-1.5) skewX(-6)"><use href="#P" color="#FF7622"/></g>
+    <circle cx="82.8" cy="89.5" r="8" fill="#2A2320"/></svg></div><div class="lbl">C</div></div>
+  <div><div class="ic i56" style="background:#2A2320"><svg width="56" height="56" viewBox="0 0 120 120">
+    <g transform="translate(15.22,-1.5) skewX(-6)"><use href="#P" color="#FF7622"/></g>
+    <circle cx="80.3" cy="87.5" r="8" fill="#FBF8F5"/></svg></div><div class="lbl">B 深色</div></div>
+</div>
+
+<p class="body">
+<b>切图参数</b>（120 网格，B 档）：
+字 <code>translate(15.22,-1.5) skewX(-6)</code>
+点 <code>cx 80.3　cy 87.5　r 8</code>（&lt;40px 改 <code>cx 79.8　cy 87　r 9</code>）<br>
+色：底 <code>#FBF8F5</code>　字 <code>#FF7622</code>　点 <code>#2A2320</code>／深色版底 <code>#2A2320</code>、点 <code>#FBF8F5</code>
+</p>
+
+</div>
+</body>
+</html>

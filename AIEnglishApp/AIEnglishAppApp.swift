@@ -63,6 +63,9 @@ struct AIEnglishAppApp: App {
 
 struct RootView: View {
     @AppStorage("onboarding_completed_at") private var onboardingCompletedAt: Double = 0
+    /// 开屏动画（1.0s）期间的遮罩。动画只是遮在前面，登录 / 取数在 .task 里
+    /// 并行跑，动画播完立即让位——绝不因为动画多等一毫秒。
+    @State private var showSplash: Bool = true
 
     /// 首启身份闸门：本地无标记时，只有服务器【明确说没完成】才进引导；
     /// 网络失败 = 不确定身份 → 显示重试页，绝不误把老用户踢回引导。
@@ -75,13 +78,15 @@ struct RootView: View {
 
     var body: some View {
         Group {
-            if onboardingCompletedAt > 0 {
+            if showSplash {
+                SplashScreenView { showSplash = false }
+            } else if onboardingCompletedAt > 0 {
                 ContentView()
             } else {
                 switch gate {
                 case .checking:
-                    // MVP 占位 loading：只放系统转圈、不带文案。
-                    // 品牌启动页确定后在此替换（视觉风格 TBD，见 CLAUDE.md）。
+                    // 开屏动画只有 1s，网络可能更慢：这里是动画结束后仍未确认身份时
+                    // 的备用 loading 占位。
                     ProgressView()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 case .needsOnboarding:

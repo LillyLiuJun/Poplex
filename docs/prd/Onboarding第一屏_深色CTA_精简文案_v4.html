@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Onboarding 第一屏 · 深色CTA + 精简文案 v4</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;0,6..72,700;1,6..72,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --pageBg:#FBF6F1; --cardBg:#FFFDF8;
+    --textPrimary:#211811; --textSecondary:#4B4640; --textMuted:#7C7773;
+    --textLabel:#A5A099; --textFaint:#C7C3BD;
+    --brand:#FF7622; --brandDeep:#C2410C;
+    --p100:#FFF3EB; --p200:#FFEADE; --p300:#FFDFCC;
+    --interactive:#17120C; --border:#E3DFD9;
+    --serif:'Newsreader',Georgia,serif;
+    --sans:'Inter',-apple-system,system-ui,sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-font-smoothing:antialiased;}
+  body{background:#EDE7E0;font-family:var(--sans);color:var(--textPrimary);padding:44px 24px 80px;}
+  .page-head{max-width:1100px;margin:0 auto;text-align:center;}
+  .page-head h1{font-family:var(--serif);font-weight:600;font-size:29px;letter-spacing:-.01em;margin-bottom:10px;}
+  .page-head p{color:var(--textMuted);font-size:14.5px;line-height:1.65;max-width:760px;margin:0 auto;}
+  .page-head b{color:var(--textSecondary);}
+
+  .row{display:flex;gap:40px;justify-content:center;align-items:flex-start;flex-wrap:wrap;max-width:1100px;margin:38px auto 0;}
+  .col{display:flex;flex-direction:column;align-items:center;gap:16px;width:330px;}
+
+  .phone{width:330px;height:706px;border-radius:50px;background:#0a0a0a;padding:10px;
+    box-shadow:0 34px 70px -22px rgba(40,30,20,.34);position:relative;flex-shrink:0;}
+  .screen{width:100%;height:100%;border-radius:41px;overflow:hidden;background:var(--pageBg);position:relative;}
+  .screen::before{content:"";position:absolute;inset:0;z-index:0;
+    background-image:radial-gradient(rgba(124,119,115,.09) 1px,transparent 1px);background-size:20px 20px;pointer-events:none;}
+  .island{position:absolute;top:13px;left:50%;transform:translateX(-50%);width:92px;height:28px;background:#000;border-radius:15px;z-index:30;}
+  .content{position:relative;z-index:5;height:100%;display:flex;flex-direction:column;}
+
+  .top{flex:1;padding:66px 28px 0;}
+  .kicker{font-size:11px;font-weight:700;letter-spacing:.16em;color:var(--brand);text-transform:uppercase;margin-bottom:26px;}
+  /* 删副文案后主标题放大到 52px，更有分量与呼吸 */
+  .title{font-family:var(--serif);font-weight:600;font-size:52px;line-height:1.04;letter-spacing:-.03em;color:var(--textPrimary);}
+  .title .b{color:var(--brand);}
+
+  .btn-dark{width:100%;height:56px;border-radius:28px;background:var(--interactive);color:#FBF6F1;
+    font-weight:600;font-size:16px;display:flex;align-items:center;justify-content:center;box-shadow:0 12px 26px rgba(28,25,23,.18);}
+  .dots{display:flex;gap:6px;justify-content:center;margin-top:16px;}
+  .dots i{width:6px;height:6px;border-radius:3px;background:var(--textFaint);}
+  .dots i.on{width:20px;background:var(--brand);}
+
+  .cap{width:330px;text-align:center;}
+  .cap .tag{display:inline-block;font-size:11.5px;font-weight:600;color:var(--brand);background:var(--p100);padding:4px 12px;border-radius:20px;margin-bottom:8px;}
+  .cap.star .tag{color:#fff;background:var(--brand);}
+  .cap h3{font-family:var(--serif);font-weight:600;font-size:18px;margin-bottom:6px;}
+  .cap p{font-size:13px;line-height:1.6;color:var(--textMuted);}
+
+  /* A · 浅色托盘 + 深色 CTA */
+  .shelf{background:var(--p200);border-radius:34px 34px 41px 41px;padding:24px 28px 26px;
+    box-shadow:0 -6px 24px rgba(255,118,34,.08);}
+
+  /* B · 渐隐橙光 + 深色 CTA */
+  .sunrise{position:relative;padding:32px 28px 26px;}
+  .sunrise::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;
+    background:linear-gradient(to top,rgba(255,118,34,.44) 0%,rgba(255,118,34,.20) 42%,rgba(255,118,34,.06) 74%,transparent 100%);}
+</style>
+</head>
+<body>
+  <div class="page-head">
+    <h1>Onboarding 第一屏 · 深色 CTA + 精简文案</h1>
+    <p>两处已按你的意见落地：① <b>删掉副文案</b>（与 Screen 2 的机制说明重复），主标题放大到 52px、更有呼吸；② <b>CTA 用暖近黑</b>（= App 真实规范 interactive，橙留给色块）。左右只差底部色块的减重手法。</p>
+  </div>
+
+  <div class="row">
+
+    <!-- A 浅色托盘 -->
+    <div class="col">
+      <div class="phone"><div class="screen">
+        <div class="island"></div>
+        <div class="content">
+          <div class="top">
+            <div class="kicker">Your English, from life</div>
+            <div class="title">Build your expression from <span class="b">work &amp; life.</span></div>
+          </div>
+          <div class="shelf">
+            <div class="btn-dark">Get started</div>
+            <div class="dots"><i class="on"></i><i></i><i></i></div>
+          </div>
+        </div>
+      </div></div>
+      <div class="cap star">
+        <span class="tag">A · 浅色托盘 + 深色 CTA ★推荐</span>
+        <h3>Pale Shelf</h3>
+        <p>浅橘托盘托住深色按钮，橙与近黑分工清楚、层次干净。最克制、最贴品牌，"少文案 + 大标题 + 稳托盘"三者合起来最有可信的分量。</p>
+      </div>
+    </div>
+
+    <!-- B 渐隐橙光 -->
+    <div class="col">
+      <div class="phone"><div class="screen">
+        <div class="island"></div>
+        <div class="content">
+          <div class="top">
+            <div class="kicker">Your English, from life</div>
+            <div class="title">Build your expression from <span class="b">work &amp; life.</span></div>
+          </div>
+          <div class="sunrise">
+            <div class="btn-dark">Get started</div>
+            <div class="dots"><i class="on"></i><i></i><i></i></div>
+          </div>
+        </div>
+      </div></div>
+      <div class="cap">
+        <span class="tag">B · 渐隐橙光 + 深色 CTA</span>
+        <h3>Faded Sunrise</h3>
+        <p>橙色渐隐无硬边、最轻盈，深色按钮压在暖光上。比 A 更"空气感"，若嫌托盘还是像个块、想更融，就选它。</p>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>

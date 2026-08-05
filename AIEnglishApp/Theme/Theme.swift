@@ -130,6 +130,14 @@ private enum Primitive {
     //    靠"更亮 + 柔阴影"分层；不用纯白，避免冷白跳出整套暖色系 ──
     static let warmWhite = Color(hex: 0xFFFDF8)
 
+    // ── App 图标资产色 ────────────────────────────────────────────────────
+    // 开屏动画的第 0 帧必须与 iOS 图标放大转场的最后一帧一致，否则启动会闪一下。
+    // 故这两枚直接取 AppIcon.appiconset 母版里的实际色值，单列、不与 neutral50
+    // (#FBF6F1) / neutral900 (#211811) 合并 —— 差值虽小，合并就会在接缝处露出来。
+    // 改动前请同步改 Assets.xcassets/AppIcon.appiconset/poplex_icon_master.svg。
+    static let iconGround = Color(hex: 0xFBF8F5)  // 图标底 = 开屏底
+    static let iconInk    = Color(hex: 0x2A2320)  // 图标墨点 = 开屏墨点
+
     // ── 覆盖在实时媒体（相机画面 / 用户照片）上的控件 ────────────────────────
     static let mediaSurface   = Color.black             // 相机全屏底
     static let controlOnMedia = Color.white             // 画面上的图标 / 快门
@@ -205,6 +213,11 @@ enum AppTheme {
         static let canvasGridDot = Primitive.neutral500
         static let canvasAura     = Primitive.primary950
 
+        // 开屏（= App 图标资产色，用于和图标转场无缝衔接）
+        // 字母本身走 brandStrong（= 种子橙 FF7622，与图标里的 P 同色），不另立 token。
+        static let splashBg  = Primitive.iconGround
+        static let splashDot = Primitive.iconInk
+
         // 相机全屏表面 + 覆盖控件（白控件浮在实时画面上，与浅色主题无关）
         static let cameraBg        = Primitive.mediaSurface
         static let cameraControl   = Primitive.controlOnMedia
@@ -242,9 +255,17 @@ enum AppTheme {
         static let hero           = SwiftUI.Font.system(.largeTitle, weight: .bold)   // Onboarding 标题
         static let screenTitle    = SwiftUI.Font.system(.title2, weight: .bold)       // 功能页大标题（onboarding 实操页等）
         static let pageTitleSerif = SwiftUI.Font.system(.largeTitle, design: .serif, weight: .semibold) // 页面衬线大标题（Warm Editorial：Tab2「Not open yet」等，与内容衬线同族）
+        static let onboardingHeroSerif = SwiftUI.Font.system(size: 46, weight: .semibold, design: .serif) // Onboarding 封面大标题：比 largeTitle 更大的展示字号，撑起全屏第一印象。封面特例——固定字号、不随 Dynamic Type 放大（与 pageTitleSerif 同为衬线同族，仅尺寸更大）
         static let sectionTitleSerif = SwiftUI.Font.system(.title2, design: .serif, weight: .semibold)  // 分区衬线小标题（Topics in progress / Materials Yours），比页面大标题小一档
         static let ctaLabel       = SwiftUI.Font.system(.body, weight: .semibold)     // 主按钮文字（Continue / Get Started）
         static let tabLabel       = SwiftUI.Font.system(.subheadline, weight: .semibold) // 顶部 Tab 名称
+        // 开屏字标「oplex」：与 App 内容字同族（design: .serif = New York，
+        // 和 pageTitleSerif / wordTitle 是同一套），再加 italic 呼应 PoplexPShape 的 -6° 斜切。
+        // 品牌资产特例——固定字号、不随 Dynamic Type 变化（放大后会撑破居中构图，
+        // 且开屏不承载可读信息，无可访问性损失）。
+        // 字号改动需同步 SplashScreenView.wordmarkSize，两者必须一致，
+        // 否则 P 的字高（由字号算 cap height）会和 oplex 对不上。
+        static let splashWordmark = SwiftUI.Font.system(size: 56, weight: .bold, design: .serif).italic()
     }
 
     enum Radius {
@@ -277,6 +298,27 @@ enum AppTheme {
         static let tabSelection: Animation = .spring(response: 0.34, dampingFraction: 0.72)
         // 顶栏滚动紧凑/恢复：稍快，确保不拖延内容阅读
         static let topBarCompact: Animation = .spring(response: 0.30, dampingFraction: 0.82)
+
+        /// 开屏动画时间表（方案 A · 总长 1.00s）。
+        /// 多出来的时间全部给了 `holdEnd` 前那一拍静止 —— 词写完后完整停 0.10s，
+        /// 这是「名字被看清」的时间。若要缩短，**不要按比例压缩各段**（会毁掉那一拍），
+        /// 正确做法是整体换成 reduceMotion 分支的纯淡入。
+        enum Splash {
+            static let holdStart: Double     = 0.08   // 承接图标：大 P 静止
+            static let shrinkDuration: Double = 0.32  // P 收到字标字号
+            static let lettersStart: Double  = 0.26   // oplex 开始逐字长出
+            static let letterStagger: Double = 0.046  // 字母间隔
+            static let letterDuration: Double = 0.22
+            static let dotStart: Double      = 0.48   // 墨点从左滑到词尾
+            static let dotDuration: Double   = 0.28
+            static let exitStart: Double     = 0.86   // 静止一拍后开始淡出
+            static let exitDuration: Double  = 0.14
+            static var total: Double { exitStart + exitDuration }   // 1.00
+
+            /// 「减弱动态效果」开启时的降级版：无位移、只淡入，总长 0.45s。
+            static let reducedFadeIn: Double = 0.20
+            static let reducedTotal: Double  = 0.45
+        }
     }
 }
 

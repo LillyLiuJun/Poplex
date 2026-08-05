@@ -33,22 +33,16 @@ struct OnboardingCaptureView: View {
     }
 
     var body: some View {
-        ZStack {
+        ZStack(alignment: .topLeading) {
             OnboardingAuraBackground()
 
-            VStack(alignment: .leading, spacing: 0) {
-                backButton
-                    .padding(.leading, AppTheme.Space.paddingCard)
-                    .padding(.top, AppTheme.Space.paddingCard)
-
-                // Content area morphs in-place on Continue.
-                if isSelecting {
-                    selectionContent
-                        .transition(.opacity)
-                } else {
-                    resultContent
-                        .transition(.opacity)
-                }
+            // Content area morphs in-place on Continue.
+            if isSelecting {
+                selectionContent
+                    .transition(.opacity)
+            } else {
+                resultContent
+                    .transition(.opacity)
             }
         }
         .animation(.easeInOut(duration: 0.3), value: isSelecting)
@@ -81,17 +75,6 @@ struct OnboardingCaptureView: View {
 
     // MARK: - Back
 
-    private var backButton: some View {
-        Button(action: handleBack) {
-            Image(systemName: "chevron.left")
-                .font(.body.weight(.medium))
-                .foregroundStyle(AppTheme.Color.textSecondary)
-                .padding(AppTheme.Space.paddingS)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(PressableButtonStyle())
-    }
-
     // Runs in the sheet's onDismiss, i.e. only once the modal is gone, so the
     // preview/Continue layout change can never race the dismissal animation.
     // Selecting a photo (any source) also clears a previously picked card.
@@ -113,31 +96,42 @@ struct OnboardingCaptureView: View {
     // MARK: - Selection content (action card + preset carousel + Continue)
 
     private var selectionContent: some View {
-        VStack(spacing: 0) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    selectionHeader
-                        .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.05)
+        ZStack(alignment: .bottom) {
+            GeometryReader { geo in
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Color.clear
+                            .frame(height: 36)
+                            .padding(.top, AppTheme.Space.paddingCard)
+                            
+                        selectionHeader
+                            .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.05)
 
-                    actionCard
-                        .padding(.top, AppTheme.Space.paddingSection)
-                        .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.15)
+                        actionCard
+                            .padding(.top, AppTheme.Space.paddingM)
+                            .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.25)
 
-                    Text("NO PHOTO READY? TRY A SAMPLE")
-                        .font(AppTheme.Font.pos)
-                        .foregroundStyle(AppTheme.Color.textMuted)
-                        .tracking(0.6)
-                        .padding(.top, AppTheme.Space.paddingSection)
-                        .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.25)
+                        if !hasSelection {
+                            Text("Or try a sample")
+                                .font(AppTheme.Font.englishBody)
+                                .fontWeight(.medium)
+                                .foregroundStyle(AppTheme.Color.textPrimary)
+                                .padding(.top, AppTheme.Space.paddingSection)
+                                .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.35)
 
-                    presetCarousel
-                        .padding(.top, AppTheme.Space.paddingCard)
-                        .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.3)
+                            presetCarousel
+                                .padding(.top, AppTheme.Space.paddingCard)
+                                .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.4)
+                        }
+                            
+                        Spacer()
+                    }
+                    .padding(.horizontal, AppTheme.Space.paddingPage)
+                    .padding(.bottom, hasSelection ? 120 : 72)
+                    .frame(minHeight: geo.size.height)
                 }
-                .padding(.horizontal, AppTheme.Space.paddingPage)
-                .padding(.bottom, hasSelection ? 100 : 72)
+                .scrollBounceBehavior(.basedOnSize)
             }
-            .scrollBounceBehavior(.basedOnSize)
 
             if hasSelection {
                 OnboardingPrimaryButton(title: "Continue", action: confirmSelection)
@@ -152,7 +146,7 @@ struct OnboardingCaptureView: View {
     private var selectionHeader: some View {
         VStack(alignment: .leading, spacing: AppTheme.Space.paddingS) {
             Text("Snap what's around\nyou to start")
-                .font(AppTheme.Font.screenTitle)
+                .font(AppTheme.Font.pageTitleSerif)
                 .foregroundStyle(AppTheme.Color.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -167,65 +161,83 @@ struct OnboardingCaptureView: View {
     // MARK: 虚线动作卡：拍照主 CTA + 相册文字链接；已选照片时变为预览卡
 
     private var actionCard: some View {
-        VStack(spacing: AppTheme.Space.paddingCard) {
-            if let image = pendingImage {
-                Image(uiImage: image)
-                    .resizable()
+        Group {
+            if pendingImage != nil || pendingCard != nil {
+                ZStack(alignment: .topTrailing) {
+                    Group {
+                        if let image = pendingImage {
+                            Image(uiImage: image).resizable()
+                        } else if let card = pendingCard {
+                            Image(card.imageName).resizable()
+                        }
+                    }
                     .scaledToFill()
                     .frame(maxWidth: .infinity)
-                    .frame(height: 180)
+                    .frame(height: 200)
                     .clipped()
-                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
-                    // clip 只裁绘制不裁命中——展示用，放弃命中防止吞掉下方链接点击
+                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.large))
                     .allowsHitTesting(false)
-
-                HStack(spacing: AppTheme.Space.paddingSection) {
-                    linkButton("Retake", source: .camera)
-                    linkButton("Photos", source: .photoLibrary)
+                    
+                    Button(action: {
+                        withAnimation(.spring(duration: 0.2)) {
+                            pendingImage = nil
+                            pendingCard = nil
+                        }
+                    }) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(8)
+                            .background(.black.opacity(0.4), in: Circle())
+                    }
+                    .padding(8)
+                    .buttonStyle(PressableButtonStyle(pressedScale: 0.9, pressedOpacity: 0.8))
                 }
             } else {
-                Image(systemName: "camera")
-                    .font(.title3)
-                    .foregroundStyle(AppTheme.Color.brandStrong)
-                    .frame(width: AppTheme.Size.iconBadge, height: AppTheme.Size.iconBadge)
-                    .background(AppTheme.Color.brandSubtleBg, in: Circle())
-
-                Text("Take a quick photo to see instant results")
-                    .font(AppTheme.Font.chineseFaint)
-                    .foregroundStyle(AppTheme.Color.textMuted)
-                    .multilineTextAlignment(.center)
-
-                OnboardingPrimaryButton(title: "Take a Photo") {
-                    activeSheet = .camera
+                HStack(spacing: AppTheme.Space.paddingSection) {
+                    Button(action: { activeSheet = .camera }) {
+                        VStack(spacing: AppTheme.Space.paddingM) {
+                            Image(systemName: "camera")
+                                .font(.title2)
+                                .foregroundStyle(AppTheme.Color.brandStrong)
+                                .frame(width: 56, height: 56)
+                                .background(AppTheme.Color.brandSubtleBg, in: Circle())
+                            
+                            Text("Camera")
+                                .font(AppTheme.Font.buddy)
+                                .foregroundStyle(AppTheme.Color.textPrimary)
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(PressableButtonStyle())
+                    
+                    Button(action: { activeSheet = .photoLibrary }) {
+                        VStack(spacing: AppTheme.Space.paddingM) {
+                            Image(systemName: "photo.on.rectangle")
+                                .font(.title2)
+                                .foregroundStyle(AppTheme.Color.textSecondary)
+                                .frame(width: 56, height: 56)
+                                .background(AppTheme.Color.imagePlaceholderBg, in: Circle())
+                            
+                            Text("Photos")
+                                .font(AppTheme.Font.buddy)
+                                .foregroundStyle(AppTheme.Color.textPrimary)
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(PressableButtonStyle())
                 }
-
-                Button(action: { activeSheet = .photoLibrary }) {
-                    Text("Choose from Photos")
-                        .font(AppTheme.Font.buddy)
-                        .foregroundStyle(AppTheme.Color.textSecondary)
-                        .underline()
-                }
-                .buttonStyle(PressableButtonStyle(pressedScale: 0.98, pressedOpacity: 0.6))
+                .padding(.vertical, AppTheme.Space.paddingM)
+                .padding(AppTheme.Space.paddingPage)
+                .frame(maxWidth: .infinity)
+                .background(Color.clear)
+                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.large))
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.large)
+                        .stroke(AppTheme.Color.borderDashed, style: StrokeStyle(lineWidth: 1, dash: [6]))
+                )
             }
         }
-        .padding(AppTheme.Space.paddingPage)
-        .frame(maxWidth: .infinity)
-        .background(AppTheme.Color.cardBg)
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.large))
-        .overlay(
-            RoundedRectangle(cornerRadius: AppTheme.Radius.large)
-                .stroke(AppTheme.Color.borderDashed, style: StrokeStyle(lineWidth: 2, dash: [6]))
-        )
-    }
-
-    private func linkButton(_ title: String, source: CaptureSource) -> some View {
-        Button(action: { activeSheet = source }) {
-            Text(title)
-                .font(AppTheme.Font.buddy)
-                .foregroundStyle(AppTheme.Color.brandStrong)
-                .underline()
-        }
-        .buttonStyle(PressableButtonStyle(pressedScale: 0.98, pressedOpacity: 0.6))
     }
 
     // MARK: 预设卡横滑条（相机不可用/没有照片时的兜底入口）
@@ -261,38 +273,51 @@ struct OnboardingCaptureView: View {
     // MARK: - Result content (moment card as hero)
 
     private var resultContent: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Spacer()
+        ZStack(alignment: .bottom) {
+            GeometryReader { geo in
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Color.clear
+                            .frame(height: 36)
+                            .padding(.top, AppTheme.Space.paddingCard)
 
-            Group {
-                if viewModel.isLoading {
-                    loadingCard
-                        .transition(.opacity)
-                } else if let result = viewModel.generationResult {
-                    resultCard(result)
-                        .transition(.scale(scale: 0.94).combined(with: .opacity))
-                } else if viewModel.retryCount >= 2 {
-                    failedView
-                        .transition(.opacity)
-                } else {
-                    errorView
-                        .transition(.opacity)
+                        Spacer()
+
+                        Group {
+                            if viewModel.isLoading {
+                                loadingCard
+                                    .transition(.opacity)
+                            } else if let result = viewModel.generationResult {
+                                resultCard(result)
+                                    .transition(.scale(scale: 0.94).combined(with: .opacity))
+                            } else if viewModel.retryCount >= 2 {
+                                failedView
+                                    .transition(.opacity)
+                            } else {
+                                errorView
+                                    .transition(.opacity)
+                            }
+                        }
+                        .padding(.horizontal, AppTheme.Space.paddingPage)
+
+                        if viewModel.generationResult != nil {
+                            Text("That's a moment from your life — now it's yours in English.")
+                                .font(AppTheme.Font.chineseFaint)
+                                .foregroundStyle(AppTheme.Color.textSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .padding(.horizontal, AppTheme.Space.paddingPage)
+                                .padding(.top, AppTheme.Space.paddingCard)
+                                .transition(.opacity)
+                        }
+
+                        Spacer()
+                    }
+                    .padding(.bottom, 120) // Give space for absolute bottom button
+                    .frame(minHeight: geo.size.height)
                 }
+                .scrollBounceBehavior(.basedOnSize)
             }
-            .padding(.horizontal, AppTheme.Space.paddingPage)
-
-            if viewModel.generationResult != nil {
-                Text("That's a moment from your life — now it's yours in English.")
-                    .font(AppTheme.Font.chineseFaint)
-                    .foregroundStyle(AppTheme.Color.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, AppTheme.Space.paddingPage)
-                    .padding(.top, AppTheme.Space.paddingCard)
-                    .transition(.opacity)
-            }
-
-            Spacer()
-
+            
             if !viewModel.isLoading {
                 bottomButton
                     .padding(.horizontal, AppTheme.Space.paddingPage)
@@ -409,24 +434,8 @@ private struct PresetCarouselTile: View {
                 Image(card.imageName)
                     .resizable()
                     .scaledToFill()
-                    .frame(width: 100, height: 120)
+                    .frame(width: 90, height: 120)
                     .clipped()
-                    .overlay(alignment: .bottom) {
-                        Text(card.title)
-                            .font(AppTheme.Font.pos)
-                            .foregroundStyle(AppTheme.Color.cameraControl)
-                            .lineLimit(1)
-                            .padding(.horizontal, AppTheme.Space.paddingXS)
-                            .padding(.vertical, AppTheme.Space.paddingXS)
-                            .frame(maxWidth: .infinity)
-                            .background(
-                                LinearGradient(
-                                    colors: [.clear, AppTheme.Color.cameraBg.opacity(0.75)],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            )
-                    }
 
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")

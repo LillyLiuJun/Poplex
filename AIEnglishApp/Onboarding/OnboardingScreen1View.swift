@@ -1,8 +1,9 @@
 import SwiftUI
 
-/// Onboarding 第一页：品牌第一印象 + 情感钩子。
-/// 结构 = 排版（价值主张）+ 悬浮样品时刻卡（产品产出证据）+ 单一 CTA。
-/// 温润极简：暖米白底 + 底部品牌橙光晕，入场渐次淡入上移，之后静止。
+/// Onboarding 第一页：品牌第一印象 + 价值主张。
+/// 克制排版（对齐 Tab2「Not open yet」）：纯衬线大标题 + 一句灰副标题 + 单一 CTA。
+/// 背景不自绘——沿用 OnboardingView 的共享背景（暖纸 + 圆点 + 极淡底部光晕），
+/// 与 Screen2 / Capture 三屏一致。品牌色不点在标题上，留给顶部 logo 位。
 struct OnboardingScreen1View: View {
     var isActive: Bool = true
     var onForward: () -> Void
@@ -11,60 +12,67 @@ struct OnboardingScreen1View: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        ZStack {
-            OnboardingAuraBackground()
-
+        ZStack(alignment: .bottom) {
             VStack(alignment: .leading, spacing: 0) {
-                Spacer()
+                // 顶部 logo 位：品牌 logo 资源到位后放这里（当前留白占位，
+                // 高度与 Screen2 的返回栏对齐，保证三屏标题起始位置一致）。
+                Color.clear
+                    .frame(height: 36)
+                    .padding(.top, AppTheme.Space.paddingCard)
+
+                // 文字组垂直居中：把原来堆在顶部、中间空洞的布局改为上下均分留白。
+                Spacer(minLength: AppTheme.Space.paddingSection)
 
                 textBlock
                     .padding(.horizontal, AppTheme.Space.paddingPage)
-                    .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.05)
 
-                Spacer().frame(height: AppTheme.Space.paddingHero)
-
-                OnboardingMomentCard(
-                    image: Image("card_morning_coffee"),
-                    sentence: "Momo shakes off the rain after our morning walk."
-                )
-                    .rotationEffect(.degrees(-2))
-                    .padding(.horizontal, AppTheme.Space.paddingSection)
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel("Sample moment card: a photo of a dog shaking off rain, with the English sentence, Momo shakes off the rain after our morning walk.")
-                    .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.22)
-
-                Spacer()
-
-                OnboardingPrimaryButton(title: "Continue", action: onForward)
-                    .padding(.horizontal, AppTheme.Space.paddingPage)
-                    .padding(.bottom, AppTheme.Space.paddingScreenBottom)
-                    .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.38)
+                Spacer(minLength: AppTheme.Space.paddingSection)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+
+            OnboardingPrimaryButton(title: "Continue", action: onForward)
+                .padding(.horizontal, AppTheme.Space.paddingPage)
+                .padding(.bottom, AppTheme.Space.paddingScreenBottom)
+                .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.30)
         }
         .contentShape(Rectangle())
         .onHorizontalSwipe(onLeft: onForward)
-        // 三页并排渲染，onAppear 启动即触发——入场动画必须在页面真正可见时才播
-        .onAppear { if isActive { appeared = true } }
-        .onChange(of: isActive) { _, active in if active { appeared = true } }
+        // 首屏靠 onAppear 触发入场：必须延到下一帧再翻 appeared，否则初始
+        // (opacity 0 / offset) 状态来不及渲染，动画会被 SwiftUI 跳过。
+        .onAppear { if isActive { triggerEntrance() } }
+        .onChange(of: isActive) { _, active in if active { triggerEntrance() } }
     }
 
-    // MARK: - 文案区：大标题（品牌橙强调收尾短语）+ 一句支撑
+    private func triggerEntrance() {
+        guard !appeared else { return }
+        DispatchQueue.main.async { appeared = true }
+    }
+
+    // MARK: - 文案区：纯黑衬线封面大标题（品牌色不点标题）+ 一句价值副标题
+    // 标题 / 副标题错峰入场，形成封面揭幕的层次。
 
     private var textBlock: some View {
         VStack(alignment: .leading, spacing: AppTheme.Space.paddingCard) {
-            (Text("Build your expression\nfrom ")
-                + Text("work and life.").foregroundStyle(AppTheme.Color.brandStrong))
-                .font(AppTheme.Font.hero)
+            Text("Build your expression\nfrom work & life.")
+                .font(AppTheme.Font.onboardingHeroSerif)
                 .foregroundStyle(AppTheme.Color.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+                .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.05)
 
-            Text("Capture a moment. Get English you can actually say.")
+            // 副标题讲"价值"，不重复 Screen2 的"机制"，避免两屏冗余。
+            // 手动断成对称两行，避免自动折行出现 "Just what's" 孤字尾。
+            Text("Not textbooks. Not drills.\nJust what's happening around you.")
                 .font(AppTheme.Font.englishBody)
                 .foregroundStyle(AppTheme.Color.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
+                .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.18)
         }
     }
 }
 
 #Preview {
-    OnboardingScreen1View(onForward: {})
+    ZStack {
+        OnboardingAuraBackground()
+        OnboardingScreen1View(onForward: {})
+    }
 }

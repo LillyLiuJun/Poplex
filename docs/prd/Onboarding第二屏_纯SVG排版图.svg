@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844" width="390" height="844">
+    <defs>
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=Newsreader:wght@600&amp;family=Inter:wght@400;500;600&amp;display=swap');
+            
+            /* Typography matching AppTheme */
+            .title { font-family: 'Newsreader', serif; font-size: 32px; font-weight: 600; fill: #1F1A17; }
+            .subtitle { font-family: 'Inter', sans-serif; font-size: 17px; fill: #7A7570; }
+            
+            .mode-title { font-family: 'Inter', sans-serif; font-size: 18px; font-weight: 600; fill: #1F1A17; }
+            .mode-detail { font-family: 'Inter', sans-serif; font-size: 17px; fill: #7A7570; }
+            
+            /* Watermark Icon Styling */
+            .watermark { 
+                fill: none; 
+                stroke: #7A7570; 
+                stroke-width: 0.3; 
+                opacity: 0.15; 
+                stroke-linecap: round; 
+                stroke-linejoin: round; 
+            }
+            
+            .btn-text { font-family: 'Inter', sans-serif; font-size: 17px; font-weight: 600; fill: #FFFFFF; text-anchor: middle; }
+        </style>
+    </defs>
+    
+    <!-- Phone Screen Background -->
+    <rect width="390" height="844" rx="40" fill="#FBF6F1" />
+    
+    <!-- Top Header -->
+    <text x="24" y="100" class="title">Share your context,</text>
+    <text x="24" y="136" class="title">in any format.</text>
+    <text x="24" y="174" class="subtitle">Drop a photo, speak, or type. AI does the rest.</text>
+
+    <!-- Item 1: Camera (Left Aligned / Z-zag start) -->
+    <g transform="translate(24, 280)">
+        <!-- Giant Watermark Icon -->
+        <g transform="translate(-20, -32) scale(4.5)">
+            <path class="watermark" d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+            <circle class="watermark" cx="12" cy="13" r="4"></circle>
+        </g>
+        <text x="0" y="24" class="mode-title">Snap a photo</text>
+        <text x="0" y="48" class="mode-detail">Your surroundings become the lesson.</text>
+    </g>
+
+    <!-- Item 2: Mic (Right Aligned / Z-zag middle) -->
+    <g transform="translate(366, 420)">
+        <g transform="translate(-70, -32) scale(4.5)">
+            <path class="watermark" d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+            <path class="watermark" d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+            <line class="watermark" x1="12" y1="19" x2="12" y2="23"></line>
+            <line class="watermark" x1="8" y1="23" x2="16" y2="23"></line>
+        </g>
+        <text x="0" y="24" class="mode-title" text-anchor="end">Say what's on your mind</text>
+        <text x="0" y="48" class="mode-detail" text-anchor="end">Your thoughts, captured in English.</text>
+    </g>
+
+    <!-- Item 3: Keyboard (Left Aligned / Z-zag end) -->
+    <g transform="translate(24, 560)">
+        <g transform="translate(-20, -32) scale(4.5)">
+            <rect class="watermark" x="2" y="4" width="20" height="16" rx="2" ry="2"></rect>
+            <line class="watermark" x1="6" y1="8" x2="6.01" y2="8"></line>
+            <line class="watermark" x1="10" y1="8" x2="10.01" y2="8"></line>
+            <line class="watermark" x1="14" y1="8" x2="14.01" y2="8"></line>
+            <line class="watermark" x1="18" y1="8" x2="18.01" y2="8"></line>
+            <line class="watermark" x1="6" y1="12" x2="6.01" y2="12"></line>
+            <line class="watermark" x1="10" y1="12" x2="10.01" y2="12"></line>
+            <line class="watermark" x1="14" y1="12" x2="14.01" y2="12"></line>
+            <line class="watermark" x1="18" y1="12" x2="18.01" y2="12"></line>
+            <line class="watermark" x1="7" y1="16" x2="17" y2="16"></line>
+        </g>
+        <text x="0" y="24" class="mode-title">Type a few words</text>
+        <text x="0" y="48" class="mode-detail">Even a fragment is enough.</text>
+    </g>
+
+    <!-- Bottom Button -->
+    <rect x="24" y="754" width="342" height="56" rx="28" fill="#1F1A17" />
+    <text x="195" y="788" class="btn-text">Continue</text>
+</svg>

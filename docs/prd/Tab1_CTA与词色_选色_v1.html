@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CTA 与 Word 词色 · 选色</title>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.5.0/dist/tabler-icons.min.css">
+<style>
+  :root{
+    --paper:#FBF6F1; --card:#FFFFFF; --card-line:#EFE7DC; --hairline:#E7DED3;
+    --ink-900:#1A150F; --ink-700:#5C534A; --ink-500:#8A8175; --faint:#A8A29E;
+    --brand:#FF7622; --mono:ui-monospace,Menlo,monospace;
+    --serif:"Newsreader",Georgia,serif; --sans:-apple-system,"SF Pro Text",system-ui,sans-serif;
+    --shadow:0 6px 22px rgba(28,25,23,.05);
+  }
+  *{ box-sizing:border-box; -webkit-font-smoothing:antialiased; }
+  body{ margin:0; background:#EFE9E1; font-family:var(--sans); color:var(--ink-900); padding:40px 20px 90px; }
+  h1{ text-align:center; font-weight:600; font-size:24px; margin:0 0 6px; }
+  .sub{ text-align:center; color:#8A8175; font-size:13px; max-width:620px; margin:0 auto 30px; line-height:1.6; }
+  .section-label{ text-align:center; font-size:11px; letter-spacing:.22em; text-transform:uppercase; color:var(--faint); margin:34px 0 18px; }
+  .row{ display:flex; gap:26px; justify-content:center; flex-wrap:wrap; align-items:flex-start; }
+
+  /* recommended phone */
+  .phone{ width:300px; height:610px; background:var(--paper); border:1px solid var(--hairline); border-radius:40px;
+    padding:11px; box-shadow:0 18px 50px rgba(33,27,21,.12); position:relative; overflow:hidden; }
+  .screen{ position:absolute; inset:11px; border-radius:30px; overflow:hidden; background:var(--paper); }
+  .grid{ position:absolute; inset:0; background-image:radial-gradient(rgba(120,113,108,.07) .6px,transparent .6px); background-size:16px 16px; }
+  .content{ position:absolute; inset:0; padding:10px 18px; }
+  .sbar{ height:34px; display:flex; align-items:center; justify-content:space-between; font-size:13px; font-weight:600; }
+  .card{ background:var(--card); border:1px solid var(--card-line); border-radius:16px; padding:16px; box-shadow:var(--shadow); margin-top:6px; }
+  .chip{ font-size:10px; font-weight:700; letter-spacing:.09em; text-transform:uppercase; color:var(--ink-500); margin-bottom:11px; }
+  .word{ font-family:var(--serif); font-weight:500; font-size:28px; color:var(--ink-900); letter-spacing:-.01em; }
+  .meta{ margin-top:5px; } .ipa{ font-family:var(--mono); font-size:12px; color:var(--ink-500); } .pos{ font-size:11.5px; color:var(--ink-500); margin-left:7px; }
+  .zh{ font-size:14px; color:var(--ink-700); margin-top:9px; }
+  .seclabel{ font-size:10px; font-weight:600; letter-spacing:.09em; text-transform:uppercase; color:var(--faint); margin:14px 0 7px; }
+  .ex{ margin-bottom:8px; } .ex .en{ font-size:13.5px; color:var(--ink-900); } .ex .cn{ font-size:12px; color:var(--ink-500); margin-top:2px; }
+  /* C gradient + input */
+  .grad{ position:absolute; left:0; right:0; bottom:0; height:200px; z-index:3; pointer-events:none;
+    background:linear-gradient(to top,var(--paper) 20%,rgba(251,246,241,0) 92%),
+               linear-gradient(to top,rgba(255,118,34,.15),rgba(255,118,34,.04) 40%,transparent 78%); }
+  .inputbar{ position:absolute; left:14px; right:14px; bottom:14px; display:flex; align-items:center; gap:10px; z-index:5;
+    background:rgba(255,255,255,.92); box-shadow:0 6px 20px rgba(28,25,23,.06); border-radius:28px; padding:7px 7px 7px 16px; }
+  .inputbar .plus{ font-size:20px; color:var(--ink-900); } .inputbar .ph{ flex:1; font-size:14px; color:var(--faint); }
+  .cam{ width:42px; height:42px; border-radius:50%; background:#1C1917; color:#fff; display:flex; align-items:center; justify-content:center; font-size:19px; }
+  .cap{ font-size:12px; color:#8A8175; text-align:center; line-height:1.5; margin-top:12px; }
+  .cap b{ display:block; font-family:var(--serif); font-size:14px; color:var(--ink-900); font-weight:500; margin-bottom:2px; }
+
+  /* swatch tiles */
+  .tiles{ display:flex; gap:16px; justify-content:center; flex-wrap:wrap; }
+  .tile{ width:184px; background:var(--card); border:1px solid var(--card-line); border-radius:16px; padding:18px; box-shadow:var(--shadow); text-align:center; }
+  .tile .demoword{ font-family:var(--serif); font-weight:500; font-size:26px; letter-spacing:-.01em; }
+  .tile .democta{ width:44px; height:44px; border-radius:50%; margin:0 auto; display:flex; align-items:center; justify-content:center; color:#fff; font-size:20px; }
+  .tile .nm{ font-size:12.5px; color:var(--ink-700); margin-top:12px; font-weight:600; }
+  .tile .hex{ font-family:var(--mono); font-size:11px; color:var(--ink-500); margin-top:2px; }
+  .tile .rec{ display:inline-block; font-size:10px; font-weight:700; color:var(--brand); background:rgba(255,118,34,.1); padding:2px 8px; border-radius:999px; margin-top:8px; }
+</style>
+</head>
+<body>
+  <h1>CTA 送出键 & Word 词色 · 选色</h1>
+  <p class="sub">推荐组合:底部渐变 C + CTA 暖近黑 + Word 词近黑。下面给每项的具体色值备选,你逐个挑。</p>
+
+  <div class="section-label">推荐组合(整屏预览)</div>
+  <div class="row">
+    <div style="display:flex;flex-direction:column;align-items:center;gap:13px;">
+      <div class="phone"><div class="screen">
+        <div class="grid"></div>
+        <div class="content">
+          <div class="sbar"><span>7:27</span><i class="ti ti-battery-filled"></i></div>
+          <div class="card">
+            <div class="chip">Word</div>
+            <div class="word">formidable</div>
+            <div class="meta"><span class="ipa">/fɔːrˈmɪdəbəl/</span><span class="pos">adj.</span></div>
+            <div class="zh">强悍</div>
+            <div class="seclabel">Examples</div>
+            <div class="ex"><div class="en">He is a formidable opponent.</div><div class="cn">他是一个强悍的对手。</div></div>
+            <div class="ex"><div class="en">She showed formidable willpower.</div><div class="cn">她展现出了强悍的意志力。</div></div>
+          </div>
+        </div>
+        <div class="grad"></div>
+        <div class="inputbar"><span class="plus"><i class="ti ti-plus"></i></span><span class="ph">Your moment</span><span class="cam"><i class="ti ti-camera"></i></span></div>
+      </div></div>
+      <div class="cap"><b>推荐</b>词近黑 #1A150F · CTA #1C1917 · 底部渐变 C</div>
+    </div>
+  </div>
+
+  <div class="section-label">① Word 词色 · 三选一</div>
+  <div class="tiles">
+    <div class="tile"><div class="demoword" style="color:#1A150F">formidable</div><div class="nm">近黑</div><div class="hex">#1A150F</div><div class="rec">推荐</div></div>
+    <div class="tile"><div class="demoword" style="color:#C2410C">formidable</div><div class="nm">焦糖深橙</div><div class="hex">#C2410C · primaryDeep</div><div style="font-size:11px;color:#8A8175;margin-top:8px">想保留品牌感</div></div>
+    <div class="tile"><div class="demoword" style="color:#FF7622">formidable</div><div class="nm">品牌橙(现状)</div><div class="hex">#FF7622</div><div style="font-size:11px;color:#8A8175;margin-top:8px">你觉得太抢的那个</div></div>
+  </div>
+
+  <div class="section-label">② CTA 送出键色 · 三选一</div>
+  <div class="tiles">
+    <div class="tile"><div class="democta" style="background:#1C1917"><i class="ti ti-camera"></i></div><div class="nm">暖近黑</div><div class="hex">#1C1917 · neutral900</div><div class="rec">推荐</div></div>
+    <div class="tile"><div class="democta" style="background:#292524"><i class="ti ti-camera"></i></div><div class="nm">暖近黑(软一档)</div><div class="hex">#292524 · neutral800</div></div>
+    <div class="tile"><div class="democta" style="background:#000000"><i class="ti ti-camera"></i></div><div class="nm">纯黑(不建议)</div><div class="hex">#000000</div><div style="font-size:11px;color:#8A8175;margin-top:8px">发冷、跳出暖色系</div></div>
+  </div>
+
+  <p class="sub" style="margin-top:38px">注:词和 CTA 都去橙后,Tab1 的品牌橙主要落在<b>底部暖渐变</b>;整体橙由 Tab2 的 CTA/进度/徽章承载,符合"橙要稀"的高级逻辑。</p>
+</body>
+</html>

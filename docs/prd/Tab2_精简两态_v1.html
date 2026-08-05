@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tab2 精简两态</title>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.5.0/dist/tabler-icons.min.css">
+<style>
+  :root{
+    --paper:#FBF6F1; --card:#FFFFFF; --card-line:#E3DFD9; --hairline:#E3DFD9;
+    --ink-900:#211811; --ink-700:#4B4640; --ink-500:#7C7773; --ink-300:#C7C3BD;
+    --label:#A5A099; --brand:#FF7622; --ink-black:#211811;
+    --serif:"Newsreader",Georgia,serif; --sans:-apple-system,"SF Pro Text",system-ui,sans-serif; --mono:ui-monospace,Menlo,monospace;
+    --shadow:0 6px 22px rgba(33,24,17,.06);
+  }
+  *{ box-sizing:border-box; -webkit-font-smoothing:antialiased; }
+  body{ margin:0; background:#ECE4DA; font-family:var(--sans); color:var(--ink-900); padding:44px 20px 90px; }
+  h1{ text-align:center; font-family:var(--serif); font-weight:500; font-size:26px; margin:0 0 6px; }
+  .sub{ text-align:center; color:var(--ink-500); font-size:13px; max-width:640px; margin:0 auto 34px; line-height:1.6; }
+  .row{ display:flex; gap:44px; justify-content:center; flex-wrap:wrap; align-items:flex-start; }
+  .col{ display:flex; flex-direction:column; align-items:center; gap:14px; width:300px; }
+  .tag{ font-size:12px; color:var(--ink-500); text-align:center; line-height:1.5; }
+  .tag b{ display:block; font-family:var(--serif); font-size:14px; color:var(--ink-900); font-weight:500; margin-bottom:2px; }
+
+  .phone{ width:300px; height:648px; background:var(--paper); border:1px solid var(--hairline); border-radius:40px; padding:11px; box-shadow:0 18px 50px rgba(33,24,17,.13); position:relative; overflow:hidden; }
+  .screen{ position:absolute; inset:11px; border-radius:30px; overflow:hidden; background:var(--paper); display:flex; flex-direction:column; }
+  .aura{ position:absolute; left:50%; bottom:-50px; width:340px; height:280px; transform:translateX(-50%); background:radial-gradient(ellipse at center,rgba(255,118,34,.14),transparent 62%); filter:blur(28px); pointer-events:none; }
+  .sbar{ height:36px; display:flex; align-items:center; justify-content:space-between; padding:0 22px; font-size:13px; font-weight:600; flex-shrink:0; position:relative; z-index:2; }
+  .pbody{ flex:1; overflow:hidden; padding:8px 22px 0; position:relative; z-index:2; }
+  .tabbar{ height:56px; flex-shrink:0; border-top:1px solid var(--hairline); display:flex; background:var(--paper); position:relative; z-index:2; }
+  .tabbar .t{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; font-size:10px; color:var(--ink-500); }
+  .tabbar .t .ti{ font-size:19px; } .tabbar .t.on{ color:var(--brand); }
+
+  .eyebrow{ font-size:10.5px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:var(--label); display:flex; align-items:center; gap:6px; }
+  .eyebrow .ti{ font-size:12px; }
+  .title{ font-family:var(--serif); font-size:29px; font-weight:600; color:var(--ink-900); letter-spacing:-.01em; margin:12px 0 8px; }
+  .lead{ font-size:13px; color:var(--ink-700); line-height:1.55; }
+
+  .metriclabel{ font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-500); }
+  .metricrow{ display:flex; align-items:baseline; justify-content:space-between; margin-bottom:9px; }
+  .metricrow .n{ font-family:var(--mono); font-size:13px; color:var(--ink-900); } .metricrow .n .t{ color:var(--ink-500); }
+  .bar{ height:5px; border-radius:999px; background:rgba(124,119,115,.16); position:relative; }
+  .bar .fill{ position:absolute; inset:0 auto 0 0; border-radius:999px; background:var(--brand); }
+
+  .hr{ height:1px; background:var(--hairline); margin:22px 0; }
+  .focus .name{ font-family:var(--serif); font-size:19px; font-weight:500; color:var(--ink-900); }
+  .otherlist{ margin-top:18px; }
+  .oitem{ display:flex; align-items:baseline; justify-content:space-between; padding:9px 0; border-bottom:1px solid #F2ECE3; font-size:14px; }
+  .oitem:last-child{ border-bottom:none; } .oitem .on{ color:var(--ink-900); } .oitem .oc{ font-family:var(--mono); font-size:12.5px; color:var(--ink-500); }
+
+  /* locked: section labels + interactive expandable topic rows (no box) */
+  .sectlabel{ display:flex; align-items:baseline; justify-content:space-between; }
+  .sectlabel .l{ font-size:13px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--ink-900); }
+  .sectlabel .cnt{ font-family:var(--mono); font-size:12.5px; color:var(--ink-900); }
+  .sectlabel .note{ font-size:10.5px; color:var(--ink-500); }
+  .trow{ padding:13px 0; }
+  .trow-top{ display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+  .trow .tn{ font-size:14.5px; font-weight:500; color:var(--ink-900); }
+  .trow .tc{ display:flex; align-items:center; gap:7px; font-family:var(--mono); font-size:12.5px; color:var(--ink-500); }
+  .trow .tc .ti{ font-size:13px; color:var(--ink-500); }
+
+  .cta{ position:absolute; left:22px; right:22px; bottom:14px; z-index:3; display:flex; align-items:center; justify-content:center; gap:7px; background:var(--ink-black); color:#fff; font-size:15px; font-weight:600; padding:14px; border-radius:999px; box-shadow:0 8px 18px rgba(33,24,17,.22); }
+
+  /* unlocked */
+  .hscroll{ display:flex; gap:12px; margin:12px -22px 0 0; overflow:hidden; }
+  .readycard{ background:var(--card); border:1px solid var(--card-line); border-radius:18px; padding:18px; box-shadow:var(--shadow); width:216px; flex-shrink:0; }
+  .rc-top{ display:flex; align-items:baseline; justify-content:space-between; }
+  .rc-name{ font-family:var(--serif); font-size:19px; font-weight:500; color:var(--ink-900); }
+  .rc-count{ font-size:12px; color:var(--ink-500); }
+  .rc-quote{ font-family:var(--serif); font-style:italic; font-size:16px; color:var(--ink-700); line-height:1.4; margin:12px 0 16px; }
+  .rc-cta{ display:flex; align-items:center; justify-content:center; gap:7px; background:var(--ink-black); color:#fff; font-size:14.5px; font-weight:600; padding:11px; border-radius:999px; }
+  .peek{ margin-top:10px; height:26px; background:var(--card); border:1px solid var(--card-line); border-radius:14px 14px 0 0; opacity:.55; }
+</style>
+</head>
+<body>
+  <h1>Tab2 · 精简两态</h1>
+  <p class="sub">去盒子套盒子、去扎堆的进度条、一个锁标识、小安静标签替代大标题;卡片只留在真正可点的那一张上。</p>
+
+  <div class="row">
+
+    <!-- Locked -->
+    <div class="col">
+      <div class="phone"><div class="screen">
+        <div class="aura"></div>
+        <div class="sbar"><span>9:41</span><i class="ti ti-battery-filled"></i></div>
+        <div class="pbody">
+          <div class="eyebrow"><i class="ti ti-lock"></i>Practice · Locked</div>
+          <div class="title">Not open yet</div>
+          <div class="lead">Two steps to unlock — capture moments, then fill one topic to 20 words.</div>
+
+          <div class="sectlabel" style="margin-top:30px"><span class="l">Moments</span><span class="cnt">3 / 5</span></div>
+          <div class="bar" style="margin-top:11px"><div class="fill" style="width:60%"></div></div>
+
+          <div class="sectlabel" style="margin-top:34px"><span class="l">Topics</span></div>
+          <div style="margin-top:8px">
+            <div class="trow">
+              <div class="trow-top"><span class="tn">Work &amp; study</span><span class="tc" style="color:var(--brand)">16 / 20 <i class="ti ti-chevron-down"></i></span></div>
+              <div class="bar"><div class="fill" style="width:80%"></div></div>
+            </div>
+            <div class="trow">
+              <div class="trow-top"><span class="tn">Home life</span><span class="tc">9 / 20 <i class="ti ti-chevron-down"></i></span></div>
+              <div class="bar"><div class="fill" style="width:45%;background:var(--ink-300)"></div></div>
+            </div>
+            <div class="trow">
+              <div class="trow-top"><span class="tn">Commute</span><span class="tc">5 / 20 <i class="ti ti-chevron-down"></i></span></div>
+              <div class="bar"><div class="fill" style="width:25%;background:var(--ink-300)"></div></div>
+            </div>
+          </div>
+        </div>
+        <div class="cta"><i class="ti ti-camera"></i>Capture something</div>
+        <div class="tabbar"><div class="t"><i class="ti ti-pencil"></i>Today</div><div class="t on"><i class="ti ti-books"></i>Practice</div><div class="t"><i class="ti ti-user"></i>Me</div></div>
+      </div></div>
+      <div class="tag"><b>Locked · 精简</b>一个锁标 · 最多两条进度 · 其余话题纯文字计数</div>
+    </div>
+
+    <!-- Unlocked -->
+    <div class="col">
+      <div class="phone"><div class="screen">
+        <div class="aura"></div>
+        <div class="sbar"><span>9:41</span><i class="ti ti-battery-filled"></i></div>
+        <div class="pbody">
+          <div class="title" style="margin-top:4px">Talk about something</div>
+          <div class="lead" style="margin-bottom:26px">Built from your daily moments.</div>
+
+          <div class="sectlabel"><span class="l">Materials Yours</span></div>
+          <div class="hscroll">
+            <div class="readycard">
+              <div class="rc-top"><span class="rc-name">Work &amp; study</span><span class="rc-count">18 words</span></div>
+              <div class="rc-quote">“我得在九点前把会议室弄好”</div>
+              <div class="rc-cta"><i class="ti ti-microphone"></i>Start talking</div>
+            </div>
+            <div class="readycard">
+              <div class="rc-top"><span class="rc-name">Daily life</span><span class="rc-count">22 words</span></div>
+              <div class="rc-quote">“晚饭想简单煮个面”</div>
+              <div class="rc-cta"><i class="ti ti-microphone"></i>Start talking</div>
+            </div>
+          </div>
+
+          <div class="sectlabel" style="margin-top:30px"><span class="l">Still filling</span></div>
+          <div style="margin-top:8px">
+            <div class="trow">
+              <div class="trow-top"><span class="tn">Home life</span><span class="tc">12 / 20 <i class="ti ti-chevron-down"></i></span></div>
+              <div class="bar"><div class="fill" style="width:60%;background:var(--ink-300)"></div></div>
+            </div>
+            <div class="trow">
+              <div class="trow-top"><span class="tn">Commute</span><span class="tc">7 / 20 <i class="ti ti-chevron-down"></i></span></div>
+              <div class="bar"><div class="fill" style="width:35%;background:var(--ink-300)"></div></div>
+            </div>
+          </div>
+        </div>
+        <div class="tabbar"><div class="t"><i class="ti ti-pencil"></i>Today</div><div class="t on"><i class="ti ti-books"></i>Practice</div><div class="t"><i class="ti ti-user"></i>Me</div></div>
+      </div></div>
+      <div class="tag"><b>Unlocked · 精简</b>一张 Ready 卡(可点)+ Still filling 纯文字列表</div>
+    </div>
+
+  </div>
+
+  <p class="sub" style="margin-top:40px;text-align:left;max-width:760px">
+    <b style="color:var(--ink-900)">砍掉了什么:</b> 锁图标圈 + LOCKED 胶囊 → 合成一行小 eyebrow;两张边框卡 + 一堆进度条 → 纸面直排,最多两条进度(Moments + 最近话题),其余话题纯文字;解锁态的橙色容器套卡 + 两个 Serif 大标题 → 去容器、换小标签「Ready / Still filling」;Hero 卡里的 badge/多条引文/+N more → 只留 话题名 + 词数 + 一句引文 + Start talking。
+  </p>
+</body>
+</html>
