@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="22.02 24.5 76.06 71"
+     width="76.06" height="71" role="img" aria-label="Poplex P">
+  <title>Poplex — P</title>
+  <!-- 反白：置于橙底 / 深色底 / 照片上
+       viewBox 已裁到墨迹外框（x 22.02–98.08 / y 24.50–95.50），
+       所以：宽高比恒为 1.0712，底边 = 基线，四周无空边。
+       字形原始网格 120×120，已应用定稿变换 translate(15.22,-1.5) skewX(-6°)。
+       唯一真源：AIEnglishApp/Components/SplashScreenView.swift → PoplexPShape -->
+  <g transform="matrix(1,0,-0.10510,1,15.22,-1.5)">
+    <path fill-rule="evenodd" fill="#FBF8F5" d="M18,26 L55,26 C74,26.5 88,36 88,50 C88,64 75,73.5 56,74
+      L47,74 L47,88 C47,92 52,92.5 58,93 L58,97 L17,97 L17,93
+      C25,92.5 30,92 30,88 L30,33 C29.5,30 25,31 18,31 Z
+      M47,34 C62,34 72,39.5 72,50 C72,60.5 62,65.5 47,65.5 Z"/>
+  </g>
+</svg>

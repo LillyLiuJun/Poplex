@@ -26,6 +26,7 @@ the fact** — fix the doc and say so.
 | `prd/输入到成长_链路现状与待敲定_v1.md` | §二 extraction/tagging rules, §三 recording & summarising — **still open, not yet decided** |
 | `prd/Agent系统PRD_逻辑审查_v1.md` | Review record behind the v1→v2 revision (rationale, historical reference) |
 | `design-system/*` | Brand colour (`#FF7622`, warm paper-grey neutrals) and typography |
+| `brand/README.md` | **Brand assets** — logo, app icon, wordmark, splash. Start there for anything visual-identity related. Note: the *source of truth is code* (`PoplexPShape`, `PoplexWordmarkMetrics`, `AppTheme.Motion.Splash`), the SVGs under `brand/assets/` are exports |
 
 **Treat with care — partly outdated:**
 

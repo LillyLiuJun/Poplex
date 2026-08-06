@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>Poplex 开屏 · 弹入版</title>
+<style>
+  :root{--page:#F5F0EC;--splash:#FBF8F5;--line:#E6DED8;--ink:#2A2320;
+        --ink-600:#726761;--ink-400:#948C86;--orange:#FF7622}
+  *{box-sizing:border-box}
+  body{margin:0;padding:56px 32px 110px;background:var(--page);
+    font-family:-apple-system,'SF Pro Text','Inter','PingFang SC',sans-serif;color:var(--ink)}
+  .wrap{max-width:1000px;margin:0 auto}
+  h1{font-size:26px;font-weight:600;letter-spacing:-.02em;margin:0 0 12px}
+  .lede{color:var(--ink-600);font-size:14px;line-height:1.85;margin:0 0 30px;max-width:640px}
+  .lede b{color:var(--ink);font-weight:600}
+  .layout{display:flex;gap:40px;align-items:flex-start;flex-wrap:wrap}
+
+  .phone{width:320px;height:694px;border-radius:46px;background:#000;padding:9px;flex:none;
+    box-shadow:0 18px 50px rgba(58,51,47,.18)}
+  .screen{width:100%;height:100%;border-radius:38px;overflow:hidden;position:relative;
+    background:var(--splash)}
+  .notch{position:absolute;top:10px;left:50%;transform:translateX(-50%);width:92px;height:27px;
+    background:#000;border-radius:14px;z-index:60}
+  .app{position:absolute;inset:0;padding:56px 22px 0;opacity:0;background:var(--page)}
+  .app h2{font-family:Georgia,'Times New Roman',serif;font-weight:700;font-size:31px;
+    line-height:1.12;letter-spacing:-.02em;margin:34px 0 8px;color:var(--ink)}
+  .app p{font-size:11px;color:var(--ink-600);margin:0 0 20px;line-height:1.5}
+  .app .sk{height:64px;background:#fff;border:1px solid var(--line);border-radius:14px;margin-bottom:10px}
+
+  .splash{position:absolute;inset:0;background:var(--splash);display:flex;
+    align-items:center;justify-content:center;z-index:20}
+  .mark{display:flex;align-items:flex-end;transform:translateY(-24px);position:relative}
+  #pwrap{transform-origin:50% 100%;display:block}
+  .word{font-family:'Times New Roman',Georgia,serif;font-weight:700;font-style:italic;
+    font-size:45.6px;line-height:.7;color:var(--orange);white-space:nowrap;display:flex}
+  .word span{display:inline-block}
+  .dot{width:7.3px;height:7.3px;border-radius:50%;background:var(--ink);
+    display:inline-block;margin-left:2.4px;flex:none}
+  .wipe{overflow:hidden;display:flex}
+
+  .panel{flex:1;min-width:320px}
+  .vgroup{border-top:1px solid var(--line);padding:20px 0 4px}
+  .vgroup:first-child{border-top:0;padding-top:0}
+  .vhead{display:flex;align-items:baseline;gap:10px;margin-bottom:8px}
+  .vidx{font-size:11px;letter-spacing:.16em;color:var(--ink-400);font-weight:600}
+  .vname{font-size:15px;font-weight:600}
+  .vdur{font-size:11px;color:var(--ink-400);font-family:ui-monospace,Menlo,monospace}
+  .vdesc{font-size:12.5px;color:var(--ink-600);line-height:1.75;margin:0 0 12px}
+  .vdesc b{color:var(--ink);font-weight:600}
+  button{font:inherit;font-size:12.5px;font-weight:500;padding:7px 15px;border-radius:9px;
+    border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
+  button:hover{background:var(--splash)}
+  button.play{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .speeds{display:flex;gap:6px;margin:24px 0 0;align-items:center}
+  .speeds span{font-size:11px;color:var(--ink-400);margin-right:4px}
+  .speeds button{padding:5px 11px;font-size:11.5px}
+  .speeds button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .tl{margin-top:12px;font-size:11px;color:var(--ink-600);line-height:1.85;
+    font-family:ui-monospace,Menlo,monospace}
+  .tl b{color:var(--ink)}
+  hr{border:0;border-top:1px solid var(--line);margin:40px 0}
+  p.body{font-size:13.5px;color:var(--ink-600);line-height:1.9;margin:20px 0 0;max-width:680px}
+  p.body b{color:var(--ink);font-weight:600}
+  code{background:var(--splash);border:1px solid var(--line);border-radius:5px;padding:1px 6px;
+    font-size:11.5px;font-family:ui-monospace,Menlo,monospace}
+  .caveat{font-size:12.5px;color:var(--ink-600);line-height:1.8;margin-top:20px;
+    padding-left:14px;border-left:2px solid var(--line);max-width:680px}
+  svg{display:block}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>回到弹入</h1>
+<p class="lede">
+把开头从「大 P 收缩」换成你说的那个<b>弹入</b>：
+<code>spring(response 0.6, damping 0.55)</code>，<code>scale 0.6 → 1</code> +
+<code>y +20 → 0</code> + 透明度淡入。<br><br>
+下面三版共用这同一个弹入，差别只在 <b>P 弹进来之后 oplex 怎么出场</b>。
+曲线不是拿 CSS 缓动凑的，是按 SwiftUI 那条阻尼弹簧的公式逐帧算出来的，节奏和真机一致。
+</p>
+
+<div class="layout">
+  <div class="phone"><div class="screen">
+    <div class="notch"></div>
+    <div class="app" id="app">
+      <h2>Not open<br>yet</h2>
+      <p>Reach 20 words in any topic to start practicing.</p>
+      <div class="sk"></div><div class="sk"></div><div class="sk"></div>
+    </div>
+    <div class="splash" id="splash">
+      <div class="mark" id="mark">
+        <svg id="pwrap" width="34" height="32" viewBox="22.02 24.5 76.06 71">
+          <g transform="matrix(1,0,-0.10510,1,15.22,-1.5)">
+            <path fill-rule="evenodd" fill="#FF7622" d="
+              M18,26 L55,26 C74,26.5 88,36 88,50 C88,64 75,73.5 56,74
+              L47,74 L47,88 C47,92 52,92.5 58,93 L58,97 L17,97 L17,93
+              C25,92.5 30,92 30,88 L30,33 C29.5,30 25,31 18,31 Z
+              M47,34 C62,34 72,39.5 72,50 C72,60.5 62,65.5 47,65.5 Z"/>
+          </g>
+        </svg>
+        <div class="wipe" id="wipe">
+          <div class="word" id="word"><span>o</span><span>p</span><span>l</span><span>e</span><span>x</span></div>
+        </div>
+        <span class="dot" id="dot"></span>
+      </div>
+    </div>
+  </div></div>
+
+  <div class="panel">
+
+    <div class="vgroup">
+      <div class="vhead"><span class="vidx">S1</span><span class="vname">弹入 + 逐字</span><span class="vdur">1.12s</span></div>
+      <p class="vdesc">
+        P 从下方弹上来，落定的同时 <code>oplex</code> 逐字长出，墨点最后滑到词尾。
+        <b>最接近你现在这版的动作语言</b>，只是把「大 P 收缩」换成了弹入。
+      </p>
+      <button class="play" onclick="play('S1')">播放 S1</button>
+      <div class="tl">
+        <b>0.00–0.75</b> P 弹入（scale .6→1，y +20→0）<br>
+        <b>0.34–0.74</b> oplex 逐字（间隔 46ms）<br>
+        <b>0.56–0.84</b> 墨点滑到词尾<br>
+        <b>0.84–0.98</b> 静止一拍<br>
+        <b>0.98–1.12</b> 上移淡出
+      </div>
+    </div>
+
+    <div class="vgroup">
+      <div class="vhead"><span class="vidx">S2</span><span class="vname">弹入 + 居中滑移</span><span class="vdur">1.16s</span></div>
+      <p class="vdesc">
+        P 在<b>屏幕正中</b>弹上来，然后随着字母长出向左滑到字标位置。
+        保留了「先只有 P，名字再被拼出来」的叙事 —— 也是现在这版真正好看的地方。
+      </p>
+      <button class="play" onclick="play('S2')">播放 S2</button>
+      <div class="tl">
+        <b>0.00–0.75</b> P 在正中弹入<br>
+        <b>0.36–0.80</b> 整组左移 + oplex 逐字<br>
+        <b>0.60–0.88</b> 墨点滑到词尾<br>
+        <b>0.88–1.02</b> 静止一拍<br>
+        <b>1.02–1.16</b> 上移淡出
+      </div>
+    </div>
+
+    <div class="vgroup">
+      <div class="vhead"><span class="vidx">S3</span><span class="vname">弹入 + 擦出</span><span class="vdur">1.20s</span></div>
+      <p class="vdesc">
+        完全复刻你之前那版：P 弹入，<code>oplex</code> 用一道 mask 从左往右<b>整体擦出</b>
+        （不是逐字），墨点弹出。区别是墨点落在词尾而不是 P 的右下。
+      </p>
+      <button class="play" onclick="play('S3')">播放 S3</button>
+      <div class="tl">
+        <b>0.00–0.75</b> P 弹入<br>
+        <b>0.40–0.92</b> oplex 从左往右擦出<br>
+        <b>0.62–0.86</b> 墨点弹出（spring）<br>
+        <b>0.92–1.06</b> 静止一拍<br>
+        <b>1.06–1.20</b> 上移淡出
+      </div>
+    </div>
+
+    <div class="speeds">
+      <span>速度</span>
+      <button class="on" data-s="1" onclick="setSpeed(this,1)">1×</button>
+      <button data-s="0.5" onclick="setSpeed(this,0.5)">0.5×</button>
+      <button data-s="0.25" onclick="setSpeed(this,0.25)">0.25×</button>
+      <button onclick="reset()">重置</button>
+    </div>
+  </div>
+</div>
+
+<hr>
+
+<p class="body">
+<b>一个取舍要先说清楚。</b>弹入和「承接图标」是互斥的：
+现在这版第 0 帧是一个满屏大 P，刚好接住 iOS 图标放大转场的最后一帧，所以启动看着是连续的一件事；
+换成弹入之后，<b>系统转场结束时屏幕是空的</b>，P 再从下面弹上来 —— 中间会有一个明显的断点。<br><br>
+换来的是<b>更有生气</b>：弹簧的过冲让它像"跳出来"，而收缩是"沉下去"。
+这是两种气质，不是一个更好。你现在的界面偏克制，弹入会稍微跳一点，但开屏本来就是唯一可以活泼一次的地方。
+</p>
+
+<p class="body">
+<b>我推 S2。</b>它保住了现在这版真正的价值 —— 「先只有一个 P，名字再被拼出来」这个叙事，
+只是把开场动作从收缩换成了弹入。S1 少了这层叙事，S3 的整体擦出在 45px 字号下几乎看不出是"擦"，
+更像直接淡入。
+</p>
+
+<p class="caveat">
+预览里的 <code>oplex</code> 用的是浏览器 Times 斜体，真机是 New York，字宽略有出入。
+P 的字形、尺寸、弹簧曲线都是精确的。选定后我把对应的 <code>spring</code> 参数和时间表写回
+<code>AppTheme.Motion.Splash</code>。
+</p>
+
+<script>
+const $=s=>document.querySelector(s);
+const splash=$('#splash'),mark=$('#mark'),app=$('#app'),pwrap=$('#pwrap'),
+      word=$('#word'),wipe=$('#wipe'),dot=$('#dot');
+const letters=[...document.querySelectorAll('#word span')];
+let speed=1, running=[];
+const SHIFT=64;              // P 从正中滑到字标位的距离（≈ oplex+点 的一半）
+const EASE='cubic-bezier(.22,.9,.25,1)';
+
+function setSpeed(b,s){speed=s;document.querySelectorAll('.speeds button[data-s]').forEach(x=>x.classList.remove('on'));b.classList.add('on');}
+function clear(){running.forEach(a=>a.cancel());running=[];}
+function anim(el,kf,opt){const a=el.animate(kf,{fill:'forwards',...opt});a.playbackRate=speed;running.push(a);return a;}
+
+/* SwiftUI spring(response, dampingFraction) 的位移解析解，逐帧采样成 keyframes */
+function springFrames(response,zeta,dur,from,to,prop){
+  const w0=2*Math.PI/response, wd=w0*Math.sqrt(Math.max(1e-6,1-zeta*zeta));
+  const n=Math.round(dur*60), out=[];
+  for(let i=0;i<=n;i++){
+    const t=i/60;
+    const env=Math.exp(-zeta*w0*t);
+    const p=1-env*(Math.cos(wd*t)+(zeta*w0/wd)*Math.sin(wd*t));
+    const v=from+(to-from)*p;
+    out.push({[prop]: prop==='transform'?v:v, offset:i/n});
+  }
+  return out;
+}
+function springTransform(response,zeta,dur,f){
+  const w0=2*Math.PI/response, wd=w0*Math.sqrt(1-zeta*zeta);
+  const n=Math.round(dur*60), out=[];
+  for(let i=0;i<=n;i++){
+    const t=i/60, env=Math.exp(-zeta*w0*t);
+    const p=1-env*(Math.cos(wd*t)+(zeta*w0/wd)*Math.sin(wd*t));
+    out.push({transform:f(p), offset:i/n});
+  }
+  return out;
+}
+
+/* 把所有会被动画写过的属性一次性归零，避免上一版留下的内联样式串台
+   （之前 S3 会把 wipe.width 卡在 0px，切回 S1/S2 时字母就被裁没了）*/
+function baseline(){
+  clear();
+  splash.style.opacity=1;
+  splash.style.transform='none';
+  mark.style.transform='translateY(-24px)';
+  pwrap.style.transform='none';
+  wipe.style.width='auto';          // ← 关键：S1/S2 不用擦出，必须放开宽度
+  word.style.opacity=1;
+  letters.forEach(l=>{l.style.transform='none';});
+  dot.style.transform='none';
+  app.style.opacity=0;
+  app.style.transform='none';
+}
+function reset(){
+  baseline();
+  pwrap.style.opacity=1;
+  letters.forEach(l=>{l.style.opacity=1;});
+  dot.style.opacity=1;
+}
+function prep(){
+  baseline();
+  pwrap.style.opacity=0;
+  letters.forEach(l=>{l.style.opacity=0;});
+  dot.style.opacity=0;
+}
+
+const SPRING_DUR=0.75;
+function pSpring(extraX=0){
+  anim(pwrap, springTransform(0.6,0.55,SPRING_DUR,
+        p=>`translate(${extraX}px, ${20-20*p}px) scale(${0.6+0.4*p})`),
+        {duration:SPRING_DUR*1000});
+  anim(pwrap,[{opacity:0},{opacity:1}],{duration:220,easing:EASE});
+}
+
+function play(v){
+  prep();
+  if(v==='S1'){
+    mark.style.transform='translateY(-24px)';
+    pSpring();
+    letters.forEach((l,i)=>anim(l,[{opacity:0,transform:'translateY(6px)'},{opacity:1,transform:'none'}],
+      {duration:200,delay:340+i*46,easing:EASE}));
+    anim(dot,[{opacity:0,transform:'translateX(-34px)'},{opacity:1,transform:'none'}],
+      {duration:280,delay:560,easing:EASE});
+    exit(840);
+  }
+  if(v==='S2'){
+    anim(mark,[{transform:`translate(${SHIFT}px,-24px)`},{transform:'translate(0px,-24px)'}],
+      {duration:440,delay:360,easing:EASE});
+    mark.style.transform=`translate(${SHIFT}px,-24px)`;
+    pSpring();
+    letters.forEach((l,i)=>anim(l,[{opacity:0,transform:'translateY(6px)'},{opacity:1,transform:'none'}],
+      {duration:200,delay:360+i*46,easing:EASE}));
+    anim(dot,[{opacity:0,transform:'translateX(-34px)'},{opacity:1,transform:'none'}],
+      {duration:280,delay:600,easing:EASE});
+    exit(880);
+  }
+  if(v==='S3'){
+    mark.style.transform='translateY(-24px)';
+    pSpring();
+    // 擦出：字母本身全程可见，靠外层容器的宽度从 0 展开
+    letters.forEach(l=>{l.style.opacity=1;});
+    const full=word.getBoundingClientRect().width;   // 实测宽度，别写死
+    wipe.style.width='0px';
+    anim(wipe,[{width:'0px'},{width:full+'px'}],{duration:520,delay:400,
+      easing:'cubic-bezier(.16,1,.3,1)'});
+    anim(dot, springTransform(0.5,0.5,0.45,p=>`scale(${p})`),{duration:450,delay:620});
+    anim(dot,[{opacity:0},{opacity:1}],{duration:120,delay:620});
+    exit(920);
+  }
+}
+function exit(at){
+  anim(splash,[{opacity:1,transform:'translateY(0)'},{opacity:0,transform:'translateY(-10px)'}],
+    {duration:140,delay:at+140,easing:'cubic-bezier(.4,0,1,1)'});
+  anim(app,[{opacity:0,transform:'scale(.985)'},{opacity:1,transform:'scale(1)'}],
+    {duration:210,delay:at+120,easing:EASE});
+}
+reset();
+</script>
+
+</div>
+</body>
+</html>

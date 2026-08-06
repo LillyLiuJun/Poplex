@@ -113,14 +113,13 @@ struct SplashScreenView: View {
     /// 用比例而不是固定 pt：它要对上 iOS 图标放大转场的最后一帧，而那一帧跟着屏幕走。
     private static let pStartWidthRatio: CGFloat = 0.48
 
-    /// P 与 `oplex` 之间的字距，**负值**。
-    /// P 的碗向右悬出、`o` 又矮又圆，两个墨迹框刚好贴上时看着仍然是散的 ——
-    /// 正字体里这一对本来就带负 kerning。要调松紧只改这一个数。
-    private static let pToWordGap: CGFloat = -wordmarkSize * 0.03
+    // 字距 / 墨点尺寸全部取自 `PoplexWordmarkMetrics` —— 字标度量的唯一真源。
+    // 要调松紧去改那里，改了静态字标和开屏会一起变，不会漂移。
+    private static let pToWordGap: CGFloat = wordmarkSize * PoplexWordmarkMetrics.kernRatio
+    private static let dotDiameter: CGFloat = wordmarkSize * PoplexWordmarkMetrics.dotDiameterRatio
+    private static let dotLeading: CGFloat = wordmarkSize * PoplexWordmarkMetrics.dotLeadingRatio
 
-    private static let dotDiameter: CGFloat = 9
-    private static let dotLeading: CGFloat = 3     // 词尾到墨点的间距
-    private static let dotTravel: CGFloat = -40    // 墨点滑入的起点偏移
+    private static let dotTravel: CGFloat = -40    // 墨点滑入的起点偏移（仅开屏用）
 
     /// 视觉居中：几何正中会显得偏下，整组上提约屏高的 4%。
     private static let opticalLift: CGFloat = -30

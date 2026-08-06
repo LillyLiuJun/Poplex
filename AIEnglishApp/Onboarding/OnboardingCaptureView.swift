@@ -108,7 +108,7 @@ struct OnboardingCaptureView: View {
                             .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.05)
 
                         actionCard
-                            .padding(.top, AppTheme.Space.paddingM)
+                            .padding(.top, AppTheme.Space.paddingSection)
                             .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.25)
 
                         if !hasSelection {
@@ -116,7 +116,7 @@ struct OnboardingCaptureView: View {
                                 .font(AppTheme.Font.englishBody)
                                 .fontWeight(.medium)
                                 .foregroundStyle(AppTheme.Color.textPrimary)
-                                .padding(.top, AppTheme.Space.paddingSection)
+                                .padding(.top, AppTheme.Space.paddingM)
                                 .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.35)
 
                             presetCarousel
@@ -194,48 +194,49 @@ struct OnboardingCaptureView: View {
                     .buttonStyle(PressableButtonStyle(pressedScale: 0.9, pressedOpacity: 0.8))
                 }
             } else {
-                HStack(spacing: AppTheme.Space.paddingSection) {
+                VStack(spacing: AppTheme.Space.paddingM) {
+                    // 拍照主卡：主路径（从你自己的生活取材）。近白底 + 浅橘图标圈，
+                    // 克制不重——靠尺寸与"唯一实操 CTA"确立主次，不靠大面积橙。
                     Button(action: { activeSheet = .camera }) {
                         VStack(spacing: AppTheme.Space.paddingM) {
-                            Image(systemName: "camera")
+                            Image(systemName: "camera.fill")
                                 .font(.title2)
                                 .foregroundStyle(AppTheme.Color.brandStrong)
-                                .frame(width: 56, height: 56)
+                                .frame(width: 60, height: 60)
                                 .background(AppTheme.Color.brandSubtleBg, in: Circle())
-                            
-                            Text("Camera")
-                                .font(AppTheme.Font.buddy)
+
+                            Text("Take a photo")
+                                .font(AppTheme.Font.sectionTitleSerif)
                                 .foregroundStyle(AppTheme.Color.textPrimary)
                         }
                         .frame(maxWidth: .infinity)
+                        .padding(.vertical, AppTheme.Space.paddingSection)
+                        .padding(.horizontal, AppTheme.Space.paddingPage)
+                        .background(
+                            AppTheme.Color.cardBg,
+                            in: RoundedRectangle(cornerRadius: AppTheme.Radius.large)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: AppTheme.Radius.large)
+                                .stroke(AppTheme.Color.border, lineWidth: 1)
+                        )
                     }
                     .buttonStyle(PressableButtonStyle())
-                    
+
+                    // 相册次入口：文字链接，权重明确低于拍照。
                     Button(action: { activeSheet = .photoLibrary }) {
-                        VStack(spacing: AppTheme.Space.paddingM) {
-                            Image(systemName: "photo.on.rectangle")
-                                .font(.title2)
-                                .foregroundStyle(AppTheme.Color.textSecondary)
-                                .frame(width: 56, height: 56)
-                                .background(AppTheme.Color.imagePlaceholderBg, in: Circle())
-                            
-                            Text("Photos")
+                        HStack(spacing: AppTheme.Space.paddingS) {
+                            Text("Or choose from Photos")
                                 .font(AppTheme.Font.buddy)
-                                .foregroundStyle(AppTheme.Color.textPrimary)
+                            Image(systemName: "chevron.right")
+                                .font(.footnote)
                         }
+                        .foregroundStyle(AppTheme.Color.textSecondary)
                         .frame(maxWidth: .infinity)
+                        .padding(.vertical, AppTheme.Space.paddingS)
                     }
                     .buttonStyle(PressableButtonStyle())
                 }
-                .padding(.vertical, AppTheme.Space.paddingM)
-                .padding(AppTheme.Space.paddingPage)
-                .frame(maxWidth: .infinity)
-                .background(Color.clear)
-                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.large))
-                .overlay(
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.large)
-                        .stroke(AppTheme.Color.borderDashed, style: StrokeStyle(lineWidth: 1, dash: [6]))
-                )
             }
         }
     }

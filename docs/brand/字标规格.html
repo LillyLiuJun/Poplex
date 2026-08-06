@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>Poplex 字标规格</title>
+<style>
+  :root{--page:#F5F0EC;--paper:#FBF8F5;--line:#E6DED8;--ink:#2A2320;
+        --ink-600:#726761;--ink-400:#948C86;--orange:#FF7622;--red:#C7453B}
+  *{box-sizing:border-box}
+  body{margin:0;padding:60px 32px 120px;background:var(--page);
+    font-family:-apple-system,'SF Pro Text','Inter','PingFang SC',sans-serif;color:var(--ink)}
+  .wrap{max-width:940px;margin:0 auto}
+  h1{font-size:26px;font-weight:600;letter-spacing:-.02em;margin:0 0 12px}
+  .lede{color:var(--ink-600);font-size:14px;line-height:1.85;margin:0 0 10px;max-width:640px}
+  .lede b{color:var(--ink);font-weight:600}
+  hr{border:0;border-top:1px solid var(--line);margin:48px 0}
+  .sechead{display:flex;align-items:baseline;gap:13px;margin:0 0 22px}
+  .idx{font-size:11px;letter-spacing:.18em;color:var(--ink-400);font-weight:600}
+  .title{font-size:18px;font-weight:600}
+  .body{font-size:13.5px;color:var(--ink-600);line-height:1.9;margin:22px 0 0;max-width:680px}
+  .body b{color:var(--ink);font-weight:600}
+  code{background:var(--paper);border:1px solid var(--line);border-radius:5px;padding:1px 6px;
+    font-size:11.5px;font-family:ui-monospace,Menlo,monospace}
+
+  /* 字标本体 */
+  .mark{display:flex;align-items:flex-end;white-space:nowrap}
+  .mark svg{display:block;flex:none}
+  .mark .word{font-family:'Times New Roman',Georgia,serif;font-weight:700;font-style:italic;
+    line-height:.7;display:block}
+  .mark .dot{border-radius:50%;display:block;flex:none}
+
+  .stage{background:var(--paper);border:1px solid var(--line);border-radius:16px;
+    padding:52px 56px;display:flex;justify-content:center;align-items:center}
+
+  /* 结构图 */
+  .diagram{position:relative;background:var(--paper);border:1px solid var(--line);
+    border-radius:16px;padding:70px 70px 92px;display:flex;justify-content:center}
+  .guide{position:absolute;border-style:dashed;border-color:#C7453B;opacity:.55}
+  .lbl{position:absolute;font-size:10.5px;color:var(--red);
+    font-family:ui-monospace,Menlo,monospace;background:var(--paper);padding:0 4px}
+
+  .grid{display:flex;gap:18px;flex-wrap:wrap}
+  .swatch{border-radius:14px;padding:26px 30px;display:flex;align-items:center;
+    justify-content:center;flex:none;min-width:210px}
+  .cap{font-size:10.5px;color:var(--ink-400);margin-top:9px;text-align:center;
+    font-family:ui-monospace,Menlo,monospace;line-height:1.6}
+  .col{display:flex;flex-direction:column;align-items:center}
+
+  table{border-collapse:collapse;width:100%;font-size:12.5px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line)}
+  th{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-400);font-weight:600}
+  td b{color:var(--ink)}
+  td.n{font-family:ui-monospace,Menlo,monospace}
+
+  .dont{position:relative;background:var(--paper);border:1px solid var(--line);
+    border-radius:14px;padding:24px;display:flex;align-items:center;justify-content:center;
+    min-height:96px;overflow:hidden}
+  .dont::after{content:'';position:absolute;inset:0;
+    background:linear-gradient(to bottom right,transparent calc(50% - .6px),
+      rgba(199,69,59,.5) 50%,transparent calc(50% + .6px))}
+  .dlbl{font-size:11.5px;color:var(--red);margin-top:9px;text-align:center;line-height:1.5}
+  .caveat{font-size:12.5px;color:var(--ink-600);line-height:1.8;margin-top:24px;
+    padding-left:14px;border-left:2px solid var(--line);max-width:680px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Poplex 字标</h1>
+<p class="lede">
+字标不是新画的 —— 它就是<b>开屏动画的最后一帧</b>。这里只是把它固化成规格：
+比例、安全边距、尺寸下限、配色版本、禁用项。
+</p>
+<p class="lede">
+构成上它是<b>一半图形、一半文字</b>：<code>P</code> 是矢量字形（和 App 图标同一份路径，
+含 −6° 斜切），<code>oplex</code> 是 New York Bold Italic，末尾一枚墨点。
+所有尺寸都以 <b>P 的字高 H</b> 为单位表达，因此放大缩小只需给一个 H。
+</p>
+
+<svg width="0" height="0" style="position:absolute"><defs>
+  <g id="Pglyph">
+    <g transform="matrix(1,0,-0.10510,1,15.22,-1.5)">
+      <path fill-rule="evenodd" fill="currentColor" d="
+        M18,26 L55,26 C74,26.5 88,36 88,50 C88,64 75,73.5 56,74
+        L47,74 L47,88 C47,92 52,92.5 58,93 L58,97 L17,97 L17,93
+        C25,92.5 30,92 30,88 L30,33 C29.5,30 25,31 18,31 Z
+        M47,34 C62,34 72,39.5 72,50 C72,60.5 62,65.5 47,65.5 Z"/>
+    </g>
+  </g>
+</defs></svg>
+
+<hr>
+
+<!-- 01 主字标 -->
+<div class="sechead"><span class="idx">01</span><span class="title">主字标</span></div>
+<div class="stage">
+  <div class="mark" style="color:var(--orange)">
+    <svg width="96.4" height="90" viewBox="22.02 24.5 76.06 71"><use href="#Pglyph"/></svg>
+    <span class="word" style="font-size:128.6px;color:var(--orange);margin-left:-5.8px">oplex</span>
+    <span class="dot" style="width:20.7px;height:20.7px;background:var(--ink);margin-left:6.9px;margin-bottom:1px"></span>
+  </div>
+</div>
+<p class="body">
+墨点是<b>句号</b>，不是装饰 —— 它坐在基线上，和 P 的下衬线底边齐平，
+所以整个字标的下沿是一条直线。它同时是图标里那枚点，两个资产靠它咬合。
+</p>
+
+<hr>
+
+<!-- 02 结构 -->
+<div class="sechead"><span class="idx">02</span><span class="title">结构参数</span></div>
+<div class="diagram">
+  <div style="position:relative">
+    <div class="mark" style="color:var(--orange)">
+      <svg width="64.3" height="60" viewBox="22.02 24.5 76.06 71"><use href="#Pglyph"/></svg>
+      <span class="word" style="font-size:85.7px;color:var(--orange);margin-left:-3.9px">oplex</span>
+      <span class="dot" style="width:13.8px;height:13.8px;background:var(--ink);margin-left:4.6px"></span>
+    </div>
+    <!-- 安全边距 0.5H = 30px -->
+    <div class="guide" style="border-width:1px;left:-30px;right:-30px;top:-30px;bottom:-30px;border-radius:3px"></div>
+    <div class="lbl" style="left:-30px;top:-48px">安全边距 0.5H</div>
+    <!-- 字高 H -->
+    <div class="guide" style="border-width:0 0 0 1px;left:-52px;top:0;bottom:0"></div>
+    <div class="lbl" style="left:-84px;top:20px">H</div>
+    <!-- 基线 -->
+    <div class="guide" style="border-width:1px 0 0 0;left:0;right:-90px;bottom:0"></div>
+    <div class="lbl" style="right:-96px;bottom:-8px">基线</div>
+  </div>
+</div>
+
+<table style="margin-top:24px">
+  <tr><th>项</th><th>相对值（以 H 为单位）</th><th>em 值</th><th>说明</th></tr>
+  <tr><td><b>P 字高</b></td><td class="n">1.0000 H</td><td class="n">—</td><td>唯一输入量，其余全部由它推出</td></tr>
+  <tr><td><b>P 墨迹宽</b></td><td class="n">1.0712 H</td><td class="n">—</td><td>字形墨迹外框实测宽高比</td></tr>
+  <tr><td><b>oplex 字号</b></td><td class="n">1.4286 H</td><td class="n">—</td><td>= H ÷ 字体 cap height 比（New York ≈ 0.70）</td></tr>
+  <tr><td><b>P → o 字距</b></td><td class="n">−0.0643 H</td><td class="n">−0.045 em</td><td>负 kerning：P 的碗悬出，o 要往里收</td></tr>
+  <tr><td><b>墨点直径</b></td><td class="n">0.2296 H</td><td class="n">0.1607 em</td><td>与图标上那枚点同源</td></tr>
+  <tr><td><b>墨点前间距</b></td><td class="n">0.0765 H</td><td class="n">0.0536 em</td><td></td></tr>
+  <tr><td><b>安全边距</b></td><td class="n">0.5000 H</td><td class="n">—</td><td>四周留白，任何元素不得进入</td></tr>
+</table>
+
+<p class="body">
+<b>换算表</b>（常用尺寸）：<br>
+H=24 → 字号 34.3 · 墨点 5.5 · 边距 12　　H=28 → 字号 40.0 · 墨点 6.4 · 边距 14<br>
+H=36 → 字号 51.4 · 墨点 8.3 · 边距 18　　H=56 → 字号 80.0 · 墨点 12.9 · 边距 28（开屏用）
+</p>
+
+<hr>
+
+<!-- 03 配色 -->
+<div class="sechead"><span class="idx">03</span><span class="title">配色版本</span></div>
+<div class="grid">
+  <div class="col">
+    <div class="swatch" style="background:#FBF8F5;box-shadow:inset 0 0 0 1px var(--line)">
+      <div class="mark"><svg width="30" height="28" viewBox="22.02 24.5 76.06 71" style="color:#FF7622"><use href="#Pglyph"/></svg>
+      <span class="word" style="font-size:40px;color:#FF7622;margin-left:-1.8px">oplex</span>
+      <span class="dot" style="width:6.4px;height:6.4px;background:#2A2320;margin-left:2.1px"></span></div>
+    </div>
+    <div class="cap">主版 · 纸底橙字<br>#FBF8F5 / #FF7622 / #2A2320</div>
+  </div>
+  <div class="col">
+    <div class="swatch" style="background:#FF7622">
+      <div class="mark"><svg width="30" height="28" viewBox="22.02 24.5 76.06 71" style="color:#FDF8F3"><use href="#Pglyph"/></svg>
+      <span class="word" style="font-size:40px;color:#FDF8F3;margin-left:-1.8px">oplex</span>
+      <span class="dot" style="width:6.4px;height:6.4px;background:#2A2320;margin-left:2.1px"></span></div>
+    </div>
+    <div class="cap">橙底反白<br>墨点保持墨色</div>
+  </div>
+  <div class="col">
+    <div class="swatch" style="background:#2A2320">
+      <div class="mark"><svg width="30" height="28" viewBox="22.02 24.5 76.06 71" style="color:#FF7622"><use href="#Pglyph"/></svg>
+      <span class="word" style="font-size:40px;color:#FF7622;margin-left:-1.8px">oplex</span>
+      <span class="dot" style="width:6.4px;height:6.4px;background:#FBF8F5;margin-left:2.1px"></span></div>
+    </div>
+    <div class="cap">墨底 · 深色模式<br>点翻成纸色</div>
+  </div>
+  <div class="col">
+    <div class="swatch" style="background:#FBF8F5;box-shadow:inset 0 0 0 1px var(--line)">
+      <div class="mark"><svg width="30" height="28" viewBox="22.02 24.5 76.06 71" style="color:#2A2320"><use href="#Pglyph"/></svg>
+      <span class="word" style="font-size:40px;color:#2A2320;margin-left:-1.8px">oplex</span>
+      <span class="dot" style="width:6.4px;height:6.4px;background:#2A2320;margin-left:2.1px"></span></div>
+    </div>
+    <div class="cap">单色墨<br>印刷 / 合作方物料</div>
+  </div>
+  <div class="col">
+    <div class="swatch" style="background:#4A6FA5">
+      <div class="mark"><svg width="30" height="28" viewBox="22.02 24.5 76.06 71" style="color:#FDF8F3"><use href="#Pglyph"/></svg>
+      <span class="word" style="font-size:40px;color:#FDF8F3;margin-left:-1.8px">oplex</span>
+      <span class="dot" style="width:6.4px;height:6.4px;background:#FDF8F3;margin-left:2.1px"></span></div>
+    </div>
+    <div class="cap">单色反白<br>置于照片 / 他方品牌色上</div>
+  </div>
+</div>
+<p class="body">
+<b>一条规则：橙色和墨色不能同时消失。</b>主版里橙是字、墨是点；
+单色版里两者合一。<b>不存在</b>「橙字 + 橙点」的版本 —— 点必须和字拉开，否则句号读不出来。
+</p>
+
+<hr>
+
+<!-- 04 尺寸下限 -->
+<div class="sechead"><span class="idx">04</span><span class="title">尺寸下限</span></div>
+<div class="grid" style="align-items:flex-end">
+  <div class="col"><div class="swatch" style="background:#FBF8F5;box-shadow:inset 0 0 0 1px var(--line)">
+    <div class="mark"><svg width="38.6" height="36" viewBox="22.02 24.5 76.06 71" style="color:#FF7622"><use href="#Pglyph"/></svg>
+    <span class="word" style="font-size:51.4px;color:#FF7622;margin-left:-2.3px">oplex</span>
+    <span class="dot" style="width:8.3px;height:8.3px;background:#2A2320;margin-left:2.8px"></span></div>
+  </div><div class="cap">H = 36pt</div></div>
+  <div class="col"><div class="swatch" style="background:#FBF8F5;box-shadow:inset 0 0 0 1px var(--line)">
+    <div class="mark"><svg width="19.3" height="18" viewBox="22.02 24.5 76.06 71" style="color:#FF7622"><use href="#Pglyph"/></svg>
+    <span class="word" style="font-size:25.7px;color:#FF7622;margin-left:-1.2px">oplex</span>
+    <span class="dot" style="width:4.1px;height:4.1px;background:#2A2320;margin-left:1.4px"></span></div>
+  </div><div class="cap">H = 18pt · 下限</div></div>
+  <div class="col"><div class="swatch" style="background:#FBF8F5;box-shadow:inset 0 0 0 1px var(--line)">
+    <div class="mark"><svg width="13.9" height="13" viewBox="22.02 24.5 76.06 71" style="color:#FF7622"><use href="#Pglyph"/></svg>
+    <span class="word" style="font-size:18.6px;color:#FF7622;margin-left:-0.8px">oplex</span></div>
+  </div><div class="cap">H &lt; 18pt · 去掉墨点</div></div>
+  <div class="col"><div class="swatch" style="background:#FBF8F5;box-shadow:inset 0 0 0 1px var(--line)">
+    <svg width="13.9" height="13" viewBox="22.02 24.5 76.06 71" style="color:#FF7622"><use href="#Pglyph"/></svg>
+  </div><div class="cap">极小 · 只用 P</div></div>
+</div>
+<p class="body">
+<b>H ≥ 18pt</b> 用完整字标。<b>低于 18pt 去掉墨点</b> —— 它会退化成一个脏点，
+不如没有。再小就只用 P（=App 图标里那个字形）。
+</p>
+
+<hr>
+
+<!-- 05 禁用 -->
+<div class="sechead"><span class="idx">05</span><span class="title">禁用</span></div>
+<div class="grid">
+  <div class="col">
+    <div class="dont"><div class="mark"><svg width="25.7" height="24" viewBox="22.02 24.5 76.06 71" style="color:#FF7622"><use href="#Pglyph"/></svg>
+      <span class="word" style="font-size:34px;color:#FF7622;margin-left:14px">oplex</span></div></div>
+    <div class="dlbl">改字距</div>
+  </div>
+  <div class="col">
+    <div class="dont"><div class="mark" style="transform:scaleX(1.35)"><svg width="25.7" height="24" viewBox="22.02 24.5 76.06 71" style="color:#FF7622"><use href="#Pglyph"/></svg>
+      <span class="word" style="font-size:34px;color:#FF7622;margin-left:-1.5px">oplex</span></div></div>
+    <div class="dlbl">拉伸变形</div>
+  </div>
+  <div class="col">
+    <div class="dont"><div class="mark"><svg width="25.7" height="24" viewBox="22.02 24.5 76.06 71" style="color:#FF7622"><use href="#Pglyph"/></svg>
+      <span class="word" style="font-size:34px;color:#FF7622;margin-left:-1.5px;font-style:normal">oplex</span></div></div>
+    <div class="dlbl">用正体（P 是 6° 斜的，对不上）</div>
+  </div>
+  <div class="col">
+    <div class="dont"><div class="mark"><svg width="25.7" height="24" viewBox="22.02 24.5 76.06 71" style="color:#FF7622"><use href="#Pglyph"/></svg>
+      <span class="word" style="font-size:34px;color:#FF7622;margin-left:-1.5px">oplex</span>
+      <span class="dot" style="width:5.5px;height:5.5px;background:#FF7622;margin-left:1.8px"></span></div></div>
+    <div class="dlbl">墨点改成橙色</div>
+  </div>
+  <div class="col">
+    <div class="dont"><div class="mark" style="filter:drop-shadow(0 3px 5px rgba(0,0,0,.45))"><svg width="25.7" height="24" viewBox="22.02 24.5 76.06 71" style="color:#FF7622"><use href="#Pglyph"/></svg>
+      <span class="word" style="font-size:34px;color:#FF7622;margin-left:-1.5px">oplex</span></div></div>
+    <div class="dlbl">加投影 / 渐变 / 描边</div>
+  </div>
+  <div class="col">
+    <div class="dont"><div class="mark"><svg width="25.7" height="24" viewBox="22.02 24.5 76.06 71" style="color:#C5BAB2"><use href="#Pglyph"/></svg>
+      <span class="word" style="font-size:34px;color:#2A2320;margin-left:-1.5px">oplex</span></div></div>
+    <div class="dlbl">P 和 oplex 用不同颜色</div>
+  </div>
+</div>
+
+<hr>
+
+<!-- 06 用在哪 -->
+<div class="sechead"><span class="idx">06</span><span class="title">用在哪</span></div>
+<table>
+  <tr><th>场合</th><th>版本</th><th>H</th></tr>
+  <tr><td>开屏动画终帧</td><td>主版 · 纸底橙字</td><td class="n">56</td></tr>
+  <tr><td>Onboarding 顶部 logo 位</td><td>主版</td><td class="n">24</td></tr>
+  <tr><td>App 内导航栏 / 页脚</td><td>主版</td><td class="n">18–20</td></tr>
+  <tr><td>App Store 截图、官网头部</td><td>主版 或 橙底反白</td><td class="n">按版面</td></tr>
+  <tr><td>App 图标 / favicon / 头像</td><td><b>不用字标</b>，用方版 P</td><td class="n">—</td></tr>
+  <tr><td>印刷单色、他方物料</td><td>单色墨 / 单色反白</td><td class="n">≥24</td></tr>
+</table>
+
+<p class="caveat">
+<b>两点交付说明。</b><br>
+① 本页的 <code>oplex</code> 用浏览器 Times 斜体渲染，真机 / 正式导出是 <b>New York Bold Italic</b>，
+字宽略有出入 —— 上面的<b>比例关系</b>是准的，绝对像素不是。<br>
+② 字标里的 <code>oplex</code> 是活字，不是路径。要交给外部（印刷、合作方、非苹果平台）时，
+必须先<b>转曲</b>再给，否则对方机器上没有 New York 会掉字体。
+App 内部不需要转曲 —— 直接用已经落地的 <code>PoplexWordmark</code> 组件即可。
+</p>
+
+</div>
+</body>
+</html>

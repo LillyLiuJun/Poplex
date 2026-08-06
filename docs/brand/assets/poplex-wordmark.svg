@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 100"
+     width="340" height="100" role="img" aria-label="Poplex">
+  <title>Poplex — 横版字标</title>
+
+  <!--
+    ⚠️ 这个文件里的 "oplex" 是**活字，不是路径**。
+       对外交付（印刷、合作方、非苹果平台、任何不确定装没装 New York 的机器）
+       之前必须先转曲，否则会掉字体、比例全错。
+       转曲方式：用 Figma / Illustrator 打开 → 选中文字 → 轮廓化 → 另存为
+       poplex-wordmark-outlined.svg。App 内部不需要 —— 直接用
+       AIEnglishApp/Components/PoplexWordmark.swift。
+
+    构图（全部以 P 的字高 H = 71 为单位，与 docs/brand/字标规格.html 一致）：
+      P 墨迹宽    1.0712 H = 76.06
+      oplex 字号  1.4286 H = 101.4
+      P→o 字距    −0.0643 H = −4.57
+      墨点直径     0.2296 H = 16.3
+      墨点前间距   0.0765 H = 5.43
+      基线 y = 95.5（P 下衬线底边 = 墨点底边 = 文字基线，三者齐平）
+      安全边距     0.5 H = 35.5（本文件未预留，排版时自行留出）
+  -->
+
+  <!-- P：与 App 图标、PoplexPShape 同一份路径 -->
+  <g transform="translate(0,-24.5)">
+    <g transform="matrix(1,0,-0.10510,1,15.22,-1.5)">
+      <path fill-rule="evenodd" fill="#FF7622"
+            d="M18,26 L55,26 C74,26.5 88,36 88,50 C88,64 75,73.5 56,74
+               L47,74 L47,88 C47,92 52,92.5 58,93 L58,97 L17,97 L17,93
+               C25,92.5 30,92 30,88 L30,33 C29.5,30 25,31 18,31 Z
+               M47,34 C62,34 72,39.5 72,50 C72,60.5 62,65.5 47,65.5 Z"/>
+    </g>
+  </g>
+
+  <!-- oplex：New York Bold Italic（回退栈仅为在无该字体的机器上不至于全丢） -->
+  <text x="71.5" y="71" fill="#FF7622"
+        font-family="'New York', 'Times New Roman', Georgia, serif"
+        font-size="101.4" font-weight="700" font-style="italic">oplex</text>
+
+  <!-- 句末墨点：坐在基线上，底边与 P 的下衬线齐平 -->
+  <circle cx="316" cy="62.85" r="8.15" fill="#2A2320"/>
+</svg>

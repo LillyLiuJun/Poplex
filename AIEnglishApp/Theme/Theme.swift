@@ -265,7 +265,28 @@ enum AppTheme {
         // 且开屏不承载可读信息，无可访问性损失）。
         // 字号改动需同步 SplashScreenView.wordmarkSize，两者必须一致，
         // 否则 P 的字高（由字号算 cap height）会和 oplex 对不上。
-        static let splashWordmark = SwiftUI.Font.system(size: 56, weight: .bold, design: .serif).italic()
+        static let splashWordmark = wordmark(size: 56)
+
+        /// 字标专用字体。品牌资产特例：**尺寸由字标度量推算**，所以这里是函数不是常量，
+        /// 也不随 Dynamic Type 变化（字标放大会撑破构图，且不承载可读信息）。
+        /// 除 `PoplexWordmark` / `SplashScreenView` 外不要调用它写正文。
+        static func wordmark(size: CGFloat) -> SwiftUI.Font {
+            SwiftUI.Font.system(size: size, weight: .bold, design: .serif).italic()
+        }
+    }
+
+    // 排版微调（行距 / 字距）。SwiftUI 的 Font 装不下这两项，故单列一层，
+    // 在用到的地方按约定 .lineSpacing() / .tracking() 引用（值集中在此，不散写）。
+    // 注意：lineSpacing 只能在默认行距上「加」，无法压紧到默认以下。
+    enum Typography {
+        /// 展示型大标题的字距（略负，让大字更「整」）。
+        static let trackingDisplay: CGFloat = -0.5
+        /// 小标签字距（正，配合大写做编辑体系感）。
+        static let trackingLabel: CGFloat = 0.8
+        /// 英文正文 / 段落的额外行距。
+        static let lineBody: CGFloat = 3
+        /// 中文 / 多语言正文的额外行距（CJK 更需要放开）。
+        static let lineCJK: CGFloat = 6
     }
 
     enum Radius {

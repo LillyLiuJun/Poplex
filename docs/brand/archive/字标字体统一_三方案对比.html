@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>字标字体统一 · 三方案对比</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@1,700;1,800&family=Bodoni+Moda:ital,opsz,wght@1,6..96,700;1,6..96,800&display=swap" rel="stylesheet">
+<style>
+  :root{--page:#F5F0EC;--paper:#FBF8F5;--line:#E6DED8;--ink:#2A2320;
+        --ink-600:#726761;--ink-400:#948C86;--orange:#FF7622;--red:#C7453B;--green:#4A7C4E}
+  *{box-sizing:border-box}
+  body{margin:0;padding:58px 32px 120px;background:var(--page);
+    font-family:-apple-system,'SF Pro Text','Inter','PingFang SC',sans-serif;color:var(--ink)}
+  .wrap{max-width:900px;margin:0 auto}
+  h1{font-size:26px;font-weight:600;letter-spacing:-.02em;margin:0 0 12px}
+  .lede{color:var(--ink-600);font-size:14px;line-height:1.85;margin:0 0 8px;max-width:640px}
+  .lede b{color:var(--ink);font-weight:600}
+  hr{border:0;border-top:1px solid var(--line);margin:46px 0}
+  .sechead{display:flex;align-items:baseline;gap:13px;margin:0 0 10px}
+  .idx{font-size:11px;letter-spacing:.18em;color:var(--ink-400);font-weight:600}
+  .title{font-size:18px;font-weight:600}
+  .why{font-size:13.5px;color:var(--ink-600);line-height:1.85;margin:0 0 24px;max-width:680px}
+  .why b{color:var(--ink);font-weight:600}
+
+  .row{background:var(--paper);border:1px solid var(--line);border-radius:14px;
+    padding:34px 40px;margin-bottom:14px;display:flex;align-items:center;
+    justify-content:space-between;gap:30px;flex-wrap:wrap}
+  .mark{display:flex;align-items:flex-end;white-space:nowrap}
+  .mark svg{display:block;flex:none}
+  .word{line-height:.72;display:block;font-weight:700;font-style:italic}
+  .dot{border-radius:50%;display:block;flex:none}
+  .meta{font-size:11.5px;color:var(--ink-400);text-align:right;line-height:1.85;flex:none}
+  .meta b{color:var(--ink);font-weight:600;font-size:12.5px}
+  .meta .ok{color:var(--green);font-weight:600}
+  .meta .no{color:var(--red);font-weight:600}
+
+  table{border-collapse:collapse;width:100%;font-size:12.5px;margin-top:10px}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-400);font-weight:600}
+  td b{color:var(--ink)}
+  code{background:var(--paper);border:1px solid var(--line);border-radius:5px;padding:1px 6px;
+    font-size:11.5px;font-family:ui-monospace,Menlo,monospace}
+  .caveat{font-size:12.5px;color:var(--ink-600);line-height:1.8;margin-top:24px;
+    padding-left:14px;border-left:2px solid var(--line);max-width:680px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>P 和 oplex 字体不统一 · 三方案</h1>
+<p class="lede">
+所有样例的 <b>P 都是同一份矢量路径</b>（未改动），只换 <code>oplex</code> 的字体 / 颜色 / 字重。
+每行右侧标出该字体的<b>粗细比</b> —— 这是 P 与 oplex 是否"同族"的关键指标，
+P 本身是 <b>2.9 : 1</b>。
+</p>
+<p class="lede">
+所有字标的 <b>P 字高统一为 60px</b>，字号由脚本按各字体<b>实测的 cap height</b> 反算，
+所以是公平对比，不会因为字体度量不同而看错大小。
+</p>
+
+<svg width="0" height="0" style="position:absolute"><defs>
+  <g id="Pglyph">
+    <g transform="matrix(1,0,-0.10510,1,15.22,-1.5)">
+      <path fill-rule="evenodd" fill="currentColor" d="
+        M18,26 L55,26 C74,26.5 88,36 88,50 C88,64 75,73.5 56,74
+        L47,74 L47,88 C47,92 52,92.5 58,93 L58,97 L17,97 L17,93
+        C25,92.5 30,92 30,88 L30,33 C29.5,30 25,31 18,31 Z
+        M47,34 C62,34 72,39.5 72,50 C72,60.5 62,65.5 47,65.5 Z"/>
+    </g>
+  </g>
+</defs></svg>
+
+<hr>
+
+<!-- 现状 -->
+<div class="sechead"><span class="idx">现状</span><span class="title">New York Bold Italic</span></div>
+<p class="why">
+现在 App 里跑的就是这个。P 瘦硬、oplex 圆润，笔画粗细的节奏对不上 ——
+你看出来的正是这个。
+</p>
+<div class="row">
+  <div class="mark" style="color:var(--orange)">
+    <svg width="64.3" height="60" viewBox="22.02 24.5 76.06 71"><use href="#Pglyph"/></svg>
+    <span class="word" data-font="times" style="color:var(--orange)">oplex</span>
+    <span class="dot" data-dot></span>
+  </div>
+  <div class="meta"><b>New York（此处以 Times 代替渲染）</b><br>
+    粗细比约 <span class="no">1.5 : 1</span><br>与 P 的 2.9 : 1 差距明显</div>
+</div>
+
+<hr>
+
+<!-- A -->
+<div class="sechead"><span class="idx">A</span><span class="title">换字体 · 打包 Playfair / Bodoni</span></div>
+<p class="why">
+不动 P，把 <code>oplex</code> 换成和它同族的高对比衬线。
+<b>Playfair Display</b> 正是你那张 AI 生成图里 P 的原型；
+<b>Bodoni Moda</b> 是更纯的 Didone，对比更极端。
+</p>
+<div class="row">
+  <div class="mark" style="color:var(--orange)">
+    <svg width="64.3" height="60" viewBox="22.02 24.5 76.06 71"><use href="#Pglyph"/></svg>
+    <span class="word" data-font="playfair" style="color:var(--orange)">oplex</span>
+    <span class="dot" data-dot></span>
+  </div>
+  <div class="meta"><b>A1 · Playfair Display Bold Italic</b><br>
+    粗细比约 <span class="ok">2.6 : 1</span><br>子集化后约 30–50KB</div>
+</div>
+<div class="row">
+  <div class="mark" style="color:var(--orange)">
+    <svg width="64.3" height="60" viewBox="22.02 24.5 76.06 71"><use href="#Pglyph"/></svg>
+    <span class="word" data-font="bodoni" style="color:var(--orange)">oplex</span>
+    <span class="dot" data-dot></span>
+  </div>
+  <div class="meta"><b>A2 · Bodoni Moda Bold Italic</b><br>
+    粗细比约 <span class="ok">3.4 : 1</span><br>比 P 还极端，小尺寸细笔会断</div>
+</div>
+<p class="why" style="margin-top:22px">
+<b>A1 更稳。</b>Bodoni 的最细处比 P 还细，20pt 以下会掉笔画 ——
+而字标的下限本来就是 18pt。Playfair 的 2.6 : 1 和 P 的 2.9 : 1 几乎贴合，
+而且它还能顺手接管你启动页那种编辑感大标题，一个字体解决两件事。
+</p>
+
+<hr>
+
+<!-- B -->
+<div class="sechead"><span class="idx">B</span><span class="title">全画成路径</span></div>
+<p class="why">
+按 P 的骨架把 o / p / l / e / x 五个字母重画一遍。
+<b>这里用 Playfair 代表它的外观 —— 因为 B 做出来就该长这样。</b>
+B 和 A1 的差别<b>不在好不好看，在归属和可控性</b>：
+路径是自己的，不依赖任何字体授权，也不会因为系统更新而变形，
+而且可以按需微调（比如把 <code>x</code> 的收笔改得更利落）。
+</p>
+<div class="row">
+  <div class="mark" style="color:var(--orange)">
+    <svg width="64.3" height="60" viewBox="22.02 24.5 76.06 71"><use href="#Pglyph"/></svg>
+    <span class="word" data-font="playfair" style="color:var(--orange);letter-spacing:-.012em">oplex</span>
+    <span class="dot" data-dot></span>
+  </div>
+  <div class="meta"><b>B · 自绘路径（以 Playfair 示意）</b><br>
+    粗细比 <span class="ok">按 P 定，2.9 : 1</span><br>外观 ≈ A1，代价高一个量级</div>
+</div>
+
+<hr>
+
+<!-- C -->
+<div class="sechead"><span class="idx">C</span><span class="title">不统一，改成拉开层级</span></div>
+<p class="why">
+承认它是「图形 + 文字」的组合：P 是 mark，<code>oplex</code> 是名字。
+只要两者<b>看起来不是同一个东西</b>，字体不同就不再是缺陷 —— 而是刻意。
+零成本，但字标不再是一个整体。
+</p>
+<div class="row">
+  <div class="mark">
+    <svg width="64.3" height="60" viewBox="22.02 24.5 76.06 71" style="color:var(--orange)"><use href="#Pglyph"/></svg>
+    <span class="word" data-font="times" style="color:var(--ink)">oplex</span>
+    <span class="dot" data-dot></span>
+  </div>
+  <div class="meta"><b>C1 · P 橙 + oplex 墨</b><br>层级最清楚<br>但墨点会和 oplex 糊在一起</div>
+</div>
+<div class="row">
+  <div class="mark" style="color:var(--orange)">
+    <svg width="64.3" height="60" viewBox="22.02 24.5 76.06 71"><use href="#Pglyph"/></svg>
+    <span class="word" data-font="times-light" style="color:var(--orange)">oplex</span>
+    <span class="dot" data-dot></span>
+  </div>
+  <div class="meta"><b>C2 · oplex 降一档字重</b><br>同色不同重<br>粗细比反而更远了</div>
+</div>
+<div class="row">
+  <div class="mark" style="color:var(--orange)">
+    <svg width="64.3" height="60" viewBox="22.02 24.5 76.06 71"><use href="#Pglyph"/></svg>
+    <span class="word" data-font="times" data-scale=".82" style="color:var(--orange)">oplex</span>
+    <span class="dot" data-dot></span>
+  </div>
+  <div class="meta"><b>C3 · oplex 缩小到 82%</b><br>P 明确是主角<br>但字标读起来像缩写 + 补注</div>
+</div>
+
+<hr>
+
+<div class="sechead"><span class="idx">04</span><span class="title">代价对比</span></div>
+<table>
+  <tr><th>方案</th><th>视觉结果</th><th>工作量</th><th>长期成本</th><th>风险</th></tr>
+  <tr>
+    <td><b>A1 Playfair</b></td>
+    <td>字体统一，粗细比 2.6 vs 2.9，几乎看不出差</td>
+    <td>打包字体 + 改一个 token</td>
+    <td>低。字体文件跟版本走</td>
+    <td>需确认 SIL OFL 授权（Playfair 是开源字体，商用免费）</td>
+  </tr>
+  <tr>
+    <td><b>A2 Bodoni</b></td>
+    <td>比 P 还高对比，气质更"时装杂志"</td>
+    <td>同上</td>
+    <td>低</td>
+    <td><b>小尺寸掉笔画</b>，与 18pt 下限冲突</td>
+  </tr>
+  <tr>
+    <td><b>B 自绘</b></td>
+    <td>≈ A1</td>
+    <td>画 5 个字母 + 反复调 kerning</td>
+    <td>中。以后改字标要改路径，不能改字号了事</td>
+    <td>画不好会比用现成字体更糟</td>
+  </tr>
+  <tr>
+    <td><b>C 拉层级</b></td>
+    <td>不统一，但读成"两个东西"</td>
+    <td>改颜色 / 字重，几行</td>
+    <td>零</td>
+    <td>字标失去整体性；C1 还会牺牲墨点</td>
+  </tr>
+</table>
+
+<p class="why" style="margin-top:22px">
+<b>我推 A1。</b>B 的产出和 A1 几乎一样，但成本高一个量级 ——
+在你现在这个阶段（MVP、一个人、还有 Tab2 在做），不值得为"路径归自己"付这个价。
+真到了要注册商标、做品牌手册的时候再把 A1 转成 B，那时 A1 就是 B 的稿子。<br>
+C 是"不解决问题，改成不把它当问题"。也成立，但它会让字标从一个词退回成一个组合，
+你之前挑 S2 开屏方案时看重的正是「名字被拼出来」这个整体感，C 和它是冲突的。
+</p>
+
+<p class="caveat">
+<b>两处渲染误差。</b>① 真机上的 New York 在这页没法渲染，用 Times New Roman 代替
+—— 两者同为过渡期衬线、粗细比接近，但字形细节不同，所以"现状"那一行看个大概即可。
+② Playfair / Bodoni 是网络字体，首次打开可能会闪一下回退字体。<br>
+选定 A1 后要做的事：把 Playfair Display Italic 700 子集化（只留 <code>oplex</code> 五个字母
+其实就够字标用，但建议保留全字母以便标题也用），打进 bundle，
+然后只改 <code>AppTheme.Font.wordmark(size:)</code> 一处 ——
+<code>PoplexWordmarkMetrics.capPerEm</code> 是向 UIFont 实测的，会自动跟上，其余全部不用动。
+</p>
+
+<script>
+const H = 60;                       // 所有字标统一的 P 字高
+const FONTS = {
+  times:        {family:"'Times New Roman', Georgia, serif", weight:700},
+  'times-light':{family:"'Times New Roman', Georgia, serif", weight:400},
+  playfair:     {family:"'Playfair Display', serif",         weight:700},
+  bodoni:       {family:"'Bodoni Moda', serif",              weight:700},
+};
+
+/* 用 canvas 实测某字体的 cap height / em，保证各字体的 P 字高严格一致 */
+function capRatio(family, weight){
+  const c = document.createElement('canvas').getContext('2d');
+  const probe = 200;
+  c.font = `italic ${weight} ${probe}px ${family}`;
+  const m = c.measureText('H');
+  const cap = m.actualBoundingBoxAscent;
+  return (cap && cap > 0) ? cap / probe : 0.70;
+}
+
+function layout(){
+  document.querySelectorAll('.word[data-font]').forEach(el=>{
+    const f = FONTS[el.dataset.font];
+    const scale = parseFloat(el.dataset.scale || '1');
+    const size = (H / capRatio(f.family, f.weight)) * scale;
+    el.style.fontFamily = f.family;
+    el.style.fontWeight = f.weight;
+    el.style.fontSize   = size + 'px';
+    // 字距 −0.045 em（与 PoplexWordmarkMetrics.kernRatio 一致）
+    el.style.marginLeft = (-0.045 * size) + 'px';
+  });
+  document.querySelectorAll('[data-dot]').forEach(el=>{
+    const word = el.previousElementSibling;
+    const size = parseFloat(word.style.fontSize) || 86;
+    const d = size * 9/56;
+    el.style.width = el.style.height = d + 'px';
+    el.style.marginLeft = (size * 3/56) + 'px';
+    el.style.background = getComputedStyle(document.documentElement)
+      .getPropertyValue('--ink').trim();
+  });
+}
+
+if (document.fonts && document.fonts.ready) {
+  document.fonts.ready.then(layout);
+  setTimeout(layout, 1200);   // 网络字体晚到时再排一次
+} else {
+  window.addEventListener('load', layout);
+}
+</script>
+
+</div>
+</body>
+</html>
