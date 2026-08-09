@@ -10,11 +10,12 @@ enum AIServiceError: Error {
     case decodingFailed
     case imageEncodingFailed
     case bodySerializationFailed
+    case contentBlocked
 }
 
 extension UIImage {
     func compressedForUpload() -> UIImage {
-        let maxDimension: CGFloat = 1600
+        let maxDimension: CGFloat = 1200
         let scale = min(maxDimension / size.width, maxDimension / size.height, 1.0)
         guard scale < 1.0 else { return self }
         let newSize = CGSize(width: size.width * scale, height: size.height * scale)
@@ -37,7 +38,7 @@ struct LiveAIService: AIServicing {
         }
         if let image {
             let compressed = image.compressedForUpload()
-            guard let jpeg = compressed.jpegData(compressionQuality: 0.75) else {
+            guard let jpeg = compressed.jpegData(compressionQuality: 0.6) else {
                 throw AIServiceError.imageEncodingFailed
             }
             body["image_base64"] = jpeg.base64EncodedString()
@@ -74,7 +75,25 @@ struct LiveAIService: AIServicing {
         request.httpBody = body
 
         let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+        guard let http = response as? HTTPURLResponse else {
+            throw AIServiceError.requestFailed
+        }
+        return try Self.decodeResponse(statusCode: http.statusCode, data: data)
+    }
+
+    /// 把 HTTP 响应分类为「解码后的 AIEnvelope」或抛出对应 AIServiceError。
+    /// 从 call() 抽出为纯函数，好让 422/content_blocked、非 2xx、坏 JSON 三条
+    /// 分支不经真实网络就能单元测试。
+    /// - 422 且 body 为 {"error":"content_blocked"} → .contentBlocked（服务端安全过滤命中）
+    /// - 其余非 2xx → .requestFailed
+    /// - 2xx 但无法解码 → .decodingFailed
+    static func decodeResponse(statusCode: Int, data: Data) throws -> AIEnvelope {
+        if statusCode == 422,
+           let errorBody = try? JSONDecoder().decode([String: String].self, from: data),
+           errorBody["error"] == "content_blocked" {
+            throw AIServiceError.contentBlocked
+        }
+        guard (200..<300).contains(statusCode) else {
             throw AIServiceError.requestFailed
         }
         do {

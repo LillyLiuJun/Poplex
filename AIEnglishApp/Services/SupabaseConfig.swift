@@ -50,4 +50,13 @@ enum SupabaseConfig {
     static var dialogueFunctionURL: URL {
         projectURL.appending(path: "functions/v1/dialogue")
     }
+
+    // MARK: - 合规
+    static var deleteAccountFunctionURL: URL {
+        projectURL.appending(path: "functions/v1/delete-account")
+    }
+
+    static var submitFeedbackFunctionURL: URL {
+        projectURL.appending(path: "functions/v1/submit-feedback")
+    }
 }

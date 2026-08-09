@@ -7,13 +7,22 @@ final class TodayViewModel {
     var isLoading = false
     var isLoadingHistory = false
     var pendingImage: UIImage?
+    var contentBlockedMessage: String?
     let session = ConversationSession()
 
     private let service: AIServicing
     private var hasLiveActivity = false   // 本次会话是否已产生实时对话（发过消息）
 
-    init(service: AIServicing = LiveAIService()) {
+    /// AI 数据同意闸门。生产默认读 UserDefaults（AIConsentView 同意后写入的标记）；
+    /// 抽成闭包是为了让 send() 的门控可在单元测试里注入，而不依赖全局 UserDefaults。
+    private let isConsentGranted: () -> Bool
+
+    init(service: AIServicing = LiveAIService(),
+         isConsentGranted: @escaping () -> Bool = {
+             UserDefaults.standard.double(forKey: "ai_consent_accepted_at") > 0
+         }) {
         self.service = service
+        self.isConsentGranted = isConsentGranted
     }
 
     // MARK: - History
@@ -96,10 +105,26 @@ final class TodayViewModel {
 
     // MARK: - Send
 
+    /// 同意页弹出前的暂存：用户点了发送但 AI 同意未签，弹出 AIConsentView；
+    /// 同意后自动重发，不清空输入框以避免用户重新输入。
+    var showAIConsent = false
+    private var pendingSendText: String?
+
     func send(_ text: String) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let image = pendingImage
         guard !trimmed.isEmpty || image != nil else { return }
+
+        // 未同意 AI 数据处理 → 暂存输入、弹出同意页，不修改任何 UI 状态。
+        // 同意后 onConsentAgreed() 自动重发；拒绝则清空暂存，用户可再次尝试。
+        guard isConsentGranted() else {
+            pendingSendText = text
+            showAIConsent = true
+            return
+        }
+        // 同意页关闭后若用户未同意，showAIConsent=false 但 pendingSendText 还在；
+        // 下次 send 走到这里时清理掉残留。
+        pendingSendText = nil
 
         hasLiveActivity = true   // 本次会话已有实时对话，后台历史刷新不得覆盖
 
@@ -129,6 +154,14 @@ final class TodayViewModel {
         pendingImage = nil
 
         await runGeneration(text: textToSend, image: image)
+    }
+
+    /// 用户在 AIConsentView 点击"同意"后调用：清暂存、自动重发。
+    func onConsentAgreed() {
+        showAIConsent = false
+        guard let text = pendingSendText else { return }
+        pendingSendText = nil
+        Task { await send(text) }
     }
 
     /// 用户点击"重试"：不重复生成用户气泡（它已在上方保留），仅移除失败提示后重新发起生成。
@@ -162,6 +195,10 @@ final class TodayViewModel {
                     image: image
                 )
             }
+        } catch AIServiceError.contentBlocked {
+            // 内容被安全过滤器拦截：移除 loading 条目，显示友好提示。
+            entries.removeAll { $0.id == loadingEntry.id }
+            contentBlockedMessage = "This moment can't be turned into a lesson. Try another one."
         } catch {
             // 失败（含断网）：保留用户气泡，换成可点击重试的提示，原始输入随 entry 带着以便重发。
             replace(loadingEntry.id, with: .sendFailed(text: text, image: image))

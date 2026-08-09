@@ -111,11 +111,14 @@ const IMAGE_READING = `
    │   Example: user types "I have a 会议 at 3pm" + snaps a calendar
    │            → sentence + express, complete "meeting" into fluent English
    │
-   └── NO attached text (pure image)
-         ├── Has focused text → 待处理内容 = extracted text
-         │                      Proceed through STEP 1–3 → word / sentence / passage
-         │
-         └── Pure scene (no text) → sentence + comprehend (s2)
+   └── NO attached text (pure image) — ALWAYS describe the scene. Do NOT branch on focused text.
+       A bare photo with no typed text carries no reliable signal about which word the user
+       wants, and "focused text" detection is itself unreliable. Ignore any text visible in
+       the photo and describe the scene. Even if the photo is a sign, label, menu, or screen,
+       do NOT extract or classify that text — describe the photo as a scene.
+       (Reading text out of an image will later be a separate, explicit user action. The only
+        path that reads image text is "user ALSO typed text" above, e.g. menu photo + "这什么意思".)
+         → sentence + comprehend (s2)
                · user_original = null (no text was input)
                · input_lang = null, input_lang_code = null
                · intent = null (comprehend card)
@@ -591,6 +594,12 @@ sub_scene: complete activity, strip qualifiers ("做晚饭"→"做饭"). Anchors
           maxOutputTokens: 100,
           thinkingConfig: { thinkingBudget: 0 },
         },
+        safetySettings: [
+          { category: "HARM_CATEGORY_HARASSMENT",        threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+          { category: "HARM_CATEGORY_HATE_SPEECH",       threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+          { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+          { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+        ],
       }),
     });
     const data = await res.json();
@@ -628,6 +637,12 @@ Reply with the category name ONLY.`;
       body: JSON.stringify({
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
         generationConfig: { maxOutputTokens: 20 },
+        safetySettings: [
+          { category: "HARM_CATEGORY_HARASSMENT",        threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+          { category: "HARM_CATEGORY_HATE_SPEECH",       threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+          { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+          { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+        ],
       }),
     });
     const data = await res.json();
@@ -978,6 +993,12 @@ When STEP 1's OBJECT is the whole input and it has a subject and a predicate:
           systemInstruction: { parts: [{ text: systemPrompt }] },
           contents,
           generationConfig: { responseMimeType: "application/json" },
+          safetySettings: [
+            { category: "HARM_CATEGORY_HARASSMENT",        threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+            { category: "HARM_CATEGORY_HATE_SPEECH",       threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+            { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+            { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+          ],
         }),
       }),
       image_base64
@@ -990,6 +1011,15 @@ When STEP 1's OBJECT is the whole input and it has a subject and a predicate:
     }
 
     const data = await geminiRes.json();
+
+    // 内容被安全过滤器拦截（输入端或输出端）→ 返回可被客户端识别的错误码
+    if (data?.promptFeedback?.blockReason) {
+      return json({ error: "content_blocked", blockReason: data.promptFeedback.blockReason }, 422);
+    }
+    if (data?.candidates?.[0]?.finishReason === "SAFETY") {
+      return json({ error: "content_blocked", blockReason: "OUTPUT_SAFETY" }, 422);
+    }
+
     const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
     const parsed = JSON.parse(raw);
 

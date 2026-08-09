@@ -101,17 +101,36 @@ struct RootView: View {
                 }
             }
         }
+        // Keyed on onboardingCompletedAt so the gate machine re-initialises whenever
+        // it flips back to 0 — e.g. Delete Account / reset clears the flag mid-session.
+        // Without re-keying, the task only ran at cold start, leaving `gate` stranded
+        // at .connectionFailed (the 20s launch timeout below flips it there once
+        // ContentView has been showing) — so deleting the account dropped the user
+        // onto a full-screen network-error page instead of a fresh onboarding.
+        //
         // Race the network sync against a 20-second timeout using a TaskGroup so
         // whichever finishes first automatically cancels the other — avoids the
         // false-positive retry page that appeared when slow-but-successful cold
         // starts (auth Keychain restore + Supabase round-trip) exceeded 10 s.
-        .task {
+        // Reset the gate synchronously the instant Delete Account / reset clears the
+        // flag, so the stale .connectionFailed can't flash for a frame before the
+        // keyed task below re-runs.
+        .onChange(of: onboardingCompletedAt) { _, newValue in
+            if newValue == 0 { gate = .checking }
+        }
+        .task(id: onboardingCompletedAt) {
+            gate = .checking
             await withTaskGroup(of: Void.self) { group in
                 group.addTask { await syncOnboardingStateFromRemote() }
                 group.addTask {
                     do {
                         try await Task.sleep(for: .seconds(20))
-                        if gate == .checking { gate = .connectionFailed }
+                        // Only the first-launch gate can show a retry page; a returning
+                        // user (onboardingCompletedAt > 0) renders ContentView, so never
+                        // strand its gate at .connectionFailed.
+                        if gate == .checking, onboardingCompletedAt == 0 {
+                            gate = .connectionFailed
+                        }
                     } catch {
                         // Cancelled because sync completed first — nothing to do
                     }
@@ -137,6 +156,11 @@ struct RootView: View {
             case .completed(let remoteDate):
                 // 走过引导（如同机重装的老用户）→ 回填本地标记，直接进主界面
                 onboardingCompletedAt = remoteDate.timeIntervalSince1970
+                // 走过引导 = 一定同意过 AI。重装 / 清数据后本地标记丢失，
+                // 须同步恢复，否则 TodayViewModel 会弹出同意页（而非网络错误）。
+                if UserDefaults.standard.double(forKey: "ai_consent_accepted_at") == 0 {
+                    UserDefaults.standard.set(remoteDate.timeIntervalSince1970, forKey: "ai_consent_accepted_at")
+                }
             case .notCompleted:
                 gate = .needsOnboarding
             case .missingProfile:

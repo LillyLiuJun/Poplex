@@ -10,9 +10,11 @@ struct OnboardingCaptureView: View {
     var onBack: () -> Void
     var onComplete: () -> Void
 
+    @AppStorage("ai_consent_accepted_at") private var aiConsentAt: Double = 0
     @State private var pendingCard: PresetCard?
     @State private var pendingImage: UIImage?
     @State private var activeSheet: CaptureSource?
+    @State private var showConsentSheet = false
     // Holds the photo picked inside the sheet until the sheet has fully
     // dismissed. Writing it straight into `pendingImage` would reshape the
     // layout underneath the sheet in the same transaction that tears the
@@ -71,6 +73,11 @@ struct OnboardingCaptureView: View {
         // 三页并排渲染，onAppear 启动即触发——入场动画必须在页面真正可见时才播
         .onAppear { if isActive { appeared = true } }
         .onChange(of: isActive) { _, active in if active { appeared = true } }
+        .sheet(isPresented: $showConsentSheet) {
+            AIConsentView(onAgree: { performSelection() })
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
     }
 
     // MARK: - Back
@@ -264,6 +271,14 @@ struct OnboardingCaptureView: View {
     }
 
     private func confirmSelection() {
+        if aiConsentAt == 0 {
+            showConsentSheet = true
+        } else {
+            performSelection()
+        }
+    }
+
+    private func performSelection() {
         if let image = pendingImage {
             Task { await viewModel.startWithImage(image) }
         } else if let card = pendingCard {

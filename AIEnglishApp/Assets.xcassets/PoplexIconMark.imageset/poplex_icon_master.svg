@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
+  <rect width="120" height="120" fill="#FBF8F5"/>
+  <g transform="translate(15.22,-1.5) skewX(-6)">
+    <path fill-rule="evenodd" fill="#FF7622" d="M18,26 L55,26 C74,26.5 88,36 88,50 C88,64 75,73.5 56,74 L47,74 L47,88 C47,92 52,92.5 58,93 L58,97 L17,97 L17,93 C25,92.5 30,92 30,88 L30,33 C29.5,30 25,31 18,31 Z M47,34 C62,34 72,39.5 72,50 C72,60.5 62,65.5 47,65.5 Z"/>
+  </g>
+  <circle cx="80.3" cy="87.5" r="8.0" fill="#2A2320"/>
+</svg>

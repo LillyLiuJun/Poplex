@@ -38,6 +38,16 @@ enum SupabaseManager {
         return session.accessToken
     }
 
+    /// 当前登录用户的 UUID 字符串（用于反馈邮件、日志等纯展示场景）。
+    static var currentUserID: String? {
+        client.auth.currentUser?.id.uuidString
+    }
+
+    /// 注销当前会话（用于删除账号后回到首启态）。
+    static func signOut() async throws {
+        try await client.auth.signOut()
+    }
+
     /// 给请求装上鉴权头：Authorization = 用户 JWT，apikey = publishable key。
     /// 6 处网络调用点统一走这里，避免重复拼头（对应审计报告「删除/请求逻辑重复」的收敛方向）。
     static func setAuthHeaders(on request: inout URLRequest) async throws {

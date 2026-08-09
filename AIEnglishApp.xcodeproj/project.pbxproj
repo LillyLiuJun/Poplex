@@ -406,9 +406,9 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Poplex;
-				INFOPLIST_KEY_NSCameraUsageDescription = "Take a photo to create your English learning card.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Used to take photos of moments you want to capture, so Poplex can generate matching English expressions.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Speak out loud to practice English with your AI tutor.";
-				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Choose a photo to create your English learning card.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Used to select photos you want to capture, so Poplex can generate matching English learning content.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Your speech is transcribed so your AI tutor can respond to what you say.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
@@ -456,9 +456,9 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Poplex;
-				INFOPLIST_KEY_NSCameraUsageDescription = "Take a photo to create your English learning card.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Used to take photos of moments you want to capture, so Poplex can generate matching English expressions.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Speak out loud to practice English with your AI tutor.";
-				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Choose a photo to create your English learning card.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Used to select photos you want to capture, so Poplex can generate matching English learning content.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Your speech is transcribed so your AI tutor can respond to what you say.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;

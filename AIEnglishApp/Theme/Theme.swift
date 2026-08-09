@@ -28,7 +28,10 @@ private enum Primitive {
     static let space56: CGFloat = 56
 
     // 控件尺寸
+    static let size28: CGFloat = 28
+    static let size36: CGFloat = 36
     static let size44: CGFloat = 44
+    static let size84: CGFloat = 84
 
     // 圆角
     static let radius8: CGFloat  = 8
@@ -205,6 +208,9 @@ enum AppTheme {
         // 语义状态（承载文字，取最深一档珊瑚红以保可读性）
         static let danger = Primitive.error950
 
+        // 模态遮罩：加载 / 删除时压暗背景。用暖近黑（neutral950）而非纯黑，与暖色系一致
+        static let scrimOverlay = Primitive.neutral950.opacity(0.25)
+
         // 图片加载占位底
         static let imagePlaceholderBg = Primitive.neutral100
 
@@ -233,6 +239,9 @@ enum AppTheme {
         static let badgeDialogueBg   = Primitive.success100  // 对话来源（dialogue source type）
         static let badgeDialogueIcon = Primitive.success800
 
+        // About AI & Your Data 设置行图标色（绿色，与 AI 功能相关）
+        static let aiFeatureAccent = Primitive.success950
+
         // MARK: 过渡别名（Mine 等未换肤界面仍引用；指向品牌强色 = 种子橙，
         // 各界面换肤时再统一到 brandStrong / accent* —— 勿在新代码中使用）
         static let textAccent = Primitive.primary950
@@ -257,6 +266,8 @@ enum AppTheme {
         static let pageTitleSerif = SwiftUI.Font.system(.largeTitle, design: .serif, weight: .semibold) // 页面衬线大标题（Warm Editorial：Tab2「Not open yet」等，与内容衬线同族）
         static let onboardingHeroSerif = SwiftUI.Font.system(size: 46, weight: .semibold, design: .serif) // Onboarding 封面大标题：比 largeTitle 更大的展示字号，撑起全屏第一印象。封面特例——固定字号、不随 Dynamic Type 放大（与 pageTitleSerif 同为衬线同族，仅尺寸更大）
         static let sectionTitleSerif = SwiftUI.Font.system(.title2, design: .serif, weight: .semibold)  // 分区衬线小标题（Topics in progress / Materials Yours），比页面大标题小一档
+        static let groupTitleSerif   = SwiftUI.Font.system(.subheadline, design: .serif, weight: .bold)   // 分组衬线小标题（备选，品牌衬线风）
+        static let groupLabel        = SwiftUI.Font.system(.footnote, weight: .semibold)                  // 分组列表 section header（iOS 标准）：配大写 + 字距 + 弱色，退后作辅助标签
         static let ctaLabel       = SwiftUI.Font.system(.body, weight: .semibold)     // 主按钮文字（Continue / Get Started）
         static let tabLabel       = SwiftUI.Font.system(.subheadline, weight: .semibold) // 顶部 Tab 名称
         // 开屏字标「oplex」：与 App 内容字同族（design: .serif = New York，
@@ -312,6 +323,9 @@ enum AppTheme {
     enum Size {
         static let barControl: CGFloat = Primitive.size44  // 顶栏/工具栏可点控件标准边长
         static let iconBadge: CGFloat  = Primitive.size44  // 图标徽章容器边长（圆形浅底托图标）
+        static let rowIcon: CGFloat    = Primitive.size28  // 列表行前导图标框 / 小圆控件（设置行、关闭键）
+        static let brandMark: CGFloat  = Primitive.size84  // 圆形 app-icon 报头容器直径
+        static let brandGlyph: CGFloat = Primitive.size36  // 报头里 PoplexPShape 的字高
     }
 
     enum Motion {

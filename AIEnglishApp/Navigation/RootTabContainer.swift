@@ -10,7 +10,7 @@ private struct TopBarHeightKey: PreferenceKey {
 
 struct RootTabContainer: View {
     @State private var selectedTab: AppTab = .today
-    @State private var showAccountMenu = false
+    @State private var showSettings = false
     @State private var mineListResetToken = UUID()
     @State private var mineSwipeActionOpen = false
     @State private var mineDetailActive = false
@@ -18,25 +18,6 @@ struct RootTabContainer: View {
     @State private var topBarCompact = false
     @State private var capturedSwipeOpen = false
     @State private var captureRecorded = false
-
-    private var appVersion: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
-    }
-
-    private var menuItems: [AccountMenuItem] {
-        var items = [
-            AccountMenuItem(id: "settings", icon: "gearshape",   title: "Settings") {},
-            AccountMenuItem(id: "about",    icon: "info.circle", title: "About")    {},
-        ]
-        #if DEBUG
-        items.append(AccountMenuItem(id: "reset_library", icon: "arrow.counterclockwise", title: "[DEBUG] Reset Library unlock") {
-            UserDefaults.standard.removeObject(forKey: "tab2_permanently_unlocked")
-            UserDefaults.standard.removeObject(forKey: "tab2_first_unlock_shown")
-            mineListResetToken = UUID()   // 触发 vm.load() 感知 UserDefaults 变化
-        })
-        #endif
-        return items
-    }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -49,25 +30,11 @@ struct RootTabContainer: View {
                     }
                 }
                 .onPreferenceChange(TopBarHeightKey.self) { topBarHeight = $0 }
-
-            // Dismiss layer — only intercepts taps when menu is visible
-            if showAccountMenu {
-                Color.clear
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .ignoresSafeArea()
-                    .contentShape(Rectangle())
-                    .onTapGesture { closeMenu() }
-            }
-
-            // Menu always in hierarchy; scale + opacity drive the animation
-            AccountMenuView(items: menuItems, appVersion: appVersion, onDismiss: closeMenu)
-                .padding(.leading, AppTheme.Space.paddingPage)
-                .padding(.top, AppTheme.Space.paddingHero)
-                .scaleEffect(showAccountMenu ? 1.0 : 0.75, anchor: .topLeading)
-                .opacity(showAccountMenu ? 1.0 : 0)
-                .allowsHitTesting(showAccountMenu)
         }
         .background(AppTheme.Color.pageBg)
+        .sheet(isPresented: $showSettings) {
+            SettingsView()
+        }
         .onChange(of: selectedTab) { oldTab, newTab in
             if oldTab == .mine {
                 mineSwipeActionOpen = false
@@ -79,14 +46,6 @@ struct RootTabContainer: View {
             // Restore full topBar on tab switch so the new tab's header is always visible
             withAnimation(AppTheme.Motion.topBarCompact) { topBarCompact = false }
         }
-    }
-
-    private func openMenu() {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showAccountMenu = true }
-    }
-
-    private func closeMenu() {
-        withAnimation(.easeOut(duration: 0.18)) { showAccountMenu = false }
     }
 
     private var contentArea: some View {
@@ -132,7 +91,7 @@ struct RootTabContainer: View {
     private var topBar: some View {
         HStack {
             Button {
-                showAccountMenu ? closeMenu() : openMenu()
+                showSettings = true
             } label: {
                 Image(systemName: "person.fill")
                     .imageScale(.medium)

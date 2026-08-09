@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Privacy Policy</title>
+<style>
+  :root {
+    --accent: #FF7622;
+    --text-primary: #2A2320;
+    --text-secondary: #6B5F55;
+    --bg: #FBF7F3;
+    --card-bg: #FFFFFF;
+    --border: #EAE0D6;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+    line-height: 1.7;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 48px 24px 96px; }
+  header { margin-bottom: 40px; }
+  h1 { font-size: 28px; margin: 0 0 8px; }
+  .meta { color: var(--text-secondary); font-size: 14px; }
+  .lang-toggle { margin: 24px 0 40px; display: flex; gap: 8px; }
+  .lang-btn {
+    padding: 8px 16px; border-radius: 20px; border: 1px solid var(--border);
+    background: var(--card-bg); color: var(--text-primary); cursor: pointer; font-size: 14px;
+  }
+  .lang-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  section { margin-bottom: 28px; }
+  h2 { font-size: 18px; margin: 0 0 10px; color: var(--text-primary); }
+  p, li { color: var(--text-primary); font-size: 15px; }
+  ul { padding-left: 20px; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .lang-block { display: none; }
+  .lang-block.active { display: block; }
+  hr { border: none; border-top: 1px solid var(--border); margin: 40px 0; }
+  footer { color: var(--text-secondary); font-size: 13px; text-align: center; margin-top: 60px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1 id="title">Privacy Policy</h1>
+    <div class="meta" id="meta">Effective date: 2026-08-08</div>
+  </header>
+
+  <div class="lang-toggle">
+    <button class="lang-btn active" data-set="en">English</button>
+    <button class="lang-btn" data-set="zh">中文</button>
+  </div>
+
+  <!-- ZH -->
+  <div class="lang-block" data-lang="zh">
+    <p>Poplex（以下简称"本应用""我们"）由 JUN LIU 开发和运营。我们非常重视你的隐私。本政策说明我们收集哪些信息、如何使用、与谁共享，以及你对自己数据拥有的权利。</p>
+
+    <section>
+      <h2>1. 我们收集的信息</h2>
+      <ul>
+        <li><strong>账号信息</strong>：本应用采用<strong>匿名登录</strong>。我们<strong>不收集</strong>你的姓名、手机号、邮箱或其他真实身份信息。系统会为你的设备生成一个随机匿名标识符（user ID），用于保存你的学习数据。</li>
+        <li><strong>你主动提供的内容</strong>：你输入的文字描述、上传或拍摄的图片，以及由此生成的学习素材（例句、词汇、语法、情境卡等）。</li>
+        <li><strong>使用与诊断数据</strong>：为改进产品，我们记录基本的使用事件（如会话次数、功能点击、错误日志）。</li>
+        <li><strong>设备信息</strong>：应用版本、操作系统版本等技术信息，用于兼容性与问题排查。</li>
+      </ul>
+      <p>我们<strong>不</strong>收集你的通讯录、位置、健康数据，也<strong>不</strong>进行跨应用广告追踪。</p>
+    </section>
+
+    <section>
+      <h2>2. 我们如何使用信息</h2>
+      <ul>
+        <li>生成并展示你的英语学习内容；</li>
+        <li>保存你的学习历史，以便你在应用内查看；</li>
+        <li>排查故障、提升稳定性与体验；</li>
+        <li>履行法律义务。</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>3. 第三方处理与共享</h2>
+      <p>为实现核心功能，你提供的<strong>文字和图片会发送给以下第三方服务处理</strong>：</p>
+      <ul>
+        <li><strong>Google（Gemini API）</strong>：用于分析你的文字/图片并生成英语学习内容。相关数据的处理受 <a href="https://policies.google.com/privacy" target="_blank">Google 隐私政策</a> 约束。</li>
+        <li><strong>Supabase</strong>：用于账号鉴权与数据存储（托管数据库）。</li>
+      </ul>
+      <p>除上述为提供服务所必需的处理外，我们<strong>不会出售你的个人数据</strong>，也不会将其用于广告，也不会与数据经纪商共享。</p>
+    </section>
+
+    <section>
+      <h2>4. 数据存储、跨境传输与保留</h2>
+      <p>你的学习数据保存在 Supabase 的托管数据库中，直至你主动删除。你的数据可能被传输、存储于你所在国家/地区以外的服务器（取决于 Supabase 与 Google 服务器所在地），我们会通过与服务商签署的数据处理协议等方式确保传输符合适用法律要求。你随时可以在应用内删除账号与全部数据（见第 7 条）。</p>
+    </section>
+
+    <section>
+      <h2>5. AI 生成内容说明</h2>
+      <p>本应用的学习内容由人工智能（Google Gemini）自动生成，<strong>可能存在不准确或不恰当之处</strong>，仅供学习参考，不构成专业建议。</p>
+    </section>
+
+    <section>
+      <h2>6. 数据安全</h2>
+      <p>我们采取合理的技术与管理措施（如传输加密、访问控制、行级安全策略 RLS）保护你的数据，但请理解互联网传输与电子存储无法做到绝对安全，我们无法保证万无一失。</p>
+    </section>
+
+    <section>
+      <h2>7. 你的权利</h2>
+      <ul>
+        <li><strong>删除</strong>：在应用内「设置 → 删除账号与数据」即可永久删除你的账号及全部关联数据。因采用匿名登录，删除后无法找回。</li>
+        <li><strong>访问</strong>：你的学习素材可在应用内「Mine」页面查看。</li>
+        <li>如你位于欧盟/英国等适用 <strong>GDPR</strong> 的地区，你享有访问、更正、删除（被遗忘权）、限制处理、数据可携、反对处理等权利，并有权向所在地的数据保护监管机构投诉。</li>
+        <li>如你是<strong>加州居民</strong>，根据 <strong>CCPA/CPRA</strong>，你享有知情权、删除权、更正权、限制敏感信息使用权，以及不因行使上述权利而受到差别对待的权利。我们不出售也不与第三方"共享"（广告意义上的）你的个人信息。</li>
+        <li>行使上述权利可通过下方邮箱联系我们，我们会在适用法律规定的期限内响应。</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>8. 儿童隐私</h2>
+      <p>本应用不面向 13 周岁以下（欧盟地区为 16 周岁以下，或当地法律规定的更高年龄）的儿童，我们不会在知情的情况下收集儿童的个人信息。若我们得知在未获得可验证家长同意的情况下收集了儿童个人信息，将尽快删除相关数据。若你是家长或监护人，认为你的孩子向我们提供了个人信息，请通过下方邮箱联系我们。</p>
+    </section>
+
+    <section>
+      <h2>9. 政策变更</h2>
+      <p>我们可能更新本政策。重大变更将在应用内或本页面提示，并更新生效日期。若变更实质性扩大了我们收集或使用信息的范围，我们会在变更生效前以合理方式通知你。</p>
+    </section>
+
+    <section>
+      <h2>10. 联系我们</h2>
+      <p>如有任何隐私相关问题，请联系：<strong><a href="mailto:poplex.help@outlook.com">poplex.help@outlook.com</a></strong></p>
+    </section>
+  </div>
+
+  <!-- EN -->
+  <div class="lang-block active" data-lang="en">
+    <p>Poplex ("the App", "we", "us") is developed and operated by JUN LIU. We take your privacy seriously. This policy explains what we collect, how we use it, who we share it with, and the rights you have over your data.</p>
+
+    <section>
+      <h2>1. Information We Collect</h2>
+      <ul>
+        <li><strong>Account information</strong>: The App uses <strong>anonymous sign-in</strong>. We do <strong>not</strong> collect your name, phone number, email, or other real-world identity. The system generates a random anonymous identifier (user ID) for your device to store your learning data.</li>
+        <li><strong>Content you provide</strong>: The text you write, images you upload or capture, and the learning materials generated from them (sentences, vocabulary, grammar, scene cards, etc.).</li>
+        <li><strong>Usage and diagnostic data</strong>: Basic usage events (session counts, feature taps, error logs) to improve the product.</li>
+        <li><strong>Device information</strong>: App version, OS version, and similar technical data for compatibility and troubleshooting.</li>
+      </ul>
+      <p>We do <strong>not</strong> collect your contacts, location, or health data, and we do <strong>not</strong> perform cross-app advertising tracking.</p>
+    </section>
+
+    <section>
+      <h2>2. How We Use Information</h2>
+      <ul>
+        <li>To generate and display your English learning content;</li>
+        <li>To save your learning history so you can review it in the App;</li>
+        <li>To troubleshoot, and improve stability and experience;</li>
+        <li>To comply with legal obligations.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>3. Third-Party Processing and Sharing</h2>
+      <p>To provide core functionality, the <strong>text and images you provide are sent to the following third parties for processing</strong>:</p>
+      <ul>
+        <li><strong>Google (Gemini API)</strong>: to analyze your text/images and generate English learning content. This processing is governed by <a href="https://policies.google.com/privacy" target="_blank">Google's Privacy Policy</a>.</li>
+        <li><strong>Supabase</strong>: for authentication and data storage (hosted database).</li>
+      </ul>
+      <p>Other than the processing necessary to provide the service, we do <strong>not sell your personal data</strong>, do not use it for advertising, and do not share it with data brokers.</p>
+    </section>
+
+    <section>
+      <h2>4. Data Storage, Cross-Border Transfer, and Retention</h2>
+      <p>Your learning data is stored in a Supabase-hosted database until you delete it. Your data may be transferred to and stored on servers located outside your country of residence, depending on where Supabase and Google host their infrastructure; we rely on data processing agreements with these providers to ensure transfers comply with applicable law. You may delete your account and all data in-app at any time (see Section 7).</p>
+    </section>
+
+    <section>
+      <h2>5. AI-Generated Content Notice</h2>
+      <p>Learning content in the App is generated by artificial intelligence (Google Gemini) and <strong>may be inaccurate or inappropriate</strong>. It is for learning reference only and does not constitute professional advice.</p>
+    </section>
+
+    <section>
+      <h2>6. Data Security</h2>
+      <p>We use reasonable technical and organizational measures (encryption in transit, access controls, row-level security policies) to protect your data. However, no method of transmission or storage is completely secure, and we cannot guarantee absolute security.</p>
+    </section>
+
+    <section>
+      <h2>7. Your Rights</h2>
+      <ul>
+        <li><strong>Deletion</strong>: Go to Settings → Delete Account and Data in the App to permanently delete your account and all associated data. Because sign-in is anonymous, deleted data cannot be recovered.</li>
+        <li><strong>Access</strong>: Your learning materials are viewable on the "Mine" tab in the App.</li>
+        <li>If you are in the EU/UK or another region covered by <strong>GDPR</strong>, you have the right to access, rectify, erase ("right to be forgotten"), restrict processing, receive a copy of your data (portability), object to processing, and lodge a complaint with your local data protection authority.</li>
+        <li>If you are a <strong>California resident</strong>, under <strong>CCPA/CPRA</strong> you have the right to know, delete, correct, and limit use of sensitive personal information, and the right not to be discriminated against for exercising these rights. We do not sell or "share" (in the advertising sense) your personal information.</li>
+        <li>To exercise any of these rights, contact us at the email below; we will respond within the time period required by applicable law.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>8. Children's Privacy</h2>
+      <p>The App is not directed to children under 13 (or under 16 in the EU, or a higher age where required by local law), and we do not knowingly collect personal information from children. If we learn that we have collected a child's personal information without verifiable parental consent, we will delete it promptly. If you are a parent or guardian and believe your child has provided us with personal information, please contact us at the email below.</p>
+    </section>
+
+    <section>
+      <h2>9. Changes to This Policy</h2>
+      <p>We may update this policy. Material changes will be indicated in the App or on this page, and the effective date will be updated. If a change materially expands the scope of information we collect or use, we will provide reasonable notice before it takes effect.</p>
+    </section>
+
+    <section>
+      <h2>10. Contact Us</h2>
+      <p>For any privacy-related questions, contact: <strong><a href="mailto:poplex.help@outlook.com">poplex.help@outlook.com</a></strong></p>
+    </section>
+  </div>
+
+  <footer>© 2026 Poplex · JUN LIU</footer>
+</div>
+
+<script>
+  const buttons = document.querySelectorAll('.lang-btn');
+  const title = document.getElementById('title');
+  const meta = document.getElementById('meta');
+  buttons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      buttons.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const lang = btn.dataset.set;
+      document.querySelectorAll('.lang-block').forEach(block => {
+        block.classList.toggle('active', block.dataset.lang === lang);
+      });
+      if (lang === 'en') {
+        title.textContent = 'Privacy Policy';
+        meta.textContent = 'Effective date: 2026-08-08';
+      } else {
+        title.textContent = '隐私政策';
+        meta.textContent = '生效日期：2026-08-08';
+      }
+    });
+  });
+</script>
+</body>
+</html>
