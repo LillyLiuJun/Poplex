@@ -286,7 +286,7 @@ struct OnboardingCaptureView: View {
         }
     }
 
-    // MARK: - Result content (moment card as hero)
+    // MARK: - Result content (moment card as hero, 方案 A 统一时刻卡)
 
     private var resultContent: some View {
         ZStack(alignment: .bottom) {
@@ -297,7 +297,9 @@ struct OnboardingCaptureView: View {
                             .frame(height: 36)
                             .padding(.top, AppTheme.Space.paddingCard)
 
-                        Spacer()
+                        resultHeader
+                            .padding(.horizontal, AppTheme.Space.paddingPage)
+                            .padding(.bottom, AppTheme.Space.paddingCard)
 
                         Group {
                             if viewModel.isLoading {
@@ -305,7 +307,7 @@ struct OnboardingCaptureView: View {
                                     .transition(.opacity)
                             } else if let result = viewModel.generationResult {
                                 resultCard(result)
-                                    .transition(.scale(scale: 0.94).combined(with: .opacity))
+                                    .transition(.scale(scale: 0.96).combined(with: .opacity))
                             } else if viewModel.retryCount >= 2 {
                                 failedView
                                     .transition(.opacity)
@@ -315,16 +317,6 @@ struct OnboardingCaptureView: View {
                             }
                         }
                         .padding(.horizontal, AppTheme.Space.paddingPage)
-
-                        if viewModel.generationResult != nil {
-                            Text("That's a moment from your life — now it's yours in English.")
-                                .font(AppTheme.Font.chineseFaint)
-                                .foregroundStyle(AppTheme.Color.textSecondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .padding(.horizontal, AppTheme.Space.paddingPage)
-                                .padding(.top, AppTheme.Space.paddingCard)
-                                .transition(.opacity)
-                        }
 
                         Spacer()
                     }
@@ -344,40 +336,68 @@ struct OnboardingCaptureView: View {
         .animation(.easeInOut(duration: 0.3), value: viewModel.generationResult != nil)
     }
 
+    private var resultHeader: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Space.paddingS) {
+            (Text("Here's your first ") + Text("moment.").foregroundStyle(AppTheme.Color.brandStrong))
+                .font(AppTheme.Font.pageTitleSerif)
+                .foregroundStyle(AppTheme.Color.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text("Your photo, now something you can say.")
+                .font(AppTheme.Font.englishBody)
+                .foregroundStyle(AppTheme.Color.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.top, AppTheme.Space.paddingCard)
+    }
+
     // MARK: 结果卡：与第一页样品卡同构 —— 用户亲手做出的第一张卡
 
     private func resultCard(_ card: AICard) -> some View {
-        VStack(alignment: .leading, spacing: AppTheme.Space.paddingCard) {
+        VStack(alignment: .leading, spacing: 0) {
             if let image = resultImage {
-                OnboardingMomentCard(image: image, sentence: card.primaryEnglish, photoHeight: 200)
+                OnboardingMomentCard(
+                    image: image,
+                    sentence: card.primaryEnglish,
+                    translation: card.nativeMeaning,
+                    photoHeight: 195
+                )
             }
         }
     }
 
-    // MARK: 生成中：照片定格 + 暖色骨架（呼吸脉冲）+ 状态文案
+    // MARK: 生成中：照片定格 + 暖色骨架（呼吸脉冲）+ 状态文案（与结果卡同构）
 
     private var loadingCard: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Space.paddingCard) {
+        VStack(alignment: .leading, spacing: AppTheme.Space.paddingM) {
             VStack(alignment: .leading, spacing: 0) {
                 if let image = resultImage {
                     image
                         .resizable()
                         .scaledToFill()
                         .frame(maxWidth: .infinity)
-                        .frame(height: 200)
+                        .frame(height: 195)
                         .clipped()
                         .allowsHitTesting(false)
                 }
 
-                VStack(alignment: .leading, spacing: AppTheme.Space.paddingCard) {
-                    ForEach(0..<3, id: \.self) { i in
-                        RoundedRectangle(cornerRadius: AppTheme.Radius.small)
-                            .fill(AppTheme.Color.imagePlaceholderBg)
-                            .frame(maxWidth: i == 2 ? 160 : .infinity)
-                            .frame(height: 22)
-                    }
+                VStack(alignment: .leading, spacing: 10) {
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.small)
+                        .fill(AppTheme.Color.imagePlaceholderBg)
+                        .frame(width: 60, height: 12)
+                        .padding(.bottom, 2)
+
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.small)
+                        .fill(AppTheme.Color.imagePlaceholderBg)
+                        .frame(height: 20)
+                        .frame(maxWidth: .infinity)
+
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.small)
+                        .fill(AppTheme.Color.imagePlaceholderBg)
+                        .frame(width: 180, height: 14)
                 }
-                .padding(AppTheme.Space.paddingCard)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 16)
                 .opacity(skeletonPulse ? 0.45 : 1)
                 .animation(
                     reduceMotion ? nil : .easeInOut(duration: 0.8).repeatForever(autoreverses: true),
@@ -385,7 +405,11 @@ struct OnboardingCaptureView: View {
                 )
             }
             .background(AppTheme.Color.cardBg)
-            .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
+            .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.large))
+            .overlay(
+                RoundedRectangle(cornerRadius: AppTheme.Radius.large)
+                    .stroke(AppTheme.Color.border.opacity(0.6), lineWidth: 1)
+            )
             .shadow(
                 color: AppTheme.Shadow.cardColor,
                 radius: AppTheme.Shadow.cardRadius,
@@ -397,6 +421,7 @@ struct OnboardingCaptureView: View {
             Text("Turning your moment into English…")
                 .font(AppTheme.Font.buddy)
                 .foregroundStyle(AppTheme.Color.textMuted)
+                .padding(.horizontal, 2)
         }
     }
 

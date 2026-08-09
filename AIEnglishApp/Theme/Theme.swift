@@ -270,6 +270,7 @@ enum AppTheme {
         static let groupLabel        = SwiftUI.Font.system(.footnote, weight: .semibold)                  // 分组列表 section header（iOS 标准）：配大写 + 字距 + 弱色，退后作辅助标签
         static let ctaLabel       = SwiftUI.Font.system(.body, weight: .semibold)     // 主按钮文字（Continue / Get Started）
         static let tabLabel       = SwiftUI.Font.system(.subheadline, weight: .semibold) // 顶部 Tab 名称
+        static let cardSentence   = SwiftUI.Font.system(.body, design: .serif, weight: .semibold) // 时刻卡英文主句（衬线 + 半粗，Dynamic Type 安全）
         // 开屏字标「oplex」：与 App 内容字同族（design: .serif = New York，
         // 和 pageTitleSerif / wordTitle 是同一套），再加 italic 呼应 PoplexPShape 的 -6° 斜切。
         // 品牌资产特例——固定字号、不随 Dynamic Type 变化（放大后会撑破居中构图，

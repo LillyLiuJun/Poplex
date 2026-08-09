@@ -49,25 +49,20 @@ final class OnboardingViewModel {
         generationResult = nil
 
         do {
-            let envelope: AIEnvelope
             if let card = selectedCard {
-                // 用卡片 bundle 图发 AI，体验与用户自拍照一致；bundle 图缺失时降级为文字 prompt
-                let cardImage = UIImage(named: card.imageName)
-                envelope = try await service.generate(
-                    text: cardImage == nil ? card.generationPrompt : nil,
-                    image: cardImage,
-                    context: nil,
-                    presetCardId: card.id,
-                    source: "onboarding"
-                )
+                // 预设卡使用静态样本，保留 1.2 秒 loading 动画以保持 AI 生成的仪式感与平滑过渡，零 API 消耗
+                try await Task.sleep(for: .milliseconds(1200))
+                generationResult = card.staticCard
+                retryCount = 0
             } else if let image = selectedImage {
-                envelope = try await service.generate(text: nil, image: image, context: nil, presetCardId: nil, source: "onboarding")
+                // 自选拍照/相册依然走实时 AI API
+                let envelope = try await service.generate(text: nil, image: image, context: nil, presetCardId: nil, source: "onboarding")
+                generationResult = envelope.card
+                retryCount = 0
             } else {
                 isLoading = false
                 return
             }
-            generationResult = envelope.card
-            retryCount = 0
         } catch {
             retryCount += 1
             errorMessage = "Something went wrong. Want to try again?"

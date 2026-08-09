@@ -79,6 +79,36 @@ struct CardContent: Decodable {
         passageLines     = (try? c.decode([PassageLine].self, forKey: .passageLines)) ?? []
     }
 
+    init(
+        granularity: String = "sentence",
+        direction: String = "express",
+        revisionType: String? = nil,
+        learnableUnits: [LearnableUnit] = [],
+        userOriginal: String? = nil,
+        userOriginalLang: String? = nil,
+        targetExpression: String? = nil,
+        nativeMeaning: String? = nil,
+        phonetic: String? = nil,
+        pos: [String] = [],
+        examples: [BilingualExample] = [],
+        grammarNote: String? = nil,
+        passageLines: [PassageLine] = []
+    ) {
+        self.granularity = granularity
+        self.direction = direction
+        self.revisionType = revisionType
+        self.learnableUnits = learnableUnits
+        self.userOriginal = userOriginal
+        self.userOriginalLang = userOriginalLang
+        self.targetExpression = targetExpression
+        self.nativeMeaning = nativeMeaning
+        self.phonetic = phonetic
+        self.pos = pos
+        self.examples = examples
+        self.grammarNote = grammarNote
+        self.passageLines = passageLines
+    }
+
     // MARK: Derived
     var isWord: Bool { granularity == "word" }
     var isPassage: Bool { granularity == "passage" }
@@ -148,6 +178,14 @@ extension AICard {
         switch self {
         case .card(let c):  return c.displayTarget
         case .error(let c): return c.message
+        }
+    }
+
+    /// The native-language translation to display if available.
+    var nativeMeaning: String? {
+        switch self {
+        case .card(let c):  return c.nativeMeaning
+        case .error:        return nil
         }
     }
 }

@@ -75,45 +75,60 @@ struct OnboardingAuraBackground: View {
     }
 }
 
-// MARK: - 时刻卡：照片 + MOMENT chip + 英文句子
-/// 第一页展示"样品"、第三页展示"用户亲手做出的结果"，同构以形成闭环。
+// MARK: - 时刻卡：照片贴顶 + MOMENT chip + 英文句子 + 中文释义 (方案 A · 统一时刻卡)
+/// 结果渲染为与 App 内统一的时刻卡容器，形成"看到样品→亲手做出"闭环。
 
 struct OnboardingMomentCard: View {
     let image: Image
     let sentence: String
-    var photoHeight: CGFloat = 168
-    
-    @State private var isBreathing = false
+    var translation: String? = nil
+    var photoHeight: CGFloat = 195
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Space.paddingM) {
+        VStack(alignment: .leading, spacing: 0) {
             image
                 .resizable()
                 .scaledToFill()
                 .frame(maxWidth: .infinity)
                 .frame(height: photoHeight)
-                .scaleEffect(isBreathing ? 1.05 : 1.0)
-                .animation(
-                    .easeInOut(duration: 8.0).repeatForever(autoreverses: true),
-                    value: isBreathing
-                )
-                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
-                .overlay(
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
-                        .stroke(Color.black.opacity(0.06), lineWidth: 1)
-                )
-                .allowsHitTesting(false)
-                .onAppear {
-                    isBreathing = true
-                }
+                .clipped()
 
-            Text(sentence)
-                .font(AppTheme.Font.englishPrimary)
-                .foregroundStyle(AppTheme.Color.textPrimary)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 4) // Slight inset to align optically with the image
+            VStack(alignment: .leading, spacing: 6) {
+                Text("MOMENT")
+                    .font(AppTheme.Font.sectionLabel)
+                    .tracking(1.2)
+                    .foregroundStyle(AppTheme.Color.textLabel)
+                    .padding(.bottom, 2)
+
+                Text(sentence)
+                    .font(AppTheme.Font.cardSentence)
+                    .foregroundStyle(AppTheme.Color.textPrimary)
+                    .lineSpacing(AppTheme.Typography.lineBody)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if let zh = translation, !zh.isEmpty {
+                    Text(zh)
+                        .font(AppTheme.Font.chineseBody)
+                        .foregroundStyle(AppTheme.Color.textMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 2)
+                }
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 16)
         }
-        // No background or shadow -> flat integrated design
+        .background(AppTheme.Color.cardBg)
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.large))
+        .overlay(
+            RoundedRectangle(cornerRadius: AppTheme.Radius.large)
+                .stroke(AppTheme.Color.border.opacity(0.6), lineWidth: 1)
+        )
+        .shadow(
+            color: AppTheme.Shadow.cardColor,
+            radius: AppTheme.Shadow.cardRadius,
+            x: AppTheme.Shadow.cardX,
+            y: AppTheme.Shadow.cardY
+        )
     }
 }
 
