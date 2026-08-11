@@ -580,9 +580,9 @@ Note: watching sport/film/show → 休闲娱乐; playing/training sport yourself
 
 Scene: "${targetText}"${userOriginal ? `\nContext: "${userOriginal}"` : ''}
 
-JSON: {"category":"<from list above>","sub_scene":"<specific activity, never null>"}
+JSON: {"category":"<from list above>","sub_scene":"<specific activity in English, never null>"}
 
-sub_scene: complete activity, strip qualifiers ("做晚饭"→"做饭"). Anchors: 饮食→做饭/外食; 休闲娱乐→看球/看剧; 运动健康→跑步/打球; 出行交通→通勤/驾车.`;
+sub_scene: complete activity in English, strip qualifiers ("做晚饭"→"Cooking"). Anchors: 饮食→Cooking/Eating out; 休闲娱乐→Watching sports/Watching a show; 运动健康→Running/Playing sports; 出行交通→Commuting/Driving.`;
 
     const res = await fetch(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
       method: 'POST',

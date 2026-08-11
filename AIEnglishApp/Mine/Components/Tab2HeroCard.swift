@@ -1,10 +1,11 @@
 import SwiftUI
 
-/// Tab2 首页 hero 卡——方案二：温润印品纸白（Oatmeal Paper），去除混合渐变，采用温暖匀净的印品纸色底与精致分类 Badge。
 struct Tab2HeroCard: View {
     let category: Tab2CategoryData
     let isFirstUnlock: Bool
     let onTalk: () -> Void
+
+    private var sceneCategory: SceneCategory { SceneCategory.from(category.sceneCategory) }
 
     var body: some View {
         Button {
@@ -20,55 +21,55 @@ struct Tab2HeroCard: View {
 
     private var cardContent: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // ① 分类标头（Badge 分类名 + 词数）
-            HStack(alignment: .center) {
-                Text(category.englishLabel.uppercased())
-                    .font(.system(size: 12, weight: .bold))
-                    .tracking(1.2)
-                    .foregroundStyle(AppTheme.Color.brandStrong)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(AppTheme.Color.brandStrong.opacity(0.1))
-                    .clipShape(Capsule())
-                
-                Spacer()
-                
-                Text("\(category.wordCount) words")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(AppTheme.Color.textMuted)
-            }
-
-            Spacer(minLength: 12)
-
-            // ② 引文行 + "+N more moments"
-            quoteSection
+            categoryHeader
 
             Spacer(minLength: 14)
 
-            // ③ 探底对齐的主 CTA 按钮
+            momentContent
+
+            Spacer(minLength: 16)
+
             ctaButton
         }
         .padding(22)
-        .frame(width: 335, height: 295, alignment: .topLeading)
+        .frame(maxWidth: .infinity)
         .glassCard()
     }
 
-    /// 引文行区域：展示前 3 条精选原话，多于 3 条时自动附带 "+N more moments"
+    // MARK: - Category header（纯文字标签，不放图标）
+
+    private var categoryHeader: some View {
+        HStack(alignment: .center) {
+            Text(category.englishLabel.uppercased())
+                .font(.system(size: 11, weight: .semibold))
+                .tracking(1.2)
+                .foregroundStyle(AppTheme.Color.textSecondary)
+
+            Spacer()
+
+            Text(PopsLabel.format(category.wordCount))
+                .font(AppTheme.Font.cardMeta)
+                .foregroundStyle(AppTheme.Color.textMuted)
+        }
+    }
+
+    // MARK: - Moment content
+
     @ViewBuilder
-    private var quoteSection: some View {
+    private var momentContent: some View {
         let scenes = displayScenes
         if scenes.isEmpty {
-            let words = category.previewWords.prefix(5)
-            if !words.isEmpty {
-                Text(words.joined(separator: "  ·  "))
-                    .font(AppTheme.Font.englishBody)
-                    .foregroundStyle(AppTheme.Color.textMuted)
-                    .lineLimit(2)
-            }
+            fallbackWords
         } else {
-            VStack(alignment: .leading, spacing: 8) {
-                ForEach(scenes) { scene in
-                    QuoteRow(scene: scene)
+            VStack(alignment: .leading, spacing: 10) {
+                featuredMoment(scenes[0])
+
+                if scenes.count > 1 {
+                    Divider().opacity(0.4)
+
+                    ForEach(scenes.dropFirst()) { scene in
+                        MomentRow(scene: scene, category: sceneCategory)
+                    }
                 }
 
                 let remaining = goodScenes.count - scenes.count
@@ -82,43 +83,121 @@ struct Tab2HeroCard: View {
         }
     }
 
-    // MARK: - CTA
+    // MARK: - Featured moment（排名第一的子场景，有图时展大图）
+
+    @ViewBuilder
+    private func featuredMoment(_ scene: Tab2SubScene) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let url = scene.imageUrl, let key = scene.stableImageKey {
+                CachedRemoteImage(
+                    signedUrl: url,
+                    stableKey: key,
+                    placeholder: RoundedRectangle(cornerRadius: 12)
+                        .fill(AppTheme.Color.cardBg)
+                        .overlay(
+                            Image(systemName: "photo")
+                                .foregroundStyle(AppTheme.Color.textMuted)
+                        )
+                )
+                .saturation(0.88)
+                .frame(maxWidth: .infinity)
+                .frame(height: 120)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
+
+            // Scene label + freq
+            HStack(alignment: .firstTextBaseline) {
+                if !scene.isPhotoMoment {
+                    Image(systemName: sceneCategory.momentIconName)
+                        .symbolVariant(.fill)
+                        .font(.system(size: 13))
+                        .foregroundStyle(AppTheme.Color.textPrimary.opacity(0.42))
+                }
+
+                Text(scene.sceneDetail)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(AppTheme.Color.textSecondary)
+
+                Spacer()
+
+                if scene.occurrenceCount > 1 {
+                    Text("+\(scene.occurrenceCount)")
+                        .font(.system(size: 11, weight: .regular))
+                        .foregroundStyle(AppTheme.Color.textMuted)
+                }
+            }
+
+            // Quote（Serif 字体，给原话一点"人说的话"的质感）
+            if let q = scene.quote, !q.isEmpty {
+                // 用户原话：Serif 字体，强调"人说的话"
+                Text(q)
+                    .font(.system(size: 15, weight: .regular, design: .serif))
+                    .foregroundStyle(AppTheme.Color.textPrimary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else if let te = scene.targetExpression, !te.isEmpty {
+                // 无原话时降级展示 AI 生成句子，弱化颜色与字体做区分
+                Text(te)
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundStyle(AppTheme.Color.textSecondary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    // MARK: - Fallback（无合格子场景时展示预览词）
+
+    @ViewBuilder
+    private var fallbackWords: some View {
+        let words = category.previewWords.prefix(5)
+        if !words.isEmpty {
+            Text(words.joined(separator: "  ·  "))
+                .font(AppTheme.Font.englishBody)
+                .foregroundStyle(AppTheme.Color.textMuted)
+                .lineLimit(2)
+        }
+    }
+
+    // MARK: - CTA（克制版，去掉深色实心 + 阴影）
 
     private var ctaButton: some View {
         HStack(spacing: AppTheme.Space.paddingS) {
             Image(systemName: "mic.fill")
-                .font(.system(size: 15, weight: .bold))
+                .font(.system(size: 14, weight: .semibold))
             Text("Start talking")
-                .font(.system(size: 16, weight: .bold))
+                .font(.system(size: 15, weight: .semibold))
         }
-        .foregroundStyle(.white)
+        .foregroundStyle(AppTheme.Color.textPrimary.opacity(0.75))
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 14)
-        .background(AppTheme.Color.interactive)   // 染色黑 CTA
+        .padding(.vertical, 12)
+        .background(AppTheme.Color.textPrimary.opacity(0.06))
         .clipShape(Capsule())
-        .shadow(
-            color: AppTheme.Color.interactive.opacity(0.22),
-            radius: 10,
-            x: 0,
-            y: 4
-        )
     }
 
-    // MARK: - Display scenes selection
-
-    private func effectiveQuote(_ scene: Tab2SubScene) -> String {
-        if let q = scene.quote, q.count >= 6 { return q }
-        return scene.sceneDetail
-    }
+    // MARK: - Scene selection（只要 sceneDetail 非空即合格）
 
     private var goodScenes: [Tab2SubScene] {
         category.subScenes
+            .filter { !$0.sceneDetail.isEmpty }
             .sorted { $0.occurrenceCount > $1.occurrenceCount }
-            .filter { effectiveQuote($0).count >= 4 }
     }
 
+    // featured 位优先选 Photo Moment（有图更值得放大展示）；
+    // 其余按频次填，总量 ≤3。
     private var displayScenes: [Tab2SubScene] {
-        Array(goodScenes.prefix(3))
+        let photos = goodScenes.filter { $0.isPhotoMoment }
+        let texts  = goodScenes.filter { !$0.isPhotoMoment }
+
+        if let featured = photos.first {
+            // 有 Photo Moment：featured = 频次最高的照片，其余按频次混排填满 2 个紧凑行
+            let rest = Array((photos.dropFirst() + texts)
+                .sorted { $0.occurrenceCount > $1.occurrenceCount }
+                .prefix(2))
+            return [featured] + rest
+        } else {
+            return Array(texts.prefix(3))
+        }
     }
 }
 
@@ -129,31 +208,5 @@ private struct HeroCardPressStyle: ButtonStyle {
         configuration.label
             .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
             .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
-    }
-}
-
-// MARK: - Quote row (极简无框对话引文)
-
-private struct QuoteRow: View {
-    let scene: Tab2SubScene
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 8) {
-            Text("“")
-                .font(.system(size: 18, weight: .bold, design: .serif))
-                .foregroundStyle(AppTheme.Color.brandStrong.opacity(0.6))
-                .offset(y: -2)
-
-            Text(quoteText)
-                .font(.system(size: 15, weight: .regular))
-                .foregroundStyle(AppTheme.Color.textPrimary)
-                .lineLimit(1)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-
-    private var quoteText: String {
-        if let q = scene.quote, q.count >= 6 { return q }
-        return scene.sceneDetail
     }
 }

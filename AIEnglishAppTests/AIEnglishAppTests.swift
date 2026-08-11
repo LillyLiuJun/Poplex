@@ -1082,70 +1082,44 @@ struct Tab2WordEntryBadgeTests {
         return try JSONDecoder().decode(Tab2WordEntry.self, from: data)
     }
 
+    // 分类型图标家族：查词→放大镜；句中单词→衬线 A；短语→text.quote；习语/俚语→bubble.left。
+
     // 主动查词 (.word sourceTag) → 放大镜
-    @Test func wordSourceTagUsesMagnifier() throws {
+    @Test func lookupWordUsesMagnifier() throws {
         let e = try entry(granularity: "word", sourceType: "material")
-        #expect(e.badgeIconName == "text.magnifyingglass")
+        #expect(e.badgeGlyph == .symbol("magnifyingglass"))
     }
 
-    // 对话来源 (.dialogue) → 声波
-    @Test func dialogueSourceTagUsesWaveform() throws {
+    // 对话来源 (.dialogue) → 声波（未上线，保留）
+    @Test func dialogueUsesWaveform() throws {
         let e = try entry(granularity: "sentence", sourceType: "dialogue")
-        #expect(e.badgeIconName == "waveform")
+        #expect(e.badgeGlyph == .symbol("waveform"))
     }
 
-    // sentence 来源 + word 类型 → character.textbox（不再用放大镜）
-    @Test func sentenceSourceWordKindUsesCharacter() throws {
-        let e = try entry(granularity: "sentence", entryKind: "word")
-        #expect(e.badgeIconName == "character.textbox")
+    // 句子/段落里的单词 → 衬线字母 A
+    @Test func sentenceWordUsesSerifLetter() throws {
+        #expect(try entry(granularity: "sentence", entryKind: "word").badgeGlyph == .serifLetter("A"))
+        #expect(try entry(granularity: "passage", entryKind: "word").badgeGlyph == .serifLetter("A"))
     }
 
-    // passage 来源 + word 类型 → 同样 character.textbox
-    @Test func passageSourceWordKindUsesCharacter() throws {
-        let e = try entry(granularity: "passage", entryKind: "word")
-        #expect(e.badgeIconName == "character.textbox")
+    // 短语 / 搭配 / 句型 → text.quote
+    @Test func phraseKindUsesTextQuote() throws {
+        for kind in ["phrase", "collocation", "pattern"] {
+            #expect(try entry(entryKind: kind).badgeGlyph == .symbol("text.quote"))
+        }
     }
 
-    // phrase → text.bubble.fill
-    @Test func phraseKindUsesBubble() throws {
-        let e = try entry(entryKind: "phrase")
-        #expect(e.badgeIconName == "text.bubble.fill")
+    // 习语 / 俚语 → bubble.left
+    @Test func idiomSlangUsesBubble() throws {
+        for kind in ["idiom", "slang"] {
+            #expect(try entry(entryKind: kind).badgeGlyph == .symbol("bubble.left"))
+        }
     }
 
-    // collocation → text.bubble.fill
-    @Test func collocationKindUsesBubble() throws {
-        let e = try entry(entryKind: "collocation")
-        #expect(e.badgeIconName == "text.bubble.fill")
-    }
-
-    // pattern → text.bubble.fill
-    @Test func patternKindUsesBubble() throws {
-        let e = try entry(entryKind: "pattern")
-        #expect(e.badgeIconName == "text.bubble.fill")
-    }
-
-    // idiom → quote.bubble.fill
-    @Test func idiomKindUsesQuoteBubble() throws {
-        let e = try entry(entryKind: "idiom")
-        #expect(e.badgeIconName == "quote.bubble.fill")
-    }
-
-    // slang → quote.bubble.fill
-    @Test func slangKindUsesQuoteBubble() throws {
-        let e = try entry(entryKind: "slang")
-        #expect(e.badgeIconName == "quote.bubble.fill")
-    }
-
-    // 未知 entryKind → 默认 text.bubble.fill
-    @Test func unknownKindDefaultsBubble() throws {
-        let e = try entry(entryKind: "unknown_future_kind")
-        #expect(e.badgeIconName == "text.bubble.fill")
-    }
-
-    // entryKind=nil → 默认 text.bubble.fill
-    @Test func nilKindDefaultsBubble() throws {
-        let e = try entry(entryKind: nil)
-        #expect(e.badgeIconName == "text.bubble.fill")
+    // 未知 entryKind / nil → 默认 text.quote（当短语处理）
+    @Test func unknownOrNilKindDefaultsTextQuote() throws {
+        #expect(try entry(entryKind: "unknown_future_kind").badgeGlyph == .symbol("text.quote"))
+        #expect(try entry(entryKind: nil).badgeGlyph == .symbol("text.quote"))
     }
 }
 
@@ -1702,5 +1676,24 @@ struct ConversationViewModelStateTests {
         #expect(isDisabled(.listening) == false)
         #expect(isDisabled(.aiSpeaking) == true)
         #expect(isDisabled(.disabled) == false)
+    }
+}
+
+// MARK: - PopsLabel formatting tests
+// 锁定 pops 计数单位的复数处理（0/1/N），供 Topics 进度行胶囊与 Hero 卡共用。
+
+struct PopsLabelTests {
+
+    @Test func zeroUsesPlural() {
+        #expect(PopsLabel.format(0) == "0 pops")
+    }
+
+    @Test func oneUsesSingular() {
+        #expect(PopsLabel.format(1) == "1 pop")
+    }
+
+    @Test func manyUsePlural() {
+        #expect(PopsLabel.format(2) == "2 pops")
+        #expect(PopsLabel.format(18) == "18 pops")
     }
 }

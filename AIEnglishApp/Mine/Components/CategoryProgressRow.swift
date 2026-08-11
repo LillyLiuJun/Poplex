@@ -2,13 +2,15 @@ import SwiftUI
 
 /// 分类进度行 — 待解锁态 AREAS 区与已解锁态 Still filling up 区共用。
 /// isHighlighted=true 时进度条用品牌橙（最接近达标的分类）；否则中性灰。
+/// 展开状态由父视图统一持有（单开手风琴）：`isExpanded` 传入、点击回调 `onToggle`。
 /// 展开时按需调用 loadWords 拉取全量词条。
 struct CategoryProgressRow: View {
     let category: Tab2CategoryData
     let isHighlighted: Bool
+    let isExpanded: Bool
+    let onToggle: () -> Void
     let loadWords: () async -> [Tab2WordEntry]
 
-    @State private var isExpanded = false
     @State private var words: [Tab2WordEntry] = []
     @State private var isLoadingWords = false
 
@@ -23,6 +25,10 @@ struct CategoryProgressRow: View {
             }
         }
         .padding(.horizontal, AppTheme.Space.paddingPage)
+        .onChange(of: isExpanded) { _, nowExpanded in
+            // 展开（父视图翻转状态）时按需拉词
+            if nowExpanded && words.isEmpty { fetchWords() }
+        }
         .onChange(of: category.wordCount) { _, _ in
             // word count changed while expanded → invalidate cache and refetch
             if isExpanded {
@@ -36,11 +42,10 @@ struct CategoryProgressRow: View {
 
     private var expandToggle: some View {
         Button {
-            withAnimation(.easeInOut(duration: 0.25)) { isExpanded.toggle() }
-            if isExpanded && words.isEmpty { fetchWords() }
+            onToggle()   // 展开/收起 + 滚动锚定由父视图统一处理（单开手风琴）
         } label: {
             VStack(alignment: .leading, spacing: 10) {
-                // 第一行：类别图标徽章 + 标题 + 动态计数 + 折叠箭头
+                // 第一行：类别图标徽章 + 标题 + 半轻灰胶囊（pops 计数 + 展开箭头合并单元）
                 HStack(alignment: .center, spacing: AppTheme.Space.paddingM) {
                     categoryBadge
 
@@ -50,41 +55,29 @@ struct CategoryProgressRow: View {
 
                     Spacer()
 
-                    countLabel
-
-                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(AppTheme.Color.textPrimary.opacity(0.20))
-                        .padding(.leading, 2)
+                    PopsPill(
+                        count: category.wordCount,
+                        isHot: category.wordCount >= targetCount || isHighlighted,
+                        isExpanded: isExpanded
+                    )
                 }
 
                 // 第二行：通栏进度条（从徽章左缘拉满，参考 Cleo Spending 行式）
                 progressBar
             }
-            .padding(.vertical, 16)
+            .padding(.vertical, AppTheme.Space.listRowVertical)
         }
         .buttonStyle(.plain)
     }
 
-    // MARK: - Category badge（方案3 · 图标去色：暖灰单色、无底圈）
+    // MARK: - Category badge（实心字形 · 暖灰单色、无底圈，靠"简而重"显质感）
 
     private var categoryBadge: some View {
         Image(systemName: SceneCategory.from(category.sceneCategory).iconName)
-            .font(.system(size: 17, weight: .regular))
-            .foregroundStyle(AppTheme.Color.textPrimary.opacity(0.32))
+            .symbolVariant(.fill)
+            .font(.system(size: 17))
+            .foregroundStyle(AppTheme.Color.textPrimary.opacity(0.42))
             .frame(width: AppTheme.Size.categoryBadge, height: AppTheme.Size.categoryBadge)
-    }
-
-    // MARK: - Count Label（只留裸数字，去 "of 20"）
-
-    @ViewBuilder
-    private var countLabel: some View {
-        let isHot = category.wordCount >= targetCount || isHighlighted
-        Text("\(category.wordCount)")
-            .font(.system(.caption))
-            .monospacedDigit()
-            .frame(minWidth: 18, alignment: .trailing)
-            .foregroundStyle(isHot ? AppTheme.Color.brandStrong : AppTheme.Color.textMuted)
     }
 
     // MARK: - Progress bar
@@ -136,8 +129,8 @@ struct CategoryProgressRow: View {
                 }
             }
             .padding(.vertical, 4)
-            // 子项缩进到类别名左缘（徽章宽 + 间距），和分类头拉出层级
-            .padding(.leading, AppTheme.Size.categoryBadge + AppTheme.Space.paddingM)
+            // 子项只做一个轻微台阶缩进，和分类头拉出层级但不推太远
+            .padding(.leading, AppTheme.Space.paddingCard)
         }
     }
 
@@ -151,6 +144,33 @@ struct CategoryProgressRow: View {
             words = list
             isLoadingWords = false
         }
+    }
+}
+
+// MARK: - Pops pill (半轻灰胶囊：pops 计数 + 展开箭头合并成一个整体单元)
+
+private struct PopsPill: View {
+    let count: Int
+    /// 最接近解锁 / 已达标的 hot 行 —— 计数走品牌橙，其余暖灰 muted，控制橙的用量。
+    let isHot: Bool
+    let isExpanded: Bool
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Text(PopsLabel.format(count))
+                .font(AppTheme.Font.popsCount)
+                .monospacedDigit()
+                .foregroundStyle(isHot ? AppTheme.Color.brandStrong : AppTheme.Color.textMuted)
+
+            // 小实心三角（同确认稿 ▾），图标字形尺寸（非正文）；随展开旋转 180°
+            Image(systemName: "arrowtriangle.down.fill")
+                .font(.system(size: 8))
+                .foregroundStyle(AppTheme.Color.textPrimary.opacity(0.32))
+                .rotationEffect(.degrees(isExpanded ? 180 : 0))
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(AppTheme.Color.pillNeutralBg, in: Capsule())
     }
 }
 
@@ -203,13 +223,26 @@ private struct WordEntryRow: View {
         } else {
             ZStack {
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(AppTheme.Color.imagePlaceholderBg)     // 暖中性灰底
+                    .fill(AppTheme.Color.iconTileBg)             // 更淡的暖中性底块，退后作弱提示
                     .frame(width: 32, height: 32)
-                Image(systemName: entry.badgeIconName)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(AppTheme.Color.textMuted)   // 灰图标
+                badgeGlyphView
             }
             .frame(width: 32, height: 32)
+        }
+    }
+
+    // 类型图标：描边 SF Symbol，或衬线字母（句中单词）。均走暖灰 muted、退后作弱提示。
+    @ViewBuilder
+    private var badgeGlyphView: some View {
+        switch entry.badgeGlyph {
+        case .symbol(let name):
+            Image(systemName: name)
+                .font(.system(size: 14, weight: .regular))
+                .foregroundStyle(AppTheme.Color.textMuted)
+        case .serifLetter(let letter):
+            Text(letter)
+                .font(AppTheme.Font.iconBadgeLetter)
+                .foregroundStyle(AppTheme.Color.textMuted)
         }
     }
 }

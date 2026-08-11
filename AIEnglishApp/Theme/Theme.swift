@@ -158,6 +158,11 @@ enum AppTheme {
         static let paddingSection: CGFloat      = Primitive.space32
         static let paddingHero: CGFloat         = Primitive.space48
         static let paddingScreenBottom: CGFloat = Primitive.space56
+
+        // 区标题→内容（Topics / Materials 分区标题到其卡片的呼吸距离，统一散落字面值）
+        static let titleToContent: CGFloat      = Primitive.space24
+        // 列表行垂直节奏（Topics 进度行上下留白）
+        static let listRowVertical: CGFloat     = Primitive.space12
     }
 
     enum Color {
@@ -214,6 +219,9 @@ enum AppTheme {
         // 图片加载占位底
         static let imagePlaceholderBg = Primitive.neutral100
 
+        // 词条类型图标的回退底块（无配图时）：比图片占位底更淡，让描边类型图标退后作弱提示
+        static let iconTileBg = Primitive.neutral900.opacity(0.05)
+
         // 首页画布装饰（网格点 = 暖灰底纹；aura = 底部品牌橘光晕）——
         // 透明度在组件内按需施加，此处只定义基色
         static let canvasGridDot = Primitive.neutral500
@@ -224,6 +232,13 @@ enum AppTheme {
         // 基色复用 warmWhite / white，透明度本身是玻璃配方的一部分。
         static let glassCardSurface = Primitive.warmWhite.opacity(0.44)
         static let glassCardEdge    = SwiftUI.Color.white.opacity(0.72)
+
+        // 暖橙薄纱卡（warmGlassCard · Topics 列表容器 + Hero 卡）：单层暖纸白底 +
+        // 整卡极淡橙薄纱 + 右上角品牌橙柔光，去描边。透明度是配方的一部分，在 modifier 内施加。
+        static let warmGlassSurface = Primitive.warmWhite   // 暖纸白底（不透明单层）
+        static let warmGlassGlow    = Primitive.primary950  // 品牌橙柔光基色（=种子橙）
+        // 半轻灰胶囊底（计数 + chevron 合并单元）：暖近黑极低透明，中性、不引入橙
+        static let pillNeutralBg    = Primitive.neutral900.opacity(0.06)
 
         // 玻璃卡内的轻量元素：进度条轨道/填充、行间隔线——暖近黑低透明，
         // 跟着底色走，不再是实心灰。hairline 与 progressTrack 同值是有意共享：
@@ -270,6 +285,9 @@ enum AppTheme {
         static let keyPhrase      = SwiftUI.Font.system(.subheadline, weight: .bold)  // 核心词组（=参考稿 kp-word 15/700 加黑）
         static let phonetic       = SwiftUI.Font.system(.footnote, design: .monospaced) // IPA 音标（等宽）
         static let pos            = SwiftUI.Font.system(.caption2)                    // 词性 / 卡片 Meta（=参考稿 ~11-12px）
+        static let popsCount      = SwiftUI.Font.system(.caption, weight: .medium)    // Topics 进度行 pops 计数（配 .monospacedDigit()）
+        static let iconBadgeLetter = SwiftUI.Font.system(.subheadline, design: .serif, weight: .semibold) // 词条类型徽章里的衬线字母（句中单词 A）
+        static let cardMeta       = SwiftUI.Font.system(.footnote, weight: .medium)   // 卡片右上角 meta（Hero 卡 pops 数等）
         static let sectionLabel   = SwiftUI.Font.system(.caption2, weight: .semibold) // 区块小标（例句 / 说明，11/600）
         static let chineseFaint   = SwiftUI.Font.system(.footnote)                    // 中文原文弱化
         static let chineseBody    = SwiftUI.Font.system(.subheadline)                 // 中文翻译（=参考稿 content-zh 14px 灰）
@@ -332,6 +350,12 @@ enum AppTheme {
         static let cardRadius: CGFloat = 32
         static let cardX: CGFloat = 0
         static let cardY: CGFloat = 12
+
+        // 暖橙薄纱卡去边框后，靠加深一档的阴影托起（无描边时承担分层职责）
+        static let warmCardColor: SwiftUI.Color = Primitive.neutral900.opacity(0.09)
+        static let warmCardRadius: CGFloat = 28
+        static let warmCardX: CGFloat = 0
+        static let warmCardY: CGFloat = 12
     }
 
     enum Size {
@@ -546,6 +570,41 @@ private struct GlassCapsuleModifier: ViewModifier {
     }
 }
 
+// MARK: - Warm glass card modifier (暖橙薄纱卡 · Topics 列表容器 + Hero 卡)
+// 与 glassCard 分开：这是单层暖纸底、无描边、带品牌橙薄纱 + 右上柔光的"暖纸卡"，
+// 不是磨砂玻璃。去边框后靠加深阴影托起。Topics 卡与 Hero 卡共用此配方。
+private struct WarmGlassCardModifier: ViewModifier {
+    let cornerRadius: CGFloat
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius)
+        content
+            .background {
+                ZStack {
+                    shape.fill(AppTheme.Color.warmGlassSurface)                 // 暖纸白底
+                    shape.fill(AppTheme.Color.warmGlassGlow.opacity(0.035))     // 整卡极淡橙薄纱
+                    shape.fill(                                                 // 右上角品牌橙柔光
+                        RadialGradient(
+                            colors: [
+                                AppTheme.Color.warmGlassGlow.opacity(0.13),
+                                AppTheme.Color.warmGlassGlow.opacity(0)
+                            ],
+                            center: UnitPoint(x: 0.9, y: -0.1),
+                            startRadius: 0,
+                            endRadius: 220
+                        )
+                    )
+                }
+            }
+            .shadow(
+                color: AppTheme.Shadow.warmCardColor,
+                radius: AppTheme.Shadow.warmCardRadius,
+                x: AppTheme.Shadow.warmCardX,
+                y: AppTheme.Shadow.warmCardY
+            )
+    }
+}
+
 extension View {
     func glassContainer(cornerRadius: CGFloat = AppTheme.Radius.glassContainer) -> some View {
         modifier(GlassContainerModifier(cornerRadius: cornerRadius))
@@ -553,6 +612,10 @@ extension View {
 
     func glassCard(cornerRadius: CGFloat = AppTheme.Radius.glassContainer) -> some View {
         modifier(GlassCardModifier(cornerRadius: cornerRadius))
+    }
+
+    func warmGlassCard(cornerRadius: CGFloat = AppTheme.Radius.glassContainer) -> some View {
+        modifier(WarmGlassCardModifier(cornerRadius: cornerRadius))
     }
 
     func glassBarItem<S: Shape>(in shape: S, interactive: Bool = true) -> some View {

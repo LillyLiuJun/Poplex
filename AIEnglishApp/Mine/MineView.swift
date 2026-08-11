@@ -80,6 +80,7 @@ struct MineView: View {
             Tab2UnlockedView(
                 vm: vm,
                 topInset: topInset,
+                listResetToken: listResetToken,
                 onTalk: { cat in
                     if FeatureFlags.conversationEnabled {
                         path.append(.conversation(sceneCategory: cat))
@@ -94,6 +95,7 @@ struct MineView: View {
             Tab2LockedView(
                 vm: vm,
                 topInset: topInset,
+                listResetToken: listResetToken,
                 onCapture: { onSwitchToToday?() }
             )
             // 锁定页（含全屏橙波）淡出，露出下面的解锁页
@@ -128,11 +130,14 @@ private enum UnlockState {
 private struct Tab2LockedView: View {
     let vm: Tab2HomeViewModel
     var topInset: CGFloat = 0
+    var listResetToken: UUID = UUID()
     let onCapture: () -> Void
 
     private let wordTarget  = 20
 
     @State private var unlockState: UnlockState = .idle
+    // 单开手风琴：同时只展开一个主题；切回 Mine（listResetToken 变化）时回收起。
+    @State private var expandedCategoryId: String?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -145,23 +150,25 @@ private struct Tab2LockedView: View {
                 emptyStateView
             } else {
                 // 1. 待解锁页面内容（固定顶栏空间，卡片与 Header 独立协同避让）
-                ScrollView {
-                    VStack(alignment: .leading, spacing: AppTheme.Space.paddingSection) {
-                        headerSection
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: AppTheme.Space.paddingSection) {
+                            headerSection
 
-                        VStack(spacing: AppTheme.Space.paddingPage) {
-                            topicsCard
+                            VStack(spacing: AppTheme.Space.paddingPage) {
+                                topicsCard(proxy)
+                            }
+                            // 不再压缩/下沉当前页——解锁重点是"呈现新内容"，旧页保持不动、随整页转场离场
+
+                            captureButton
                         }
-                        // 不再压缩/下沉当前页——解锁重点是"呈现新内容"，旧页保持不动、随整页转场离场
-
-                        captureButton
+                        .padding(.top, AppTheme.Space.paddingSection)     // 顶部呼吸
+                        .padding(.bottom, AppTheme.Space.paddingPage)
+                        // 锁回屏宽、左对齐
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .padding(.top, AppTheme.Space.paddingSection)     // 顶部呼吸
-                    .padding(.bottom, AppTheme.Space.paddingPage)
-                    // 锁回屏宽、左对齐
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentMargins(.top, topInset, for: .scrollContent)
                 }
-                .contentMargins(.top, topInset, for: .scrollContent)
             }
 
             // 释放时暖橙"洗版"：从按钮位置(底部)向上的渐变，下浓上淡——能量从按钮升腾、呈现新内容
@@ -180,6 +187,9 @@ private struct Tab2LockedView: View {
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
                 .animation(.easeIn(duration: 0.4), value: unlockState)
+        }
+        .onChange(of: listResetToken) { _, _ in
+            expandedCategoryId = nil   // 切回 Mine：回到初始收起
         }
     }
 
@@ -200,7 +210,7 @@ private struct Tab2LockedView: View {
     }
 
     private var hintText: some View {
-        Text("Reach 20 words in any topic to start practicing.")
+        Text("Reach 20 pops in any topic to start practicing.")
             .font(AppTheme.Font.englishBody)
             .foregroundStyle(AppTheme.Color.textSecondary)
     }
@@ -234,13 +244,13 @@ private struct Tab2LockedView: View {
     }
 
     // ── TOPICS list ──────────────────────────────────────────────────────
-    private var topicsCard: some View {
+    private func topicsCard(_ proxy: ScrollViewProxy) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("Topics in progress")
                 .font(AppTheme.Font.sectionTitleSerif)
                 .foregroundStyle(AppTheme.Color.textPrimary)
                 .padding(.horizontal, AppTheme.Space.paddingPage)
-                .padding(.bottom, AppTheme.Space.paddingM)
+                .padding(.bottom, AppTheme.Space.titleToContent)
 
             let cats  = categoriesWithWords
             let topId = closestCategory?.id
@@ -257,14 +267,26 @@ private struct Tab2LockedView: View {
                         CategoryProgressRow(
                             category: cat,
                             isHighlighted: cat.id == topId,
+                            isExpanded: expandedCategoryId == cat.id,
+                            onToggle: { toggleExpand(cat.id, proxy) },
                             loadWords: { await vm.loadCategoryWords(for: cat.sceneCategory) }
                         )
+                        .id(cat.id)
                     }
                 }
                 .padding(.vertical, AppTheme.Space.paddingS)
-                .glassCard()
+                .warmGlassCard()
                 .padding(.horizontal, AppTheme.Space.paddingPage)
             }
+        }
+    }
+
+    // 单开手风琴 + 滚动锚定：展开时把点开的行滚到顶部对齐，收起上一个，视线始终锁在这一行。
+    private func toggleExpand(_ id: String, _ proxy: ScrollViewProxy) {
+        let willExpand = expandedCategoryId != id
+        withAnimation(.easeInOut(duration: 0.28)) {
+            expandedCategoryId = willExpand ? id : nil
+            if willExpand { proxy.scrollTo(id, anchor: .top) }
         }
     }
 
@@ -519,32 +541,38 @@ private struct EmptyMomentGlyph: View {
 private struct Tab2UnlockedView: View {
     let vm: Tab2HomeViewModel
     var topInset: CGFloat = 0
+    var listResetToken: UUID = UUID()
     let onTalk: (String) -> Void
+
+    // 单开手风琴：同时只展开一个 Topics-in-Progress 主题；切回 Mine 时回收起。
+    @State private var expandedCategoryId: String?
 
     var body: some View {
         ZStack {
             AppTheme.Color.pageBg.ignoresSafeArea()
             CanvasBackground().ignoresSafeArea()
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Talk about something")
-                            .font(AppTheme.Font.pageTitleSerif)
-                            .foregroundStyle(AppTheme.Color.textPrimary)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 24) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Talk about something")
+                                .font(AppTheme.Font.pageTitleSerif)
+                                .foregroundStyle(AppTheme.Color.textPrimary)
 
-                        Text("Scenarios built from your daily moments.")
-                            .font(AppTheme.Font.englishBody)
-                            .foregroundStyle(AppTheme.Color.textMuted)
+                            Text("Scenarios built from your daily moments.")
+                                .font(AppTheme.Font.englishBody)
+                                .foregroundStyle(AppTheme.Color.textMuted)
+                        }
+                        .padding(.horizontal, AppTheme.Space.paddingPage)
+                        .padding(.top, AppTheme.Space.paddingPage)
+
+                        contentSections(proxy)
                     }
-                    .padding(.horizontal, AppTheme.Space.paddingPage)
-                    .padding(.top, AppTheme.Space.paddingPage)
-
-                    contentSections
+                    .padding(.bottom, AppTheme.Space.paddingPage * 2)
                 }
-                .padding(.bottom, AppTheme.Space.paddingPage * 2)
+                .contentMargins(.top, topInset, for: .scrollContent)
             }
-            .contentMargins(.top, topInset, for: .scrollContent)
         }
         .onAppear {
             if vm.isFirstUnlock {
@@ -554,10 +582,22 @@ private struct Tab2UnlockedView: View {
                 }
             }
         }
+        .onChange(of: listResetToken) { _, _ in
+            expandedCategoryId = nil   // 切回 Mine：回到初始收起
+        }
+    }
+
+    // 单开手风琴 + 滚动锚定（同 Tab2LockedView）
+    private func toggleExpand(_ id: String, _ proxy: ScrollViewProxy) {
+        let willExpand = expandedCategoryId != id
+        withAnimation(.easeInOut(duration: 0.28)) {
+            expandedCategoryId = willExpand ? id : nil
+            if willExpand { proxy.scrollTo(id, anchor: .top) }
+        }
     }
 
     @ViewBuilder
-    private var contentSections: some View {
+    private func contentSections(_ proxy: ScrollViewProxy) -> some View {
         if let data = vm.data {
             let hero   = vm.heroCategory()
             let heroId = hero?.id
@@ -566,7 +606,7 @@ private struct Tab2UnlockedView: View {
             // 已解锁分类：独立 Serif 标题 "Materials Yours" + 横向 Peek 轮播卡片
             if hero != nil || !otherUnlocked.isEmpty {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Materials Yours")
+                    Text("Your Materials")
                         .font(AppTheme.Font.sectionTitleSerif)
                         .foregroundStyle(AppTheme.Color.textPrimary)
                         .padding(.horizontal, AppTheme.Space.paddingPage)
@@ -599,7 +639,7 @@ private struct Tab2UnlockedView: View {
             // Topics in Progress——独立 Serif 标题 + 磨砂玻璃列表容器
             let stillFilling = data.categories.filter { !$0.unlocked && $0.wordCount >= 1 }
             if !stillFilling.isEmpty {
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: AppTheme.Space.titleToContent) {
                     Text("Topics in Progress")
                         .font(AppTheme.Font.sectionTitleSerif)
                         .foregroundStyle(AppTheme.Color.textPrimary)
@@ -610,12 +650,15 @@ private struct Tab2UnlockedView: View {
                             CategoryProgressRow(
                                 category: cat,
                                 isHighlighted: false,
+                                isExpanded: expandedCategoryId == cat.id,
+                                onToggle: { toggleExpand(cat.id, proxy) },
                                 loadWords: { await vm.loadCategoryWords(for: cat.sceneCategory) }
                             )
+                            .id(cat.id)
                         }
                     }
                     .padding(.vertical, AppTheme.Space.paddingS)
-                    .glassCard()
+                    .warmGlassCard()
                     .padding(.horizontal, AppTheme.Space.paddingPage)
                 }
             }

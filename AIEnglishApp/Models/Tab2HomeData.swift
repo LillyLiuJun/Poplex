@@ -84,22 +84,33 @@ struct Tab2CategoryData: Decodable, Identifiable {
 struct Tab2SubScene: Decodable, Identifiable {
     let sceneDetail: String
     let occurrenceCount: Int
-    let quote: String?      // 该子场景下最近一条用户原话（≥6 字；无则 nil）
-    let imageUrl: String?   // 对应来源 message 的图片 URL（无则 nil）
+    let quote: String?            // 用户原话（≥6 字；无则 nil）
+    let targetExpression: String? // AI 生成的目标语言句子（quote 为空时降级展示）
+    let imageUrl: String?         // 对应来源 message 的图片 URL（无则 nil）
 
     var id: String { sceneDetail }
 
-    enum CodingKeys: String, CodingKey {
-        case sceneDetail     = "scene_detail"
-        case occurrenceCount = "occurrence_count"
-        case quote
-        case imageUrl        = "image_url"
+    var isPhotoMoment: Bool { imageUrl != nil }
+
+    // 剥掉签名参数，取路径部分作缓存 key（签名 URL 每次重签会变，路径不变）
+    var stableImageKey: String? {
+        guard let url = imageUrl, !url.isEmpty else { return nil }
+        return url.components(separatedBy: "?").first
     }
 
-    init(sceneDetail: String, occurrenceCount: Int, quote: String? = nil, imageUrl: String? = nil) {
+    enum CodingKeys: String, CodingKey {
+        case sceneDetail       = "scene_detail"
+        case occurrenceCount   = "occurrence_count"
+        case quote
+        case targetExpression  = "target_expression"
+        case imageUrl          = "image_url"
+    }
+
+    init(sceneDetail: String, occurrenceCount: Int, quote: String? = nil, targetExpression: String? = nil, imageUrl: String? = nil) {
         self.sceneDetail = sceneDetail
         self.occurrenceCount = occurrenceCount
         self.quote = quote
+        self.targetExpression = targetExpression
         self.imageUrl = imageUrl
     }
 }
@@ -171,6 +182,13 @@ struct Tab2WordEntry: Decodable, Identifiable {
     }
 }
 
+// MARK: - Badge glyph (类型图标：SF Symbol 描边 / 衬线字母 两种呈现)
+
+enum Tab2BadgeGlyph: Equatable {
+    case symbol(String)       // SF Symbol 描边图标
+    case serifLetter(String)  // 衬线字母（句中单词，呼应品牌衬线）
+}
+
 // MARK: - Badge & image helpers (internal for testability)
 
 extension Tab2WordEntry {
@@ -180,17 +198,20 @@ extension Tab2WordEntry {
         return urlStr.components(separatedBy: "?").first
     }
 
-    /// Badge 图标名称，按捕获方式（sourceTag）优先，再按表达类型（entryKind）细分。
-    var badgeIconName: String {
+    /// 词条类型图标（统一细线家族）。按捕获方式优先，再按表达类型细分：
+    ///   · 查词（.word）→ 放大镜；对话（.dialogue，未上线）→ 声波
+    ///   · 句子/段落里的单词 → 衬线字母 A（呼应品牌衬线）
+    ///   · 短语/搭配/句型 → text.quote 引用文本线；习语/俚语 → bubble.left 对话气泡
+    /// 图片走 imageUrl，不经此。
+    var badgeGlyph: Tab2BadgeGlyph {
         switch sourceTag {
-        case .word:     return "text.magnifyingglass"
-        case .dialogue: return "waveform"
+        case .word:     return .symbol("magnifyingglass")
+        case .dialogue: return .symbol("waveform")
         case .sentence, .passage:
             switch entryKind {
-            case "word":                                return "character.textbox"
-            case "phrase", "collocation", "pattern":    return "text.bubble.fill"
-            case "idiom", "slang":                      return "quote.bubble.fill"
-            default:                                    return "text.bubble.fill"
+            case "word":            return .serifLetter("A")
+            case "idiom", "slang":  return .symbol("bubble.left")
+            default:                return .symbol("text.quote")  // phrase/collocation/pattern/未知
             }
         }
     }
