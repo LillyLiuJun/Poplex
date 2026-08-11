@@ -123,14 +123,10 @@ struct RootTabContainer: View {
                     guard abs(dx) > abs(dy) else { return }
                     if dx < -60 && selectedTab == .today {
                         withAnimation(.easeInOut(duration: 0.2)) { selectedTab = .mine }
-                    } else if dx > 60 && selectedTab == .mine {
-                        if capturedSwipeOpen {
-                            // Delete was open — reset list, don't switch tab
-                            mineListResetToken = UUID()
-                            mineSwipeActionOpen = false
-                        } else {
-                            withAnimation(.easeInOut(duration: 0.2)) { selectedTab = .today }
-                        }
+                    } else if dx > 60 && selectedTab == .mine && capturedSwipeOpen {
+                        // Delete action was open — reset list state, don't switch tab
+                        mineListResetToken = UUID()
+                        mineSwipeActionOpen = false
                     }
                 }
         )
