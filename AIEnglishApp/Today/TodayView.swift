@@ -3,82 +3,60 @@ import SwiftUI
 struct TodayView: View {
     @State private var viewModel = TodayViewModel(service: LiveAIService())
     @State private var inputText = ""
-    @State private var previewImage: UIImage?
-    @State private var previewAnchor: UnitPoint = .center
+    var onImagePreview: ((UIImage, UnitPoint) -> Void)?
+    var topInset: CGFloat = 0
     /// Written by the scroll view; read by RootTabContainer to drive topBar compact mode
     @Binding var topBarCompact: Bool
     /// Only the visible tab may drive compact — a backgrounded TodayView must not
     /// keep writing compact and fight the tab-switch reset (caused labels to vanish on Mine)
     private let isActive: Bool
 
-    init(topBarCompact: Binding<Bool> = .constant(false), isActive: Bool = true) {
+    init(topBarCompact: Binding<Bool> = .constant(false), isActive: Bool = true, onImagePreview: ((UIImage, UnitPoint) -> Void)? = nil, topInset: CGFloat = 0) {
         self._topBarCompact = topBarCompact
         self.isActive = isActive
+        self.onImagePreview = onImagePreview
+        self.topInset = topInset
     }
 
     var body: some View {
         @Bindable var vm = viewModel
-        timeline
-            .task { await viewModel.loadHistory() }
-            .safeAreaInset(edge: .bottom) {
-                InputBar(text: $inputText, image: $vm.pendingImage, isLoading: viewModel.isLoading) {
-                    let toSend = inputText
-                    inputText = ""
-                    Task { await viewModel.send(toSend) }
-                }
+        ZStack(alignment: .bottom) {
+            timeline
+                .task { await viewModel.loadHistory() }
+
+            // InputBar 独立悬浮在内容上方；背后垫 Gemini 风格可变渐进式通透模糊底托（向下贯穿底部安全区，向上 28pt 平滑消融进入内容区），
+            // 内容向下滚动穿过时自然失焦消融溶解进背景，保持极佳的通透感与景深
+            InputBar(text: $inputText, image: $vm.pendingImage, isLoading: viewModel.isLoading) {
+                let toSend = inputText
+                inputText = ""
+                Task { await viewModel.send(toSend) }
             }
-            .overlay {
-            ZStack {
-                if previewImage != nil {
-                    Color.black
-                        .ignoresSafeArea()
-                        .transition(.opacity)
-                        .onTapGesture {
-                            withAnimation(.spring(duration: 0.3)) { previewImage = nil }
-                        }
-                }
-                if let img = previewImage {
-                    ZStack(alignment: .topTrailing) {
-                        Image(uiImage: img)
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .allowsHitTesting(false)
-                        Button {
-                            withAnimation(.spring(duration: 0.3)) { previewImage = nil }
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.title)
-                                .foregroundStyle(.white, Color(uiColor: .systemGray3))
-                                .padding()
-                        }
-                    }
-                    .transition(.scale(scale: 0.1, anchor: previewAnchor).combined(with: .opacity))
-                }
+            .background {
+                VariableBlurBackdrop(direction: .bottom, extraExtend: 28)
+                    .ignoresSafeArea(.container, edges: .bottom)
             }
         }
-        .animation(.spring(duration: 0.35), value: previewImage != nil)
-        // 首页画布装饰（网格点 + 底部橘色光晕），透明叠在 pageBg 之上、内容之下
-        .background(CanvasBackground(showTopAura: false).ignoresSafeArea())
-        .alert("Can't create a lesson", isPresented: Binding(
-            get: { viewModel.contentBlockedMessage != nil },
-            set: { if !$0 { viewModel.contentBlockedMessage = nil } }
-        )) {
-            Button("OK") { viewModel.contentBlockedMessage = nil }
-        } message: {
-            Text(viewModel.contentBlockedMessage ?? "")
-        }
-        .sheet(isPresented: $viewModel.showAIConsent) {
-            AIConsentView { viewModel.onConsentAgreed() }
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-        }
-        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
-            viewModel.session.didEnterBackground()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
-            viewModel.session.didBecomeActive()
-        }
+            // 首页画布装饰（网格点 + 底部橘色光晕），透明叠在 pageBg 之上、内容之下
+            .background(CanvasBackground(showTopAura: false).ignoresSafeArea())
+            .alert("Can't create a lesson", isPresented: Binding(
+                get: { viewModel.contentBlockedMessage != nil },
+                set: { if !$0 { viewModel.contentBlockedMessage = nil } }
+            )) {
+                Button("OK") { viewModel.contentBlockedMessage = nil }
+            } message: {
+                Text(viewModel.contentBlockedMessage ?? "")
+            }
+            .sheet(isPresented: $viewModel.showAIConsent) {
+                AIConsentView { viewModel.onConsentAgreed() }
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
+                viewModel.session.didEnterBackground()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+                viewModel.session.didBecomeActive()
+            }
     }
 
     private var timeline: some View {
@@ -88,11 +66,11 @@ struct TodayView: View {
                     ForEach(viewModel.entries) { entry in
                         TimelineRow(entry: entry, onImageTap: { img, frame in
                             let screen = UIScreen.main.bounds.size
-                            previewAnchor = UnitPoint(
+                            let anchor = UnitPoint(
                                 x: frame.midX / screen.width,
                                 y: frame.midY / screen.height
                             )
-                            withAnimation(.spring(duration: 0.35)) { previewImage = img }
+                            onImagePreview?(img, anchor)
                         }, onRetry: { text, image, entryId in
                             Task { await viewModel.retrySend(text: text, image: image, failedEntryId: entryId) }
                         })
@@ -100,7 +78,9 @@ struct TodayView: View {
                     }
                 }
                 .padding(AppTheme.Space.paddingPage)
+                .padding(.bottom, 72)     // 为底部 InputBar 留出空间（胶囊 52 + 边距）
             }
+            .contentMargins(.top, topInset, for: .scrollContent)  // 可滚动进入的顶部 margin
             .topEdgeFade()
             .modifier(ScrollCompactDetector(compact: $topBarCompact, active: isActive))
             .scrollDismissesKeyboard(.interactively)

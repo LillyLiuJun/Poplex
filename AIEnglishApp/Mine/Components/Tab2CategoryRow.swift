@@ -49,18 +49,7 @@ struct Tab2CategoryRow: View {
         }
         .padding(22)
         .frame(width: 335, height: 295, alignment: .topLeading)
-        .background(Color(red: 0.98, green: 0.97, blue: 0.96))
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
-        .overlay(
-            RoundedRectangle(cornerRadius: AppTheme.Radius.card)
-                .strokeBorder(Color(red: 0.92, green: 0.90, blue: 0.87), lineWidth: 1)
-        )
-        .shadow(
-            color: Color.black.opacity(0.03),
-            radius: 12,
-            x: 0,
-            y: 4
-        )
+        .glassCard()
     }
 
     /// 引文行区域：展示前 3 条精选原话，多于 3 条时自动附带 "+N more moments"

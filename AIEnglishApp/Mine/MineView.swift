@@ -54,9 +54,6 @@ struct MineView: View {
                         withAnimation(AppTheme.Motion.tabSelection) {}
                     }
                 }
-                .safeAreaInset(edge: .top, spacing: 0) {
-                    Color.clear.frame(height: topInset)
-                }
                 .toast(
                     message: Binding(get: { vm.toastMessage }, set: { vm.toastMessage = $0 }),
                     systemImage: "exclamationmark.triangle"
@@ -82,6 +79,7 @@ struct MineView: View {
         } else if vm.isPermanentlyUnlocked {
             Tab2UnlockedView(
                 vm: vm,
+                topInset: topInset,
                 onTalk: { cat in
                     if FeatureFlags.conversationEnabled {
                         path.append(.conversation(sceneCategory: cat))
@@ -95,6 +93,7 @@ struct MineView: View {
         } else {
             Tab2LockedView(
                 vm: vm,
+                topInset: topInset,
                 onCapture: { onSwitchToToday?() }
             )
             // 锁定页（含全屏橙波）淡出，露出下面的解锁页
@@ -128,6 +127,7 @@ private enum UnlockState {
 
 private struct Tab2LockedView: View {
     let vm: Tab2HomeViewModel
+    var topInset: CGFloat = 0
     let onCapture: () -> Void
 
     private let wordTarget  = 20
@@ -139,23 +139,29 @@ private struct Tab2LockedView: View {
         ZStack {
             AppTheme.Color.pageBg.ignoresSafeArea()
             CanvasBackground().ignoresSafeArea()
-            
-            // 1. 待解锁页面内容（固定顶栏空间，卡片与 Header 独立协同避让）
-            ScrollView {
-                VStack(alignment: .leading, spacing: AppTheme.Space.paddingSection) {
-                    headerSection
-                    
-                    VStack(spacing: AppTheme.Space.paddingPage) {
-                        topicsCard
-                    }
-                    // 不再压缩/下沉当前页——解锁重点是"呈现新内容"，旧页保持不动、随整页转场离场
 
-                    captureButton
+            if categoriesWithWords.isEmpty {
+                // 无数据空状态（方案A · 极简居中）：整页垂直居中，CTA 沉底
+                emptyStateView
+            } else {
+                // 1. 待解锁页面内容（固定顶栏空间，卡片与 Header 独立协同避让）
+                ScrollView {
+                    VStack(alignment: .leading, spacing: AppTheme.Space.paddingSection) {
+                        headerSection
+
+                        VStack(spacing: AppTheme.Space.paddingPage) {
+                            topicsCard
+                        }
+                        // 不再压缩/下沉当前页——解锁重点是"呈现新内容"，旧页保持不动、随整页转场离场
+
+                        captureButton
+                    }
+                    .padding(.top, AppTheme.Space.paddingSection)     // 顶部呼吸
+                    .padding(.bottom, AppTheme.Space.paddingPage)
+                    // 锁回屏宽、左对齐
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .padding(.top, AppTheme.Space.paddingSection)     // 顶部呼吸
-                .padding(.bottom, AppTheme.Space.paddingPage)
-                // 锁回屏宽、左对齐
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentMargins(.top, topInset, for: .scrollContent)
             }
 
             // 释放时暖橙"洗版"：从按钮位置(底部)向上的渐变，下浓上淡——能量从按钮升腾、呈现新内容
@@ -199,6 +205,34 @@ private struct Tab2LockedView: View {
             .foregroundStyle(AppTheme.Color.textSecondary)
     }
 
+    // ── 无数据空状态（方案A · 极简居中）──────────────────────────────────
+    // 中央徽章 = 生活缤纷方向 H4 的暖单色版（时刻小卡，只留品牌橙 + 暖中性灰）。
+    // CTA 复用 captureButton：空状态下 isReady 恒为 false，点了跳 Tab1 去记录。
+    private var emptyStateView: some View {
+        // 中央内容块：相对整页垂直居中
+        VStack(spacing: 0) {
+            EmptyMomentGlyph()
+                .padding(.bottom, 26)
+
+            Text("Nothing here yet")
+                .font(AppTheme.Font.pageTitleSerif)
+                .foregroundStyle(AppTheme.Color.textPrimary)
+                .padding(.bottom, AppTheme.Space.paddingM)
+
+            Text("Capture a moment from your day. It becomes English you can use.")
+                .font(AppTheme.Font.englishBody)
+                .foregroundStyle(AppTheme.Color.textMuted)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 280)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // CTA：overlay 沉底，不参与中央块的居中计算（否则内容会被顶偏上）
+        .overlay(alignment: .bottom) {
+            captureButton
+                .padding(.bottom, AppTheme.Space.paddingSection)
+        }
+    }
+
     // ── TOPICS list ──────────────────────────────────────────────────────
     private var topicsCard: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -217,10 +251,9 @@ private struct Tab2LockedView: View {
                     .foregroundStyle(AppTheme.Color.textMuted)
                     .padding(.horizontal, AppTheme.Space.paddingPage)
             } else {
-                // 卡片：话题行装回白卡（与解锁态 Topics in progress 卡同款；标题在卡外）
-                // 行间不叠额外 spacing——由行内 .padding(.vertical,12) 统一决定间距，避免 12+8+12 的叠加乱节奏
+                // 卡片：进度条独自承担行间分隔（方案3），不再叠分割线
                 VStack(spacing: 0) {
-                    ForEach(cats) { cat in
+                    ForEach(Array(cats.enumerated()), id: \.element.id) { index, cat in
                         CategoryProgressRow(
                             category: cat,
                             isHighlighted: cat.id == topId,
@@ -229,9 +262,7 @@ private struct Tab2LockedView: View {
                     }
                 }
                 .padding(.vertical, AppTheme.Space.paddingS)
-                .background(AppTheme.Color.cardBg)
-                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
-                .shadow(color: Color.black.opacity(0.04), radius: 12, x: 0, y: 4)
+                .glassCard()
                 .padding(.horizontal, AppTheme.Space.paddingPage)
             }
         }
@@ -276,48 +307,52 @@ private struct Tab2LockedView: View {
                 onCapture()
             }
         } label: {
-            ZStack {
-                // 蓄力光晕层：charging 时橙光在 0.45s 内 easeIn 由弱到强、由小到大地"攒劲"，
-                // 把这半秒的等待变成看得见的"正在充能"，再爆发（releasing 时交给 bloom/shockwave）
-                Capsule()
-                    .fill(AppTheme.Color.brandStrong)
-                    .blur(radius: 16)
-                    .scaleEffect(unlockState == .charging ? 1.22 : 0.85)
-                    .opacity(unlockState == .charging ? 0.5 : 0.0)
-                    .animation(.easeIn(duration: 0.45), value: unlockState)
-
-                // 舒张发光的背影光晕层 (Bloom Glow Layer)——释放时铺得更大更软，橙色散开
-                Capsule()
-                    .fill(AppTheme.Color.brandStrong)
-                    .blur(radius: unlockState == .releasing ? 56 : 0)
-                    .scaleEffect(unlockState == .releasing ? 4.5 : 0.8)
-                    .opacity(unlockState == .releasing ? 0.72 : 0.0)
-
-                HStack(spacing: AppTheme.Space.paddingS) {
-                    if isReady {
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 16, weight: .bold))
-                            .scaleEffect(sparkleScale)
-                            .rotationEffect(.degrees(sparkleRotation))
-                    }
-                    Text(isReady ? "You're all set" : "Capture something")
+            HStack(spacing: AppTheme.Space.paddingS) {
+                if isReady {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 16, weight: .bold))
+                        .scaleEffect(sparkleScale)
+                        .rotationEffect(.degrees(sparkleRotation))
                 }
-                .font(AppTheme.Font.ctaLabel)
-                .foregroundStyle(AppTheme.Color.cardBg)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(AppTheme.Color.interactive)   // 保持染色黑（点击变橙显得怪，去掉）
-                .clipShape(Capsule())
-                .shadow(
-                    color: AppTheme.Color.interactive.opacity(shadowOpacity),
-                    radius: shadowRadius,
-                    x: 0,
-                    y: shadowY
-                )
-                .scaleEffect(buttonScale)
-                .opacity(buttonOpacity)      // 释放时溶解：淡出
-                .blur(radius: buttonBlur)     // + 虚化，溶进能量爆发
+                Text(isReady ? "You're all set" : "Capture something")
             }
+            .font(AppTheme.Font.ctaLabel)
+            .foregroundStyle(AppTheme.Color.cardBg)
+            .frame(maxWidth: .infinity)
+            .frame(height: 52)    // 与 Tab1 InputBar 胶囊同高
+            .background(AppTheme.Color.interactive)   // 保持染色黑（点击变橙显得怪，去掉）
+            .clipShape(Capsule())
+            // 光晕层挂为 pill 的 background：尺寸跟随胶囊、不参与布局。
+            // 原来作为 ZStack 兄弟节点的贪婪 Capsule 会把 button 撑满整个可用高度
+            // （在底部 overlay 里可见胶囊因此被顶到屏幕正中）
+            .background {
+                ZStack {
+                    // 蓄力光晕层：charging 时橙光在 0.45s 内 easeIn 由弱到强、由小到大地"攒劲"，
+                    // 把这半秒的等待变成看得见的"正在充能"，再爆发（releasing 时交给 bloom/shockwave）
+                    Capsule()
+                        .fill(AppTheme.Color.brandStrong)
+                        .blur(radius: 16)
+                        .scaleEffect(unlockState == .charging ? 1.22 : 0.85)
+                        .opacity(unlockState == .charging ? 0.5 : 0.0)
+                        .animation(.easeIn(duration: 0.45), value: unlockState)
+
+                    // 舒张发光的背影光晕层 (Bloom Glow Layer)——释放时铺得更大更软，橙色散开
+                    Capsule()
+                        .fill(AppTheme.Color.brandStrong)
+                        .blur(radius: unlockState == .releasing ? 56 : 0)
+                        .scaleEffect(unlockState == .releasing ? 4.5 : 0.8)
+                        .opacity(unlockState == .releasing ? 0.72 : 0.0)
+                }
+            }
+            .shadow(
+                color: AppTheme.Color.interactive.opacity(shadowOpacity),
+                radius: shadowRadius,
+                x: 0,
+                y: shadowY
+            )
+            .scaleEffect(buttonScale)
+            .opacity(buttonOpacity)      // 释放时溶解：淡出
+            .blur(radius: buttonBlur)     // + 虚化，溶进能量爆发
         }
         .buttonStyle(.plain)
         .padding(.horizontal, AppTheme.Space.paddingPage)
@@ -378,7 +413,11 @@ private struct Tab2LockedView: View {
 
     // ── Helpers ───────────────────────────────────────────────────────────
     private var categoriesWithWords: [Tab2CategoryData] {
-        (vm.data?.categories ?? []).filter { $0.wordCount >= 1 }
+        #if DEBUG
+        // 临时走查钩子：TAB2_EMPTY=1 强制空状态（验证完即删，勿提交）
+        if ProcessInfo.processInfo.environment["TAB2_EMPTY"] == "1" { return [] }
+        #endif
+        return (vm.data?.categories ?? []).filter { $0.wordCount >= 1 }
     }
 
     private var closestCategory: Tab2CategoryData? {
@@ -398,10 +437,88 @@ private struct Tab2LockedView: View {
     }
 }
 
+// MARK: - 空状态中央徽章（方案A · H4 暖单色：玻璃圆 + 微倾时刻小卡）
+
+/// 一张微倾的迷你"时刻卡"：浅橘照片区 + 橙色小太阳 + 暖灰小山与文字行，
+/// 只取品牌橙与暖中性灰两族，不引入多色，避免杂乱。
+private struct EmptyMomentGlyph: View {
+    var body: some View {
+        ZStack {
+            // 暖橙光晕：提亮顶部区域，限制在玻璃圆内避免撑大间距
+            Circle()
+                .fill(AppTheme.Color.brandStrong.opacity(0.12))
+                .frame(width: 80, height: 80)
+                .blur(radius: 14)
+
+            ZStack {
+                momentCard
+                // 卡外一颗橙色小点，破开对称、添一点"散落的生活感"
+                Circle()
+                    .fill(AppTheme.Color.brandStrong)
+                    .frame(width: 5, height: 5)
+                    .offset(x: 19, y: -17)
+            }
+            .frame(width: 88, height: 88)
+            // 88 直径 + 44 圆角 = 正圆；走 glassCard 的暖白配方（ultraThin 裸用在浅底上发灰）
+            .glassCard(cornerRadius: 44)
+        }
+        .clipShape(Circle())   // 裁掉光晕溢出，保持视觉边界等于玻璃圆
+    }
+
+    private var momentCard: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            photoArea
+                .frame(width: 20, height: 16)
+
+            RoundedRectangle(cornerRadius: 1.5)
+                .fill(AppTheme.Color.textFaint)
+                .frame(width: 14, height: 3)
+
+            RoundedRectangle(cornerRadius: 1.5)
+                .fill(AppTheme.Color.border)
+                .frame(width: 9, height: 3)
+        }
+        .padding(4)
+        .background(AppTheme.Color.cardBg)
+        .clipShape(RoundedRectangle(cornerRadius: 5))
+        .overlay(
+            RoundedRectangle(cornerRadius: 5)
+                .strokeBorder(AppTheme.Color.border, lineWidth: 0.5)
+        )
+        .rotationEffect(.degrees(-7))
+    }
+
+    /// 照片区：浅橘底 + 橙色小太阳 + 暖灰双山峰
+    private var photoArea: some View {
+        ZStack(alignment: .bottom) {
+            AppTheme.Color.brandSubtleBg
+
+            Path { p in
+                p.move(to: CGPoint(x: 0, y: 16))
+                p.addLine(to: CGPoint(x: 6, y: 9))
+                p.addLine(to: CGPoint(x: 11, y: 14))
+                p.addLine(to: CGPoint(x: 14, y: 11))
+                p.addLine(to: CGPoint(x: 20, y: 16))
+                p.closeSubpath()
+            }
+            .fill(AppTheme.Color.textFaint.opacity(0.7))
+
+            Circle()
+                .fill(AppTheme.Color.brandStrong)
+                .frame(width: 6, height: 6)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .padding(.leading, 3)
+                .padding(.top, 3)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 3))
+    }
+}
+
 // MARK: - Unlocked view
 
 private struct Tab2UnlockedView: View {
     let vm: Tab2HomeViewModel
+    var topInset: CGFloat = 0
     let onTalk: (String) -> Void
 
     var body: some View {
@@ -427,6 +544,7 @@ private struct Tab2UnlockedView: View {
                 }
                 .padding(.bottom, AppTheme.Space.paddingPage * 2)
             }
+            .contentMargins(.top, topInset, for: .scrollContent)
         }
         .onAppear {
             if vm.isFirstUnlock {
@@ -473,17 +591,12 @@ private struct Tab2UnlockedView: View {
                             }
                         }
                         .padding(.horizontal, AppTheme.Space.paddingPage)
-                        .padding(.vertical, 12)
+                        .padding(.vertical, 16)   // 给玻璃卡阴影留出不裁切的空间
                     }
-                    .background(
-                        RoundedRectangle(cornerRadius: 24)
-                            .fill(AppTheme.Color.brandSubtleBg.opacity(0.4))
-                    )
-                    .padding(.horizontal, AppTheme.Space.paddingS)
                 }
             }
 
-            // Topics in Progress——独立 Serif 标题 "Topics in Progress" + 纯列表圆角白卡容器
+            // Topics in Progress——独立 Serif 标题 + 磨砂玻璃列表容器
             let stillFilling = data.categories.filter { !$0.unlocked && $0.wordCount >= 1 }
             if !stillFilling.isEmpty {
                 VStack(alignment: .leading, spacing: 12) {
@@ -492,8 +605,8 @@ private struct Tab2UnlockedView: View {
                         .foregroundStyle(AppTheme.Color.textPrimary)
                         .padding(.horizontal, AppTheme.Space.paddingPage)
 
-                    VStack(spacing: 4) {
-                        ForEach(stillFilling) { cat in
+                    VStack(spacing: 0) {
+                        ForEach(Array(stillFilling.enumerated()), id: \.element.id) { index, cat in
                             CategoryProgressRow(
                                 category: cat,
                                 isHighlighted: false,
@@ -501,15 +614,8 @@ private struct Tab2UnlockedView: View {
                             )
                         }
                     }
-                    .padding(.vertical, 8)
-                    .background(AppTheme.Color.cardBg)
-                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
-                    .shadow(
-                        color: Color.black.opacity(0.04),
-                        radius: 12,
-                        x: 0,
-                        y: 4
-                    )
+                    .padding(.vertical, AppTheme.Space.paddingS)
+                    .glassCard()
                     .padding(.horizontal, AppTheme.Space.paddingPage)
                 }
             }

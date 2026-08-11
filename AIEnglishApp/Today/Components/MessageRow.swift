@@ -83,6 +83,14 @@ private struct UserBubble: View {
                     }
                     .frame(width: imageSize, height: imageSize)
                     .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.bubble))
+                    .contentShape(RoundedRectangle(cornerRadius: AppTheme.Radius.bubble))
+                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { imageFrame = $0 }
+                    .onTapGesture {
+                        let cacheKey = imageStableKey ?? urlStr
+                        if let cached = ImageCache.shared.get(cacheKey) {
+                            onImageTap?(cached, imageFrame)
+                        }
+                    }
                 }
             }
             if let text, !text.isEmpty {

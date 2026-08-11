@@ -219,6 +219,19 @@ enum AppTheme {
         static let canvasGridDot = Primitive.neutral500
         static let canvasAura     = Primitive.primary950
 
+        // 磨砂玻璃卡（Tab2 卡片 / 列表容器）：暖白 44% 薄蒙 + 0.5px 白边，
+        // 叠在 ultraThinMaterial 上出"透"感；画布光晕是玻璃透出的内容。
+        // 基色复用 warmWhite / white，透明度本身是玻璃配方的一部分。
+        static let glassCardSurface = Primitive.warmWhite.opacity(0.44)
+        static let glassCardEdge    = SwiftUI.Color.white.opacity(0.72)
+
+        // 玻璃卡内的轻量元素：进度条轨道/填充、行间隔线——暖近黑低透明，
+        // 跟着底色走，不再是实心灰。hairline 与 progressTrack 同值是有意共享：
+        // 玻璃容器内"最轻一档"的分隔统一 4.5%。
+        static let progressTrack = Primitive.neutral900.opacity(0.045)
+        static let progressFill  = Primitive.neutral900.opacity(0.145)
+        static let glassHairline = Primitive.neutral900.opacity(0.045)
+
         // 开屏（= App 图标资产色，用于和图标转场无缝衔接）
         // 字母本身走 brandStrong（= 种子橙 FF7622，与图标里的 P 同色），不另立 token。
         static let splashBg  = Primitive.iconGround
@@ -325,6 +338,7 @@ enum AppTheme {
         static let barControl: CGFloat = Primitive.size44  // 顶栏/工具栏可点控件标准边长
         static let iconBadge: CGFloat  = Primitive.size44  // 图标徽章容器边长（圆形浅底托图标）
         static let rowIcon: CGFloat    = Primitive.size28  // 列表行前导图标框 / 小圆控件（设置行、关闭键）
+        static let categoryBadge: CGFloat = Primitive.size36  // Topics 类别圆形徽章边长（浅橘底托类别图标）
         static let brandMark: CGFloat  = Primitive.size84  // 圆形 app-icon 报头容器直径
         static let brandGlyph: CGFloat = Primitive.size36  // 报头里 PoplexPShape 的字高
     }
@@ -384,10 +398,60 @@ private struct GlassContainerModifier: ViewModifier {
     }
 }
 
+// MARK: - Glass card modifier (Tab2 磨砂玻璃卡 / 列表容器)
+// iOS 26+: native Liquid Glass + 阴影
+// iOS 17-25: ultraThinMaterial + 暖白 44% 薄蒙 + 0.5px 白边 + 顶部 40% 内高光，
+//            对齐 v4 参考稿——有"厚度"的玻璃，而不是一块浅色。
+// 与 glassContainer 分开：那是浮层/面板配方（InputBar、AccountMenu），勿合并。
+private struct GlassCardModifier: ViewModifier {
+    let cornerRadius: CGFloat
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius)
+        if #available(iOS 26, *) {
+            content
+                .glassEffect(in: shape)
+                .shadow(
+                    color: AppTheme.Shadow.cardColor,
+                    radius: AppTheme.Shadow.cardRadius,
+                    x: AppTheme.Shadow.cardX,
+                    y: AppTheme.Shadow.cardY
+                )
+        } else {
+            content
+                .background {
+                    ZStack {
+                        shape.fill(.ultraThinMaterial)
+                        shape.fill(AppTheme.Color.glassCardSurface)
+                        // 顶部内高光（0 → 45% 渐隐），玻璃的"厚度"来源
+                        shape.fill(
+                            LinearGradient(
+                                stops: [
+                                    .init(color: .white.opacity(0.42), location: 0),
+                                    .init(color: .white.opacity(0), location: 0.45)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        shape.strokeBorder(AppTheme.Color.glassCardEdge, lineWidth: 0.5)
+                    }
+                }
+                .shadow(
+                    color: AppTheme.Shadow.cardColor,
+                    radius: AppTheme.Shadow.cardRadius,
+                    x: AppTheme.Shadow.cardX,
+                    y: AppTheme.Shadow.cardY
+                )
+        }
+    }
+}
+
 // MARK: - Glass bar item modifier (顶栏导航件)
 // iOS 26: native glass in the given shape; interactive only for tappable items —
 // interactive glass on a non-button container swallows child button taps
-// iOS 17-25: ultraThinMaterial + shadow fallback
+// iOS 17-25: ultraThinMaterial + warm cardBg tint + subtle border + shadow fallback
 private struct GlassBarItemModifier<S: Shape>: ViewModifier {
     let shape: S
     let interactive: Bool
@@ -395,15 +459,18 @@ private struct GlassBarItemModifier<S: Shape>: ViewModifier {
     @ViewBuilder
     func body(content: Content) -> some View {
         if #available(iOS 26, *) {
-            // Shadow added explicitly: glass on a white background has no inherent
-            // border or depth cue, so without a shadow the element is invisible at
-            // rest (only visible when coloured content scrolls behind it).
             content
                 .glassEffect(interactive ? .regular.interactive() : .regular, in: shape)
                 .shadow(color: AppTheme.Shadow.cardColor, radius: 10, x: 0, y: 2)
         } else {
             content
-                .background(.ultraThinMaterial, in: shape)
+                .background {
+                    ZStack {
+                        shape.fill(.ultraThinMaterial)
+                        shape.fill(AppTheme.Color.cardBg.opacity(0.85))
+                        shape.stroke(AppTheme.Color.border.opacity(0.8), lineWidth: 0.5)
+                    }
+                }
                 .shadow(color: AppTheme.Shadow.cardColor, radius: 8, x: 0, y: 2)
         }
     }
@@ -450,28 +517,30 @@ struct GlassGroup<Content: View>: View {
 
 // MARK: - Glass capsule modifier (InputBar single-capsule container)
 // iOS 26+: native Liquid Glass via .glassEffect(in: Capsule())
-// iOS 17-25: .ultraThinMaterial in Capsule + shadow fallback
+// iOS 17-25: ultraThinMaterial + warm cardBg tint + subtle border + shadow fallback
 private struct GlassCapsuleModifier: ViewModifier {
-    // Fixed 26pt radius = full-capsule appearance at the normal 52pt height,
-    // and stays properly rounded when the capsule expands (e.g. with a
-    // thumbnail). Capsule() would set radius = height/2, which grows to 64pt
-    // at 128pt height and curves so far inward that corner content falls
-    // outside the glass boundary.
     private let cornerRadius: CGFloat = 26
 
     @ViewBuilder
     func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius)
         if #available(iOS 26, *) {
             content
-                .glassEffect(in: RoundedRectangle(cornerRadius: cornerRadius))
+                .glassEffect(in: shape)
         } else {
             content
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: cornerRadius))
+                .background {
+                    ZStack {
+                        shape.fill(.ultraThinMaterial)
+                        shape.fill(AppTheme.Color.cardBg.opacity(0.85))
+                        shape.strokeBorder(AppTheme.Color.border, lineWidth: 0.5)
+                    }
+                }
                 .shadow(
                     color: AppTheme.Shadow.cardColor,
-                    radius: AppTheme.Shadow.cardRadius,
-                    x: AppTheme.Shadow.cardX,
-                    y: AppTheme.Shadow.cardY
+                    radius: 14,
+                    x: 0,
+                    y: 4
                 )
         }
     }
@@ -480,6 +549,10 @@ private struct GlassCapsuleModifier: ViewModifier {
 extension View {
     func glassContainer(cornerRadius: CGFloat = AppTheme.Radius.glassContainer) -> some View {
         modifier(GlassContainerModifier(cornerRadius: cornerRadius))
+    }
+
+    func glassCard(cornerRadius: CGFloat = AppTheme.Radius.glassContainer) -> some View {
+        modifier(GlassCardModifier(cornerRadius: cornerRadius))
     }
 
     func glassBarItem<S: Shape>(in shape: S, interactive: Bool = true) -> some View {

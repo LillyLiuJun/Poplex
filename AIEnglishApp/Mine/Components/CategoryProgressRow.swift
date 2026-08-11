@@ -39,9 +39,11 @@ struct CategoryProgressRow: View {
             withAnimation(.easeInOut(duration: 0.25)) { isExpanded.toggle() }
             if isExpanded && words.isEmpty { fetchWords() }
         } label: {
-            VStack(alignment: .leading, spacing: 8) {
-                // 第一行：分类标题 + 动态计数 + 折叠箭头
-                HStack(alignment: .center, spacing: AppTheme.Space.paddingS) {
+            VStack(alignment: .leading, spacing: 10) {
+                // 第一行：类别图标徽章 + 标题 + 动态计数 + 折叠箭头
+                HStack(alignment: .center, spacing: AppTheme.Space.paddingM) {
+                    categoryBadge
+
                     Text(category.englishLabel)
                         .font(.system(.callout, weight: isHighlighted || category.wordCount >= targetCount ? .semibold : .medium))
                         .foregroundStyle(AppTheme.Color.textPrimary)
@@ -52,35 +54,37 @@ struct CategoryProgressRow: View {
 
                     Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(AppTheme.Color.textMuted)
+                        .foregroundStyle(AppTheme.Color.textPrimary.opacity(0.20))
                         .padding(.leading, 2)
                 }
 
-                // 第二行：平滑高质感的 Capsule 进度条
+                // 第二行：通栏进度条（从徽章左缘拉满，参考 Cleo Spending 行式）
                 progressBar
             }
-            .padding(.vertical, 12)
+            .padding(.vertical, 16)
         }
         .buttonStyle(.plain)
     }
 
-    // MARK: - Count Label
+    // MARK: - Category badge（方案3 · 图标去色：暖灰单色、无底圈）
+
+    private var categoryBadge: some View {
+        Image(systemName: SceneCategory.from(category.sceneCategory).iconName)
+            .font(.system(size: 17, weight: .regular))
+            .foregroundStyle(AppTheme.Color.textPrimary.opacity(0.32))
+            .frame(width: AppTheme.Size.categoryBadge, height: AppTheme.Size.categoryBadge)
+    }
+
+    // MARK: - Count Label（只留裸数字，去 "of 20"）
 
     @ViewBuilder
     private var countLabel: some View {
         let isHot = category.wordCount >= targetCount || isHighlighted
-        HStack(spacing: 4) {
-            Text("\(category.wordCount)")
-                // 统一 caption + 等宽 + 右对齐固定槽：位数不同也不左右跳，"of 20"/⌄ 对齐成列
-                // 最近解锁=品牌色，其余=与 "of 20" 同款灰（只靠颜色区分，不靠变大）
-                .font(.system(.caption))
-                .monospacedDigit()
-                .frame(minWidth: 18, alignment: .trailing)
-                .foregroundStyle(isHot ? AppTheme.Color.brandStrong : AppTheme.Color.textMuted)
-            Text("of \(targetCount)")
-                .font(.system(.caption))
-                .foregroundStyle(AppTheme.Color.textMuted)
-        }
+        Text("\(category.wordCount)")
+            .font(.system(.caption))
+            .monospacedDigit()
+            .frame(minWidth: 18, alignment: .trailing)
+            .foregroundStyle(isHot ? AppTheme.Color.brandStrong : AppTheme.Color.textMuted)
     }
 
     // MARK: - Progress bar
@@ -88,15 +92,16 @@ struct CategoryProgressRow: View {
     private var progressBar: some View {
         let progress = min(CGFloat(category.wordCount) / CGFloat(targetCount), 1.0)
         // 不用 GeometryReader：满宽 Capsule 作轨道，填充用 scaleEffect 缩放，避免撑宽
+        // 方案3：2.5px 超轻进度条，独自承担行间分隔职责
         return Capsule()
-            .fill(Color(.systemGray6))
-            .frame(height: 6)
+            .fill(AppTheme.Color.progressTrack)
+            .frame(height: 2.5)
             .overlay(alignment: .leading) {
                 Capsule()
                     .fill(
                         isHighlighted || category.wordCount >= targetCount
                             ? AppTheme.Color.brandStrong.opacity(0.5)   // 品牌橙半透明，柔和不冲
-                            : Color(.systemGray4)
+                            : AppTheme.Color.progressFill
                     )
                     .scaleEffect(x: category.wordCount > 0 ? max(progress, 0.02) : 0, anchor: .leading)
                     .animation(.easeOut(duration: 0.4), value: category.wordCount)
@@ -131,7 +136,8 @@ struct CategoryProgressRow: View {
                 }
             }
             .padding(.vertical, 4)
-            .padding(.leading, AppTheme.Space.paddingM)   // 子项缩进，和分类头拉出层级
+            // 子项缩进到类别名左缘（徽章宽 + 间距），和分类头拉出层级
+            .padding(.leading, AppTheme.Size.categoryBadge + AppTheme.Space.paddingM)
         }
     }
 
@@ -141,22 +147,7 @@ struct CategoryProgressRow: View {
         guard !isLoadingWords, words.isEmpty else { return }
         isLoadingWords = true
         Task {
-            var list = await loadWords()
-            // 插入测试长词组与长释义，方便在App上直接测试长度边界表现
-            list.append(Tab2WordEntry(
-                lemma: "kill two birds with one stone",
-                displayForm: "kill two birds with one stone",
-                entryKind: "idiom",
-                granularity: "sentence",
-                nativeMeaning: "一石二鸟，一举两得"
-            ))
-            list.append(Tab2WordEntry(
-                lemma: "unquestionably counterproductive",
-                displayForm: "unquestionably counterproductive",
-                entryKind: "phrase",
-                granularity: "sentence",
-                nativeMeaning: "毫无疑问地产生反效果与副作用"
-            ))
+            let list = await loadWords()
             words = list
             isLoadingWords = false
         }

@@ -41,4 +41,23 @@ enum SceneCategory: String, CaseIterable {
         guard let raw = rawValue else { return .other }
         return SceneCategory(rawValue: raw) ?? .other
     }
+
+    /// Topics 行的类别图标（SF Symbol 名，线性风）。类别区分靠图标形状，
+    /// 徽章底色统一浅橘单色（M2 方案），不按类别换色。
+    var iconName: String {
+        switch self {
+        case .homeFamily:    return "house"
+        case .workStudy:     return "briefcase"
+        case .dailyRoutines: return "sun.horizon"
+        case .food:          return "fork.knife"
+        case .shopping:      return "bag"
+        case .gettingAround: return "tram"
+        case .healthFitness: return "figure.run"
+        case .leisure:       return "gamecontroller"
+        case .tech:          return "laptopcomputer"
+        case .weather:       return "cloud.sun"
+        case .social:        return "bubble.left.and.bubble.right"
+        case .other:         return "ellipsis"
+        }
+    }
 }
