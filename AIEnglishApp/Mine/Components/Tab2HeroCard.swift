@@ -1,11 +1,19 @@
 import SwiftUI
 
+/// Tab2 已解锁分类卡（设计方案 §2–§7）。所有已解锁分类共用本组件（原 Tab2CategoryRow 已并入）。
+/// 结构：顶部拼图/预设图（分类级氛围）+ 底部单条 featured moment（同源）+ 右下角 CTA。
+/// 底部按 (user_original, input_lang) 分四种模式（§4.2）：
+///   A 你说过的英语（引号+衬线）· B 想说没说出（衬线主角+母语注脚，无引号）
+///   C 你拍下的场景（衬线主角+来源标记，无引号）· D 攒下的词（chips 兜底）
 struct Tab2HeroCard: View {
     let category: Tab2CategoryData
     let isFirstUnlock: Bool
     let onTalk: () -> Void
 
     private var sceneCategory: SceneCategory { SceneCategory.from(category.sceneCategory) }
+
+    // 底部固定高度：各模式对齐，列表滚动不跳动（§2.3）
+    private let bottomHeight: CGFloat = 172
 
     var body: some View {
         Button {
@@ -17,186 +25,244 @@ struct Tab2HeroCard: View {
         .buttonStyle(HeroCardPressStyle())
     }
 
-    // MARK: - Card layout
-
     private var cardContent: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            categoryHeader
-
-            Spacer(minLength: 14)
-
-            momentContent
-
-            Spacer(minLength: 16)
-
-            ctaButton
+        VStack(spacing: 0) {
+            topArt
+            bottomContent
         }
-        .padding(22)
         .frame(maxWidth: .infinity)
-        .glassCard()
-    }
-
-    // MARK: - Category header（纯文字标签，不放图标）
-
-    private var categoryHeader: some View {
-        HStack(alignment: .center) {
-            Text(category.englishLabel.uppercased())
-                .font(.system(size: 11, weight: .semibold))
-                .tracking(1.2)
-                .foregroundStyle(AppTheme.Color.textSecondary)
-
-            Spacer()
-
-            Text(PopsLabel.format(category.wordCount))
-                .font(AppTheme.Font.cardMeta)
-                .foregroundStyle(AppTheme.Color.textMuted)
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.glassContainer))
+        .background {
+            RoundedRectangle(cornerRadius: AppTheme.Radius.glassContainer)
+                .fill(AppTheme.Color.warmGlassSurface)
         }
+        // 轻阴影：收敛不晕染（原 warmCard radius 28 会在页面上晕成一片"底纹"）
+        .shadow(color: AppTheme.Shadow.cardColor, radius: 12, x: 0, y: 4)
     }
 
-    // MARK: - Moment content
+    // MARK: - 顶部（§6.3：判定源是 hero_photos 是否为空）
 
     @ViewBuilder
-    private var momentContent: some View {
-        let scenes = displayScenes
-        if scenes.isEmpty {
-            fallbackWords
+    private var topArt: some View {
+        let label = category.englishLabel
+        let pops  = PopsLabel.format(category.wordCount)
+        // +N：除底部正在看的这条 featured，分类还剩几个 moment（§9.3）
+        let moreCount = max(0, category.momentCount - 1)
+
+        if category.heroPhotos.isEmpty {
+            CategoryPresetArtView(
+                category: sceneCategory, categoryLabel: label,
+                popsText: pops, moreCount: moreCount
+            )
         } else {
-            VStack(alignment: .leading, spacing: 10) {
-                featuredMoment(scenes[0])
-
-                if scenes.count > 1 {
-                    Divider().opacity(0.4)
-
-                    ForEach(scenes.dropFirst()) { scene in
-                        MomentRow(scene: scene, category: sceneCategory)
-                    }
-                }
-
-                let remaining = goodScenes.count - scenes.count
-                if remaining > 0 {
-                    Text("+\(remaining) more moments")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(AppTheme.Color.textMuted)
-                        .padding(.top, 2)
-                }
-            }
+            HeroCollageView(
+                photos: category.heroPhotos, categoryLabel: label,
+                popsText: pops, moreCount: moreCount
+            )
         }
     }
 
-    // MARK: - Featured moment（排名第一的子场景，有图时展大图）
+    // MARK: - 底部内容（meta + 主角 + CTA）
+
+    private var bottomContent: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: AppTheme.Space.paddingS) {
+                if let f = category.featured {
+                    metaRow(f)
+                    featuredLead(f)
+                } else {
+                    fallbackWords   // 模式 D
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+
+            Spacer(minLength: AppTheme.Space.paddingM)
+
+            HStack {
+                Spacer()
+                ctaPill
+            }
+        }
+        .padding(.horizontal, AppTheme.Space.paddingCard)
+        .padding(.vertical, AppTheme.Space.paddingM)
+        .frame(height: bottomHeight)
+    }
+
+    // MARK: - Meta 行（§5）：scene · [📷 from your photo] · [seen N×] · time
 
     @ViewBuilder
-    private func featuredMoment(_ scene: Tab2SubScene) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if let url = scene.imageUrl, let key = scene.stableImageKey {
-                CachedRemoteImage(
-                    signedUrl: url,
-                    stableKey: key,
-                    placeholder: RoundedRectangle(cornerRadius: 12)
-                        .fill(AppTheme.Color.cardBg)
-                        .overlay(
-                            Image(systemName: "photo")
-                                .foregroundStyle(AppTheme.Color.textMuted)
-                        )
-                )
-                .saturation(0.88)
-                .frame(maxWidth: .infinity)
-                .frame(height: 120)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-            }
+    private func metaRow(_ f: Tab2FeaturedMoment) -> some View {
+        HStack(spacing: 5) {
+            Text(f.sceneDetail)
+                .font(AppTheme.Font.pos)
+                .fontWeight(.semibold)
+                .foregroundStyle(AppTheme.Color.textSecondary)
+                .lineLimit(1)
 
-            // Scene label + freq
-            HStack(alignment: .firstTextBaseline) {
-                if !scene.isPhotoMoment {
-                    Image(systemName: sceneCategory.momentIconName)
-                        .symbolVariant(.fill)
-                        .font(.system(size: 13))
-                        .foregroundStyle(AppTheme.Color.textPrimary.opacity(0.42))
+            if mode(f) == .c {
+                metaDot
+                HStack(spacing: 3) {
+                    Image(systemName: "camera")
+                    Text("from your photo")
                 }
-
-                Text(scene.sceneDetail)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(AppTheme.Color.textSecondary)
-
-                Spacer()
-
-                if scene.occurrenceCount > 1 {
-                    Text("+\(scene.occurrenceCount)")
-                        .font(.system(size: 11, weight: .regular))
-                        .foregroundStyle(AppTheme.Color.textMuted)
-                }
+                .font(AppTheme.Font.pos)
+                .foregroundStyle(AppTheme.Color.textSecondary)
             }
+            if let t = f.createdAt {
+                metaDot
+                Text(Self.relativeTime(t))
+                    .font(AppTheme.Font.pos)
+                    .foregroundStyle(AppTheme.Color.textFaint)
+            }
+            Spacer(minLength: 0)
+        }
+    }
 
-            // Quote（Serif 字体，给原话一点"人说的话"的质感）
-            if let q = scene.quote, !q.isEmpty {
-                // 用户原话：Serif 字体，强调"人说的话"
-                Text(q)
-                    .font(.system(size: 15, weight: .regular, design: .serif))
-                    .foregroundStyle(AppTheme.Color.textPrimary)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-            } else if let te = scene.targetExpression, !te.isEmpty {
-                // 无原话时降级展示 AI 生成句子，弱化颜色与字体做区分
-                Text(te)
-                    .font(.system(size: 14, weight: .regular))
-                    .foregroundStyle(AppTheme.Color.textSecondary)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
+    private var metaDot: some View {
+        Text("·")
+            .font(AppTheme.Font.pos)
+            .foregroundStyle(AppTheme.Color.textFaint)
+    }
+
+    // MARK: - 主角句（模式 A / B / C）
+
+    @ViewBuilder
+    private func featuredLead(_ f: Tab2FeaturedMoment) -> some View {
+        switch mode(f) {
+        case .a:
+            // 主角 = 用户英文原话（引号 = 目标语言字面产出，§4.1）；母语翻译作注脚
+            leadStack(primary: "\u{201C}\(f.userOriginal ?? "")\u{201D}", footnote: f.nativeMeaning)
+        case .b:
+            // 主角 = target（无引号）；用户母语原话作注脚
+            leadStack(primary: f.targetExpression ?? "", footnote: f.userOriginal)
+        case .c:
+            // 主角 = target（无引号，来源标记在 meta 行）；母语翻译作注脚
+            leadStack(primary: f.targetExpression ?? "", footnote: f.nativeMeaning)
+        case .d:
+            EmptyView()   // 由 fallbackWords 承载
+        }
+    }
+
+    // 主角句（英文，衬线）+ 母语注脚（muted）。四模式统一：英文在上、母语在下。
+    @ViewBuilder
+    private func leadStack(primary: String, footnote: String?) -> some View {
+        VStack(alignment: .leading, spacing: AppTheme.Space.paddingXS) {
+            Text(primary)
+                .font(AppTheme.Font.cardSentence)
+                .foregroundStyle(AppTheme.Color.textPrimary)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+            if let note = footnote, !note.isEmpty {
+                Text(note)
+                    .font(AppTheme.Font.chineseFaint)
+                    .foregroundStyle(AppTheme.Color.textMuted)
+                    .lineLimit(1)
             }
         }
     }
 
-    // MARK: - Fallback（无合格子场景时展示预览词）
+    // MARK: - 模式 D（词 chips 兜底，§4.6）
 
     @ViewBuilder
     private var fallbackWords: some View {
-        let words = category.previewWords.prefix(5)
+        let words = Array(category.previewWords.prefix(6))
         if !words.isEmpty {
-            Text(words.joined(separator: "  ·  "))
-                .font(AppTheme.Font.englishBody)
-                .foregroundStyle(AppTheme.Color.textMuted)
-                .lineLimit(2)
+            VStack(alignment: .leading, spacing: AppTheme.Space.paddingM) {
+                Text("Your collected pops")
+                    .font(AppTheme.Font.chineseBody)
+                    .foregroundStyle(AppTheme.Color.textSecondary)
+                FlowLayout(spacing: AppTheme.Space.paddingS) {
+                    ForEach(words, id: \.self) { w in
+                        Text(w)
+                            .font(AppTheme.Font.iconBadgeLetter)   // 衬线，呼应品牌
+                            .foregroundStyle(AppTheme.Color.textSecondary)   // 克制中性色，不用品牌橙
+                            .padding(.horizontal, AppTheme.Space.paddingM)
+                            .padding(.vertical, AppTheme.Space.paddingS)
+                            .background(AppTheme.Color.pageBg, in: Capsule())
+                            .overlay(Capsule().stroke(AppTheme.Color.border, lineWidth: 1))
+                    }
+                }
+            }
         }
     }
 
-    // MARK: - CTA（克制版，去掉深色实心 + 阴影）
+    // MARK: - CTA（深色实心 pill，参考 Duolingo「Start lesson」样式）
 
-    private var ctaButton: some View {
+    private var ctaPill: some View {
         HStack(spacing: AppTheme.Space.paddingS) {
-            Image(systemName: "mic.fill")
-                .font(.system(size: 14, weight: .semibold))
             Text("Start talking")
-                .font(.system(size: 15, weight: .semibold))
+            Image(systemName: "arrow.right")
+                .imageScale(.small)
         }
-        .foregroundStyle(AppTheme.Color.textPrimary.opacity(0.75))
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 12)
-        .background(AppTheme.Color.textPrimary.opacity(0.06))
-        .clipShape(Capsule())
+        .font(AppTheme.Font.ctaLabel)
+        .foregroundStyle(.white)
+        .padding(.horizontal, AppTheme.Space.paddingPage)
+        .padding(.vertical, AppTheme.Space.paddingM)
+        .background(AppTheme.Color.textPrimary, in: Capsule())
     }
 
-    // MARK: - Scene selection（只要 sceneDetail 非空即合格）
+    // MARK: - 模式判据（§4.2：用 (user_original, input_lang) 组合，不能只看 input_lang）
 
-    private var goodScenes: [Tab2SubScene] {
-        category.subScenes
-            .filter { !$0.sceneDetail.isEmpty }
-            .sorted { $0.occurrenceCount > $1.occurrenceCount }
+    enum FeaturedMode { case a, b, c, d }
+
+    /// 纯逻辑判据（可单测）：
+    /// 无 featured → D；有母语原话 → target 记 A、其余(native/other) 记 B；无原话(纯图片) → C。
+    static func featuredMode(userOriginal: String?, inputLang: String?, hasFeatured: Bool) -> FeaturedMode {
+        guard hasFeatured else { return .d }
+        if let o = userOriginal, !o.isEmpty {
+            // input_lang='other'（第三语言）按非目标语言处理，落 B（无引号）
+            return inputLang == "target" ? .a : .b
+        }
+        return .c   // user_original 为空 = 纯图片
     }
 
-    // featured 位优先选 Photo Moment（有图更值得放大展示）；
-    // 其余按频次填，总量 ≤3。
-    private var displayScenes: [Tab2SubScene] {
-        let photos = goodScenes.filter { $0.isPhotoMoment }
-        let texts  = goodScenes.filter { !$0.isPhotoMoment }
+    private func mode(_ f: Tab2FeaturedMoment) -> FeaturedMode {
+        Self.featuredMode(userOriginal: f.userOriginal, inputLang: f.inputLang, hasFeatured: true)
+    }
 
-        if let featured = photos.first {
-            // 有 Photo Moment：featured = 频次最高的照片，其余按频次混排填满 2 个紧凑行
-            let rest = Array((photos.dropFirst() + texts)
-                .sorted { $0.occurrenceCount > $1.occurrenceCount }
-                .prefix(2))
-            return [featured] + rest
-        } else {
-            return Array(texts.prefix(3))
+    // MARK: - 相对时间（§5.4：粗粒度，不到小时）
+
+    static func relativeTime(_ date: Date, now: Date = Date()) -> String {
+        let cal = Calendar.current
+        let days = cal.dateComponents(
+            [.day], from: cal.startOfDay(for: date), to: cal.startOfDay(for: now)
+        ).day ?? 0
+        switch days {
+        case ..<1:    return "today"
+        case 1:       return "yesterday"
+        case 2...27:  return "\(days) days ago"
+        case 28...59: return "last month"
+        default:      return "earlier"
+        }
+    }
+}
+
+// MARK: - 极简 Flow 布局（chips 按行打包，不裁半行，§4.6）
+
+private struct FlowLayout: Layout {
+    var spacing: CGFloat = 8
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxW = proposal.width ?? .infinity
+        var x: CGFloat = 0, y: CGFloat = 0, rowH: CGFloat = 0
+        for s in subviews {
+            let sz = s.sizeThatFits(.unspecified)
+            if x + sz.width > maxW, x > 0 { x = 0; y += rowH + spacing; rowH = 0 }
+            x += sz.width + spacing
+            rowH = max(rowH, sz.height)
+        }
+        return CGSize(width: maxW == .infinity ? x : maxW, height: y + rowH)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let maxW = bounds.width
+        var x: CGFloat = 0, y: CGFloat = 0, rowH: CGFloat = 0
+        for s in subviews {
+            let sz = s.sizeThatFits(.unspecified)
+            if x + sz.width > maxW, x > 0 { x = 0; y += rowH + spacing; rowH = 0 }
+            s.place(at: CGPoint(x: bounds.minX + x, y: bounds.minY + y), proposal: ProposedViewSize(sz))
+            x += sz.width + spacing
+            rowH = max(rowH, sz.height)
         }
     }
 }
@@ -210,3 +276,103 @@ private struct HeroCardPressStyle: ButtonStyle {
             .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
     }
 }
+
+// MARK: - Preview mock（展示四模式 × 拼图/预设的各种卡片样式）
+
+#if DEBUG
+private extension Tab2CategoryData {
+    static func mock(
+        category: String, featured: Tab2FeaturedMoment?, heroPhotos: [Tab2HeroPhoto],
+        momentCount: Int, previewWords: [String] = []
+    ) -> Tab2CategoryData {
+        Tab2CategoryData(
+            sceneCategory: category, wordCount: 42, unlocked: true,
+            lastMaterialAt: Date(), subScenes: [], previewWords: previewWords,
+            momentCount: momentCount, featured: featured, heroPhotos: heroPhotos
+        )
+    }
+}
+
+private func mockPhoto(_ seed: Int, featured: Bool = false) -> Tab2HeroPhoto {
+    Tab2HeroPhoto(
+        materialId: "m\(seed)",
+        imageUrl: "https://picsum.photos/seed/\(seed)/400/300",
+        isFeatured: featured
+    )
+}
+
+private func mockFeatured(
+    scene: String, userOriginal: String?, target: String?, native: String?,
+    inputLang: String?, image: String? = nil, occ: Int = 1
+) -> Tab2FeaturedMoment {
+    Tab2FeaturedMoment(
+        sceneDetail: scene, occurrenceCount: occ, materialId: "mf",
+        userOriginal: userOriginal, targetExpression: target, nativeMeaning: native,
+        imageUrl: image, inputLang: inputLang, sourceDirection: "express",
+        sourceGranularity: "sentence", createdAt: Date().addingTimeInterval(-4 * 86400),
+        spokenCount: 0
+    )
+}
+
+#Preview("Hero 卡 · 四模式") {
+    ScrollView {
+        VStack(spacing: 22) {
+            // 模式 A：英文原话（引号）+ 3 张拼图（c3）
+            Tab2HeroCard(category: .mock(
+                category: "饮食",
+                featured: mockFeatured(
+                    scene: "Cooking dinner",
+                    userOriginal: "The sauce came out way too salty tonight.",
+                    target: nil, native: "今晚酱汁太咸了。", inputLang: "target", occ: 4),
+                heroPhotos: [mockPhoto(11, featured: true), mockPhoto(12), mockPhoto(13)],
+                momentCount: 4
+            ), isFirstUnlock: false, onTalk: {}).frame(width: 350)
+
+            // 模式 B：中文原话（无引号 + 母语注脚）+ 预设图（无照片）
+            Tab2HeroCard(category: .mock(
+                category: "工作与学业",
+                featured: mockFeatured(
+                    scene: "Standup meeting",
+                    userOriginal: "他们问我时间线时我大脑一片空白",
+                    target: "I totally blanked when they asked me for the timeline.",
+                    native: nil, inputLang: "native", occ: 5),
+                heroPhotos: [], momentCount: 5
+            ), isFirstUnlock: false, onTalk: {}).frame(width: 350)
+
+            // 模式 C：纯图片（from your photo）+ 单图（c1）
+            Tab2HeroCard(category: .mock(
+                category: "饮食",
+                featured: mockFeatured(
+                    scene: "Cooking dinner", userOriginal: nil,
+                    target: "The kitchen smells wonderful tonight.",
+                    native: "今晚厨房飘着好闻的香气。", inputLang: nil,
+                    image: "https://picsum.photos/seed/21/400/300"),
+                heroPhotos: [mockPhoto(21, featured: true)],
+                momentCount: 1
+            ), isFirstUnlock: false, onTalk: {}).frame(width: 350)
+
+            // 模式 D：无 featured（全查词）+ 预设图 + 词 chips
+            Tab2HeroCard(category: .mock(
+                category: "科技数码", featured: nil, heroPhotos: [], momentCount: 0,
+                previewWords: ["back up", "glitch", "firmware", "sync", "latency", "crash"]
+            ), isFirstUnlock: false, onTalk: {}).frame(width: 350)
+
+            // 拼图变体：5 张（c5）
+            Tab2HeroCard(category: .mock(
+                category: "休闲娱乐",
+                featured: mockFeatured(
+                    scene: "Watching sports", userOriginal: nil,
+                    target: "The stadium was absolutely electric tonight.",
+                    native: "今晚球场气氛热烈。", inputLang: nil,
+                    image: "https://picsum.photos/seed/31/400/300"),
+                heroPhotos: [mockPhoto(31, featured: true), mockPhoto(32), mockPhoto(33),
+                             mockPhoto(34), mockPhoto(35)],
+                momentCount: 8
+            ), isFirstUnlock: false, onTalk: {}).frame(width: 350)
+        }
+        .padding(.vertical, 30)
+    }
+    .frame(maxWidth: .infinity)
+    .background(AppTheme.Color.pageBg)
+}
+#endif

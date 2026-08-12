@@ -1281,17 +1281,22 @@ struct Tab2HeroCategoryTests {
         wordCount: Int,
         unlocked: Bool,
         lastMaterialAt: Date? = nil,
-        quotes: [String?] = []
+        hasFeatured: Bool = false
     ) -> Tab2CategoryData {
-        let subScenes = quotes.enumerated().map { i, q in
-            Tab2SubScene(sceneDetail: "Scene \(i)", occurrenceCount: i + 1, quote: q)
-        }
+        // 第 3 刀后 heroCategory() 改读 featured（不再看 subScenes.quote）
+        let featured: Tab2FeaturedMoment? = hasFeatured ? Tab2FeaturedMoment(
+            sceneDetail: "Scene", occurrenceCount: 1, materialId: "m",
+            userOriginal: "some original", targetExpression: "some target",
+            nativeMeaning: nil, imageUrl: nil, inputLang: "native",
+            sourceDirection: "express", sourceGranularity: "sentence",
+            createdAt: lastMaterialAt, spokenCount: 0
+        ) : nil
         return Tab2CategoryData(
             sceneCategory: sceneCategory,
             wordCount: wordCount,
             unlocked: unlocked,
             lastMaterialAt: lastMaterialAt,
-            subScenes: subScenes
+            featured: featured
         )
     }
 
@@ -1310,67 +1315,124 @@ struct Tab2HeroCategoryTests {
         #expect(vm.heroCategory() == nil)
     }
 
-    @Test func fewerThanTwoValidQuotesFallsBackToHighestWordCount() {
+    // 无任何 featured → 降级到词数最多的已解锁分类
+    @Test func noFeaturedFallsBackToHighestWordCount() {
         let vm = Tab2HomeViewModel()
-        // 有效引文阈值 = ≥6 字；"Short"(5字) 不达标
-        let lowQuoteCat = makeCategory(
-            sceneCategory: "工作与学业", wordCount: 10, unlocked: true,
-            quotes: ["Short"]
-        )
-        let highWordCat = makeCategory(
-            sceneCategory: "饮食", wordCount: 20, unlocked: true,
-            quotes: []
-        )
-        vm.data = Tab2HomeData(unlocked: true, inputCount: 5, categories: [lowQuoteCat, highWordCat])
+        let low  = makeCategory(sceneCategory: "工作与学业", wordCount: 10, unlocked: true)
+        let high = makeCategory(sceneCategory: "饮食", wordCount: 20, unlocked: true)
+        vm.data = Tab2HomeData(unlocked: true, inputCount: 5, categories: [low, high])
         let hero = vm.heroCategory()
         #expect(hero?.sceneCategory == "饮食")
         #expect(hero?.wordCount == 20)
     }
 
-    @Test func prefersUnlockedCategoryWithTwoOrMoreValidQuotes() {
+    // 有 featured 的分类优先于无 featured（即使后者词数更多）
+    @Test func prefersCategoryWithFeaturedOverHigherWordCount() {
         let vm = Tab2HomeViewModel()
-        let richCat = makeCategory(
+        let featuredCat = makeCategory(
             sceneCategory: "工作与学业", wordCount: 5, unlocked: true,
-            lastMaterialAt: Date(),
-            quotes: ["We had a long team meeting", "Deadline is this Friday morning"]
+            lastMaterialAt: Date(), hasFeatured: true
         )
         let wordRichCat = makeCategory(
-            sceneCategory: "饮食", wordCount: 50, unlocked: true,
-            quotes: []
+            sceneCategory: "饮食", wordCount: 50, unlocked: true, hasFeatured: false
         )
-        vm.data = Tab2HomeData(unlocked: true, inputCount: 8, categories: [wordRichCat, richCat])
-        let hero = vm.heroCategory()
-        #expect(hero?.sceneCategory == "工作与学业")
+        vm.data = Tab2HomeData(unlocked: true, inputCount: 8, categories: [wordRichCat, featuredCat])
+        #expect(vm.heroCategory()?.sceneCategory == "工作与学业")
     }
 
-    @Test func mostRecentLastMaterialAtWinsAmongRichCategories() {
+    // 多个有 featured：lastMaterialAt 最新的赢
+    @Test func mostRecentFeaturedWins() {
         let vm = Tab2HomeViewModel()
-        let olderDate = Date(timeIntervalSince1970: 1_750_000_000)
-        let newerDate = Date(timeIntervalSince1970: 1_760_000_000)
+        let older = Date(timeIntervalSince1970: 1_750_000_000)
+        let newer = Date(timeIntervalSince1970: 1_760_000_000)
         let oldCat = makeCategory(
             sceneCategory: "家庭与人际", wordCount: 15, unlocked: true,
-            lastMaterialAt: olderDate,
-            quotes: ["Dinner with my parents last night", "My sister visited us this weekend"]
+            lastMaterialAt: older, hasFeatured: true
         )
         let newCat = makeCategory(
             sceneCategory: "工作与学业", wordCount: 10, unlocked: true,
-            lastMaterialAt: newerDate,
-            quotes: ["Project deadline coming this Friday", "Team meeting went really well today"]
+            lastMaterialAt: newer, hasFeatured: true
         )
         vm.data = Tab2HomeData(unlocked: true, inputCount: 10, categories: [oldCat, newCat])
-        let hero = vm.heroCategory()
-        #expect(hero?.sceneCategory == "工作与学业")
+        #expect(vm.heroCategory()?.sceneCategory == "工作与学业")
+    }
+}
+
+// MARK: - Tab2HeroCard 模式判据 tests（§4.2）
+
+struct Tab2HeroCardModeTests {
+
+    // 英文输入（input_lang=target）→ 模式 A（引号）
+    @Test func targetInputIsModeA() {
+        #expect(Tab2HeroCard.featuredMode(userOriginal: "I'm exhausted.", inputLang: "target", hasFeatured: true) == .a)
     }
 
-    @Test func quotesWithExactlySixCharsPassThreshold() {
-        let vm = Tab2HomeViewModel()
-        let cat = makeCategory(
-            sceneCategory: "休闲娱乐", wordCount: 8, unlocked: true,
-            quotes: ["123456", "abcdef"]  // exactly 6 chars — boundary case
-        )
-        vm.data = Tab2HomeData(unlocked: true, inputCount: 3, categories: [cat])
-        let hero = vm.heroCategory()
-        #expect(hero?.sceneCategory == "休闲娱乐")
+    // 母语输入（native）→ 模式 B（无引号 + 注脚）
+    @Test func nativeInputIsModeB() {
+        #expect(Tab2HeroCard.featuredMode(userOriginal: "太累了", inputLang: "native", hasFeatured: true) == .b)
+    }
+
+    // 第三语言（other）按非目标语言 → 模式 B（不加引号）
+    @Test func otherLangIsModeB() {
+        #expect(Tab2HeroCard.featuredMode(userOriginal: "疲れた", inputLang: "other", hasFeatured: true) == .b)
+    }
+
+    // user_original 为空（纯图片）→ 模式 C
+    @Test func nilUserOriginalIsModeC() {
+        #expect(Tab2HeroCard.featuredMode(userOriginal: nil, inputLang: nil, hasFeatured: true) == .c)
+    }
+
+    // user_original 空字符串也当纯图片 → 模式 C
+    @Test func emptyUserOriginalIsModeC() {
+        #expect(Tab2HeroCard.featuredMode(userOriginal: "", inputLang: nil, hasFeatured: true) == .c)
+    }
+
+    // 无 featured（分类全查词）→ 模式 D
+    @Test func noFeaturedIsModeD() {
+        #expect(Tab2HeroCard.featuredMode(userOriginal: "x", inputLang: "target", hasFeatured: false) == .d)
+    }
+}
+
+// MARK: - Tab2HeroCard 相对时间粒度 tests（§5.4）
+
+struct Tab2HeroCardRelativeTimeTests {
+
+    private let cal = Calendar.current
+    private func daysAgo(_ n: Int, from now: Date) -> Date {
+        cal.date(byAdding: .day, value: -n, to: now)!
+    }
+
+    @Test func zeroDaysIsToday() {
+        let now = Date()
+        #expect(Tab2HeroCard.relativeTime(now, now: now) == "today")
+    }
+
+    @Test func oneDayIsYesterday() {
+        let now = Date()
+        #expect(Tab2HeroCard.relativeTime(daysAgo(1, from: now), now: now) == "yesterday")
+    }
+
+    @Test func fourDaysIsNDaysAgo() {
+        let now = Date()
+        #expect(Tab2HeroCard.relativeTime(daysAgo(4, from: now), now: now) == "4 days ago")
+    }
+
+    // 上边界：27 天仍是 "N days ago"
+    @Test func twentySevenDaysIsDaysAgo() {
+        let now = Date()
+        #expect(Tab2HeroCard.relativeTime(daysAgo(27, from: now), now: now) == "27 days ago")
+    }
+
+    // 28 天进入 "last month"
+    @Test func twentyEightDaysIsLastMonth() {
+        let now = Date()
+        #expect(Tab2HeroCard.relativeTime(daysAgo(28, from: now), now: now) == "last month")
+    }
+
+    // 90 天 → "earlier"
+    @Test func ninetyDaysIsEarlier() {
+        let now = Date()
+        #expect(Tab2HeroCard.relativeTime(daysAgo(90, from: now), now: now) == "earlier")
     }
 }
 

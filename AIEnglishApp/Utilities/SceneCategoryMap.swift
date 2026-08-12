@@ -60,4 +60,23 @@ enum SceneCategory: String, CaseIterable {
         case .other:         return "ellipsis"
         }
     }
+
+    /// Moment 场景图标（SF Symbol）——用于 Tab2 Hero 卡预设图 / Text Moment。
+    /// 独立于 `iconName`（Topics 行用）：这套更贴合"日常活动"意象（起居→床、出行→车）。
+    var momentIconName: String {
+        switch self {
+        case .homeFamily:    return "house"
+        case .workStudy:     return "briefcase"
+        case .dailyRoutines: return "bed.double"
+        case .food:          return "fork.knife"
+        case .shopping:      return "bag"
+        case .gettingAround: return "car"
+        case .healthFitness: return "figure.run"
+        case .leisure:       return "tv"
+        case .tech:          return "laptopcomputer"
+        case .weather:       return "cloud.sun"
+        case .social:        return "bubble.left.and.bubble.right"
+        case .other:         return "tag"
+        }
+    }
 }

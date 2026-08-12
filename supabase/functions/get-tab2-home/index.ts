@@ -39,20 +39,23 @@ async function getAuthUserId(req: Request): Promise<string | null> {
   }
 }
 
-// 批量签名：收集 categories[].sub_scenes[].image_url 里的所有路径，一次请求换成签名 URL。
+// 批量签名：收集 sub_scenes[].image_url + featured.image_url + hero_photos[].image_url
+// 里的所有 Storage 路径，一次请求换成签名 URL。
 async function signImagePaths(
   categories: Array<Record<string, unknown>>
 ): Promise<Array<Record<string, unknown>>> {
   // 收集所有非空路径（去重）
   const paths = new Set<string>();
+  const collect = (v: unknown) => {
+    if (typeof v === "string" && v) paths.add(v);
+  };
   for (const cat of categories) {
-    const scenes = cat.sub_scenes as Array<Record<string, unknown>> | undefined;
-    if (!scenes) continue;
-    for (const s of scenes) {
-      if (typeof s.image_url === "string" && s.image_url) {
-        paths.add(s.image_url);
-      }
-    }
+    (cat.sub_scenes as Array<Record<string, unknown>> | undefined)
+      ?.forEach((s) => collect(s.image_url));
+    const featured = cat.featured as Record<string, unknown> | null | undefined;
+    if (featured) collect(featured.image_url);
+    (cat.hero_photos as Array<Record<string, unknown>> | undefined)
+      ?.forEach((p) => collect(p.image_url));
   }
 
   if (paths.size === 0) return categories;
@@ -88,18 +91,35 @@ async function signImagePaths(
     console.error("[get-tab2-home] sign error:", e);
   }
 
-  // 把路径替换成签名 URL（签名失败的保持 null，不透出原始路径）
+  const sign = (v: unknown): string | null =>
+    typeof v === "string" ? (signedMap.get(v) ?? null) : null;
+
+  // 替换路径为签名 URL：
+  //   · sub_scenes / featured 的 image_url 是可空字段——签名失败留 null，不透原始路径
+  //   · hero_photos 的 image_url 前端模型为非空——签名失败的整张从拼图剔除
   return categories.map((cat) => {
+    const out: Record<string, unknown> = { ...cat };
+
     const scenes = cat.sub_scenes as Array<Record<string, unknown>> | undefined;
-    if (!scenes) return cat;
-    return {
-      ...cat,
-      sub_scenes: scenes.map((s) => {
-        const path = typeof s.image_url === "string" ? s.image_url : null;
-        const signedUrl = path ? (signedMap.get(path) ?? null) : null;
-        return { ...s, image_url: signedUrl };
-      }),
-    };
+    if (scenes) out.sub_scenes = scenes.map((s) => ({ ...s, image_url: sign(s.image_url) }));
+
+    const featured = cat.featured as Record<string, unknown> | null | undefined;
+    if (featured) out.featured = { ...featured, image_url: sign(featured.image_url) };
+
+    const hero = cat.hero_photos as Array<Record<string, unknown>> | undefined;
+    if (hero) {
+      out.hero_photos = hero
+        .map((p) => ({ ...p, image_url: sign(p.image_url) }))
+        .filter((p) => {
+          if (!p.image_url) {
+            console.warn("[get-tab2-home] hero_photo sign failed, dropped:", p.material_id);
+            return false;
+          }
+          return true;
+        });
+    }
+
+    return out;
   });
 }
 

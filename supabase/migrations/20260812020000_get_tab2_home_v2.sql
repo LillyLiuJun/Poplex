@@ -70,7 +70,7 @@ BEGIN
 
   -- ④ 单图绑定预处理（§3.5）：分类恰好只有 1 张真实照片时，记下 material_id
   single_photo_mat AS (
-    SELECT scene_category, MIN(material_id) AS material_id
+    SELECT scene_category, (array_agg(material_id))[1] AS material_id
     FROM (
       SELECT DISTINCT lo.scene_category, m.id AS material_id
       FROM   lexicon_occurrences lo

@@ -619,15 +619,16 @@ private struct Tab2UnlockedView: View {
                                     isFirstUnlock: vm.isFirstUnlock,
                                     onTalk: { onTalk(hero.sceneCategory) }
                                 )
-                                .frame(width: 335)
+                                .frame(width: 350)
                             }
 
                             ForEach(otherUnlocked) { cat in
-                                Tab2CategoryRow(
+                                Tab2HeroCard(
                                     category: cat,
+                                    isFirstUnlock: false,
                                     onTalk: { onTalk(cat.sceneCategory) }
                                 )
-                                .frame(width: 335)
+                                .frame(width: 350)
                             }
                         }
                         .padding(.horizontal, AppTheme.Space.paddingPage)

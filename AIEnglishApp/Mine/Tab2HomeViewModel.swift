@@ -25,21 +25,16 @@ final class Tab2HomeViewModel {
     // MARK: - Hero 选取
 
     /// 从 data.categories 里选出 hero 卡：
-    /// 优先「最近有新素材且能凑出 ≥2 句有效引文的已解锁分类」；
+    /// 优先「有 featured moment 且最近有新素材的已解锁分类」；
     /// 次选「已解锁词数最多的分类」；未解锁时返回 nil。
     func heroCategory() -> Tab2CategoryData? {
         guard let cats = data?.categories else { return nil }
         let unlocked = cats.filter(\.unlocked)
         guard !unlocked.isEmpty else { return nil }
 
-        // 有效引文 = quote 非空 且字数 ≥6
-        func validQuoteCount(_ c: Tab2CategoryData) -> Int {
-            c.subScenes.filter { ($0.quote?.count ?? 0) >= 6 }.count
-        }
-
-        // 优先：quote ≥2 + 最近有素材，按 lastMaterialAt 降序
+        // 优先：有 featured moment（有可展示的场景）+ 最近有素材，按 lastMaterialAt 降序
         let preferred = unlocked
-            .filter { validQuoteCount($0) >= 2 }
+            .filter { $0.featured != nil }
             .sorted { ($0.lastMaterialAt ?? .distantPast) > ($1.lastMaterialAt ?? .distantPast) }
         if let best = preferred.first { return best }
 

@@ -134,6 +134,26 @@ struct Tab2FeaturedMoment: Decodable {
         case spokenCount       = "spoken_count"
     }
 
+    init(
+        sceneDetail: String, occurrenceCount: Int, materialId: String,
+        userOriginal: String?, targetExpression: String?, nativeMeaning: String?,
+        imageUrl: String?, inputLang: String?, sourceDirection: String?,
+        sourceGranularity: String?, createdAt: Date?, spokenCount: Int
+    ) {
+        self.sceneDetail = sceneDetail
+        self.occurrenceCount = occurrenceCount
+        self.materialId = materialId
+        self.userOriginal = userOriginal
+        self.targetExpression = targetExpression
+        self.nativeMeaning = nativeMeaning
+        self.imageUrl = imageUrl
+        self.inputLang = inputLang
+        self.sourceDirection = sourceDirection
+        self.sourceGranularity = sourceGranularity
+        self.createdAt = createdAt
+        self.spokenCount = spokenCount
+    }
+
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         sceneDetail       = try c.decode(String.self, forKey: .sceneDetail)
