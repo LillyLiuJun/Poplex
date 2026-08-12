@@ -222,9 +222,10 @@ struct AICardBody: View {
         }
     }
 
-    // express 场景下的「母语行」——用户输入原文
+    // express 场景下的「母语行」：有用户原文时用原文；纯图片 user_original=nil 时用 native_meaning
     private var expressNativeRow: String? {
         if let original = content.userOriginal, !original.isEmpty { return original }
+        if let meaning = content.nativeMeaning, !meaning.isEmpty { return meaning }
         return nil
     }
 }
