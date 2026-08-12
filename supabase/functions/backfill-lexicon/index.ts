@@ -75,11 +75,18 @@ async function recordForMaterial(material: Material): Promise<number> {
       p_user_id:            material.user_id,
       p_source_id:          material.id,
       p_scene_category:     material.scene_category,
+      p_scene_detail:       (material as any).scene_detail ?? null,
       p_input_lang:         raw.input_lang        ?? null,
       p_input_lang_code:    raw.input_lang_code   ?? null,
       p_source_granularity: raw.granularity        ?? null,
       p_source_direction:   raw.direction          ?? null,
       p_intent_text:        raw.intent             ?? null,
+      p_intent_source:
+        raw.input_lang === 'native' && raw.intent != null
+          ? 'stated'
+          : raw.user_original == null && raw.direction === 'express'
+          ? 'inferred'
+          : null,
       p_sample_sentence:    sample,
       p_units:              units,
     }),

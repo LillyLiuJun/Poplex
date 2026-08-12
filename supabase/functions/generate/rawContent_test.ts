@@ -201,3 +201,26 @@ Deno.test('comprehend 卡 intent 为 null（模型不输出）', () => {
   const r = buildRawContent('s2', minimal({ intent: null }), '', null);
   assertStrictEquals(r?.rawContent.intent, null);
 });
+
+// ── 纯图片路径（第 1 刀改动）──────────────────────────
+// 纯图片现在走 s4（sentence + express）。
+// user_original=null（无文字输入），direction=express，granularity=sentence，
+// intent 由 AI 从 native_meaning 推断，非 null。
+Deno.test('纯图片 → s4 + express，user_original=null，intent 非 null', () => {
+  const r = buildRawContent('s4', minimal({
+    granularity:       'sentence',
+    direction:         'express',
+    user_original:     null,
+    input_lang:        null,
+    input_lang_code:   null,
+    intent:            '在厨房做饭',
+    target_expression: 'The kitchen smells wonderful tonight.',
+    native_meaning:    '今晚厨房飘着好闻的香气。',
+  }), '', null);
+  assertEquals(r?.materialType,           'scene');
+  assertEquals(r?.rawContent.granularity, 'sentence');
+  assertEquals(r?.rawContent.direction,   'express');
+  assertStrictEquals(r?.rawContent.user_original, null);
+  assertEquals(r?.rawContent.intent,      '在厨房做饭');
+  assertEquals(r?.rawContent.native_meaning, '今晚厨房飘着好闻的香气。');
+});

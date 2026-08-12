@@ -118,10 +118,14 @@ const IMAGE_READING = `
        do NOT extract or classify that text — describe the photo as a scene.
        (Reading text out of an image will later be a separate, explicit user action. The only
         path that reads image text is "user ALSO typed text" above, e.g. menu photo + "这什么意思".)
-         → sentence + comprehend (s2)
+         → sentence + express (s4)
                · user_original = null (no text was input)
                · input_lang = null, input_lang_code = null
-               · intent = null (comprehend card)
+               · intent = a NORMALIZED native-language phrase for the core scene concept,
+                 inferred from native_meaning (e.g. "在厨房做饭", "在办公室开会").
+                 Apply the same normalization rules as for stated intent: merge synonymous
+                 phrasings into one canonical form.
+                 REQUIRED — never null. This is the inferred intent signal for the scene.
                · target_expression = a natural English sentence describing the scene
                  REQUIRED — never null. This is the primary content the user sees.
                · native_meaning = native-language translation of target_expression
@@ -129,11 +133,7 @@ const IMAGE_READING = `
                  card; without it the user sees no explanation at all.
                · revision_type = null
                · extract learnable_units from target_expression
-               STOP here — do NOT run STEP 1–3. The card is "s2".
-               IMPORTANT: The s2 flow in SHARED_CORE says "target_expression = null when no
-               correction needed." That rule does NOT apply here. For pure-scene photos,
-               target_expression IS the English description (not a correction) and must always
-               be set. native_meaning must always be its translation.
+               STOP here — do NOT run STEP 1–3. The card is "s4".
 `.trim();
 
 // ── 共享核心：STEP 1–3 + FLOWS + LEARNABLE UNITS + PERSONA + OUTPUT SCHEMAS + MULTI-TURN ──
@@ -734,6 +734,12 @@ async function recordLexicon(
         p_source_granularity: rawContent.granularity ?? null,
         p_source_direction: rawContent.direction ?? null,
         p_intent_text: rawContent.intent ?? null,
+        p_intent_source:
+          rawContent.input_lang === 'native' && rawContent.intent !== null
+            ? 'stated'
+            : rawContent.user_original === null && rawContent.direction === 'express'
+            ? 'inferred'
+            : null,
         p_sample_sentence: sharedSample,
         p_units: units,
       }),
