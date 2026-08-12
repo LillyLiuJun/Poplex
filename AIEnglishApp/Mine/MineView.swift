@@ -606,7 +606,7 @@ private struct Tab2UnlockedView: View {
             // 已解锁分类：独立 Serif 标题 "Materials Yours" + 横向 Peek 轮播卡片
             if hero != nil || !otherUnlocked.isEmpty {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Your Materials")
+                    Text("Your materials")
                         .font(AppTheme.Font.sectionTitleSerif)
                         .foregroundStyle(AppTheme.Color.textPrimary)
                         .padding(.horizontal, AppTheme.Space.paddingPage)
@@ -640,7 +640,7 @@ private struct Tab2UnlockedView: View {
             let stillFilling = data.categories.filter { !$0.unlocked && $0.wordCount >= 1 }
             if !stillFilling.isEmpty {
                 VStack(alignment: .leading, spacing: AppTheme.Space.titleToContent) {
-                    Text("Topics in Progress")
+                    Text("Topics in progress")
                         .font(AppTheme.Font.sectionTitleSerif)
                         .foregroundStyle(AppTheme.Color.textPrimary)
                         .padding(.horizontal, AppTheme.Space.paddingPage)

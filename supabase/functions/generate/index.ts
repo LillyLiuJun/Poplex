@@ -326,9 +326,9 @@ LEARNABLE UNITS
 Every card carries "learnable_units". Rules differ by granularity:
 
 ▸ word cards (s1 / s3)
-  · The canonical entry / translation is ALWAYS the primary unit (is_primary: true).
-  · Optionally add 1 collocation from the examples if it has clear study value.
-  · Total: 1–2 units. Keep it simple.
+  · Extract EXACTLY ONE unit: the canonical entry / translation itself (is_primary: true).
+  · Do NOT add collocations or any extra units — a word lookup banks only the word looked up.
+  · Total: exactly 1 unit.
 
 ▸ sentence cards (s2 / s4)
   · Extract from the target-language text (target_expression ?? user_original).
@@ -674,10 +674,12 @@ async function recordLexicon(
 
   try {
     const rawUnits = Array.isArray(rawContent.learnable_units) ? rawContent.learnable_units : [];
-    // 词卡（granularity=word）只记主词条，AI 造的例句搭配词不算用户真实接触的内容
+    // 词卡只记第一个词条（用户真正查的词），prompt 保证它永远排第一。
+    // 不依赖 AI 的 is_primary 字段——字段可能缺失或类型不对，导致词条被静默丢弃。
     const filteredUnits = rawContent.granularity === 'word'
-      ? rawUnits.filter(u => u?.is_primary === true)
+      ? (rawUnits.length > 0 ? [rawUnits[0]] : [])
       : rawUnits;
+    console.log(`[recordLexicon] granularity=${rawContent.granularity} rawUnits=${rawUnits.length} filteredUnits=${filteredUnits.length}`);
     const baseUnits = filteredUnits
       .map(u => {
         const lemma = normalizeLemma(u?.form);
@@ -691,7 +693,10 @@ async function recordLexicon(
       })
       .filter(u => u.lemma && !LEXICON_STOPWORDS.has(u.lemma));
 
-    if (baseUnits.length === 0) return;
+    if (baseUnits.length === 0) {
+      console.log(`[recordLexicon] no units after filtering for material=${materialId}`);
+      return;
+    }
 
     // 缺口 7 修复：passage 素材的 sample_sentence 应为该词所在的那一行，
     // 而不是整篇文章（target_expression 对 passage 是全文，会造成存储浪费和显示异常）。
