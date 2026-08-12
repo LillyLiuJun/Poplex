@@ -27,6 +27,10 @@ struct Tab2CategoryData: Decodable, Identifiable {
     let lastMaterialAt: Date?
     let subScenes: [Tab2SubScene]
     let previewWords: [String]
+    // 第 2 刀新增字段（§9.2）；旧客户端收不到时退化为 nil/0
+    let momentCount: Int
+    let featured: Tab2FeaturedMoment?
+    let heroPhotos: [Tab2HeroPhoto]
 
     var id: String { sceneCategory }
 
@@ -42,6 +46,9 @@ struct Tab2CategoryData: Decodable, Identifiable {
         case lastMaterialAt = "last_material_at"
         case subScenes      = "sub_scenes"
         case previewWords   = "preview_words"
+        case momentCount    = "moment_count"
+        case featured
+        case heroPhotos     = "hero_photos"
     }
 
     init(
@@ -50,7 +57,10 @@ struct Tab2CategoryData: Decodable, Identifiable {
         unlocked: Bool,
         lastMaterialAt: Date? = nil,
         subScenes: [Tab2SubScene] = [],
-        previewWords: [String] = []
+        previewWords: [String] = [],
+        momentCount: Int = 0,
+        featured: Tab2FeaturedMoment? = nil,
+        heroPhotos: [Tab2HeroPhoto] = []
     ) {
         self.sceneCategory = sceneCategory
         self.wordCount = wordCount
@@ -58,6 +68,9 @@ struct Tab2CategoryData: Decodable, Identifiable {
         self.lastMaterialAt = lastMaterialAt
         self.subScenes = subScenes
         self.previewWords = previewWords
+        self.momentCount = momentCount
+        self.featured = featured
+        self.heroPhotos = heroPhotos
     }
 
     init(from decoder: Decoder) throws {
@@ -65,8 +78,11 @@ struct Tab2CategoryData: Decodable, Identifiable {
         sceneCategory  = try c.decode(String.self,   forKey: .sceneCategory)
         wordCount      = try c.decode(Int.self,       forKey: .wordCount)
         unlocked       = try c.decode(Bool.self,      forKey: .unlocked)
-        subScenes      = try c.decodeIfPresent([Tab2SubScene].self, forKey: .subScenes) ?? []
-        previewWords   = try c.decodeIfPresent([String].self,       forKey: .previewWords) ?? []
+        subScenes      = try c.decodeIfPresent([Tab2SubScene].self,      forKey: .subScenes)   ?? []
+        previewWords   = try c.decodeIfPresent([String].self,            forKey: .previewWords) ?? []
+        momentCount    = try c.decodeIfPresent(Int.self,                 forKey: .momentCount)  ?? 0
+        featured       = try c.decodeIfPresent(Tab2FeaturedMoment.self,  forKey: .featured)
+        heroPhotos     = try c.decodeIfPresent([Tab2HeroPhoto].self,     forKey: .heroPhotos)   ?? []
 
         if let raw = try c.decodeIfPresent(String.self, forKey: .lastMaterialAt) {
             // Backend returns fractional-seconds format (e.g. "2026-07-25T10:00:00.000Z");
@@ -79,6 +95,89 @@ struct Tab2CategoryData: Decodable, Identifiable {
         }
     }
 }
+
+// MARK: - 第 2 刀新增模型（§9.2）
+
+/// 被选中展示在底部的 featured moment（§3、§9.1）。
+struct Tab2FeaturedMoment: Decodable {
+    let sceneDetail: String
+    let occurrenceCount: Int
+    let materialId: String
+    let userOriginal: String?
+    let targetExpression: String?
+    let nativeMeaning: String?
+    let imageUrl: String?
+    let inputLang: String?
+    let sourceDirection: String?
+    let sourceGranularity: String?
+    let createdAt: Date?
+    let spokenCount: Int
+
+    // 剥掉签名参数，取路径部分作缓存 key
+    var stableImageKey: String? {
+        guard let url = imageUrl, !url.isEmpty else { return nil }
+        return url.components(separatedBy: "?").first
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case sceneDetail       = "scene_detail"
+        case occurrenceCount   = "occurrence_count"
+        case materialId        = "material_id"
+        case userOriginal      = "user_original"
+        case targetExpression  = "target_expression"
+        case nativeMeaning     = "native_meaning"
+        case imageUrl          = "image_url"
+        case inputLang         = "input_lang"
+        case sourceDirection   = "source_direction"
+        case sourceGranularity = "source_granularity"
+        case createdAt         = "created_at"
+        case spokenCount       = "spoken_count"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        sceneDetail       = try c.decode(String.self, forKey: .sceneDetail)
+        occurrenceCount   = try c.decode(Int.self,    forKey: .occurrenceCount)
+        materialId        = try c.decode(String.self, forKey: .materialId)
+        userOriginal      = try c.decodeIfPresent(String.self, forKey: .userOriginal)
+        targetExpression  = try c.decodeIfPresent(String.self, forKey: .targetExpression)
+        nativeMeaning     = try c.decodeIfPresent(String.self, forKey: .nativeMeaning)
+        imageUrl          = try c.decodeIfPresent(String.self, forKey: .imageUrl)
+        inputLang         = try c.decodeIfPresent(String.self, forKey: .inputLang)
+        sourceDirection   = try c.decodeIfPresent(String.self, forKey: .sourceDirection)
+        sourceGranularity = try c.decodeIfPresent(String.self, forKey: .sourceGranularity)
+        spokenCount       = try c.decodeIfPresent(Int.self,    forKey: .spokenCount) ?? 0
+        // fractional-seconds 双格式兜底（同 Tab2CategoryData.lastMaterialAt）
+        if let raw = try c.decodeIfPresent(String.self, forKey: .createdAt) {
+            let fmtMs = ISO8601DateFormatter()
+            fmtMs.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            createdAt = fmtMs.date(from: raw) ?? ISO8601DateFormatter().date(from: raw)
+        } else {
+            createdAt = nil
+        }
+    }
+}
+
+/// 顶部拼图照片中的单张（§6.2）。
+struct Tab2HeroPhoto: Decodable, Identifiable {
+    let materialId: String
+    let imageUrl: String
+    let isFeatured: Bool
+
+    var id: String { materialId }
+
+    var stableImageKey: String? {
+        imageUrl.components(separatedBy: "?").first
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case materialId  = "material_id"
+        case imageUrl    = "image_url"
+        case isFeatured  = "is_featured"
+    }
+}
+
+// MARK: -
 
 /// 子场景——一个反复出现的日常活动。
 struct Tab2SubScene: Decodable, Identifiable {
