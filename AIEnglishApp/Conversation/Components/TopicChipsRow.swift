@@ -24,7 +24,7 @@ struct TopicChipsRow: View {
                             .foregroundStyle(AppTheme.Color.textSecondary)
                             .padding(.horizontal, AppTheme.Space.paddingM)
                             .padding(.vertical, AppTheme.Space.paddingS)
-                            .background(AppTheme.Color.brandSubtleBg, in: Capsule())
+                            .background(AppTheme.Color.brandWash, in: Capsule())
                     }
                     .accessibilityLabel("Talk about \(chip.label)")
                 }

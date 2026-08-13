@@ -101,7 +101,7 @@ struct RootTabContainer: View {
             }, topInset: topBarHeight)
                 .opacity(selectedTab == .today ? 1 : 0)
                 .allowsHitTesting(selectedTab == .today)
-            MineView(listResetToken: mineListResetToken, swipeActionOpen: $mineSwipeActionOpen, detailActive: $mineDetailActive, topInset: topBarHeight, onSwitchToToday: {
+            MineView(listResetToken: mineListResetToken, swipeActionOpen: $mineSwipeActionOpen, detailActive: $mineDetailActive, topInset: topBarHeight, isActive: selectedTab == .mine, onSwitchToToday: {
                             withAnimation(.easeInOut(duration: 0.2)) { selectedTab = .today }
                         })
                 .opacity(selectedTab == .mine ? 1 : 0)
@@ -141,7 +141,7 @@ struct RootTabContainer: View {
                     .imageScale(.medium)
                     .foregroundStyle(AppTheme.Color.textSecondary)
                     .frame(width: AppTheme.Size.barControl, height: AppTheme.Size.barControl)
-                    .glassBarItem(in: Circle())
+                    .surfaceFloating(in: Circle())
                     .contentShape(Circle())
             }
             .buttonStyle(.plain)

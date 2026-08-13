@@ -14,7 +14,7 @@ struct SummaryBlock<Content: View>: View {
             VStack(alignment: .leading, spacing: AppTheme.Space.paddingM) {
                 Text(title)
                     .font(AppTheme.Font.sectionLabel)
-                    .foregroundStyle(AppTheme.Color.textLabel)
+                    .foregroundStyle(AppTheme.Color.textMuted)
                     .textCase(.uppercase)
 
                 content()

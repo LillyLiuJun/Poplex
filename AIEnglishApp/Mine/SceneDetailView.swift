@@ -25,13 +25,13 @@ private struct DetailContent: View {
                     CachedRemoteImage(
                         signedUrl: signedUrl,
                         stableKey: imagePath,
-                        placeholder: RoundedRectangle(cornerRadius: AppTheme.Radius.card)
+                        placeholder: RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
                             .fill(AppTheme.Color.cardBg)
                             .overlay(Image(systemName: "photo").font(.largeTitle).foregroundStyle(AppTheme.Color.textSecondary))
                     )
                     .frame(maxWidth: .infinity)
                     .frame(height: 200)
-                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
+                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
                 }
 
                 // 情境标签 + 时间
@@ -66,7 +66,7 @@ private struct DetailContent: View {
                             HStack(alignment: .top, spacing: AppTheme.Space.paddingS) {
                                 Text(kp.phrase)
                                     .font(.callout.bold())
-                                    .foregroundStyle(AppTheme.Color.textAccent)
+                                    .foregroundStyle(AppTheme.Color.brandStrong)
                                 Text(kp.note)
                                     .font(.callout)
                                     .foregroundStyle(AppTheme.Color.textSecondary)
@@ -84,9 +84,9 @@ private struct DetailContent: View {
                     Label("Start Practice", systemImage: "mic.fill")
                         .frame(maxWidth: .infinity)
                         .padding(AppTheme.Space.paddingCard)
-                        .background(AppTheme.Color.textAccent)
+                        .background(AppTheme.Color.brandStrong)
                         .foregroundStyle(Color.white)
-                        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
+                        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
                 }
             }
             .padding(AppTheme.Space.paddingPage)

@@ -25,7 +25,7 @@ struct CategoryPresetArtView: View {
 
     private var placeholderArt: some View {
         ZStack {
-            AppTheme.Color.brandSubtleBg
+            AppTheme.Color.brandWash
             Image(systemName: category.momentIconName)
                 .font(.system(size: 44, weight: .ultraLight))   // glyph 尺寸，豁免字体 token 规则
                 .foregroundStyle(AppTheme.Color.textPrimary.opacity(0.16))

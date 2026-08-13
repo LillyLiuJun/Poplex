@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 短暂提示条——自动在 4 s 后消失（时长要够读完一整句文案）。用 .toast(message:) 挂在任意 View 上。
+/// 短暂提示条——默认给整句 4s 阅读时间，短反馈可传独立 lifetime。用 .toast(message:) 挂在任意 View 上。
 struct AppToast: View {
     let message: String
     /// 前置图标；nil 则不显示。警告类提示传图标提高可扫读性。
@@ -25,32 +25,74 @@ struct AppToast: View {
     }
 }
 
+/// 复用 AppToast 的呈现与自动消失逻辑；页面可决定它相对固定控件的位置。
+struct AutoDismissingAppToast: View {
+    @Binding var message: String?
+    var systemImage: String? = nil
+    var lifetime: Duration = AppTheme.Motion.toastLifetime
+
+    var body: some View {
+        if let message {
+            AppToast(message: message, systemImage: systemImage)
+                .task(id: message) {
+                    try? await Task.sleep(for: lifetime)
+                    guard !Task.isCancelled else { return }
+                    self.message = nil
+                }
+        }
+    }
+}
+
+enum AppToastPlacement {
+    case top
+    case bottom
+
+    var alignment: Alignment {
+        switch self {
+        case .top: .top
+        case .bottom: .bottom
+        }
+    }
+
+    var paddingEdge: Edge.Set {
+        switch self {
+        case .top: .top
+        case .bottom: .bottom
+        }
+    }
+}
+
 extension View {
-    func toast(message: Binding<String?>, systemImage: String? = nil) -> some View {
-        modifier(ToastModifier(message: message, systemImage: systemImage))
+    func toast(
+        message: Binding<String?>,
+        systemImage: String? = nil,
+        lifetime: Duration = AppTheme.Motion.toastLifetime,
+        placement: AppToastPlacement = .bottom
+    ) -> some View {
+        modifier(ToastModifier(
+            message: message,
+            systemImage: systemImage,
+            lifetime: lifetime,
+            placement: placement
+        ))
     }
 }
 
 private struct ToastModifier: ViewModifier {
     @Binding var message: String?
     var systemImage: String? = nil
+    let lifetime: Duration
+    let placement: AppToastPlacement
 
     func body(content: Content) -> some View {
-        ZStack(alignment: .bottom) {
+        ZStack(alignment: placement.alignment) {
             content
-            if let msg = message {
-                AppToast(message: msg, systemImage: systemImage)
-                    .padding(.bottom, AppTheme.Space.paddingSection)
-                    .task(id: msg) {
-                        // sleep 被 .task(id:) 取消时抛 CancellationError；
-                        // try? 把它吞成 nil 而非中断任务，所以必须显式检查取消，
-                        // 否则旧任务会继续执行 message = nil，把刚出现的新 toast 清掉。
-                        try? await Task.sleep(for: .seconds(4))
-                        guard !Task.isCancelled else { return }
-                        // 克制：无动画，直接出现/消失
-                        message = nil
-                    }
-            }
+            AutoDismissingAppToast(
+                message: $message,
+                systemImage: systemImage,
+                lifetime: lifetime
+            )
+            .padding(placement.paddingEdge, AppTheme.Space.paddingSection)
         }
     }
 }

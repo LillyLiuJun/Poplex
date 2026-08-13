@@ -18,7 +18,7 @@ struct SceneCardRow: View {
                         .overlay(Image(systemName: "photo").foregroundStyle(AppTheme.Color.textSecondary))
                 )
                 .frame(width: 56, height: 56)
-                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card / 2))
+                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium / 2))
             }
 
             VStack(alignment: .leading, spacing: AppTheme.Space.paddingS) {
@@ -40,8 +40,8 @@ struct SceneCardRow: View {
                                 .font(.caption.weight(.medium))
                                 .padding(.horizontal, AppTheme.Space.paddingS)
                                 .padding(.vertical, 2)
-                                .background(AppTheme.Color.textAccent.opacity(0.12))
-                                .foregroundStyle(AppTheme.Color.textAccent)
+                                .background(AppTheme.Color.brandStrong.opacity(0.12))
+                                .foregroundStyle(AppTheme.Color.brandStrong)
                                 .clipShape(Capsule())
                         }
                     }
@@ -51,6 +51,6 @@ struct SceneCardRow: View {
         .padding(AppTheme.Space.paddingCard)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(AppTheme.Color.cardBg)
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
     }
 }

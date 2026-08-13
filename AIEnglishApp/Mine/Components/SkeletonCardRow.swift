@@ -22,7 +22,7 @@ struct SkeletonCardRow: View {
         }
         .padding(AppTheme.Space.paddingCard)
         .background(AppTheme.Color.cardBg)
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
         .overlay(alignment: .leading) {
             // 从左到右扫过的亮带
             Rectangle()
@@ -36,7 +36,7 @@ struct SkeletonCardRow: View {
                 .frame(width: 120)
                 .offset(x: shimmerX)
         }
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
         .onAppear {
             withAnimation(.linear(duration: 1.3).repeatForever(autoreverses: false)) {
                 shimmerX = 500

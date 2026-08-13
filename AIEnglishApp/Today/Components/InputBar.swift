@@ -127,7 +127,7 @@ struct InputBar: View {
             inputRow
         }
         .frame(minHeight: 52)
-        .glassCapsule()
+        .surfaceFloating(cornerRadius: AppTheme.Radius.glassContainer)
         .animation(.easeOut(duration: 0.2), value: image != nil)
         .animation(.easeOut(duration: 0.2), value: isMultiLine)
     }
@@ -232,7 +232,7 @@ struct InputBar: View {
         TextField(
             "",
             text: $text,
-            prompt: Text("Your moment").foregroundStyle(AppTheme.Color.textFaint),
+            prompt: Text("Your moment").foregroundStyle(AppTheme.Color.textMuted),
             axis: .vertical
         )
         .lineLimit(1...4)
@@ -311,7 +311,7 @@ struct InputBar: View {
                 activeSheet = .photoLibrary
             }
         }
-        .glassContainer(cornerRadius: AppTheme.Radius.medium)
+        .surfaceFloating()
         .fixedSize()
     }
 

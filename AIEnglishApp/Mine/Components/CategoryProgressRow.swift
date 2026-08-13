@@ -10,11 +10,57 @@ struct CategoryProgressRow: View {
     let isExpanded: Bool
     let onToggle: () -> Void
     let loadWords: () async -> [Tab2WordEntry]
+    var milestonePresentations: [CategoryMilestonePresentation] = []
 
     @State private var words: [Tab2WordEntry] = []
     @State private var isLoadingWords = false
+    @State private var milestoneRevealed = false
+    @State private var milestoneEmphasized = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let targetCount = 20
+
+    // 进度条承担「连续性」（全部走橙），数字与 icon 承担「里程碑」（只在 hot 时转橙）。
+    // hot = 最接近解锁 / 已达标。
+    private var isPresentingMilestone: Bool {
+        milestonePresentation != nil
+    }
+
+    private var milestonePresentation: CategoryMilestonePresentation? {
+        milestonePresentations.first { $0.categoryID == category.id }
+    }
+
+    static func milestoneScale(
+        isPresenting: Bool,
+        isEmphasized: Bool,
+        reduceMotion: Bool
+    ) -> CGFloat {
+        guard isPresenting, isEmphasized, !reduceMotion else { return 1.0 }
+        return 1.08
+    }
+
+    private var milestoneScale: CGFloat {
+        Self.milestoneScale(
+            isPresenting: isPresentingMilestone,
+            isEmphasized: milestoneEmphasized,
+            reduceMotion: reduceMotion
+        )
+    }
+
+    private var displayedCount: Int {
+        guard isPresentingMilestone, let milestonePresentation else {
+            return category.wordCount
+        }
+        if reduceMotion { return milestonePresentation.currentCount }
+        return milestoneRevealed
+            ? milestonePresentation.currentCount
+            : milestonePresentation.previousCount
+    }
+
+    private var isHot: Bool {
+        if isPresentingMilestone { return milestoneRevealed }
+        return isHighlighted || category.wordCount >= targetCount
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -36,6 +82,33 @@ struct CategoryProgressRow: View {
                 fetchWords()
             }
         }
+        .task(id: milestonePresentations) {
+            guard isPresentingMilestone else {
+                milestoneRevealed = false
+                milestoneEmphasized = false
+                return
+            }
+
+            milestoneRevealed = false
+            milestoneEmphasized = false
+            try? await Task.sleep(for: AppTheme.Motion.categoryMilestoneToastLead)
+            if reduceMotion {
+                withAnimation(AppTheme.Motion.categoryMilestoneReduced) {
+                    milestoneRevealed = true
+                }
+            } else {
+                withAnimation(AppTheme.Motion.categoryMilestone) {
+                    milestoneRevealed = true
+                }
+                withAnimation(AppTheme.Motion.categoryMilestoneEmphasisRise) {
+                    milestoneEmphasized = true
+                }
+                try? await Task.sleep(for: AppTheme.Motion.categoryMilestoneEmphasisPeak)
+                withAnimation(AppTheme.Motion.categoryMilestoneEmphasisSettle) {
+                    milestoneEmphasized = false
+                }
+            }
+        }
     }
 
     // MARK: - Collapsed header button
@@ -44,22 +117,23 @@ struct CategoryProgressRow: View {
         Button {
             onToggle()   // 展开/收起 + 滚动锚定由父视图统一处理（单开手风琴）
         } label: {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: AppTheme.Size.rowLabelToProgress) {
                 // 第一行：类别图标徽章 + 标题 + 半轻灰胶囊（pops 计数 + 展开箭头合并单元）
                 HStack(alignment: .center, spacing: AppTheme.Space.paddingM) {
                     categoryBadge
 
                     Text(category.englishLabel)
-                        .font(.system(.callout, weight: isHighlighted || category.wordCount >= targetCount ? .semibold : .medium))
+                        .font(AppTheme.Font.categoryLabel(isHot: isHot))
                         .foregroundStyle(AppTheme.Color.textPrimary)
 
                     Spacer()
 
                     PopsPill(
-                        count: category.wordCount,
-                        isHot: category.wordCount >= targetCount || isHighlighted,
+                        count: displayedCount,
+                        isHot: isHot,
                         isExpanded: isExpanded
                     )
+                    .scaleEffect(milestoneScale)
                 }
 
                 // 第二行：通栏进度条（从徽章左缘拉满，参考 Cleo Spending 行式）
@@ -70,34 +144,34 @@ struct CategoryProgressRow: View {
         .buttonStyle(.plain)
     }
 
-    // MARK: - Category badge（实心字形 · 暖灰单色、无底圈，靠"简而重"显质感）
+    // MARK: - Category badge（描边字形 · hot 时转 brandInk，非 hot 走 textMuted）
+    // 填充变体（.fill）保留给「激活态」当状态信号，不再当风格选择。
 
     private var categoryBadge: some View {
         Image(systemName: SceneCategory.from(category.sceneCategory).iconName)
-            .symbolVariant(.fill)
-            .font(.system(size: 17))
-            .foregroundStyle(AppTheme.Color.textPrimary.opacity(0.42))
+            .font(.system(size: AppTheme.Size.categoryIconGlyph))
+            .foregroundStyle(isHot ? AppTheme.Color.brandInk : AppTheme.Color.textMuted)
             .frame(width: AppTheme.Size.categoryBadge, height: AppTheme.Size.categoryBadge)
+            .scaleEffect(milestoneScale)
     }
 
     // MARK: - Progress bar
 
     private var progressBar: some View {
-        let progress = min(CGFloat(category.wordCount) / CGFloat(targetCount), 1.0)
-        // 不用 GeometryReader：满宽 Capsule 作轨道，填充用 scaleEffect 缩放，避免撑宽
-        // 方案3：2.5px 超轻进度条，独自承担行间分隔职责
+        let progress = min(CGFloat(displayedCount) / CGFloat(targetCount), 1.0)
+        // 进度全部走橙：进度 = 成长线，用档位区分状态，禁止半透明橙（压暖纸会得到脏粉）。
+        // hot（细线≤24pt 例外）走满饱和 brandStrong；非 hot 降一档走 brandMid。
         return Capsule()
             .fill(AppTheme.Color.progressTrack)
-            .frame(height: 2.5)
+            .frame(height: AppTheme.Size.progressBarHeight)
             .overlay(alignment: .leading) {
                 Capsule()
-                    .fill(
-                        isHighlighted || category.wordCount >= targetCount
-                            ? AppTheme.Color.brandStrong.opacity(0.5)   // 品牌橙半透明，柔和不冲
-                            : AppTheme.Color.progressFill
+                    .fill(isHot ? AppTheme.Color.brandStrong : AppTheme.Color.brandMid)
+                    .scaleEffect(x: displayedCount > 0 ? max(progress, 0.02) : 0, anchor: .leading)
+                    .animation(
+                        isPresentingMilestone ? nil : AppTheme.Motion.categoryProgressUpdate,
+                        value: category.wordCount
                     )
-                    .scaleEffect(x: category.wordCount > 0 ? max(progress, 0.02) : 0, anchor: .leading)
-                    .animation(.easeOut(duration: 0.4), value: category.wordCount)
             }
     }
 
@@ -111,24 +185,24 @@ struct CategoryProgressRow: View {
                 ProgressView()
                     .scaleEffect(0.85)
                 Text("Loading words...")
-                    .font(.system(size: 13))
+                    .font(AppTheme.Font.statusNote)
                     .foregroundStyle(AppTheme.Color.textMuted)
                 Spacer()
             }
-            .padding(.vertical, 14)
+            .padding(.vertical, AppTheme.Size.wordListLoadingVPad)
         } else if words.isEmpty {
             Text("No words in this topic yet.")
-                .font(.system(size: 13))
+                .font(AppTheme.Font.statusNote)
                 .foregroundStyle(AppTheme.Color.textMuted)
                 .frame(maxWidth: .infinity, alignment: .center)
-                .padding(.vertical, 12)
+                .padding(.vertical, AppTheme.Space.paddingM)
         } else {
-            VStack(spacing: 8) {
+            VStack(spacing: AppTheme.Space.paddingS) {
                 ForEach(words) { entry in
                     WordEntryRow(entry: entry)
                 }
             }
-            .padding(.vertical, 4)
+            .padding(.vertical, AppTheme.Space.paddingXS)
             // 子项只做一个轻微台阶缩进，和分类头拉出层级但不推太远
             .padding(.leading, AppTheme.Space.paddingCard)
         }
@@ -154,22 +228,25 @@ private struct PopsPill: View {
     /// 最接近解锁 / 已达标的 hot 行 —— 计数走品牌橙，其余暖灰 muted，控制橙的用量。
     let isHot: Bool
     let isExpanded: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: AppTheme.Size.pillHSpacing) {
+            // 数字承担「里程碑」：只在 hot 时转 brandInk（橙文字合规出口 5.09:1），其余暖灰 muted。
             Text(PopsLabel.format(count))
                 .font(AppTheme.Font.popsCount)
                 .monospacedDigit()
-                .foregroundStyle(isHot ? AppTheme.Color.brandStrong : AppTheme.Color.textMuted)
+                .contentTransition(reduceMotion ? .identity : .numericText())
+                .foregroundStyle(isHot ? AppTheme.Color.brandInk : AppTheme.Color.textMuted)
 
-            // 小实心三角（同确认稿 ▾），图标字形尺寸（非正文）；随展开旋转 180°
+            // 展开三角（arrowtriangle.down.fill）：随展开旋转 180°
             Image(systemName: "arrowtriangle.down.fill")
-                .font(.system(size: 8))
-                .foregroundStyle(AppTheme.Color.textPrimary.opacity(0.32))
+                .font(.system(size: AppTheme.Size.expandArrow))
+                .foregroundStyle(AppTheme.Color.textMuted)
                 .rotationEffect(.degrees(isExpanded ? 180 : 0))
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
+        .padding(.horizontal, AppTheme.Size.pillHPad)
+        .padding(.vertical, AppTheme.Size.pillVPad)
         .background(AppTheme.Color.pillNeutralBg, in: Capsule())
     }
 }
@@ -184,9 +261,9 @@ private struct WordEntryRow: View {
             leftSlot
 
             // 词 + 释义纵向排：释义移到词下方，长词不再把释义挤成右侧空药丸
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: AppTheme.Size.wordEntrySpacing) {
                 Text(entry.displayForm ?? entry.lemma)
-                    .font(.system(.subheadline, design: .serif, weight: .semibold))  // 英文词=学习内容，走衬线，与 Tab1 词卡呼应
+                    .font(.system(.subheadline, design: .serif, weight: .semibold))
                     .foregroundStyle(AppTheme.Color.textPrimary)
                     .lineLimit(1)
                 if let meaning = entry.nativeMeaning, !meaning.isEmpty {
@@ -210,24 +287,24 @@ private struct WordEntryRow: View {
         if let urlStr = entry.imageUrl, !urlStr.isEmpty {
             let stableKey = entry.stableImageKey ?? urlStr
             CachedRemoteImage(signedUrl: urlStr, stableKey: stableKey) {
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: AppTheme.Radius.small)
                     .fill(AppTheme.Color.imagePlaceholderBg)
             }
-            .frame(width: 32, height: 32)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .saturation(0.75)                                   // 降饱和，弱化图片鲜艳度
-            .overlay(                                           // 叠一层暖纸薄蒙版，压低对比、融进暖色系
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(AppTheme.Color.pageBg.opacity(0.15))
+            .frame(width: AppTheme.Size.entryThumbnail, height: AppTheme.Size.entryThumbnail)
+            .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.small))
+            .saturation(0.75)
+            .overlay(
+                RoundedRectangle(cornerRadius: AppTheme.Radius.small)
+                    .fill(AppTheme.Color.imageWarmOverlay)
             )
         } else {
             ZStack {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(AppTheme.Color.iconTileBg)             // 更淡的暖中性底块，退后作弱提示
-                    .frame(width: 32, height: 32)
+                RoundedRectangle(cornerRadius: AppTheme.Radius.small)
+                    .fill(AppTheme.Color.iconTileBg)
+                    .frame(width: AppTheme.Size.entryThumbnail, height: AppTheme.Size.entryThumbnail)
                 badgeGlyphView
             }
-            .frame(width: 32, height: 32)
+            .frame(width: AppTheme.Size.entryThumbnail, height: AppTheme.Size.entryThumbnail)
         }
     }
 
@@ -237,44 +314,12 @@ private struct WordEntryRow: View {
         switch entry.badgeGlyph {
         case .symbol(let name):
             Image(systemName: name)
-                .font(.system(size: 14, weight: .regular))
+                .font(.system(size: AppTheme.Size.entryBadgeGlyph, weight: .regular))
                 .foregroundStyle(AppTheme.Color.textMuted)
         case .serifLetter(let letter):
             Text(letter)
                 .font(AppTheme.Font.iconBadgeLetter)
                 .foregroundStyle(AppTheme.Color.textMuted)
-        }
-    }
-}
-
-// MARK: - Badge color helpers (view-only, color values not testable in unit tests)
-
-private extension Tab2WordEntry {
-    var badgeBg: SwiftUI.Color {
-        switch sourceTag {
-        case .word:     return AppTheme.Color.badgeWordBg
-        case .dialogue: return AppTheme.Color.badgeDialogueBg
-        case .sentence, .passage:
-            switch entryKind {
-            case "word":                                return AppTheme.Color.badgeWordBg
-            case "phrase", "collocation", "pattern":    return AppTheme.Color.badgePhraseBg
-            case "idiom", "slang":                      return AppTheme.Color.badgeIdiomBg
-            default:                                    return AppTheme.Color.badgePhraseBg
-            }
-        }
-    }
-
-    var badgeIconColor: SwiftUI.Color {
-        switch sourceTag {
-        case .word:     return AppTheme.Color.badgeWordIcon
-        case .dialogue: return AppTheme.Color.badgeDialogueIcon
-        case .sentence, .passage:
-            switch entryKind {
-            case "word":                                return AppTheme.Color.badgeWordIcon
-            case "phrase", "collocation", "pattern":    return AppTheme.Color.badgePhraseIcon
-            case "idiom", "slang":                      return AppTheme.Color.badgeIdiomIcon
-            default:                                    return AppTheme.Color.badgePhraseIcon
-            }
         }
     }
 }

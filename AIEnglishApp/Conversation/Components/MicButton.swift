@@ -54,8 +54,8 @@ struct MicButton: View {
         switch state {
         case .idle:        return AppTheme.Color.brandStrong
         case .listening:   return AppTheme.Color.brandStrong
-        case .aiSpeaking:  return AppTheme.Color.textFaint
-        case .disabled:    return AppTheme.Color.textFaint
+        case .aiSpeaking:  return AppTheme.Color.neutralFaint
+        case .disabled:    return AppTheme.Color.neutralFaint
         }
     }
 

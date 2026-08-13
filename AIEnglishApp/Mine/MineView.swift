@@ -9,12 +9,14 @@ struct MineView: View {
     @Binding var swipeActionOpen: Bool
     @Binding var detailActive: Bool
     var topInset: CGFloat = 0
+    var isActive: Bool = true
     /// Called when user taps "Capture something" in locked state — switches to Tab1
     var onSwitchToToday: (() -> Void)? = nil
 
     @State private var vm = Tab2HomeViewModel()
     @State private var path: [MineRoute] = []
     @State private var comingSoonToast: String? = nil
+    @State private var milestoneToast: String? = nil
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// 解锁揭幕转场：减弱动态时只淡入（不做从底部缩放生长）
@@ -29,12 +31,14 @@ struct MineView: View {
         swipeActionOpen: Binding<Bool> = .constant(false),
         detailActive: Binding<Bool> = .constant(false),
         topInset: CGFloat = 0,
+        isActive: Bool = true,
         onSwitchToToday: (() -> Void)? = nil
     ) {
         self.listResetToken = listResetToken
         self._swipeActionOpen = swipeActionOpen
         self._detailActive = detailActive
         self.topInset = topInset
+        self.isActive = isActive
         self.onSwitchToToday = onSwitchToToday
     }
 
@@ -44,6 +48,11 @@ struct MineView: View {
                 .toolbar(.hidden, for: .navigationBar)
                 .task { await vm.load() }
                 .onChange(of: listResetToken) { _, _ in
+                    #if DEBUG
+                    if ProcessInfo.processInfo.environment["TAB2_MILESTONE_DEMO"] == "1" {
+                        vm.prepareDebugMilestoneDemoFromCurrentData()
+                    }
+                    #endif
                     Task { await vm.load() }
                 }
                 .onChange(of: path) { _, newPath in
@@ -54,11 +63,29 @@ struct MineView: View {
                         withAnimation(AppTheme.Motion.tabSelection) {}
                     }
                 }
+                .task(id: visibleMilestonePresentations) {
+                    let presentations = visibleMilestonePresentations
+                    guard !presentations.isEmpty else { return }
+                    milestoneToast = vm.milestoneToastMessage(for: presentations)
+                    let revealDuration = reduceMotion
+                        ? AppTheme.Motion.categoryMilestoneReducedReveal
+                        : AppTheme.Motion.categoryMilestoneReveal
+                    try? await Task.sleep(for: revealDuration)
+                    guard !Task.isCancelled, isActive else { return }
+                    try? await Task.sleep(for: AppTheme.Motion.categoryMilestoneResultHold)
+                    guard !Task.isCancelled, isActive else { return }
+                    vm.finishMilestonePresentations(presentations)
+                }
                 .toast(
                     message: Binding(get: { vm.toastMessage }, set: { vm.toastMessage = $0 }),
                     systemImage: "exclamationmark.triangle"
                 )
                 .toast(message: $comingSoonToast, systemImage: "clock")
+                .toast(
+                    message: $milestoneToast,
+                    systemImage: "sparkles",
+                    lifetime: AppTheme.Motion.milestoneToastLifetime
+                )
                 .navigationDestination(for: MineRoute.self) { route in
                     switch route {
                     case .conversation(let cat):
@@ -66,6 +93,10 @@ struct MineView: View {
                     }
                 }
         }
+    }
+
+    private var visibleMilestonePresentations: [CategoryMilestonePresentation] {
+        isActive ? vm.milestonePresentations : []
     }
 
     // MARK: - State machine
@@ -81,6 +112,7 @@ struct MineView: View {
                 vm: vm,
                 topInset: topInset,
                 listResetToken: listResetToken,
+                milestonePresentations: visibleMilestonePresentations,
                 onTalk: { cat in
                     if FeatureFlags.conversationEnabled {
                         path.append(.conversation(sceneCategory: cat))
@@ -96,6 +128,7 @@ struct MineView: View {
                 vm: vm,
                 topInset: topInset,
                 listResetToken: listResetToken,
+                milestonePresentations: visibleMilestonePresentations,
                 onCapture: { onSwitchToToday?() }
             )
             // 锁定页（含全屏橙波）淡出，露出下面的解锁页
@@ -131,6 +164,7 @@ private struct Tab2LockedView: View {
     let vm: Tab2HomeViewModel
     var topInset: CGFloat = 0
     var listResetToken: UUID = UUID()
+    var milestonePresentations: [CategoryMilestonePresentation] = []
     let onCapture: () -> Void
 
     private let wordTarget  = 20
@@ -160,7 +194,7 @@ private struct Tab2LockedView: View {
                             }
                             // 不再压缩/下沉当前页——解锁重点是"呈现新内容"，旧页保持不动、随整页转场离场
 
-                            captureButton
+                            captureButton()
                         }
                         .padding(.top, AppTheme.Space.paddingSection)     // 顶部呼吸
                         .padding(.bottom, AppTheme.Space.paddingPage)
@@ -215,30 +249,58 @@ private struct Tab2LockedView: View {
             .foregroundStyle(AppTheme.Color.textSecondary)
     }
 
-    // ── 无数据空状态（方案A · 极简居中）──────────────────────────────────
-    // 中央徽章 = 生活缤纷方向 H4 的暖单色版（时刻小卡，只留品牌橙 + 暖中性灰）。
-    // CTA 复用 captureButton：空状态下 isReady 恒为 false，点了跳 Tab1 去记录。
+    // ── 无数据空状态（视觉规范 §05）──────────────────────────────────────
+    // 品牌 P 只作为大面积的浅色背景层；前景沿 Tab2 / Onboarding 共用的左上对齐轴排布。
+    // CTA 仍复用解锁前的行为，只在空状态前置描边相机，说明「从拍一张开始」。
     private var emptyStateView: some View {
-        // 中央内容块：相对整页垂直居中
-        VStack(spacing: 0) {
-            EmptyMomentGlyph()
-                .padding(.bottom, 26)
+        ZStack(alignment: .topLeading) {
+            PoplexPShape()
+                .fill(AppTheme.Color.brandTint, style: FillStyle(eoFill: true))
+                .frame(
+                    width: AppTheme.Size.emptyStateWatermarkHeight * PoplexPShape.aspect,
+                    height: AppTheme.Size.emptyStateWatermarkHeight
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                .offset(
+                    x: AppTheme.Size.emptyStateWatermarkTrailingOffset,
+                    y: -AppTheme.Size.emptyStateWatermarkBottom
+                )
+                .accessibilityHidden(true)
 
-            Text("Nothing here yet")
-                .font(AppTheme.Font.pageTitleSerif)
-                .foregroundStyle(AppTheme.Color.textPrimary)
-                .padding(.bottom, AppTheme.Space.paddingM)
+            VStack(alignment: .leading, spacing: 0) {
+                Text("Nothing here yet.")
+                    .font(AppTheme.Font.pageTitleSerif)
+                    .tracking(AppTheme.Typography.trackingDisplay)
+                    .foregroundStyle(AppTheme.Color.textPrimary)
 
-            Text("Capture a moment from your day. It becomes English you can use.")
-                .font(AppTheme.Font.englishBody)
-                .foregroundStyle(AppTheme.Color.textMuted)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 280)
+                Text("Capture a moment from your day.\nIt becomes English you can use.")
+                    .font(AppTheme.Font.englishBody)
+                    .foregroundStyle(AppTheme.Color.textSecondary)
+                    .lineSpacing(AppTheme.Typography.lineBody)
+                    .frame(maxWidth: AppTheme.Size.emptyStateBodyWidth, alignment: .leading)
+                    .padding(.top, AppTheme.Space.paddingCard)
+
+                HStack(spacing: AppTheme.Space.paddingM) {
+                    Circle()
+                        .fill(AppTheme.Color.brandStrong)
+                        .frame(
+                            width: AppTheme.Size.emptyStatePopsDot,
+                            height: AppTheme.Size.emptyStatePopsDot
+                        )
+
+                    Text("0 pops so far")
+                        .font(AppTheme.Font.growthStatus)
+                        .foregroundStyle(AppTheme.Color.brandInk)
+                }
+                .padding(.top, AppTheme.Size.emptyStateBodyToGrowth)
+            }
+            .padding(.horizontal, AppTheme.Space.paddingPage)
+            .padding(.top, AppTheme.Size.emptyStateContentTop)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        // CTA：overlay 沉底，不参与中央块的居中计算（否则内容会被顶偏上）
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        // CTA 沉底，不参与内容区定位，确保左上对齐的正文不会被按钮挤动。
         .overlay(alignment: .bottom) {
-            captureButton
+            captureButton(showsCaptureIcon: true)
                 .padding(.bottom, AppTheme.Space.paddingSection)
         }
     }
@@ -269,13 +331,14 @@ private struct Tab2LockedView: View {
                             isHighlighted: cat.id == topId,
                             isExpanded: expandedCategoryId == cat.id,
                             onToggle: { toggleExpand(cat.id, proxy) },
-                            loadWords: { await vm.loadCategoryWords(for: cat.sceneCategory) }
+                            loadWords: { await vm.loadCategoryWords(for: cat.sceneCategory) },
+                            milestonePresentations: milestonePresentations
                         )
                         .id(cat.id)
                     }
                 }
                 .padding(.vertical, AppTheme.Space.paddingS)
-                .warmGlassCard()
+                .surfaceCard()
                 .padding(.horizontal, AppTheme.Space.paddingPage)
             }
         }
@@ -291,7 +354,7 @@ private struct Tab2LockedView: View {
     }
 
     // ── CTA ──────────────────────────────────────────────────────────────
-    private var captureButton: some View {
+    private func captureButton(showsCaptureIcon: Bool = false) -> some View {
         let isReady = vm.isReadyToUnlock
         return Button {
             if isReady {
@@ -335,6 +398,9 @@ private struct Tab2LockedView: View {
                         .font(.system(size: 16, weight: .bold))
                         .scaleEffect(sparkleScale)
                         .rotationEffect(.degrees(sparkleRotation))
+                } else if showsCaptureIcon {
+                    Image(systemName: "camera")
+                        .font(.system(size: AppTheme.Size.emptyStateCaptureIconGlyph, weight: .regular))
                 }
                 Text(isReady ? "You're all set" : "Capture something")
             }
@@ -459,89 +525,13 @@ private struct Tab2LockedView: View {
     }
 }
 
-// MARK: - 空状态中央徽章（方案A · H4 暖单色：玻璃圆 + 微倾时刻小卡）
-
-/// 一张微倾的迷你"时刻卡"：浅橘照片区 + 橙色小太阳 + 暖灰小山与文字行，
-/// 只取品牌橙与暖中性灰两族，不引入多色，避免杂乱。
-private struct EmptyMomentGlyph: View {
-    var body: some View {
-        ZStack {
-            // 暖橙光晕：提亮顶部区域，限制在玻璃圆内避免撑大间距
-            Circle()
-                .fill(AppTheme.Color.brandStrong.opacity(0.12))
-                .frame(width: 80, height: 80)
-                .blur(radius: 14)
-
-            ZStack {
-                momentCard
-                // 卡外一颗橙色小点，破开对称、添一点"散落的生活感"
-                Circle()
-                    .fill(AppTheme.Color.brandStrong)
-                    .frame(width: 5, height: 5)
-                    .offset(x: 19, y: -17)
-            }
-            .frame(width: 88, height: 88)
-            // 88 直径 + 44 圆角 = 正圆；走 glassCard 的暖白配方（ultraThin 裸用在浅底上发灰）
-            .glassCard(cornerRadius: 44)
-        }
-        .clipShape(Circle())   // 裁掉光晕溢出，保持视觉边界等于玻璃圆
-    }
-
-    private var momentCard: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            photoArea
-                .frame(width: 20, height: 16)
-
-            RoundedRectangle(cornerRadius: 1.5)
-                .fill(AppTheme.Color.textFaint)
-                .frame(width: 14, height: 3)
-
-            RoundedRectangle(cornerRadius: 1.5)
-                .fill(AppTheme.Color.border)
-                .frame(width: 9, height: 3)
-        }
-        .padding(4)
-        .background(AppTheme.Color.cardBg)
-        .clipShape(RoundedRectangle(cornerRadius: 5))
-        .overlay(
-            RoundedRectangle(cornerRadius: 5)
-                .strokeBorder(AppTheme.Color.border, lineWidth: 0.5)
-        )
-        .rotationEffect(.degrees(-7))
-    }
-
-    /// 照片区：浅橘底 + 橙色小太阳 + 暖灰双山峰
-    private var photoArea: some View {
-        ZStack(alignment: .bottom) {
-            AppTheme.Color.brandSubtleBg
-
-            Path { p in
-                p.move(to: CGPoint(x: 0, y: 16))
-                p.addLine(to: CGPoint(x: 6, y: 9))
-                p.addLine(to: CGPoint(x: 11, y: 14))
-                p.addLine(to: CGPoint(x: 14, y: 11))
-                p.addLine(to: CGPoint(x: 20, y: 16))
-                p.closeSubpath()
-            }
-            .fill(AppTheme.Color.textFaint.opacity(0.7))
-
-            Circle()
-                .fill(AppTheme.Color.brandStrong)
-                .frame(width: 6, height: 6)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .padding(.leading, 3)
-                .padding(.top, 3)
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 3))
-    }
-}
-
 // MARK: - Unlocked view
 
 private struct Tab2UnlockedView: View {
     let vm: Tab2HomeViewModel
     var topInset: CGFloat = 0
     var listResetToken: UUID = UUID()
+    var milestonePresentations: [CategoryMilestonePresentation] = []
     let onTalk: (String) -> Void
 
     // 单开手风琴：同时只展开一个 Topics-in-Progress 主题；切回 Mine 时回收起。
@@ -599,9 +589,12 @@ private struct Tab2UnlockedView: View {
     @ViewBuilder
     private func contentSections(_ proxy: ScrollViewProxy) -> some View {
         if let data = vm.data {
-            let hero   = vm.heroCategory()
+            let milestoneIDs = Set(milestonePresentations.map(\.categoryID))
+            let hero   = vm.heroCategory(excluding: milestoneIDs)
             let heroId = hero?.id
-            let otherUnlocked = data.categories.filter { $0.unlocked && $0.id != heroId }
+            let otherUnlocked = data.categories.filter {
+                $0.unlocked && $0.id != heroId && !milestoneIDs.contains($0.id)
+            }
 
             // 已解锁分类：独立 Serif 标题 "Materials Yours" + 横向 Peek 轮播卡片
             if hero != nil || !otherUnlocked.isEmpty {
@@ -638,7 +631,9 @@ private struct Tab2UnlockedView: View {
             }
 
             // Topics in Progress——独立 Serif 标题 + 磨砂玻璃列表容器
-            let stillFilling = data.categories.filter { !$0.unlocked && $0.wordCount >= 1 }
+            let stillFilling = data.categories.filter {
+                (!$0.unlocked && $0.wordCount >= 1) || milestoneIDs.contains($0.id)
+            }
             if !stillFilling.isEmpty {
                 VStack(alignment: .leading, spacing: AppTheme.Space.titleToContent) {
                     Text("Topics in progress")
@@ -653,13 +648,14 @@ private struct Tab2UnlockedView: View {
                                 isHighlighted: false,
                                 isExpanded: expandedCategoryId == cat.id,
                                 onToggle: { toggleExpand(cat.id, proxy) },
-                                loadWords: { await vm.loadCategoryWords(for: cat.sceneCategory) }
+                                loadWords: { await vm.loadCategoryWords(for: cat.sceneCategory) },
+                                milestonePresentations: milestonePresentations
                             )
                             .id(cat.id)
                         }
                     }
                     .padding(.vertical, AppTheme.Space.paddingS)
-                    .warmGlassCard()
+                    .surfaceCard()
                     .padding(.horizontal, AppTheme.Space.paddingPage)
                 }
             }
@@ -726,6 +722,11 @@ private struct ConversationStubView: View {
         }
         .toolbar(.hidden, for: .navigationBar)
     }
+}
+
+#Preview("Tab2 Empty State") {
+    Tab2LockedView(vm: Tab2HomeViewModel(), onCapture: {})
+        .environment(\.colorScheme, .light)
 }
 
 #Preview {

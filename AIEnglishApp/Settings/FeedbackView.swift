@@ -32,9 +32,6 @@ struct FeedbackView: View {
     }
     private var canSubmit: Bool { !trimmedBody.isEmpty && !isSubmitting }
 
-    private var appVersion: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
-    }
     private var deviceInfo: String {
         "\(UIDevice.current.model), iOS \(UIDevice.current.systemVersion)"
     }
@@ -118,7 +115,7 @@ struct FeedbackView: View {
                 if body_.isEmpty {
                     Text("Tell us what's on your mind…")
                         .font(AppTheme.Font.englishBody)
-                        .foregroundStyle(AppTheme.Color.textFaint)
+                        .foregroundStyle(AppTheme.Color.textMuted)
                         .padding(.horizontal, AppTheme.Space.paddingCard + 5)
                         .padding(.vertical, AppTheme.Space.paddingCard + 8)
                         .allowsHitTesting(false)
@@ -136,13 +133,13 @@ struct FeedbackView: View {
                     }
             }
             .background(AppTheme.Color.cardBg)
-            .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
+            .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
             .shadow(color: AppTheme.Shadow.cardColor,
                     radius: AppTheme.Shadow.cardRadius, x: 0, y: AppTheme.Shadow.cardY)
             .overlay(alignment: .bottomTrailing) {
                 Text("\(trimmedBody.count)/\(bodyLimit)")
                     .font(AppTheme.Font.pos)
-                    .foregroundStyle(AppTheme.Color.textFaint)
+                    .foregroundStyle(AppTheme.Color.textMuted)
                     .padding(AppTheme.Space.paddingS)
             }
             .padding(.horizontal, AppTheme.Space.paddingPage)
@@ -160,7 +157,7 @@ struct FeedbackView: View {
                 .keyboardType(.emailAddress)
                 .padding(AppTheme.Space.paddingCard)
                 .background(AppTheme.Color.cardBg)
-                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
+                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
                 .shadow(color: AppTheme.Shadow.cardColor,
                         radius: AppTheme.Shadow.cardRadius, x: 0, y: AppTheme.Shadow.cardY)
                 .padding(.horizontal, AppTheme.Space.paddingPage)
@@ -187,7 +184,7 @@ struct FeedbackView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, AppTheme.Space.paddingCard)
             .background(
-                (canSubmit ? AppTheme.Color.interactive : AppTheme.Color.textFaint),
+                (canSubmit ? AppTheme.Color.interactive : AppTheme.Color.neutralFaint),
                 in: Capsule()
             )
         }
@@ -259,7 +256,7 @@ struct FeedbackView: View {
             var payload: [String: String] = [
                 "category": category.rawValue,
                 "body": trimmedBody,
-                "app_version": appVersion,
+                "app_version": Bundle.main.appVersion,
                 "device_info": deviceInfo,
             ]
             let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)

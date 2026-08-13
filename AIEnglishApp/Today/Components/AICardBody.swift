@@ -239,6 +239,6 @@ private struct CardSectionLabel: View {
         Text(text.uppercased())
             .font(AppTheme.Font.sectionLabel)
             .tracking(0.6)
-            .foregroundStyle(AppTheme.Color.textLabel)
+            .foregroundStyle(AppTheme.Color.textMuted)
     }
 }

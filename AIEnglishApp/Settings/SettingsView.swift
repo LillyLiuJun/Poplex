@@ -16,6 +16,159 @@ private struct IdentifiableURL: Identifiable {
     let url: URL
 }
 
+// MARK: - Settings row artwork (matches visual spec §04)
+
+private enum SettingsRowIcon {
+    case aiData
+    case privacy
+    case terms
+    case feedback
+    case delete
+    case reset
+}
+
+/// 视觉规范中的图标是定制 24×24 描边路径，不以近似 SF Symbol 替代。
+/// 图标仅作按钮标签的装饰，按钮文字本身承载 VoiceOver 名称。
+private struct SettingsRowIconView: View {
+    let icon: SettingsRowIcon
+    let tint: Color
+
+    var body: some View {
+        Canvas { context, size in
+            let scale = min(size.width, size.height) / 24
+            context.scaleBy(x: scale, y: scale)
+            context.stroke(
+                path,
+                with: .color(tint),
+                style: StrokeStyle(
+                    lineWidth: AppTheme.Size.settingsIconStroke,
+                    lineCap: icon == .delete ? .round : .butt,
+                    lineJoin: .round
+                )
+            )
+        }
+        .frame(
+            width: AppTheme.Size.settingsRowIconGlyph,
+            height: AppTheme.Size.settingsRowIconGlyph
+        )
+        .frame(width: AppTheme.Size.rowIcon)
+        .accessibilityHidden(true)
+    }
+
+    private var path: Path {
+        var path = Path()
+
+        switch icon {
+        case .aiData:
+            path.move(to: CGPoint(x: 12, y: 3))
+            path.addLine(to: CGPoint(x: 13.9, y: 8.1))
+            path.addLine(to: CGPoint(x: 19, y: 10))
+            path.addLine(to: CGPoint(x: 13.9, y: 11.9))
+            path.addLine(to: CGPoint(x: 12, y: 17))
+            path.addLine(to: CGPoint(x: 10.1, y: 11.9))
+            path.addLine(to: CGPoint(x: 5, y: 10))
+            path.addLine(to: CGPoint(x: 10.1, y: 8.1))
+            path.closeSubpath()
+
+        case .privacy:
+            path.addRoundedRect(
+                in: CGRect(x: 5, y: 10, width: 14, height: 10),
+                cornerSize: CGSize(width: 2.4, height: 2.4)
+            )
+            path.move(to: CGPoint(x: 8.2, y: 10))
+            path.addLine(to: CGPoint(x: 8.2, y: 7.2))
+            path.addCurve(
+                to: CGPoint(x: 15.8, y: 7.2),
+                control1: CGPoint(x: 8.2, y: 5.1),
+                control2: CGPoint(x: 9.9, y: 3.4)
+            )
+            path.addLine(to: CGPoint(x: 15.8, y: 10))
+
+        case .terms:
+            path.move(to: CGPoint(x: 6, y: 3.5))
+            path.addLine(to: CGPoint(x: 13.5, y: 3.5))
+            path.addLine(to: CGPoint(x: 18, y: 8))
+            path.addLine(to: CGPoint(x: 18, y: 20.5))
+            path.addLine(to: CGPoint(x: 6, y: 20.5))
+            path.closeSubpath()
+            path.move(to: CGPoint(x: 13.5, y: 3.5))
+            path.addLine(to: CGPoint(x: 13.5, y: 8))
+            path.addLine(to: CGPoint(x: 18, y: 8))
+            path.move(to: CGPoint(x: 9, y: 13))
+            path.addLine(to: CGPoint(x: 15, y: 13))
+            path.move(to: CGPoint(x: 9, y: 16.5))
+            path.addLine(to: CGPoint(x: 15, y: 16.5))
+
+        case .feedback:
+            path.move(to: CGPoint(x: 3.5, y: 6.5))
+            path.addLine(to: CGPoint(x: 20.5, y: 6.5))
+            path.addLine(to: CGPoint(x: 20.5, y: 17.5))
+            path.addLine(to: CGPoint(x: 9.5, y: 17.5))
+            path.addLine(to: CGPoint(x: 3.5, y: 21))
+            path.closeSubpath()
+
+        case .delete:
+            path.move(to: CGPoint(x: 4.5, y: 7))
+            path.addLine(to: CGPoint(x: 19.5, y: 7))
+            path.move(to: CGPoint(x: 9.5, y: 7))
+            path.addLine(to: CGPoint(x: 9.5, y: 4.2))
+            path.addLine(to: CGPoint(x: 14.5, y: 4.2))
+            path.addLine(to: CGPoint(x: 14.5, y: 7))
+            path.move(to: CGPoint(x: 6.8, y: 7))
+            path.addLine(to: CGPoint(x: 7.8, y: 20.8))
+            path.addLine(to: CGPoint(x: 16.2, y: 20.8))
+            path.addLine(to: CGPoint(x: 17.2, y: 7))
+
+        case .reset:
+            path.move(to: CGPoint(x: 7, y: 8))
+            path.addLine(to: CGPoint(x: 7, y: 4))
+            path.addLine(to: CGPoint(x: 3, y: 8))
+            path.addLine(to: CGPoint(x: 7, y: 12))
+            path.move(to: CGPoint(x: 7, y: 8))
+            path.addCurve(
+                to: CGPoint(x: 20, y: 12),
+                control1: CGPoint(x: 14, y: 3),
+                control2: CGPoint(x: 20, y: 6)
+            )
+            path.addCurve(
+                to: CGPoint(x: 12, y: 21),
+                control1: CGPoint(x: 20, y: 17),
+                control2: CGPoint(x: 16, y: 21)
+            )
+        }
+
+        return path
+    }
+}
+
+private struct SettingsChevron: View {
+    var body: some View {
+        Canvas { context, size in
+            let scale = min(size.width, size.height) / 24
+            context.scaleBy(x: scale, y: scale)
+
+            var path = Path()
+            path.move(to: CGPoint(x: 9, y: 5))
+            path.addLine(to: CGPoint(x: 16, y: 12))
+            path.addLine(to: CGPoint(x: 9, y: 19))
+
+            context.stroke(
+                path,
+                with: .color(AppTheme.Color.border),
+                style: StrokeStyle(
+                    lineWidth: AppTheme.Size.settingsChevronStroke,
+                    lineCap: .round
+                )
+            )
+        }
+        .frame(
+            width: AppTheme.Size.settingsChevronGlyph,
+            height: AppTheme.Size.settingsChevronGlyph
+        )
+        .accessibilityHidden(true)
+    }
+}
+
 // MARK: - SettingsView
 
 /// 设置页：与 Tab1/Tab2 同一视觉语言 —— 暖纸底 + Canvas 装饰 + 圆形 app-icon 报头
@@ -30,10 +183,6 @@ struct SettingsView: View {
 
     private let privacyURL = URL(string: "https://poplex-legal.vercel.app/privacy.html")!
     private let termsURL   = URL(string: "https://poplex-legal.vercel.app/terms.html")!
-
-    private var appVersion: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
-    }
 
     var body: some View {
         NavigationStack {
@@ -121,15 +270,15 @@ struct SettingsView: View {
 
     private var aboutLegalCard: some View {
         settingsCard("About & Legal") {
-            settingsRow(icon: "sparkles", label: "AI & Your Data") {
+            settingsRow(icon: .aiData, label: "AI & Your Data") {
                 showAboutAI = true
             }
             rowDivider
-            settingsRow(icon: "lock", label: "Privacy Policy") {
+            settingsRow(icon: .privacy, label: "Privacy Policy") {
                 safariItem = IdentifiableURL(url: privacyURL)
             }
             rowDivider
-            settingsRow(icon: "doc.text", label: "Terms of Service") {
+            settingsRow(icon: .terms, label: "Terms of Service") {
                 safariItem = IdentifiableURL(url: termsURL)
             }
         }
@@ -137,7 +286,7 @@ struct SettingsView: View {
 
     private var supportCard: some View {
         settingsCard("Support") {
-            settingsRow(icon: "bubble.left", label: "Feedback & Report") {
+            settingsRow(icon: .feedback, label: "Feedback & Report") {
                 showFeedback = true
             }
         }
@@ -145,7 +294,7 @@ struct SettingsView: View {
 
     private var accountCard: some View {
         settingsCard("Account") {
-            settingsRow(icon: "trash", label: "Delete Account & Data",
+            settingsRow(icon: .delete, label: "Delete Account & Data",
                         tint: AppTheme.Color.danger, iconTint: AppTheme.Color.danger,
                         showsChevron: false) {
                 showDeleteAlert = true
@@ -156,7 +305,7 @@ struct SettingsView: View {
     #if DEBUG
     private var developerCard: some View {
         settingsCard("Developer") {
-            settingsRow(icon: "arrow.counterclockwise", label: "Reset Library unlock",
+            settingsRow(icon: .reset, label: "Reset Library unlock",
                         showsChevron: false) {
                 UserDefaults.standard.removeObject(forKey: "tab2_permanently_unlocked")
                 UserDefaults.standard.removeObject(forKey: "tab2_first_unlock_shown")
@@ -166,40 +315,36 @@ struct SettingsView: View {
     #endif
 
     private var versionFooter: some View {
-        Text("Version \(appVersion)")
+        Text("Version \(Bundle.main.appVersion)")
             .font(AppTheme.Font.pos)
-            .foregroundStyle(AppTheme.Color.textFaint)
+            .foregroundStyle(AppTheme.Color.textMuted)
             .frame(maxWidth: .infinity)
     }
 
     // MARK: - Building blocks
 
-    /// 分区：衬线标题在卡外（与 Tab2 "Materials Yours" 同款）+ 暖近白卡容器（柔阴影）。
+    /// 分区：衬线标题在卡外（与 Tab2 "Materials Yours" 同款）+ 暖纸内容卡。
     private func settingsCard<Content: View>(
         _ title: String,
         @ViewBuilder content: () -> Content
     ) -> some View {
         VStack(alignment: .leading, spacing: AppTheme.Space.paddingS) {
-            Text(title.uppercased())
-                .font(AppTheme.Font.groupLabel)
-                .tracking(AppTheme.Typography.trackingLabel)
-                .foregroundStyle(AppTheme.Color.textMuted)
+            Text(title)
+                .font(AppTheme.Font.sectionTitleSerif)
+                .foregroundStyle(AppTheme.Color.textPrimary)
                 .padding(.horizontal, AppTheme.Space.paddingPage)
 
             VStack(spacing: 0) {
                 content()
             }
-            .background(AppTheme.Color.cardBg)
-            .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
-            .shadow(color: AppTheme.Shadow.cardColor,
-                    radius: AppTheme.Shadow.cardRadius, x: 0, y: AppTheme.Shadow.cardY)
+            .surfaceCard()
             .padding(.horizontal, AppTheme.Space.paddingPage)
         }
     }
 
     /// 卡内行：线性图标 + 标签 + 可选箭头。默认前景近黑、图标暖灰；危险行传 danger。
     private func settingsRow(
-        icon: String,
+        icon: SettingsRowIcon,
         label: String,
         tint: Color = AppTheme.Color.textPrimary,
         iconTint: Color = AppTheme.Color.textSecondary,
@@ -208,18 +353,13 @@ struct SettingsView: View {
     ) -> some View {
         Button(action: action) {
             HStack(spacing: AppTheme.Space.paddingCard) {
-                Image(systemName: icon)
-                    .font(.system(.body))                       // icon glyph，随 Dynamic Type
-                    .foregroundStyle(iconTint)
-                    .frame(width: AppTheme.Size.rowIcon, alignment: .center)
+                SettingsRowIconView(icon: icon, tint: iconTint)
                 Text(label)
                     .font(AppTheme.Font.englishBody)
                     .foregroundStyle(tint)
                 Spacer()
                 if showsChevron {
-                    Image(systemName: "chevron.right")
-                        .font(.system(.footnote, weight: .semibold))
-                        .foregroundStyle(AppTheme.Color.textFaint)
+                    SettingsChevron()
                 }
             }
             .padding(.horizontal, AppTheme.Space.paddingCard)

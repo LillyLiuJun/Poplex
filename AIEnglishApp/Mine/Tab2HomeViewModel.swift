@@ -9,6 +9,7 @@ final class Tab2HomeViewModel {
     var isLoading = false
     var errorMessage: String?
     var toastMessage: String?
+    var milestonePresentations: [CategoryMilestonePresentation] = []
 
     /// 首次解锁时为 true，用于触发动效和专属 hero 文案；动效结束后置 false。
     var isFirstUnlock = false
@@ -17,19 +18,96 @@ final class Tab2HomeViewModel {
     private(set) var isPermanentlyUnlocked: Bool
 
     private var lastLoadedAt: Date = .distantPast
+    private let milestoneTracker: CategoryMilestoneTracker
+    #if DEBUG
+    private var debugDemoStartedBeforeRefresh = false
+    #endif
 
-    init() {
+    init(milestoneTracker: CategoryMilestoneTracker = CategoryMilestoneTracker()) {
+        self.milestoneTracker = milestoneTracker
         isPermanentlyUnlocked = UserDefaults.standard.bool(forKey: kUnlockedKey)
     }
+
+    // MARK: - Category milestone presentation
+
+    func registerMilestones(
+        _ snapshots: [CategoryMilestoneSnapshot],
+        userID: String
+    ) {
+        let detected = milestoneTracker.observeBatch(snapshots, userID: userID)
+        guard milestonePresentations.isEmpty, !detected.isEmpty else { return }
+        milestonePresentations = detected
+    }
+
+    func finishMilestonePresentations(_ presentations: [CategoryMilestonePresentation]) {
+        guard milestonePresentations == presentations else { return }
+        milestonePresentations = []
+    }
+
+    func milestoneToastMessage(
+        for presentations: [CategoryMilestonePresentation]
+    ) -> String {
+        guard presentations.count == 1, let presentation = presentations.first else {
+            return "\(presentations.count) topics reached \(PopsLabel.format(20))"
+        }
+        let label = data?.categories.first {
+            $0.id == presentation.categoryID
+        }?.englishLabel ?? SceneCategory.from(presentation.categoryID).englishLabel
+        return "\(label) reached \(PopsLabel.format(20))"
+    }
+
+    #if DEBUG
+    /// Repeatable visual walkthrough. It never touches milestone persistence;
+    /// launch with `TAB2_MILESTONE_DEMO=1` and refresh Tab2 to replay.
+    static func debugMilestoneDemoPresentations(
+        in categories: [Tab2CategoryData]
+    ) -> [CategoryMilestonePresentation] {
+        let unlocked = categories.filter(\.unlocked).sorted {
+            if $0.wordCount == $1.wordCount { return $0.id < $1.id }
+            return $0.wordCount < $1.wordCount
+        }
+        let candidates = Array(unlocked.prefix(2))
+        let selected = candidates.isEmpty
+            ? categories.filter { $0.wordCount > 0 }.max(by: { $0.wordCount < $1.wordCount }).map { [$0] } ?? []
+            : candidates
+
+        return selected.map { candidate in
+            CategoryMilestonePresentation(
+                categoryID: candidate.id,
+                previousCount: 19,
+                currentCount: 20
+            )
+        }
+    }
+
+
+    /// Starts the walkthrough from cached/on-screen data so switching to Tab2
+    /// does not wait for the refresh. Only Debug callers invoke this helper.
+    func prepareDebugMilestoneDemoFromCurrentData() {
+        guard let categories = data?.categories else { return }
+        debugDemoStartedBeforeRefresh = true
+        guard milestonePresentations.isEmpty else { return }
+        milestonePresentations = Self.debugMilestoneDemoPresentations(in: categories)
+    }
+
+    func prepareDebugMilestoneDemoAfterRefresh(_ categories: [Tab2CategoryData]) {
+        defer { debugDemoStartedBeforeRefresh = false }
+        guard !debugDemoStartedBeforeRefresh,
+              milestonePresentations.isEmpty else { return }
+        milestonePresentations = Self.debugMilestoneDemoPresentations(in: categories)
+    }
+    #endif
 
     // MARK: - Hero 选取
 
     /// 从 data.categories 里选出 hero 卡：
     /// 优先「有 featured moment 且最近有新素材的已解锁分类」；
     /// 次选「已解锁词数最多的分类」；未解锁时返回 nil。
-    func heroCategory() -> Tab2CategoryData? {
+    func heroCategory(excluding excludedCategoryIDs: Set<String> = []) -> Tab2CategoryData? {
         guard let cats = data?.categories else { return nil }
-        let unlocked = cats.filter(\.unlocked)
+        let unlocked = cats.filter {
+            $0.unlocked && !excludedCategoryIDs.contains($0.id)
+        }
         guard !unlocked.isEmpty else { return nil }
 
         // 优先：有 featured moment（有可展示的场景）+ 最近有素材，按 lastMaterialAt 降序
@@ -93,7 +171,29 @@ final class Tab2HomeViewModel {
         do {
             let fresh = try await fetchHomeData()
             await LocalCache.shared.save(fresh, key: .tab2Home)
-            data = try JSONDecoder().decode(Tab2HomeData.self, from: fresh)
+            let decoded = try JSONDecoder().decode(Tab2HomeData.self, from: fresh)
+            data = decoded
+            #if DEBUG
+            if ProcessInfo.processInfo.environment["TAB2_MILESTONE_DEMO"] == "1" {
+                prepareDebugMilestoneDemoAfterRefresh(decoded.categories)
+            } else if let userID = SupabaseManager.currentUserID {
+                registerMilestones(
+                    decoded.categories.map {
+                        CategoryMilestoneSnapshot(categoryID: $0.id, count: $0.wordCount)
+                    },
+                    userID: userID
+                )
+            }
+            #else
+            if let userID = SupabaseManager.currentUserID {
+                registerMilestones(
+                    decoded.categories.map {
+                        CategoryMilestoneSnapshot(categoryID: $0.id, count: $0.wordCount)
+                    },
+                    userID: userID
+                )
+            }
+            #endif
             wordCache.removeAll()
             lastLoadedAt = Date()
             toastMessage = nil

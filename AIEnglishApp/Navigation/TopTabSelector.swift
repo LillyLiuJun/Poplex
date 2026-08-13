@@ -13,7 +13,7 @@ struct TopTabSelector: View {
         }
         .padding(.horizontal, AppTheme.Space.paddingXS)
         .padding(.vertical, AppTheme.Space.paddingXS)
-        .glassBarItem(in: Capsule(), interactive: false)
+        .surfaceFloating(in: Capsule(), interactive: false)
         // tabSelection drives thumb moves; topBarCompact drives label show/hide
         .animation(AppTheme.Motion.tabSelection, value: selectedTab)
         .animation(AppTheme.Motion.topBarCompact, value: compact)

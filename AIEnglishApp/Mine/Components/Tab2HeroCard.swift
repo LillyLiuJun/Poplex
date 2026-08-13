@@ -32,12 +32,7 @@ struct Tab2HeroCard: View {
         }
         .frame(maxWidth: .infinity)
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.glassContainer))
-        .background {
-            RoundedRectangle(cornerRadius: AppTheme.Radius.glassContainer)
-                .fill(AppTheme.Color.warmGlassSurface)
-        }
-        // 轻阴影：收敛不晕染（原 warmCard radius 28 会在页面上晕成一片"底纹"）
-        .shadow(color: AppTheme.Shadow.cardColor, radius: 12, x: 0, y: 4)
+        .surfaceCard()
     }
 
     // MARK: - 顶部（§6.3：判定源是 hero_photos 是否为空）
@@ -112,7 +107,7 @@ struct Tab2HeroCard: View {
                 metaDot
                 Text(Self.relativeTime(t))
                     .font(AppTheme.Font.pos)
-                    .foregroundStyle(AppTheme.Color.textFaint)
+                    .foregroundStyle(AppTheme.Color.textMuted)
             }
             Spacer(minLength: 0)
         }
@@ -121,7 +116,7 @@ struct Tab2HeroCard: View {
     private var metaDot: some View {
         Text("·")
             .font(AppTheme.Font.pos)
-            .foregroundStyle(AppTheme.Color.textFaint)
+            .foregroundStyle(AppTheme.Color.neutralFaint)
     }
 
     // MARK: - 主角句（模式 A / B / C）

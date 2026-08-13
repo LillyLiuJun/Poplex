@@ -48,7 +48,7 @@ struct AccountMenuView: View {
             .padding(.vertical, AppTheme.Space.paddingCard)
         }
         .frame(width: 200)
-        .glassContainer()
+        .surfaceFloating()
     }
 }
 

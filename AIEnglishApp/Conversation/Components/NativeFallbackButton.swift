@@ -18,9 +18,9 @@ struct NativeFallbackButton: View {
                 .font(AppTheme.Font.buddy)
                 .foregroundStyle(
                     isDisabled
-                    ? AppTheme.Color.textFaint
+                    ? AppTheme.Color.neutralFaint
                     : isListening
-                        ? AppTheme.Color.brandDefault
+                        ? AppTheme.Color.brandStrong
                         : AppTheme.Color.textSecondary
                 )
                 .frame(minWidth: 44, minHeight: AppTheme.Size.barControl)

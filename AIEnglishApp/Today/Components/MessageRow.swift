@@ -65,11 +65,11 @@ private struct UserBubble: View {
                         .aspectRatio(contentMode: .fill)
                         .frame(width: imageSize, height: imageSize)
                         .clipped()
-                        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.bubble))
+                        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
                         // Clip affects drawing only — restrict hit-testing to
                         // the visible bubble so the invisible overflow can't
                         // swallow taps around the message.
-                        .contentShape(RoundedRectangle(cornerRadius: AppTheme.Radius.bubble))
+                        .contentShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
                         .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { imageFrame = $0 }
                         .onTapGesture { onImageTap?(img, imageFrame) }
                 }
@@ -77,13 +77,13 @@ private struct UserBubble: View {
                 HStack {
                     Spacer()
                     CachedRemoteImage(signedUrl: urlStr, stableKey: imageStableKey ?? urlStr) {
-                        RoundedRectangle(cornerRadius: AppTheme.Radius.bubble)
+                        RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
                             .fill(AppTheme.Color.imagePlaceholderBg)
                             .overlay(ProgressView().scaleEffect(0.7))
                     }
                     .frame(width: imageSize, height: imageSize)
-                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.bubble))
-                    .contentShape(RoundedRectangle(cornerRadius: AppTheme.Radius.bubble))
+                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
+                    .contentShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
                     .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { imageFrame = $0 }
                     .onTapGesture {
                         let cacheKey = imageStableKey ?? urlStr
@@ -101,7 +101,7 @@ private struct UserBubble: View {
                         .padding(.vertical, AppTheme.Space.paddingM)
                         .background(AppTheme.Color.bubbleUserBg)
                         .foregroundStyle(AppTheme.Color.bubbleUserText)
-                        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.bubble))
+                        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
                 }
             }
         }

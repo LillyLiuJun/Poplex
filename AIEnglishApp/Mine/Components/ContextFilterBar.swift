@@ -37,7 +37,7 @@ private struct FilterChip: View {
                 .font(.subheadline)
                 .padding(.horizontal, AppTheme.Space.paddingCard)
                 .padding(.vertical, AppTheme.Space.paddingXS)
-                .background(isSelected ? AppTheme.Color.textAccent : AppTheme.Color.cardBg)
+                .background(isSelected ? AppTheme.Color.brandStrong : AppTheme.Color.cardBg)
                 .foregroundStyle(isSelected ? Color.white : AppTheme.Color.textPrimary)
                 .clipShape(Capsule())
         }

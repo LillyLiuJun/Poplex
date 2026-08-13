@@ -115,6 +115,9 @@ private enum Primitive {
     static let error800 = Color(hex: 0xE88979)
     static let error900 = Color(hex: 0xE47360)
     static let error950 = Color(hex: 0xE05C46)
+    // error950 的加深档（同色相不换色系）：error950 仅 3.57:1 做文字不达 AA，
+    // 此档 5.96:1，是 danger 的唯一合规出口。
+    static let errorDeep = Color(hex: 0xB0392A)
 
     // Info — 蓝
     static let info50  = Color(hex: 0xF0F6F9)
@@ -171,27 +174,36 @@ enum AppTheme {
         static let cardBg   = Primitive.warmWhite   // 近白暖卡片，比页面浅一档
         static let inputBg  = Primitive.warmWhite
 
-        // 文字（由重到轻）
-        static let textPrimary   = Primitive.neutral900
-        static let textSecondary = Primitive.neutral700
-        static let textMuted     = Primitive.neutral500
-        static let textFaint     = Primitive.neutral300
-        static let textLabel     = Primitive.neutral400  // 区块小标（例句 / 说明）
+        // 文字（由重到轻，全部 ≥4.4:1 WCAG AA 合规）
+        // 三档已覆盖所有文字层次；textFaint(1.73:1) / textLabel(2.55:1) 均不合规，已删除。
+        static let textPrimary   = Primitive.neutral900  // 17.2:1
+        static let textSecondary = Primitive.neutral700  // 9.9:1
+        static let textMuted     = Primitive.neutral500  // 4.4:1
 
-        // 卡片类型 chip 配色。第5刀卡片合并后 CardTypeChip 改走单色 textMuted，
-        // 以下四色暂时无引用，留待 token 卫生轮决定合并/删除（勿在本刀顺手删）。
-        static let chipMoment    = Primitive.primary900  // Moment    · 橙 + 白字
-        static let chipWord      = Primitive.info900     // Word      · 蓝 + 白字
-        static let chipPolish    = Primitive.warning700  // Polish    · 浅金 + 深字
-        static let chipTranslate = Primitive.success950  // Translate · 绿 + 白字
-        static let textOnChip    = Primitive.neutral50   // chip 胶囊上的浅色文字（默认）
+        // 非阅读性用途的最浅中性：禁用态填充、禁用态文字、装饰图形、分隔符号。
+        // 1.73:1 —— 永远不可用于需要阅读的文字（WCAG 豁免非文字/禁用态对比度要求）。
+        // 与 border(neutral200 #E3DFD9) 不同值：border 是发丝线语义，neutralFaint 是浅灰实心填充语义。
+        static let neutralFaint  = Primitive.neutral300  // #C7C3BD
+        // 满宽禁用 CTA：比页面明确一档，但仍远弱于可用态的暖近黑。
+        // 背景与文字拉开明度，避免整枚按钮糊成一块无法辨认的浅灰。
+        static let controlDisabledBg = Primitive.neutral200
+        static let controlDisabledText = Primitive.neutral500
+
+        static let textOnChip    = Primitive.neutral50   // chip 胶囊 / 深底按钮上的浅色文字
 
         // 品牌 / 交互
-        // brandStrong 指向种子橙 FF7622（实心填充承载白字）；brandDefault 取稍浅一档
-        // 作描边/浅底强调；brandSubtleBg 取浅橘淡底。
-        static let brandDefault  = Primitive.primary900  // 默认品牌色（浅底/描边等）
-        static let brandStrong   = Primitive.primary950  // 实心填充上承载浅色文字（如 CTA），=种子橙
-        static let brandSubtleBg = Primitive.primary100  // 品牌极淡橘底
+        // 橙按「做什么」分档，不按「好不好看」调透明度：
+        //   brandInk   — 橙做文字的唯一出口（5.09:1）：≤24pt 文字
+        //   brandStrong — 满饱和图形（FF7622）：≤24pt 图标、点、满格进度。永不做文字。
+        //   brandMid   — 中档填充：24–120pt 进度条、chip、下划线
+        //   brandTint  — 大面积浅底：>120pt 达标胶囊、横幅、水印
+        //   brandWash  — 整块区域的最淡橙底（比 brandTint 再浅一档）
+        // 任何尺寸均禁止半透明橙：橙 50% 叠暖纸底会得到脏粉，不橙不灰。
+        static let brandInk    = Primitive.primaryDeep   // 橙做文字（≤24pt 文字场景）
+        static let brandStrong = Primitive.primary950    // 满饱和图形（≤24pt，=种子橙 FF7622）
+        static let brandMid    = Primitive.primary800    // 中档填充（24–120pt）
+        static let brandTint   = Primitive.primary200    // 大面积浅底（>120pt）
+        static let brandWash   = Primitive.primary100    // 整块区域的最淡橙底
 
         // AI 追问区 / 核心词组（温润极简：透明底 + 橘色图标 + 顶部细分割线，不再整块底）
         static let accentBuddy   = Primitive.neutral700
@@ -210,14 +222,16 @@ enum AppTheme {
         static let borderDashed = Primitive.neutral200
         static let divider      = Primitive.neutral200
 
-        // 语义状态（承载文字，取最深一档珊瑚红以保可读性）
-        static let danger = Primitive.error950
+        // 语义状态（承载文字，取加深档以保可读性：error950 仅 3.57:1 不达 AA；errorDeep 5.96:1 合规）
+        static let danger = Primitive.errorDeep
 
         // 模态遮罩：加载 / 删除时压暗背景。用暖近黑（neutral950）而非纯黑，与暖色系一致
         static let scrimOverlay = Primitive.neutral950.opacity(0.25)
 
         // 图片加载占位底
         static let imagePlaceholderBg = Primitive.neutral100
+        // 图片暖纸薄蒙：叠在缩略图上，压低对比、融进暖色系（不是文字色，opacity 在此处合规）
+        static let imageWarmOverlay   = Primitive.neutral50.opacity(0.15)
 
         // 词条类型图标的回退底块（无配图时）：比图片占位底更淡，让描边类型图标退后作弱提示
         static let iconTileBg = Primitive.neutral900.opacity(0.05)
@@ -257,22 +271,7 @@ enum AppTheme {
         static let cameraControl   = Primitive.controlOnMedia
         static let cameraControlBg = Primitive.scrimOnMedia
 
-        // Tab2 词条 badge 配色（按表达类型区分，而非来源材料粒度）
-        static let badgeWordBg       = Primitive.info100     // 单词（word）
-        static let badgeWordIcon     = Primitive.info700
-        static let badgePhraseBg     = Primitive.primary100  // 短语/搭配/句型（phrase/collocation/pattern）
-        static let badgePhraseIcon   = Primitive.primary800
-        static let badgeIdiomBg      = Primitive.warning200  // 习语/俚语（idiom/slang）
-        static let badgeIdiomIcon    = Primitive.warning800
-        static let badgeDialogueBg   = Primitive.success100  // 对话来源（dialogue source type）
-        static let badgeDialogueIcon = Primitive.success800
 
-        // About AI & Your Data 设置行图标色（绿色，与 AI 功能相关）
-        static let aiFeatureAccent = Primitive.success950
-
-        // MARK: 过渡别名（Mine 等未换肤界面仍引用；指向品牌强色 = 种子橙，
-        // 各界面换肤时再统一到 brandStrong / accent* —— 勿在新代码中使用）
-        static let textAccent = Primitive.primary950
     }
 
     enum Font {
@@ -289,6 +288,10 @@ enum AppTheme {
         static let iconBadgeLetter = SwiftUI.Font.system(.subheadline, design: .serif, weight: .semibold) // 词条类型徽章里的衬线字母（句中单词 A）
         static let cardMeta       = SwiftUI.Font.system(.footnote, weight: .medium)   // 卡片右上角 meta（Hero 卡 pops 数等）
         static let sectionLabel   = SwiftUI.Font.system(.caption2, weight: .semibold) // 区块小标（例句 / 说明，11/600）
+        static let statusNote     = SwiftUI.Font.system(.footnote)                     // 加载态 / 空态 / 系统提示性短句
+        static let growthStatus   = SwiftUI.Font.system(.footnote, weight: .semibold)  // 成长线状态（如「0 pops so far」）
+        static let actionNote     = SwiftUI.Font.system(.footnote)                     // 操作项的补充说明（如拍照入口副文案）
+        static let compactActionLabel = SwiftUI.Font.system(.footnote, weight: .semibold) // 紧凑胶囊动作（如 Camera / Gallery）
         static let chineseFaint   = SwiftUI.Font.system(.footnote)                    // 中文原文弱化
         static let chineseBody    = SwiftUI.Font.system(.subheadline)                 // 中文翻译（=参考稿 content-zh 14px 灰）
         static let date           = SwiftUI.Font.system(.caption2, weight: .semibold) // 日期分隔
@@ -297,7 +300,7 @@ enum AppTheme {
         static let pageTitleSerif = SwiftUI.Font.system(.largeTitle, design: .serif, weight: .semibold) // 页面衬线大标题（Warm Editorial：Tab2「Not open yet」等，与内容衬线同族）
         static let onboardingHeroSerif = SwiftUI.Font.system(size: 46, weight: .semibold, design: .serif) // Onboarding 封面大标题：比 largeTitle 更大的展示字号，撑起全屏第一印象。封面特例——固定字号、不随 Dynamic Type 放大（与 pageTitleSerif 同为衬线同族，仅尺寸更大）
         static let sectionTitleSerif = SwiftUI.Font.system(.title2, design: .serif, weight: .semibold)  // 分区衬线小标题（Topics in progress / Materials Yours），比页面大标题小一档
-        static let groupTitleSerif   = SwiftUI.Font.system(.subheadline, design: .serif, weight: .bold)   // 分组衬线小标题（备选，品牌衬线风）
+        static let compactSectionTitleSerif = SwiftUI.Font.system(.title3, design: .serif, weight: .semibold) // 紧凑页面内的小分区标题（如 Onboarding 样例区）
         static let groupLabel        = SwiftUI.Font.system(.footnote, weight: .semibold)                  // 分组列表 section header（iOS 标准）：配大写 + 字距 + 弱色，退后作辅助标签
         static let ctaLabel       = SwiftUI.Font.system(.body, weight: .semibold)     // 主按钮文字（Continue / Get Started）
         static let tabLabel       = SwiftUI.Font.system(.subheadline, weight: .semibold) // 顶部 Tab 名称
@@ -309,6 +312,12 @@ enum AppTheme {
         // 字号改动需同步 SplashScreenView.wordmarkSize，两者必须一致，
         // 否则 P 的字高（由字号算 cap height）会和 oplex 对不上。
         static let splashWordmark = wordmark(size: 56)
+
+        /// Topics 分类行标题：非 hot 为 medium，最接近解锁 / 已达标时为 semibold。
+        /// 保持原有字重，只把条件字体选择收回 Theme 语义层。
+        static func categoryLabel(isHot: Bool) -> SwiftUI.Font {
+            SwiftUI.Font.system(.callout, weight: isHot ? .semibold : .medium)
+        }
 
         /// 字标专用字体。品牌资产特例：**尺寸由字标度量推算**，所以这里是函数不是常量，
         /// 也不随 Dynamic Type 变化（字标放大会撑破构图，且不承载可读信息）。
@@ -337,10 +346,6 @@ enum AppTheme {
         static let medium: CGFloat         = Primitive.radius16  // 卡片 / 气泡
         static let large: CGFloat          = Primitive.radius20  // 输入框
         static let glassContainer: CGFloat = Primitive.radius28  // 浮动 glass 容器
-
-        // MARK: 过渡别名（旧组件仍引用，横向迁移后统一到上面三档）
-        static let bubble: CGFloat = Primitive.radius16
-        static let card: CGFloat   = Primitive.radius16
     }
 
     enum Shadow {
@@ -356,6 +361,12 @@ enum AppTheme {
         static let warmCardRadius: CGFloat = 28
         static let warmCardX: CGFloat = 0
         static let warmCardY: CGFloat = 12
+
+        // 小型叠纸插画：极低浓度、短距离阴影只负责交代纸层厚度，不制造悬浮卡片感。
+        static let paperLayerColor: SwiftUI.Color = Primitive.neutral900.opacity(0.05)
+        static let paperLayerRadius: CGFloat = 4
+        static let paperLayerX: CGFloat = 0
+        static let paperLayerY: CGFloat = 4
     }
 
     enum Size {
@@ -365,6 +376,54 @@ enum AppTheme {
         static let categoryBadge: CGFloat = Primitive.size36  // Topics 类别圆形徽章边长（浅橘底托类别图标）
         static let brandMark: CGFloat  = Primitive.size84  // 圆形 app-icon 报头容器直径
         static let brandGlyph: CGFloat = Primitive.size36  // 报头里 PoplexPShape 的字高
+
+        // ── Settings 行矢量图标（对应视觉规范 §04 的 24×24 描边资产）──────────
+        static let settingsRowIconGlyph: CGFloat = 20  // 行前导图标绘制尺寸
+        static let settingsIconStroke: CGFloat    = 1.8 // 行前导图标在 24×24 资产坐标内的描边
+        static let settingsChevronGlyph: CGFloat = 13  // 行尾 chevron 绘制尺寸
+        static let settingsChevronStroke: CGFloat = 3.2 // chevron 在 24×24 资产坐标内的描边
+
+        // ── CategoryProgressRow 控件度量（不落在 4pt 间距刻度上的内量，不要凑整）──
+        static let progressBarHeight: CGFloat    = 2.5   // 进度条轨道高度（超轻细线）
+        static let categoryIconGlyph: CGFloat    = 17    // 分类图标徽章 SF Symbol 字号
+        static let expandArrow: CGFloat          = 8     // 展开三角字号（颜色已升为 textMuted，回到原有 8pt 度量）
+        static let entryThumbnail: CGFloat       = 32    // 词条左栏缩略图 / 图标底块边长
+        static let entryBadgeGlyph: CGFloat      = 14    // 词条类型 SF Symbol 字号
+        static let pillHSpacing: CGFloat         = 6     // PopsPill HStack 间距
+        static let pillHPad: CGFloat             = 10    // PopsPill 水平内边距
+        static let pillVPad: CGFloat             = 5     // PopsPill 垂直内边距
+        static let rowLabelToProgress: CGFloat   = 10    // 分类行首行（标题+胶囊）→ 进度条间距
+        static let wordEntrySpacing: CGFloat     = 2     // 词条行词 + 释义纵向间距
+        static let wordListLoadingVPad: CGFloat  = 14    // 词列表加载态垂直内边距
+
+        // ── Tab2 空状态（视觉规范 §05）─────────────────────────────────────
+        static let emptyStateContentTop: CGFloat            = 120 // 内容距屏幕顶部：与 Tab2 / Onboarding 左上轴对齐
+        static let emptyStateBodyWidth: CGFloat             = 290 // 说明文字阅读行宽，锁定两行节奏
+        static let emptyStateBodyToGrowth: CGFloat          = 34  // 说明文字 → 成长状态间距
+        static let emptyStatePopsDot: CGFloat               = 7   // 「0 pops so far」前的成长点
+        static let emptyStateWatermarkHeight: CGFloat       = 290 // 品牌 P 水印字高（只露出右下背景层）
+        static let emptyStateWatermarkTrailingOffset: CGFloat = 30 // P 水印右侧出血，避免变成居中主图
+        static let emptyStateWatermarkBottom: CGFloat       = 130 // P 水印距底，避开 CTA
+        static let emptyStateCaptureIconGlyph: CGFloat      = 19  // 空态 CTA 描边相机图标
+
+        // ── Onboarding 拍照页（视觉规范 §06）───────────────────────────────
+        static let onboardingCaptureGlyph: CGFloat          = 24  // 主拍照入口描边相机
+        static let onboardingPhotosGlyph: CGFloat           = 20  // 紧凑相册入口描边图标
+        static let onboardingCardChevronGlyph: CGFloat      = 13  // 主卡右端 chevron
+        static let onboardingInlineChevronGlyph: CGFloat    = 10  // 紧跟次操作文字的 chevron
+        static let onboardingUploadIllustrationWidth: CGFloat = 104 // 虚线空输入区的有机叠纸插画宽
+        static let onboardingUploadIllustrationHeight: CGFloat = 72 // 虚线空输入区的有机叠纸插画高
+        static let onboardingUploadActionWidth: CGFloat     = 176 // 双入口胶囊的紧凑内容宽
+        static let onboardingUploadActionGlyph: CGFloat     = 14  // 双入口胶囊内的描边图标
+        static let onboardingUploadBorderWidth: CGFloat     = 1.5 // 空输入区虚线边界
+        static let onboardingUploadDashLength: CGFloat      = 6   // 空输入区单段虚线长度
+        static let onboardingUploadDashGap: CGFloat         = 6   // 空输入区虚线间距
+        static let disabledControlBorderWidth: CGFloat      = 1   // 大面积禁用 CTA 的轻描边
+        static let onboardingMaxPhotoAspectRatio: CGFloat   = 2.25 // 接受常规手机全屏截图；更长/更宽素材需重选
+        static let onboardingPreviewHeight: CGFloat         = 200 // 无法读取图片尺寸时的预览高度兜底
+        static let onboardingContentBottomClearance: CGFloat = 120 // 固定 Continue 槽位的内容避让
+        static let onboardingSampleWidth: CGFloat           = 90  // 样例图横滑卡宽
+        static let onboardingSampleHeight: CGFloat          = 104 // 样例图横滑卡高：给固定 CTA 留出呼吸
     }
 
     enum Motion {
@@ -372,6 +431,23 @@ enum AppTheme {
         static let tabSelection: Animation = .spring(response: 0.34, dampingFraction: 0.72)
         // 顶栏滚动紧凑/恢复：稍快，确保不拖延内容阅读
         static let topBarCompact: Animation = .spring(response: 0.30, dampingFraction: 0.82)
+        // Onboarding 选图后仅在图片侵入固定 CTA 安全区时补一次滚动；短促、不抢图片本身。
+        static let onboardingPhotoAutoScroll: Animation = .easeOut(duration: 0.3)
+        // 分类成长：toast 先出现 0.25s，再用 0.45s 补满；结果读完后移动分类。
+        static let categoryProgressUpdate: Animation = .easeOut(duration: 0.4)
+        static let categoryMilestone: Animation = .easeOut(duration: 0.45)
+        static let categoryMilestoneReduced: Animation = .easeOut(duration: 0.2)
+        static let categoryMilestoneEmphasisRise: Animation = .easeOut(duration: 0.16)
+        static let categoryMilestoneEmphasisSettle: Animation = .easeOut(duration: 0.29)
+        static let categoryMilestoneToastLead: Duration = .milliseconds(250)
+        static let categoryMilestoneEmphasisPeak: Duration = .milliseconds(160)
+        static let categoryMilestoneReveal: Duration = .milliseconds(700)
+        static let categoryMilestoneReducedReveal: Duration = .milliseconds(450)
+        static let categoryMilestoneResultHold: Duration = .milliseconds(800)
+        // 普通 toast 为整句阅读预留 4s；Onboarding 图片校验 3s；里程碑短句 2.2s。
+        static let toastLifetime: Duration = .seconds(4)
+        static let onboardingPhotoToastLifetime: Duration = .seconds(3)
+        static let milestoneToastLifetime: Duration = .milliseconds(2200)
 
         /// 开屏动画时间表（方案 A · 总长 1.00s）。
         /// 多出来的时间全部给了 `holdEnd` 前那一拍静止 —— 词写完后完整停 0.10s，
@@ -396,22 +472,35 @@ enum AppTheme {
     }
 }
 
-// MARK: - Glass container modifier
-// iOS 26+: native Liquid Glass via .glassEffect(in:)
-// iOS 17-25: .ultraThinMaterial + shadow fallback
-// Components call .glassContainer() and never inline material values.
-
-private struct GlassContainerModifier: ViewModifier {
-    let cornerRadius: CGFloat
+// MARK: - Surface floating modifier (工具栏 / 菜单 / 输入框)
+// iOS 26: native glass in the given shape; interactive only for tappable items —
+// interactive glass on a non-button container swallows child button taps.
+// iOS 17-25: ultraThinMaterial + 暖白薄蒙 + 细描边 + 阴影。
+// 所有浮动工具表面共用这一个配方，避免同一层级出现不同玻璃质感。
+private struct SurfaceFloatingModifier<S: InsettableShape>: ViewModifier {
+    let shape: S
+    let interactive: Bool
 
     @ViewBuilder
     func body(content: Content) -> some View {
         if #available(iOS 26, *) {
             content
-                .glassEffect(in: RoundedRectangle(cornerRadius: cornerRadius))
+                .glassEffect(interactive ? .regular.interactive() : .regular, in: shape)
+                .shadow(
+                    color: AppTheme.Shadow.cardColor,
+                    radius: AppTheme.Shadow.cardRadius,
+                    x: AppTheme.Shadow.cardX,
+                    y: AppTheme.Shadow.cardY
+                )
         } else {
             content
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: cornerRadius))
+                .background {
+                    ZStack {
+                        shape.fill(.ultraThinMaterial)
+                        shape.fill(AppTheme.Color.cardBg.opacity(0.85))
+                        shape.strokeBorder(AppTheme.Color.border.opacity(0.8), lineWidth: 0.5)
+                    }
+                }
                 .shadow(
                     color: AppTheme.Shadow.cardColor,
                     radius: AppTheme.Shadow.cardRadius,
@@ -570,10 +659,10 @@ private struct GlassCapsuleModifier: ViewModifier {
     }
 }
 
-// MARK: - Warm glass card modifier (暖橙薄纱卡 · Topics 列表容器 + Hero 卡)
-// 与 glassCard 分开：这是单层暖纸底、无描边、带品牌橙薄纱 + 右上柔光的"暖纸卡"，
-// 不是磨砂玻璃。去边框后靠加深阴影托起。Topics 卡与 Hero 卡共用此配方。
-private struct WarmGlassCardModifier: ViewModifier {
+// MARK: - Surface card modifier (内容容器)
+// 单层暖纸底、无描边、带极淡品牌橙薄纱与右上柔光；不使用玻璃，避免内容卡发灰。
+// 内容容器统一走此配方与 28pt 容器圆角，靠阴影而不是描边建立层级。
+private struct SurfaceCardModifier: ViewModifier {
     let cornerRadius: CGFloat
 
     func body(content: Content) -> some View {
@@ -606,28 +695,24 @@ private struct WarmGlassCardModifier: ViewModifier {
 }
 
 extension View {
-    func glassContainer(cornerRadius: CGFloat = AppTheme.Radius.glassContainer) -> some View {
-        modifier(GlassContainerModifier(cornerRadius: cornerRadius))
+    /// 内容容器：暖纸卡配方，默认 28pt 容器圆角。
+    func surfaceCard(cornerRadius: CGFloat = AppTheme.Radius.glassContainer) -> some View {
+        modifier(SurfaceCardModifier(cornerRadius: cornerRadius))
     }
 
-    func glassCard(cornerRadius: CGFloat = AppTheme.Radius.glassContainer) -> some View {
-        modifier(GlassCardModifier(cornerRadius: cornerRadius))
+    /// 浮动工具：玻璃配方。默认使用 28pt 容器圆角；圆形 / 胶囊请传入对应形状。
+    func surfaceFloating(cornerRadius: CGFloat = AppTheme.Radius.glassContainer) -> some View {
+        modifier(SurfaceFloatingModifier(
+            shape: RoundedRectangle(cornerRadius: cornerRadius),
+            interactive: true
+        ))
     }
 
-    func warmGlassCard(cornerRadius: CGFloat = AppTheme.Radius.glassContainer) -> some View {
-        modifier(WarmGlassCardModifier(cornerRadius: cornerRadius))
-    }
-
-    func glassBarItem<S: Shape>(in shape: S, interactive: Bool = true) -> some View {
-        modifier(GlassBarItemModifier(shape: shape, interactive: interactive))
+    func surfaceFloating<S: InsettableShape>(in shape: S, interactive: Bool = true) -> some View {
+        modifier(SurfaceFloatingModifier(shape: shape, interactive: interactive))
     }
 
     func topEdgeFade() -> some View {
         modifier(TopEdgeFadeModifier())
     }
-
-    func glassCapsule() -> some View {
-        modifier(GlassCapsuleModifier())
-    }
 }
-

@@ -898,6 +898,127 @@ struct MessageRecordImageFieldsTests {
 
 // MARK: - OnboardingViewModel tests
 
+struct OnboardingImagePreviewLayoutTests {
+
+    @Test func fourByThreeImageUsesItsNaturalHeight() {
+        let height = OnboardingImagePreviewLayout.height(
+            containerWidth: 360,
+            imageSize: CGSize(width: 4_000, height: 3_000)
+        )
+
+        #expect(height == 270)
+    }
+
+    @Test func portraitImageUsesItsNaturalHeight() {
+        let height = OnboardingImagePreviewLayout.height(
+            containerWidth: 360,
+            imageSize: CGSize(width: 900, height: 1_600)
+        )
+
+        #expect(height == 640)
+    }
+
+    @Test func landscapeImageUsesItsNaturalHeight() {
+        let height = OnboardingImagePreviewLayout.height(
+            containerWidth: 360,
+            imageSize: CGSize(width: 3_000, height: 1_000)
+        )
+
+        #expect(height == 120)
+    }
+
+    @Test func invalidImageSizeFallsBackToPresetHeight() {
+        let height = OnboardingImagePreviewLayout.height(
+            containerWidth: 360,
+            imageSize: .zero
+        )
+
+        #expect(height == AppTheme.Size.onboardingPreviewHeight)
+    }
+}
+
+struct OnboardingPhotoAspectValidatorTests {
+
+    @Test func fourToNinePortraitBoundaryIsAccepted() {
+        #expect(
+            OnboardingPhotoAspectValidator.validate(
+                imageSize: CGSize(width: 1_000, height: 2_250)
+            ) == .accepted
+        )
+    }
+
+    @Test func nineToFourLandscapeBoundaryIsAccepted() {
+        #expect(
+            OnboardingPhotoAspectValidator.validate(
+                imageSize: CGSize(width: 2_250, height: 1_000)
+            ) == .accepted
+        )
+    }
+
+    @Test func regularIPhoneScreenshotIsAccepted() {
+        #expect(
+            OnboardingPhotoAspectValidator.validate(
+                imageSize: CGSize(width: 1_206, height: 2_622)
+            ) == .accepted
+        )
+    }
+
+    @Test func portraitBeyondBoundaryIsTooTall() {
+        #expect(
+            OnboardingPhotoAspectValidator.validate(
+                imageSize: CGSize(width: 1_000, height: 2_251)
+            ) == .tooTall
+        )
+    }
+
+    @Test func landscapeBeyondBoundaryIsTooWide() {
+        #expect(
+            OnboardingPhotoAspectValidator.validate(
+                imageSize: CGSize(width: 2_251, height: 1_000)
+            ) == .tooWide
+        )
+    }
+
+    @Test func emptyImageSizeIsInvalid() {
+        #expect(
+            OnboardingPhotoAspectValidator.validate(imageSize: .zero) == .invalid
+        )
+    }
+}
+
+struct OnboardingPhotoAutoScrollTests {
+
+    @Test func photoWithRequiredClearanceDoesNotScroll() {
+        #expect(
+            OnboardingPhotoAutoScroll.isNeeded(
+                photoBottom: 600,
+                continueTop: 632,
+                clearance: 32
+            ) == false
+        )
+    }
+
+    @Test func photoReachingContinueSafetyAreaScrolls() {
+        #expect(
+            OnboardingPhotoAutoScroll.isNeeded(
+                photoBottom: 601,
+                continueTop: 632,
+                clearance: 32
+            )
+        )
+    }
+
+    @Test func spacerPreservesClearanceAboveContinue() {
+        #expect(
+            OnboardingPhotoAutoScroll.spacerHeight(
+                viewportBottom: 844,
+                continueTop: 740,
+                clearance: 32
+            ) == 136
+        )
+    }
+}
+
 struct OnboardingViewModelTests {
 
     private let sampleCard = PresetCard.all[0]   // "Morning coffee"
@@ -1758,4 +1879,316 @@ struct PopsLabelTests {
         #expect(PopsLabel.format(2) == "2 pops")
         #expect(PopsLabel.format(18) == "18 pops")
     }
+}
+
+// MARK: - Category milestone crossing tests
+
+struct CategoryMilestoneTrackerTests {
+
+    @Test func existingAchievementsBecomeBaselineWithoutReplaying() {
+        let defaults = makeDefaults()
+        defer { clear(defaults) }
+        let tracker = CategoryMilestoneTracker(defaults: defaults)
+
+        let first = tracker.observeBatch(
+            [CategoryMilestoneSnapshot(categoryID: "work", count: 20)],
+            userID: "user-a"
+        )
+        let later = tracker.observeBatch(
+            [CategoryMilestoneSnapshot(categoryID: "work", count: 21)],
+            userID: "user-a"
+        )
+
+        #expect(first.isEmpty)
+        #expect(later.isEmpty)
+    }
+
+    @Test func crossingFromNineteenToTwentyCreatesPresentation() {
+        let defaults = makeDefaults()
+        defer { clear(defaults) }
+        let tracker = CategoryMilestoneTracker(defaults: defaults)
+
+        _ = tracker.observeBatch(
+            [CategoryMilestoneSnapshot(categoryID: "work", count: 19)],
+            userID: "user-a"
+        )
+        let presentations = tracker.observeBatch(
+            [CategoryMilestoneSnapshot(categoryID: "work", count: 20)],
+            userID: "user-a"
+        )
+
+        #expect(presentations == [CategoryMilestonePresentation(
+            categoryID: "work",
+            previousCount: 19,
+            currentCount: 20
+        )])
+    }
+
+    @Test func achievedCategoryNeverReplaysAfterCountRegression() {
+        let defaults = makeDefaults()
+        defer { clear(defaults) }
+        let tracker = CategoryMilestoneTracker(defaults: defaults)
+
+        _ = tracker.observeBatch(
+            [CategoryMilestoneSnapshot(categoryID: "work", count: 19)],
+            userID: "user-a"
+        )
+        _ = tracker.observeBatch(
+            [CategoryMilestoneSnapshot(categoryID: "work", count: 20)],
+            userID: "user-a"
+        )
+        _ = tracker.observeBatch(
+            [CategoryMilestoneSnapshot(categoryID: "work", count: 8)],
+            userID: "user-a"
+        )
+        let replay = tracker.observeBatch(
+            [CategoryMilestoneSnapshot(categoryID: "work", count: 20)],
+            userID: "user-a"
+        )
+
+        #expect(replay.isEmpty)
+    }
+
+    @Test func simultaneousCrossingsReturnEveryPresentationAndPersistAll() {
+        let defaults = makeDefaults()
+        defer { clear(defaults) }
+        let tracker = CategoryMilestoneTracker(defaults: defaults)
+
+        _ = tracker.observeBatch([
+            CategoryMilestoneSnapshot(categoryID: "work", count: 19),
+            CategoryMilestoneSnapshot(categoryID: "food", count: 18)
+        ], userID: "user-a")
+
+        let presentations = tracker.observeBatch([
+            CategoryMilestoneSnapshot(categoryID: "work", count: 20),
+            CategoryMilestoneSnapshot(categoryID: "food", count: 23)
+        ], userID: "user-a")
+
+        _ = tracker.observeBatch([
+            CategoryMilestoneSnapshot(categoryID: "work", count: 10),
+            CategoryMilestoneSnapshot(categoryID: "food", count: 10)
+        ], userID: "user-a")
+        let replay = tracker.observeBatch([
+            CategoryMilestoneSnapshot(categoryID: "work", count: 20),
+            CategoryMilestoneSnapshot(categoryID: "food", count: 23)
+        ], userID: "user-a")
+
+        #expect(presentations == [
+            CategoryMilestonePresentation(
+                categoryID: "work",
+                previousCount: 19,
+                currentCount: 20
+            ),
+            CategoryMilestonePresentation(
+                categoryID: "food",
+                previousCount: 18,
+                currentCount: 23
+            )
+        ])
+        #expect(replay.isEmpty)
+    }
+
+    @Test func baselinesAreIsolatedPerUser() {
+        let defaults = makeDefaults()
+        defer { clear(defaults) }
+        let tracker = CategoryMilestoneTracker(defaults: defaults)
+
+        _ = tracker.observeBatch(
+            [CategoryMilestoneSnapshot(categoryID: "work", count: 19)],
+            userID: "user-a"
+        )
+        let userACrossing = tracker.observeBatch(
+            [CategoryMilestoneSnapshot(categoryID: "work", count: 20)],
+            userID: "user-a"
+        )
+        let userBFirstObservation = tracker.observeBatch(
+            [CategoryMilestoneSnapshot(categoryID: "work", count: 20)],
+            userID: "user-b"
+        )
+
+        #expect(!userACrossing.isEmpty)
+        #expect(userBFirstObservation.isEmpty)
+    }
+
+    private func makeDefaults() -> UserDefaults {
+        let suiteName = "CategoryMilestoneTrackerTests.\(UUID().uuidString)"
+        return UserDefaults(suiteName: suiteName)!
+    }
+
+    private func clear(_ defaults: UserDefaults) {
+        defaults.dictionaryRepresentation().keys.forEach(defaults.removeObject(forKey:))
+    }
+}
+
+struct Tab2MilestoneLifecycleTests {
+
+    @Test func milestoneEmphasisScalesOnlyDuringStandardMotionPresentation() {
+        #expect(CategoryProgressRow.milestoneScale(
+            isPresenting: true,
+            isEmphasized: true,
+            reduceMotion: false
+        ) == 1.08)
+        #expect(CategoryProgressRow.milestoneScale(
+            isPresenting: true,
+            isEmphasized: true,
+            reduceMotion: true
+        ) == 1.0)
+        #expect(CategoryProgressRow.milestoneScale(
+            isPresenting: false,
+            isEmphasized: true,
+            reduceMotion: false
+        ) == 1.0)
+    }
+
+    @Test func milestoneToastLifetimeIsShorterThanReadingToastLifetime() {
+        #expect(AppTheme.Motion.milestoneToastLifetime < AppTheme.Motion.toastLifetime)
+    }
+
+    @Test func onboardingPhotoToastLifetimeSitsBetweenMilestoneAndReadingFeedback() {
+        #expect(
+            AppTheme.Motion.milestoneToastLifetime
+                < AppTheme.Motion.onboardingPhotoToastLifetime
+        )
+        #expect(
+            AppTheme.Motion.onboardingPhotoToastLifetime
+                < AppTheme.Motion.toastLifetime
+        )
+    }
+
+    @Test func milestoneToastDescribesReachedCategory() {
+        let vm = Tab2HomeViewModel()
+        vm.data = Tab2HomeData(unlocked: true, inputCount: 20, categories: [
+            Tab2CategoryData(
+                sceneCategory: "出行交通",
+                wordCount: 20,
+                unlocked: true
+            )
+        ])
+
+        let message = vm.milestoneToastMessage(for: [CategoryMilestonePresentation(
+            categoryID: "出行交通",
+            previousCount: 19,
+            currentCount: 20
+        )])
+
+        #expect(message == "Getting around reached 20 pops")
+    }
+
+    @Test func milestoneToastAggregatesSimultaneousTopicsAtThreshold() {
+        let vm = Tab2HomeViewModel()
+        let message = vm.milestoneToastMessage(for: [
+            CategoryMilestonePresentation(
+                categoryID: "出行交通",
+                previousCount: 19,
+                currentCount: 23
+            ),
+            CategoryMilestonePresentation(
+                categoryID: "饮食",
+                previousCount: 18,
+                currentCount: 21
+            )
+        ])
+
+        #expect(message == "2 topics reached 20 pops")
+    }
+
+    @Test func pendingPresentationRemainsUntilMatchingPresentationFinishes() {
+        let defaults = UserDefaults(suiteName: "Tab2MilestoneLifecycleTests.\(UUID().uuidString)")!
+        defer { defaults.dictionaryRepresentation().keys.forEach(defaults.removeObject(forKey:)) }
+        let vm = Tab2HomeViewModel(
+            milestoneTracker: CategoryMilestoneTracker(defaults: defaults)
+        )
+
+        vm.registerMilestones(
+            [CategoryMilestoneSnapshot(categoryID: "work", count: 19)],
+            userID: "user-a"
+        )
+        vm.registerMilestones(
+            [CategoryMilestoneSnapshot(categoryID: "work", count: 20)],
+            userID: "user-a"
+        )
+
+        let expected = [CategoryMilestonePresentation(
+            categoryID: "work",
+            previousCount: 19,
+            currentCount: 20
+        )]
+        #expect(vm.milestonePresentations == expected)
+
+        vm.finishMilestonePresentations([CategoryMilestonePresentation(
+            categoryID: "food",
+            previousCount: 19,
+            currentCount: 20
+        )])
+        #expect(vm.milestonePresentations == expected)
+
+        vm.finishMilestonePresentations(expected)
+        #expect(vm.milestonePresentations.isEmpty)
+    }
+
+    #if DEBUG
+    @Test func debugDemoUsesTwoUnlockedCategoriesClosestToThreshold() {
+        let categories = [
+            Tab2CategoryData(sceneCategory: "工作与学业", wordCount: 12, unlocked: false),
+            Tab2CategoryData(sceneCategory: "饮食", wordCount: 34, unlocked: true),
+            Tab2CategoryData(sceneCategory: "出行交通", wordCount: 22, unlocked: true)
+        ]
+
+        let presentations = Tab2HomeViewModel.debugMilestoneDemoPresentations(
+            in: categories
+        )
+
+        #expect(presentations == [
+            CategoryMilestonePresentation(
+                categoryID: "出行交通",
+                previousCount: 19,
+                currentCount: 20
+            ),
+            CategoryMilestonePresentation(
+                categoryID: "饮食",
+                previousCount: 19,
+                currentCount: 20
+            )
+        ])
+    }
+
+    @Test func debugDemoCanStartFromAlreadyLoadedData() {
+        let vm = Tab2HomeViewModel()
+        let categories = [
+            Tab2CategoryData(
+                sceneCategory: "出行交通",
+                wordCount: 22,
+                unlocked: true
+            )
+        ]
+        vm.data = Tab2HomeData(unlocked: true, inputCount: 20, categories: categories)
+
+        vm.prepareDebugMilestoneDemoFromCurrentData()
+
+        #expect(vm.milestonePresentations == [CategoryMilestonePresentation(
+            categoryID: "出行交通",
+            previousCount: 19,
+            currentCount: 20
+        )])
+    }
+
+    @Test func freshResponseDoesNotReplayDemoAlreadyStartedFromLoadedData() {
+        let vm = Tab2HomeViewModel()
+        let categories = [
+            Tab2CategoryData(
+                sceneCategory: "出行交通",
+                wordCount: 22,
+                unlocked: true
+            )
+        ]
+        vm.data = Tab2HomeData(unlocked: true, inputCount: 20, categories: categories)
+
+        vm.prepareDebugMilestoneDemoFromCurrentData()
+        let presentations = vm.milestonePresentations
+        vm.finishMilestonePresentations(presentations)
+        vm.prepareDebugMilestoneDemoAfterRefresh(categories)
+
+        #expect(vm.milestonePresentations.isEmpty)
+    }
+    #endif
 }

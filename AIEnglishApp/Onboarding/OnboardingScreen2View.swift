@@ -179,7 +179,7 @@ struct OnboardingScreen2View: View {
 
             Text("now")
                 .font(AppTheme.Font.pos)
-                .foregroundStyle(AppTheme.Color.textFaint)
+                .foregroundStyle(AppTheme.Color.textMuted)
         }
         .frame(width: 232, alignment: .leading)
         .padding(AppTheme.Space.paddingCard)

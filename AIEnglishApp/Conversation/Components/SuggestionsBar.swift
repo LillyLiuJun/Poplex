@@ -62,7 +62,7 @@ struct SuggestionsBar: View {
         HStack(alignment: .firstTextBaseline, spacing: AppTheme.Space.paddingS) {
             Text(suggestion.lemma)
                 .font(AppTheme.Font.englishPrimary)
-                .foregroundStyle(AppTheme.Color.brandDefault)
+                .foregroundStyle(AppTheme.Color.brandStrong)
             Text(suggestion.hint)
                 .font(AppTheme.Font.englishBody)
                 .foregroundStyle(AppTheme.Color.textMuted)

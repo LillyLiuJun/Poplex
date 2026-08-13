@@ -7,17 +7,31 @@ import SwiftUI
 
 struct OnboardingPrimaryButton: View {
     let title: String
+    var isEnabled: Bool = true
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             Text(title)
                 .font(AppTheme.Font.ctaLabel)
-                .foregroundStyle(AppTheme.Color.textOnChip)
+                .foregroundStyle(isEnabled ? AppTheme.Color.textOnChip : AppTheme.Color.controlDisabledText)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, AppTheme.Space.paddingCard)
-                .background(AppTheme.Color.interactive, in: Capsule())
+                .background(
+                    isEnabled ? AppTheme.Color.interactive : AppTheme.Color.controlDisabledBg,
+                    in: Capsule()
+                )
+                .overlay {
+                    if !isEnabled {
+                        Capsule()
+                            .strokeBorder(
+                                AppTheme.Color.border,
+                                lineWidth: AppTheme.Size.disabledControlBorderWidth
+                            )
+                    }
+                }
         }
+        .disabled(!isEnabled)
         .buttonStyle(PressableButtonStyle(pressedScale: 0.97, pressedOpacity: 0.85))
     }
 }
@@ -97,7 +111,7 @@ struct OnboardingMomentCard: View {
                 Text("MOMENT")
                     .font(AppTheme.Font.sectionLabel)
                     .tracking(1.2)
-                    .foregroundStyle(AppTheme.Color.textLabel)
+                    .foregroundStyle(AppTheme.Color.textMuted)
                     .padding(.bottom, 2)
 
                 Text(sentence)

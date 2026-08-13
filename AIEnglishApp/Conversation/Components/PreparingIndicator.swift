@@ -11,7 +11,7 @@ struct PreparingIndicator: View {
             ZStack {
                 // Soft halo behind the icon (breathing ring)
                 Circle()
-                    .fill(AppTheme.Color.brandSubtleBg)
+                    .fill(AppTheme.Color.brandWash)
                     .frame(width: 88, height: 88) // TODO(token) AppTheme.Size.micButton + halo
                     .scaleEffect(breathScale)
                     .opacity(breathScale > 1.05 ? 0.0 : 0.6)
@@ -25,7 +25,7 @@ struct PreparingIndicator: View {
 
             Text("Getting your topics…")
                 .font(AppTheme.Font.buddy)
-                .foregroundStyle(AppTheme.Color.textFaint)
+                .foregroundStyle(AppTheme.Color.textMuted)
         }
         .onAppear {
             // TODO(token) AppTheme.Motion.breathing

@@ -17,7 +17,7 @@ struct UndoToast: View {
         .padding(.horizontal, AppTheme.Space.paddingPage)
         .padding(.vertical, AppTheme.Space.paddingCard)
         .background(Color.primary.opacity(0.85))
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
         .padding(.horizontal, AppTheme.Space.paddingPage)
     }
 }

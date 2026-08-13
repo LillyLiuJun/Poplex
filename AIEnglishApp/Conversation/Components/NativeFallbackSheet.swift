@@ -33,7 +33,7 @@ struct NativeFallbackSheet: View {
             Button(action: onDismiss) {
                 Text("Try saying it.")
                     .font(AppTheme.Font.buddy)
-                    .foregroundStyle(AppTheme.Color.brandDefault)
+                    .foregroundStyle(AppTheme.Color.brandStrong)
                     .frame(minWidth: 44, minHeight: AppTheme.Size.barControl)
                     .contentShape(Rectangle())
             }
@@ -42,7 +42,7 @@ struct NativeFallbackSheet: View {
         .padding(AppTheme.Space.paddingCard)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(AppTheme.Color.cardBg)
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card))
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
         .padding(.horizontal, AppTheme.Space.paddingPage)
         .padding(.bottom, AppTheme.Space.paddingS)
     }

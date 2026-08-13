@@ -200,11 +200,11 @@ struct ConversationView: View {
                 withAnimation(AppTheme.Motion.tabSelection) { vm.retry() }
             }
             .font(AppTheme.Font.sectionLabel)
-            .foregroundStyle(AppTheme.Color.brandDefault)
+            .foregroundStyle(AppTheme.Color.brandStrong)
         }
         .padding(.horizontal, AppTheme.Space.paddingPage)
         .padding(.vertical, AppTheme.Space.paddingM)
-        .background(AppTheme.Color.brandSubtleBg)
+        .background(AppTheme.Color.brandWash)
     }
 
     // MARK: - Mic tap handler (Step 4 — real ASR)
@@ -227,7 +227,7 @@ struct ConversationView: View {
                 HStack(spacing: AppTheme.Space.paddingS) {
                     Text("DEBUG")
                         .font(AppTheme.Font.sectionLabel)
-                        .foregroundStyle(AppTheme.Color.textFaint)
+                        .foregroundStyle(AppTheme.Color.textMuted)
                         .padding(.leading, AppTheme.Space.paddingM)
 
                     ForEach(ConversationPageState.allCases, id: \.self) { state in
@@ -249,7 +249,7 @@ struct ConversationView: View {
                         .padding(.vertical, AppTheme.Space.paddingS)
                         .background(
                             vm.pageState == state
-                            ? AppTheme.Color.brandSubtleBg
+                            ? AppTheme.Color.brandWash
                             : AppTheme.Color.pageBg,
                             in: Capsule()
                         )

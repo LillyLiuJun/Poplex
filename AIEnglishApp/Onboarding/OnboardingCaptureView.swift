@@ -1,6 +1,75 @@
 import SwiftUI
 import PhotosUI
 
+/// 选中的用户照片与预设样例都按原比例占满内容宽度。
+/// 输入侧已限制为 1:2.25–2.25:1，因此这里无需再用固定高度二次约束。
+enum OnboardingImagePreviewLayout {
+    static func height(containerWidth: CGFloat, imageSize: CGSize) -> CGFloat {
+        guard containerWidth > 0, imageSize.width > 0, imageSize.height > 0 else {
+            return AppTheme.Size.onboardingPreviewHeight
+        }
+
+        return containerWidth * imageSize.height / imageSize.width
+    }
+}
+
+enum OnboardingPhotoAspectValidationResult: Equatable {
+    case accepted
+    case tooTall
+    case tooWide
+    case invalid
+}
+
+enum OnboardingPhotoAspectValidator {
+    static func validate(imageSize: CGSize) -> OnboardingPhotoAspectValidationResult {
+        guard imageSize.width > 0, imageSize.height > 0 else { return .invalid }
+
+        let limit = AppTheme.Size.onboardingMaxPhotoAspectRatio
+        if imageSize.height > imageSize.width * limit { return .tooTall }
+        if imageSize.width > imageSize.height * limit { return .tooWide }
+        return .accepted
+    }
+}
+
+enum OnboardingPhotoAutoScroll {
+    static func isNeeded(
+        photoBottom: CGFloat,
+        continueTop: CGFloat,
+        clearance: CGFloat
+    ) -> Bool {
+        photoBottom > continueTop - clearance
+    }
+
+    static func spacerHeight(
+        viewportBottom: CGFloat,
+        continueTop: CGFloat,
+        clearance: CGFloat
+    ) -> CGFloat {
+        max(0, viewportBottom - continueTop + clearance)
+    }
+}
+
+private enum OnboardingSelectionLayout {
+    static let coordinateSpace = "onboardingSelectionViewport"
+    static let scrollAnchor = "onboardingSelectedPhotoClearance"
+}
+
+private struct SelectedPhotoBottomPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat?
+
+    static func reduce(value: inout CGFloat?, nextValue: () -> CGFloat?) {
+        value = nextValue() ?? value
+    }
+}
+
+private struct ContinueTopPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat?
+
+    static func reduce(value: inout CGFloat?, nextValue: () -> CGFloat?) {
+        value = nextValue() ?? value
+    }
+}
+
 /// Onboarding 第三页：用户亲手实操 —— 选素材（拍照/相册/预设卡）→ AI 生成 → 展示产出。
 /// 布局参考 ai_studio_code(31).html：虚线动作卡（拍照主 CTA + 相册文字链接）
 /// + 横滑预设卡条；结果渲染为与第一页同构的时刻卡，形成"看到样品→亲手做出"闭环。
@@ -21,6 +90,11 @@ struct OnboardingCaptureView: View {
     // sheet down, which desyncs the presentation state on device and leaves
     // both entry buttons dead afterwards.
     @State private var stagedImage: UIImage?
+    @State private var photoValidationMessage: String?
+    @State private var selectedPhotoBottom: CGFloat?
+    @State private var continueTop: CGFloat?
+    @State private var selectionRevision = 0
+    @State private var autoScrolledRevision: Int?
     @State private var appeared = false
     @State private var skeletonPulse = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -88,8 +162,20 @@ struct OnboardingCaptureView: View {
     private func applyStagedImage() {
         guard let image = stagedImage else { return }
         stagedImage = nil
-        pendingImage = image
-        pendingCard = nil
+
+        switch OnboardingPhotoAspectValidator.validate(imageSize: image.size) {
+        case .accepted:
+            photoValidationMessage = nil
+            pendingImage = image
+            pendingCard = nil
+            registerNewSelection()
+        case .tooTall:
+            photoValidationMessage = "Photo is too tall — use 1:2.25 to 2.25:1."
+        case .tooWide:
+            photoValidationMessage = "Photo is too wide — use 1:2.25 to 2.25:1."
+        case .invalid:
+            photoValidationMessage = "Couldn't read this photo. Choose another."
+        }
     }
 
     private func handleBack() {
@@ -103,51 +189,139 @@ struct OnboardingCaptureView: View {
     // MARK: - Selection content (action card + preset carousel + Continue)
 
     private var selectionContent: some View {
-        ZStack(alignment: .bottom) {
-            GeometryReader { geo in
-                ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 0) {
-                        Color.clear
-                            .frame(height: 36)
-                            .padding(.top, AppTheme.Space.paddingCard)
+        GeometryReader { geo in
+            ScrollViewReader { proxy in
+                ZStack(alignment: .bottom) {
+                    ScrollView(showsIndicators: false) {
+                        VStack(alignment: .leading, spacing: 0) {
+                            Color.clear
+                                .frame(height: 36)
+                                .padding(.top, AppTheme.Space.paddingCard)
                             
                         selectionHeader
                             .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.05)
 
-                        actionCard
+                        actionCard(
+                            availableWidth: geo.size.width
+                                - AppTheme.Space.paddingPage
+                                - AppTheme.Space.paddingPage
+                        )
                             .padding(.top, AppTheme.Space.paddingSection)
                             .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.25)
+                            .background {
+                                if hasSelection {
+                                    GeometryReader { photoGeo in
+                                        Color.clear.preference(
+                                            key: SelectedPhotoBottomPreferenceKey.self,
+                                            value: photoGeo.frame(
+                                                in: .named(OnboardingSelectionLayout.coordinateSpace)
+                                            ).maxY
+                                        )
+                                    }
+                                }
+                            }
+
+                        if hasSelection {
+                            Color.clear
+                                .frame(
+                                    height: OnboardingPhotoAutoScroll.spacerHeight(
+                                        viewportBottom: geo.size.height,
+                                        continueTop: continueTop ?? geo.size.height,
+                                        clearance: AppTheme.Space.paddingSection
+                                    )
+                                )
+                                .id(OnboardingSelectionLayout.scrollAnchor)
+                        }
 
                         if !hasSelection {
                             Text("Or try a sample")
-                                .font(AppTheme.Font.englishBody)
-                                .fontWeight(.medium)
+                                .font(AppTheme.Font.compactSectionTitleSerif)
                                 .foregroundStyle(AppTheme.Color.textPrimary)
-                                .padding(.top, AppTheme.Space.paddingM)
+                                .padding(.top, AppTheme.Space.paddingSection)
                                 .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.35)
 
                             presetCarousel
-                                .padding(.top, AppTheme.Space.paddingCard)
+                                .padding(.top, AppTheme.Space.paddingM)
                                 .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.4)
                         }
                             
-                        Spacer()
+                            Spacer()
+                        }
+                        .padding(.horizontal, AppTheme.Space.paddingPage)
+                        .padding(.bottom, AppTheme.Size.onboardingContentBottomClearance)
+                        .frame(minHeight: geo.size.height)
+                    }
+                    .scrollBounceBehavior(.basedOnSize)
+
+                    VStack(spacing: AppTheme.Space.paddingCard) {
+                        AutoDismissingAppToast(
+                            message: $photoValidationMessage,
+                            systemImage: "exclamationmark.triangle",
+                            lifetime: AppTheme.Motion.onboardingPhotoToastLifetime
+                        )
+
+                        OnboardingPrimaryButton(
+                            title: "Continue",
+                            isEnabled: hasSelection,
+                            action: confirmSelection
+                        )
+                        .background {
+                            GeometryReader { buttonGeo in
+                                Color.clear.preference(
+                                    key: ContinueTopPreferenceKey.self,
+                                    value: buttonGeo.frame(
+                                        in: .named(OnboardingSelectionLayout.coordinateSpace)
+                                    ).minY
+                                )
+                            }
+                        }
                     }
                     .padding(.horizontal, AppTheme.Space.paddingPage)
-                    .padding(.bottom, hasSelection ? 120 : 72)
-                    .frame(minHeight: geo.size.height)
-                }
-                .scrollBounceBehavior(.basedOnSize)
-            }
-
-            if hasSelection {
-                OnboardingPrimaryButton(title: "Continue", action: confirmSelection)
-                    .padding(.horizontal, AppTheme.Space.paddingPage)
                     .padding(.bottom, AppTheme.Space.paddingScreenBottom)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+                .coordinateSpace(name: OnboardingSelectionLayout.coordinateSpace)
+                .onPreferenceChange(SelectedPhotoBottomPreferenceKey.self) { bottom in
+                    selectedPhotoBottom = bottom
+                    scrollSelectedPhotoIfNeeded(proxy: proxy, viewportBottom: geo.size.height)
+                }
+                .onPreferenceChange(ContinueTopPreferenceKey.self) { top in
+                    continueTop = top
+                    scrollSelectedPhotoIfNeeded(proxy: proxy, viewportBottom: geo.size.height)
+                }
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: hasSelection)
+    }
+
+    private func registerNewSelection() {
+        selectionRevision += 1
+        autoScrolledRevision = nil
+        selectedPhotoBottom = nil
+    }
+
+    private func scrollSelectedPhotoIfNeeded(
+        proxy: ScrollViewProxy,
+        viewportBottom: CGFloat
+    ) {
+        guard hasSelection,
+              autoScrolledRevision != selectionRevision,
+              let selectedPhotoBottom,
+              let continueTop,
+              OnboardingPhotoAutoScroll.isNeeded(
+                  photoBottom: selectedPhotoBottom,
+                  continueTop: continueTop,
+                  clearance: AppTheme.Space.paddingSection
+              ) else { return }
+
+        autoScrolledRevision = selectionRevision
+        DispatchQueue.main.async {
+            if reduceMotion {
+                proxy.scrollTo(OnboardingSelectionLayout.scrollAnchor, anchor: .bottom)
+            } else {
+                withAnimation(AppTheme.Motion.onboardingPhotoAutoScroll) {
+                    proxy.scrollTo(OnboardingSelectionLayout.scrollAnchor, anchor: .bottom)
+                }
+            }
+        }
     }
 
     private var selectionHeader: some View {
@@ -165,25 +339,18 @@ struct OnboardingCaptureView: View {
         .padding(.top, AppTheme.Space.paddingCard)
     }
 
-    // MARK: 虚线动作卡：拍照主 CTA + 相册文字链接；已选照片时变为预览卡
+    // MARK: 空输入区；已选照片时原位变为预览卡
 
-    private var actionCard: some View {
+    private func actionCard(availableWidth: CGFloat) -> some View {
         Group {
             if pendingImage != nil || pendingCard != nil {
                 ZStack(alignment: .topTrailing) {
-                    Group {
-                        if let image = pendingImage {
-                            Image(uiImage: image).resizable()
-                        } else if let card = pendingCard {
-                            Image(card.imageName).resizable()
-                        }
+                    if let image = pendingImage {
+                        userImagePreview(image, availableWidth: availableWidth)
+                    } else if let card = pendingCard,
+                              let image = UIImage(named: card.imageName) {
+                        userImagePreview(image, availableWidth: availableWidth)
                     }
-                    .scaledToFill()
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 200)
-                    .clipped()
-                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.large))
-                    .allowsHitTesting(false)
                     
                     Button(action: {
                         withAnimation(.spring(duration: 0.2)) {
@@ -202,50 +369,61 @@ struct OnboardingCaptureView: View {
                 }
             } else {
                 VStack(spacing: AppTheme.Space.paddingM) {
-                    // 拍照主卡：主路径（从你自己的生活取材）。近白底 + 浅橘图标圈，
-                    // 克制不重——靠尺寸与"唯一实操 CTA"确立主次，不靠大面积橙。
-                    Button(action: { activeSheet = .camera }) {
-                        VStack(spacing: AppTheme.Space.paddingM) {
-                            Image(systemName: "camera.fill")
-                                .font(.title2)
-                                .foregroundStyle(AppTheme.Color.brandStrong)
-                                .frame(width: 60, height: 60)
-                                .background(AppTheme.Color.brandSubtleBg, in: Circle())
+                    OnboardingCaptureIllustration()
 
-                            Text("Take a photo")
-                                .font(AppTheme.Font.sectionTitleSerif)
-                                .foregroundStyle(AppTheme.Color.textPrimary)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, AppTheme.Space.paddingSection)
-                        .padding(.horizontal, AppTheme.Space.paddingPage)
-                        .background(
-                            AppTheme.Color.cardBg,
-                            in: RoundedRectangle(cornerRadius: AppTheme.Radius.large)
+                    Text("Add your photo")
+                        .font(AppTheme.Font.ctaLabel)
+                        .foregroundStyle(AppTheme.Color.textPrimary)
+
+                    VStack(spacing: AppTheme.Space.paddingS) {
+                        OnboardingUploadActionButton(
+                            title: "Camera",
+                            systemImage: "camera",
+                            action: { activeSheet = .camera }
                         )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: AppTheme.Radius.large)
-                                .stroke(AppTheme.Color.border, lineWidth: 1)
+
+                        OnboardingUploadActionButton(
+                            title: "Gallery",
+                            systemImage: "photo.on.rectangle",
+                            action: { activeSheet = .photoLibrary }
                         )
                     }
-                    .buttonStyle(PressableButtonStyle())
-
-                    // 相册次入口：文字链接，权重明确低于拍照。
-                    Button(action: { activeSheet = .photoLibrary }) {
-                        HStack(spacing: AppTheme.Space.paddingS) {
-                            Text("Or choose from Photos")
-                                .font(AppTheme.Font.buddy)
-                            Image(systemName: "chevron.right")
-                                .font(.footnote)
-                        }
-                        .foregroundStyle(AppTheme.Color.textSecondary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, AppTheme.Space.paddingS)
-                    }
-                    .buttonStyle(PressableButtonStyle())
+                    .frame(width: AppTheme.Size.onboardingUploadActionWidth)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, AppTheme.Space.paddingPage)
+                .padding(.vertical, AppTheme.Space.paddingCard)
+                .contentShape(RoundedRectangle(cornerRadius: AppTheme.Radius.glassContainer))
+                .overlay {
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.glassContainer)
+                        .strokeBorder(
+                            AppTheme.Color.borderDashed,
+                            style: StrokeStyle(
+                                lineWidth: AppTheme.Size.onboardingUploadBorderWidth,
+                                dash: [
+                                    AppTheme.Size.onboardingUploadDashLength,
+                                    AppTheme.Size.onboardingUploadDashGap
+                                ]
+                            )
+                        )
                 }
             }
         }
+    }
+
+    private func userImagePreview(_ image: UIImage, availableWidth: CGFloat) -> some View {
+        let previewHeight = OnboardingImagePreviewLayout.height(
+            containerWidth: availableWidth,
+            imageSize: image.size
+        )
+
+        return Image(uiImage: image)
+            .resizable()
+            .scaledToFit()
+            .frame(width: availableWidth, height: previewHeight)
+            .background(AppTheme.Color.cardBg)
+            .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.glassContainer))
+            .allowsHitTesting(false)
     }
 
     // MARK: 预设卡横滑条（相机不可用/没有照片时的兜底入口）
@@ -258,10 +436,13 @@ struct OnboardingCaptureView: View {
                         card: card,
                         isSelected: pendingCard?.id == card.id && pendingImage == nil
                     ) {
-                        withAnimation(.spring(duration: 0.2)) {
-                            pendingCard = card
-                            pendingImage = nil
-                        }
+                        // Sample 选中会同时让横滑列表消失并生成自然比例预览。
+                        // 这里若用 spring，PreferenceKey 会先读到动画中间帧，
+                        // 一次性自动避让便可能提前消耗在错误位置。先让布局一次到位，
+                        // 只保留真正承担反馈的 onboardingPhotoAutoScroll 动画。
+                        pendingCard = card
+                        pendingImage = nil
+                        registerNewSelection()
                     }
                 }
             }
@@ -437,7 +618,7 @@ struct OnboardingCaptureView: View {
                     .foregroundStyle(AppTheme.Color.brandStrong)
                     .padding(.horizontal, AppTheme.Space.paddingCard)
                     .padding(.vertical, AppTheme.Space.paddingS)
-                    .background(AppTheme.Color.brandSubtleBg, in: Capsule())
+                    .background(AppTheme.Color.brandWash, in: Capsule())
             }
             .buttonStyle(PressableButtonStyle())
         }
@@ -462,6 +643,152 @@ struct OnboardingCaptureView: View {
 
 // MARK: - Sub-views
 
+/// 方案 C 的空输入插画：用已有实色 token 叠出纸雕层次，不用半透明橙。
+/// Path 内的坐标是矢量资产本身，不参与页面布局度量。
+private struct OnboardingCaptureIllustration: View {
+    var body: some View {
+        ZStack {
+            Canvas { context, size in
+                let scaleX = size.width / AppTheme.Size.onboardingUploadIllustrationWidth
+                let scaleY = size.height / AppTheme.Size.onboardingUploadIllustrationHeight
+
+                func scaledPath(_ build: (inout Path) -> Void) -> Path {
+                    var source = Path()
+                    build(&source)
+                    return source.applying(CGAffineTransform(scaleX: scaleX, y: scaleY))
+                }
+
+                let back = scaledPath { path in
+                    path.move(to: CGPoint(x: 30, y: 16))
+                    path.addCurve(
+                        to: CGPoint(x: 78, y: 55),
+                        control1: CGPoint(x: 50, y: 8),
+                        control2: CGPoint(x: 86, y: 16)
+                    )
+                    path.addCurve(
+                        to: CGPoint(x: 30, y: 16),
+                        control1: CGPoint(x: 59, y: 66),
+                        control2: CGPoint(x: 10, y: 47)
+                    )
+                    path.closeSubpath()
+                }
+                context.fill(back, with: .color(AppTheme.Color.brandTint))
+
+                let middle = scaledPath { path in
+                    path.move(to: CGPoint(x: 42, y: 48))
+                    path.addCurve(
+                        to: CGPoint(x: 68, y: 22),
+                        control1: CGPoint(x: 34, y: 36),
+                        control2: CGPoint(x: 48, y: 23)
+                    )
+                    path.addCurve(
+                        to: CGPoint(x: 42, y: 48),
+                        control1: CGPoint(x: 83, y: 22),
+                        control2: CGPoint(x: 76, y: 55)
+                    )
+                    path.closeSubpath()
+                }
+                context.fill(middle, with: .color(AppTheme.Color.neutralFaint))
+
+                let front = scaledPath { path in
+                    path.move(to: CGPoint(x: 28, y: 44))
+                    path.addCurve(
+                        to: CGPoint(x: 50, y: 20),
+                        control1: CGPoint(x: 24, y: 31),
+                        control2: CGPoint(x: 36, y: 19)
+                    )
+                    path.addCurve(
+                        to: CGPoint(x: 72, y: 43),
+                        control1: CGPoint(x: 65, y: 20),
+                        control2: CGPoint(x: 79, y: 31)
+                    )
+                    path.addCurve(
+                        to: CGPoint(x: 28, y: 44),
+                        control1: CGPoint(x: 67, y: 57),
+                        control2: CGPoint(x: 32, y: 57)
+                    )
+                    path.closeSubpath()
+                }
+                context.drawLayer { layer in
+                    layer.addFilter(.shadow(
+                        color: AppTheme.Shadow.paperLayerColor,
+                        radius: AppTheme.Shadow.paperLayerRadius,
+                        x: AppTheme.Shadow.paperLayerX,
+                        y: AppTheme.Shadow.paperLayerY
+                    ))
+                    layer.fill(front, with: .color(AppTheme.Color.cardBg))
+                }
+
+                let accent = scaledPath { path in
+                    path.move(to: CGPoint(x: 66, y: 21))
+                    path.addCurve(
+                        to: CGPoint(x: 77, y: 32),
+                        control1: CGPoint(x: 73, y: 19),
+                        control2: CGPoint(x: 80, y: 25)
+                    )
+                    path.addCurve(
+                        to: CGPoint(x: 66, y: 21),
+                        control1: CGPoint(x: 74, y: 39),
+                        control2: CGPoint(x: 61, y: 34)
+                    )
+                    path.closeSubpath()
+                }
+                context.drawLayer { layer in
+                    layer.addFilter(.shadow(
+                        color: AppTheme.Shadow.paperLayerColor,
+                        radius: AppTheme.Shadow.paperLayerRadius,
+                        x: AppTheme.Shadow.paperLayerX,
+                        y: AppTheme.Shadow.paperLayerY
+                    ))
+                    layer.fill(accent, with: .color(AppTheme.Color.brandStrong))
+                }
+            }
+
+            Image(systemName: "camera")
+                .font(.system(size: AppTheme.Size.onboardingCaptureGlyph, weight: .regular))
+                .foregroundStyle(AppTheme.Color.brandStrong)
+        }
+        .frame(
+            width: AppTheme.Size.onboardingUploadIllustrationWidth,
+            height: AppTheme.Size.onboardingUploadIllustrationHeight
+        )
+        .accessibilityHidden(true)
+    }
+}
+
+/// 空输入区里的直接动作。没有 chevron，因为点击后立即调起系统选择器，
+/// 并不进入新的信息层级。
+private struct OnboardingUploadActionButton: View {
+    let title: String
+    let systemImage: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: AppTheme.Space.paddingS) {
+                Image(systemName: systemImage)
+                    .font(.system(
+                        size: AppTheme.Size.onboardingUploadActionGlyph,
+                        weight: .regular
+                    ))
+
+                Text(title)
+                    .font(AppTheme.Font.compactActionLabel)
+            }
+            .foregroundStyle(AppTheme.Color.textSecondary)
+            .frame(maxWidth: .infinity)
+            .frame(height: AppTheme.Size.barControl)
+            .background(AppTheme.Color.cardBg, in: Capsule())
+            .overlay {
+                Capsule()
+                    .strokeBorder(AppTheme.Color.border, lineWidth: AppTheme.Size.onboardingUploadBorderWidth)
+            }
+            .contentShape(Capsule())
+        }
+        .buttonStyle(PressableButtonStyle())
+    }
+}
+
 /// 预设卡横滑条中的卡片：底部渐变标签 + 选中橙描边/勾号（修复原 accentColor
 /// 引用空颜色集导致渲染成系统蓝的问题）。
 private struct PresetCarouselTile: View {
@@ -475,7 +802,10 @@ private struct PresetCarouselTile: View {
                 Image(card.imageName)
                     .resizable()
                     .scaledToFill()
-                    .frame(width: 90, height: 120)
+                    .frame(
+                        width: AppTheme.Size.onboardingSampleWidth,
+                        height: AppTheme.Size.onboardingSampleHeight
+                    )
                     .clipped()
 
                 if isSelected {
