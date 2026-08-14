@@ -32,7 +32,11 @@ struct Tab2HeroCard: View {
         }
         .frame(maxWidth: .infinity)
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.glassContainer))
-        .surfaceCard()
+        .background {
+            RoundedRectangle(cornerRadius: AppTheme.Radius.glassContainer)
+                .fill(AppTheme.Color.warmGlassSurface)
+        }
+        .shadow(color: AppTheme.Shadow.cardColor, radius: 12, x: 0, y: 4)
     }
 
     // MARK: - 顶部（§6.3：判定源是 hero_photos 是否为空）

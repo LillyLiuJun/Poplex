@@ -182,6 +182,11 @@ struct OnboardingCaptureView: View {
         if isSelecting {
             onBack()
         } else {
+            // Reset scroll tracking so selectionContent re-scrolls to reveal
+            // the image + Continue button when the user returns.
+            autoScrolledRevision = nil
+            selectedPhotoBottom = nil
+            continueTop = nil
             viewModel.reset()
         }
     }

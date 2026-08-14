@@ -50,8 +50,11 @@ final class OnboardingViewModel {
 
         do {
             if let card = selectedCard {
-                // 预设卡使用静态样本，保留 1.2 秒 loading 动画以保持 AI 生成的仪式感与平滑过渡，零 API 消耗
-                try await Task.sleep(for: .milliseconds(1200))
+                // 预设卡使用静态样本，零 API 消耗。利用 1.2s 动画等待并行预热登录，
+                // 确保 completeOnboarding() → markOnboardingComplete() 时 auth session 已就绪。
+                async let warmUp: Void = { _ = try? await SupabaseManager.ensureSignedIn() }()
+                try await Task.sleep(for: .milliseconds(3000))
+                _ = await warmUp
                 generationResult = card.staticCard
                 retryCount = 0
             } else if let image = selectedImage {

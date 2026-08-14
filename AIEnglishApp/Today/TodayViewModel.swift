@@ -30,7 +30,17 @@ final class TodayViewModel {
     func loadHistory() async {
         guard !isLoadingHistory else { return }
         isLoadingHistory = true
-        defer { isLoadingHistory = false }
+        defer {
+            isLoadingHistory = false
+            // First launch after onboarding: inject seed entries if Tab1 is still empty.
+            // Own-photo path: server already has the record, entries won't be empty.
+            // Preset-card path: server has nothing; seed = [userBubble + aiCard] fills the gap.
+            let seed = OnboardingSeedStore.shared.entries
+            OnboardingSeedStore.shared.entries = []
+            if !seed.isEmpty {
+                entries = entries + seed
+            }
+        }
 
         // 1) 先读本地缓存并立即渲染——仅当时间线还空着、且本次会话未产生实时对话。
         //    有缓存 → 用户瞬间看到历史，不再是空白/骨架。

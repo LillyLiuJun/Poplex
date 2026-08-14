@@ -70,6 +70,15 @@ struct OnboardingView: View {
 
     private func completeOnboarding() {
         UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: "onboarding_completed_at")
+        // Preset card: build [userBubble(asset image) + aiCard] so Tab1 shows image + description.
+        // Own photo: server already has the record; leave seed empty, loadHistory() handles it.
+        if let card = viewModel.selectedCard, let result = viewModel.generationResult {
+            let image = UIImage(named: card.imageName)
+            OnboardingSeedStore.shared.entries = [
+                .userBubble(text: "Describe this image", image: image, imageStableKey: card.imageName),
+                .aiCard(result)
+            ]
+        }
         Task {
             do { try await ProfileService.markOnboardingComplete() }
             catch { print("[Onboarding] ERROR remote sync failed: \(error)") }
