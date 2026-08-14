@@ -115,7 +115,7 @@ struct OnboardingMomentCard: View {
                     .padding(.bottom, 2)
 
                 Text(sentence)
-                    .font(AppTheme.Font.cardSentence)
+                    .font(AppTheme.Font.englishPrimary)
                     .foregroundStyle(AppTheme.Color.textPrimary)
                     .lineSpacing(AppTheme.Typography.lineBody)
                     .fixedSize(horizontal: false, vertical: true)
