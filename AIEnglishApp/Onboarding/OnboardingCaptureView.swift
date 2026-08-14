@@ -337,7 +337,7 @@ struct OnboardingCaptureView: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             Text("Point at your desk, coffee, or view — no preparation needed.")
-                .font(AppTheme.Font.englishBody)
+                .font(AppTheme.Font.onboardingLeadSerif)
                 .foregroundStyle(AppTheme.Color.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -530,7 +530,7 @@ struct OnboardingCaptureView: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             Text("Your photo, now something you can say.")
-                .font(AppTheme.Font.englishBody)
+                .font(AppTheme.Font.onboardingLeadSerif)
                 .foregroundStyle(AppTheme.Color.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
         }

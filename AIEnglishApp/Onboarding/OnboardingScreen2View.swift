@@ -76,7 +76,7 @@ struct OnboardingScreen2View: View {
                 .foregroundStyle(AppTheme.Color.textPrimary)
 
             Text("Drop a photo, speak, or type. AI does the rest.")
-                .font(AppTheme.Font.englishBody)
+                .font(AppTheme.Font.onboardingLeadSerif)
                 .lineSpacing(AppTheme.Typography.lineBody)
                 .foregroundStyle(AppTheme.Color.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)

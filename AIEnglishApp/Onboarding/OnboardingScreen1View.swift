@@ -72,7 +72,7 @@ struct OnboardingScreen1View: View {
 
             // 副标题讲"价值"，不重复 Screen2 的"机制"，避免两屏冗余。
             Text("Not textbooks. Not drills.\nJust what's happening around you.")
-                .font(AppTheme.Font.englishBody)
+                .font(AppTheme.Font.onboardingLeadSerif)
                 .lineSpacing(AppTheme.Typography.lineBody)
                 .foregroundStyle(AppTheme.Color.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
