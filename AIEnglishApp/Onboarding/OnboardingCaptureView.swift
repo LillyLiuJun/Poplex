@@ -487,24 +487,24 @@ struct OnboardingCaptureView: View {
                             .padding(.horizontal, AppTheme.Space.paddingPage)
                             .padding(.bottom, AppTheme.Space.paddingCard)
 
-                        Group {
-                            if viewModel.isLoading {
-                                loadingCard
-                                    .transition(.opacity)
-                            } else if let result = viewModel.generationResult {
-                                resultCard(result)
-                                    .transition(.scale(scale: 0.96).combined(with: .opacity))
-                            } else if viewModel.retryCount >= 2 {
-                                failedView
-                                    .transition(.opacity)
-                            } else {
-                                errorView
-                                    .transition(.opacity)
-                            }
+                        if viewModel.isLoading {
+                            loadingCard
+                                .transition(.opacity)
+                                .padding(.horizontal, AppTheme.Space.paddingPage)
+                            Spacer()
+                        } else if let result = viewModel.generationResult {
+                            resultCard(result)
+                                .transition(.scale(scale: 0.96).combined(with: .opacity))
+                                .padding(.horizontal, AppTheme.Space.paddingPage)
+                            Spacer()
+                        } else {
+                            // 生成失败：插画 + 文案(+重试) 在剩余空间整体居中，
+                            // 取代原来甩在左上、中间留白的排版。
+                            fallbackStage(isFailed: viewModel.retryCount >= 2)
+                                .transition(.opacity)
+                                .padding(.horizontal, AppTheme.Space.paddingPage)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
                         }
-                        .padding(.horizontal, AppTheme.Space.paddingPage)
-
-                        Spacer()
                     }
                     .padding(.bottom, 120) // Give space for absolute bottom button
                     .frame(minHeight: geo.size.height)
@@ -611,28 +611,36 @@ struct OnboardingCaptureView: View {
         }
     }
 
-    private var errorView: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Space.paddingCard) {
-            Text(viewModel.errorMessage ?? "Something went wrong.")
-                .font(AppTheme.Font.englishBody)
-                .foregroundStyle(AppTheme.Color.textSecondary)
+    // MARK: 兜底态：纸雕插画 + 文案(+重试)，在内容区剩余空间整体居中
+    // isFailed = 重试两次后放弃（引导进 App）；否则为可重试的出错态。
+    private func fallbackStage(isFailed: Bool) -> some View {
+        VStack(spacing: AppTheme.Space.paddingSection) {
+            OnboardingFallbackIllustration(kind: isFailed ? .explore : .retry)
 
-            Button(action: { Task { await viewModel.retry() } }) {
-                Text("Try again")
-                    .font(AppTheme.Font.buddy)
-                    .foregroundStyle(AppTheme.Color.brandStrong)
-                    .padding(.horizontal, AppTheme.Space.paddingCard)
-                    .padding(.vertical, AppTheme.Space.paddingS)
-                    .background(AppTheme.Color.brandWash, in: Capsule())
+            VStack(spacing: AppTheme.Space.paddingCard) {
+                Text(isFailed
+                     ? "No worries — you can explore inside the app."
+                     : (viewModel.errorMessage ?? "Something went wrong. Want to try again?"))
+                    .font(AppTheme.Font.englishBody)
+                    .foregroundStyle(AppTheme.Color.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: 260)
+
+                if !isFailed {
+                    Button(action: { Task { await viewModel.retry() } }) {
+                        Text("Try again")
+                            .font(AppTheme.Font.buddy)
+                            .foregroundStyle(AppTheme.Color.brandStrong)
+                            .padding(.horizontal, AppTheme.Space.paddingCard)
+                            .padding(.vertical, AppTheme.Space.paddingS)
+                            .background(AppTheme.Color.brandWash, in: Capsule())
+                    }
+                    .buttonStyle(PressableButtonStyle())
+                }
             }
-            .buttonStyle(PressableButtonStyle())
         }
-    }
-
-    private var failedView: some View {
-        Text("No worries — you can explore inside the app.")
-            .font(AppTheme.Font.englishBody)
-            .foregroundStyle(AppTheme.Color.textSecondary)
+        .frame(maxWidth: .infinity)
     }
 
     @ViewBuilder
@@ -756,6 +764,89 @@ private struct OnboardingCaptureIllustration: View {
         .frame(
             width: AppTheme.Size.onboardingUploadIllustrationWidth,
             height: AppTheme.Size.onboardingUploadIllustrationHeight
+        )
+        .accessibilityHidden(true)
+    }
+}
+
+/// 兜底态（生成失败 / 放弃）的纸雕插画：与空输入区叠纸同族——三层暖色纸卡
+/// 叠出层次，前景卡上几条淡描边暗示"本该长出的时刻卡"，右上角一枚小橙徽标
+/// 呼应动作（retry = 刷新；explore = 前进）。橙色仅用于 ≤30pt 的小面积角标。
+private struct OnboardingFallbackIllustration: View {
+    enum Kind {
+        case retry   // 可重试的出错态
+        case explore // 放弃后引导进 App
+
+        var glyph: String {
+            switch self {
+            case .retry:   return "arrow.clockwise"
+            case .explore: return "arrow.right"
+            }
+        }
+    }
+
+    let kind: Kind
+
+    private var cardSize: CGFloat { AppTheme.Size.onboardingFallbackCardSize }
+    private var badge: CGFloat { AppTheme.Size.onboardingFallbackBadge }
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            // 叠纸层
+            ZStack {
+                RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
+                    .fill(AppTheme.Color.brandTint)
+                    .frame(width: cardSize + 16, height: cardSize + 8)
+                    .rotationEffect(.degrees(-7))
+                    .offset(x: -8, y: 6)
+
+                RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
+                    .fill(AppTheme.Color.neutralFaint.opacity(0.5))
+                    .frame(width: cardSize + 8, height: cardSize + 4)
+                    .rotationEffect(.degrees(4))
+                    .offset(x: 6, y: 2)
+
+                // 前景纸卡 + 淡描边"文字条"
+                RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
+                    .fill(AppTheme.Color.cardBg)
+                    .frame(width: cardSize, height: cardSize)
+                    .overlay(alignment: .leading) {
+                        VStack(alignment: .leading, spacing: 7) {
+                            RoundedRectangle(cornerRadius: 2.5)
+                                .fill(AppTheme.Color.border)
+                                .frame(width: 34, height: 5)
+                            RoundedRectangle(cornerRadius: 2.5)
+                                .fill(AppTheme.Color.border)
+                                .frame(width: 46, height: 5)
+                            RoundedRectangle(cornerRadius: 2.5)
+                                .fill(AppTheme.Color.border)
+                                .frame(width: 24, height: 5)
+                        }
+                        .padding(.leading, 12)
+                    }
+                    .shadow(
+                        color: AppTheme.Shadow.paperLayerColor,
+                        radius: AppTheme.Shadow.paperLayerRadius,
+                        x: AppTheme.Shadow.paperLayerX,
+                        y: AppTheme.Shadow.paperLayerY
+                    )
+            }
+            .frame(
+                width: AppTheme.Size.onboardingFallbackIllustrationWidth,
+                height: AppTheme.Size.onboardingFallbackIllustrationHeight
+            )
+
+            // 橙色角标
+            Image(systemName: kind.glyph)
+                .font(.system(size: AppTheme.Size.onboardingFallbackBadgeGlyph, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: badge, height: badge)
+                .background(AppTheme.Color.brandStrong, in: Circle())
+                .offset(x: 4, y: -2)
+        }
+        .frame(
+            width: AppTheme.Size.onboardingFallbackIllustrationWidth,
+            height: AppTheme.Size.onboardingFallbackIllustrationHeight
         )
         .accessibilityHidden(true)
     }

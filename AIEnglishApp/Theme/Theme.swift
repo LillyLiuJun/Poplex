@@ -425,6 +425,12 @@ enum AppTheme {
         static let onboardingContentBottomClearance: CGFloat = 120 // 固定 Continue 槽位的内容避让
         static let onboardingSampleWidth: CGFloat           = 90  // 样例图横滑卡宽
         static let onboardingSampleHeight: CGFloat          = 104 // 样例图横滑卡高：给固定 CTA 留出呼吸
+        // 兜底态（生成失败 / 放弃）的纸雕插画：与空输入区叠纸同族，尺寸放大作页面锚点
+        static let onboardingFallbackIllustrationWidth: CGFloat  = 140 // 兜底态叠纸插画整体宽
+        static let onboardingFallbackIllustrationHeight: CGFloat = 116 // 兜底态叠纸插画整体高
+        static let onboardingFallbackCardSize: CGFloat           = 66  // 前景纸卡边长
+        static let onboardingFallbackBadge: CGFloat              = 30  // 橙色角标直径（小面积满饱和图形）
+        static let onboardingFallbackBadgeGlyph: CGFloat         = 15  // 角标内白色描边字形
     }
 
     enum Motion {
