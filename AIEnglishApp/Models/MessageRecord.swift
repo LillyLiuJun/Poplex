@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 // DB 消息记录——从 get-messages 解码，用于重建历史时间线
 struct MessageRecord: Decodable, Identifiable {
@@ -55,6 +56,12 @@ struct MessageRecord: Decodable, Identifiable {
             } else {
                 displayText = userContent
             }
+            // 预设卡图片是 App 内置素材：image_url 存 "asset:<imageName>" 标记，
+            // 直接取本地素材渲染（storage 签名对 asset 前缀无意义）。
+            if let assetName = Self.assetImageName(fromPath: imagePath) {
+                return TimelineEntry(id: id, createdAt: createdAt,
+                                     content: .userBubble(text: displayText, image: UIImage(named: assetName), imageUrl: nil, imageStableKey: nil))
+            }
             return TimelineEntry(id: id, createdAt: createdAt,
                                  content: .userBubble(text: displayText, image: nil, imageUrl: signedImageUrl, imageStableKey: imagePath))
         case "assistant":
@@ -63,5 +70,11 @@ struct MessageRecord: Decodable, Identifiable {
         default:
             return nil
         }
+    }
+
+    /// image_url 里的本地素材引用："asset:<imageName>" → 返回素材名；否则 nil（storage 路径）。
+    static func assetImageName(fromPath path: String?) -> String? {
+        guard let path, path.hasPrefix("asset:"), path.count > "asset:".count else { return nil }
+        return String(path.dropFirst("asset:".count))
     }
 }

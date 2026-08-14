@@ -37,6 +37,11 @@ enum SupabaseConfig {
         projectURL.appending(path: "functions/v1/get-messages")
     }
 
+    // MARK: - Onboarding 预设卡轻量落库
+    static var savePresetCardFunctionURL: URL {
+        projectURL.appending(path: "functions/v1/save-preset-card")
+    }
+
     // MARK: - Tab2 首页（Slice B）
     static var getTab2HomeFunctionURL: URL {
         projectURL.appending(path: "functions/v1/get-tab2-home")

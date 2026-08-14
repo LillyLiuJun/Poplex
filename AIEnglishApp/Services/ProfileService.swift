@@ -48,15 +48,37 @@ enum ProfileService {
     /// （行缺失是边缘情况；upsert = INSERT…ON CONFLICT，顺带完成 profile 行自愈）。
     /// 失败不阻塞流程（调用方 fire-and-forget）。
     static func markOnboardingComplete() async throws {
-        let user = try await SupabaseManager.ensureSignedIn()
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let nowISO = formatter.string(from: Date())
-        print("[ProfileService] marking onboarding complete for user \(user.id)")
-        try await SupabaseManager.client
-            .from("profiles")
-            .upsert(["id": user.id.uuidString.lowercased(), "onboarding_completed_at": nowISO, "updated_at": nowISO])
-            .execute()
-        print("[ProfileService] onboarding_completed_at upserted OK")
+        do {
+            let user = try await SupabaseManager.ensureSignedIn()
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            let nowISO = formatter.string(from: Date())
+            print("[ProfileService] marking onboarding complete for user \(user.id)")
+            try await SupabaseManager.client
+                .from("profiles")
+                .upsert(["id": user.id.uuidString.lowercased(), "onboarding_completed_at": nowISO, "updated_at": nowISO])
+                .execute()
+            setOnboardingSyncPending(false)
+            print("[ProfileService] onboarding_completed_at upserted OK")
+        } catch {
+            setOnboardingSyncPending(true)
+            throw error
+        }
+    }
+
+    // MARK: - 断网打标待办（补发机制）
+
+    /// 打标失败时本地记待办；下次 App 启动补发一次（见 RootView）。
+    /// 为什么需要：预设卡是离线兜底入口，断网走完 onboarding 是设计内旅程——
+    /// 失败不补的话，用户重装 / 换设备后服务端查不到完成记录，会再次看到
+    /// onboarding。成功即清，失败保留待下次启动再试。
+    static let onboardingSyncPendingKey = "onboarding_sync_pending"
+
+    static func hasPendingOnboardingSync(defaults: UserDefaults = .standard) -> Bool {
+        defaults.bool(forKey: onboardingSyncPendingKey)
+    }
+
+    static func setOnboardingSyncPending(_ pending: Bool, defaults: UserDefaults = .standard) {
+        defaults.set(pending, forKey: onboardingSyncPendingKey)
     }
 }

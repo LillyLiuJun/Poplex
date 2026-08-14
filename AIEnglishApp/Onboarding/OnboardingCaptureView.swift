@@ -54,6 +54,19 @@ private enum OnboardingSelectionLayout {
     static let scrollAnchor = "onboardingSelectedPhotoClearance"
 }
 
+private enum OnboardingCaptureLayout {
+    // 页面级坐标空间：翻页手势的 startLocation 与样例图条的 frame 都以此为参照
+    static let pageSpace = "onboardingCapturePage"
+}
+
+private struct CarouselFramePreferenceKey: PreferenceKey {
+    static var defaultValue: CGRect?
+
+    static func reduce(value: inout CGRect?, nextValue: () -> CGRect?) {
+        value = nextValue() ?? value
+    }
+}
+
 private struct SelectedPhotoBottomPreferenceKey: PreferenceKey {
     static var defaultValue: CGFloat?
 
@@ -97,6 +110,8 @@ struct OnboardingCaptureView: View {
     @State private var autoScrolledRevision: Int?
     @State private var appeared = false
     @State private var skeletonPulse = false
+    // 样例图横滑条在页面坐标空间里的 frame；翻页手势起点落在其中时不翻页
+    @State private var carouselFrame: CGRect?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var isSelecting: Bool { viewModel.selectedCard == nil && viewModel.selectedImage == nil }
@@ -123,7 +138,16 @@ struct OnboardingCaptureView: View {
         }
         .animation(.easeInOut(duration: 0.3), value: isSelecting)
         .contentShape(Rectangle())
-        .onHorizontalSwipe(onRight: handleBack)
+        .onHorizontalSwipe(
+            ignoredFrames: { [carouselFrame].compactMap { $0 } },
+            onRight: handleBack
+        )
+        .coordinateSpace(name: OnboardingCaptureLayout.pageSpace)
+        .overlay(alignment: .topLeading) {
+            OnboardingBackButton(action: backButtonAction)
+                .padding(.top, AppTheme.Space.paddingCard)
+                .padding(.leading, AppTheme.Space.paddingM)
+        }
         // One sheet, switched by CaptureSource — never two live modals at once,
         // so SwiftUI's presentation state can't desync between camera & photo.
         // Both sources write into `stagedImage`; the result is applied in
@@ -152,6 +176,7 @@ struct OnboardingCaptureView: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
+        .onPreferenceChange(CarouselFramePreferenceKey.self) { carouselFrame = $0 }
     }
 
     // MARK: - Back
@@ -179,6 +204,14 @@ struct OnboardingCaptureView: View {
     }
 
     private func handleBack() {
+        // 右滑只在选照片态返回上一页。结果态（含样例图生成）禁止右滑：
+        // 生成结果是一次性产出，误触右滑会直接丢失，且没有撤销途径。
+        // 结果态想重拍走左上角返回按钮（backButtonAction）。
+        guard isSelecting else { return }
+        onBack()
+    }
+
+    private func backButtonAction() {
         if isSelecting {
             onBack()
         } else {
@@ -301,6 +334,8 @@ struct OnboardingCaptureView: View {
         selectionRevision += 1
         autoScrolledRevision = nil
         selectedPhotoBottom = nil
+        // 选中后样例图条消失，同步清掉屏蔽区，避免旧 frame 残留误伤该区域的返回手势
+        carouselFrame = nil
     }
 
     private func scrollSelectedPhotoIfNeeded(
@@ -441,6 +476,13 @@ struct OnboardingCaptureView: View {
                         card: card,
                         isSelected: pendingCard?.id == card.id && pendingImage == nil
                     ) {
+                        // 预设卡落库与打标都需要网络：断网时不允许选择，
+                        // 避免「离线走完 onboarding → 服务端无记录」的静默丢数据。
+                        // 文案与 feat/onboarding-error-states 的断网档一致。
+                        guard NetworkMonitor.shared.isConnected else {
+                            photoValidationMessage = "Network unavailable. Check your network and try again."
+                            return
+                        }
                         // Sample 选中会同时让横滑列表消失并生成自然比例预览。
                         // 这里若用 spring，PreferenceKey 会先读到动画中间帧，
                         // 一次性自动避让便可能提前消耗在错误位置。先让布局一次到位，
@@ -453,6 +495,16 @@ struct OnboardingCaptureView: View {
             }
             // 给选中态的放大留出绘制空间，避免被 ScrollView 裁掉
             .padding(AppTheme.Space.paddingXS)
+        }
+        .background {
+            // 把样例图条在页面坐标空间里的 frame 上报出去：翻页手势起点落在
+            // 其中时归 ScrollView 消费，不翻页。竖屏滚动时 frame 随布局实时更新。
+            GeometryReader { geo in
+                Color.clear.preference(
+                    key: CarouselFramePreferenceKey.self,
+                    value: geo.frame(in: .named(OnboardingCaptureLayout.pageSpace))
+                )
+            }
         }
     }
 
@@ -468,6 +520,12 @@ struct OnboardingCaptureView: View {
         if let image = pendingImage {
             Task { await viewModel.startWithImage(image) }
         } else if let card = pendingCard {
+            // 选卡后网络断开：Continue 时再拦一道——生成依赖联网落库与打标。
+            // 文案与 feat/onboarding-error-states 的断网档一致。
+            guard NetworkMonitor.shared.isConnected else {
+                photoValidationMessage = "Network unavailable. Check your network and try again."
+                return
+            }
             Task { await viewModel.startWithCard(card) }
         }
     }

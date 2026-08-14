@@ -72,13 +72,19 @@ struct OnboardingView: View {
         UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: "onboarding_completed_at")
         // Preset card: build [userBubble(asset image) + aiCard] so Tab1 shows image + description.
         // Own photo: server already has the record; leave seed empty, loadHistory() handles it.
-        if let card = viewModel.selectedCard, let result = viewModel.generationResult {
+        // 已成功落库的预设卡不再注入 seed——服务端记录会被 loadHistory 拉到，再注入就重复了。
+        if let card = viewModel.selectedCard, let result = viewModel.generationResult,
+           !viewModel.presetSavedToServer {
             let image = UIImage(named: card.imageName)
             OnboardingSeedStore.shared.entries = [
                 .userBubble(text: "Describe this image", image: image, imageStableKey: card.imageName),
                 .aiCard(result)
             ]
         }
+        // 先记账再销账：远端打标成功（markOnboardingComplete 成功分支）才清待办。
+        // 这样即使下面的 Task 来不及执行（如点完立刻杀 app）或断网失败，
+        // 待办仍在，下次启动自动补发——不依赖打标 Task 是否真正跑到。
+        ProfileService.setOnboardingSyncPending(true)
         Task {
             do { try await ProfileService.markOnboardingComplete() }
             catch { print("[Onboarding] ERROR remote sync failed: \(error)") }
@@ -94,14 +100,22 @@ extension View {
     /// `onRight` = swipe finger right (back). Uses simultaneousGesture so it
     /// coexists with buttons (taps don't move) and ScrollViews (vertical drags
     /// are ignored via the horizontal guard).
+    ///
+    /// `ignoredFrames`: rects (in this view's coordinate space) where the paging
+    /// gesture must NOT fire — e.g. a horizontal sample carousel. A swipe that
+    /// *starts* inside one of these rects belongs to the ScrollView, otherwise
+    /// scrolling the samples would also flip the page.
     func onHorizontalSwipe(
         threshold: CGFloat = 60,
+        ignoredFrames: @escaping () -> [CGRect] = { [] },
         onLeft: @escaping () -> Void = {},
         onRight: @escaping () -> Void = {}
     ) -> some View {
         simultaneousGesture(
             DragGesture(minimumDistance: 30)
                 .onEnded { value in
+                    let start = value.startLocation
+                    guard !ignoredFrames().contains(where: { $0.contains(start) }) else { return }
                     let w = value.translation.width
                     let h = value.translation.height
                     guard abs(w) > abs(h) else { return }

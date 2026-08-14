@@ -401,6 +401,12 @@ private struct FailingMock: AIServicing {
     }
 }
 
+/// 预设卡落库 mock：按配置返回成功/失败。
+private struct PresetCardSavingMock: PresetCardSaving {
+    let succeeds: Bool
+    func save(card: PresetCard) async -> Bool { succeeds }
+}
+
 /// 第一次抛错、之后成功——模拟"断网发送失败 → 恢复网络后重试成功"。
 /// 用 class（引用语义）才能在多次 generate 调用间共享计数。
 private final class FailOnceMock: AIServicing {
@@ -1068,9 +1074,11 @@ struct OnboardingViewModelTests {
     }
 
     // generate 失败：errorMessage 有值、retryCount 为 1、generationResult 为 nil、loading 回 false
+    // 走 startWithImage：失败语义只存在于自选照片的真实 API 路径；
+    // 预设卡是静态零 API 路径，永远不会失败（见 OnboardingViewModel.generate 注释）。
     @Test func generateFailureSetsErrorAndIncrementsRetry() async {
         let vm = OnboardingViewModel(service: FailingMock())
-        await vm.startWithCard(sampleCard)
+        await vm.startWithImage(UIImage(systemName: "photo")!)
         #expect(vm.errorMessage != nil)
         #expect(vm.retryCount == 1)
         #expect(vm.generationResult == nil)
@@ -1080,7 +1088,7 @@ struct OnboardingViewModelTests {
     // 连续失败两次：retryCount 累加到 2
     @Test func repeatedFailuresAccumulateRetryCount() async {
         let vm = OnboardingViewModel(service: FailingMock())
-        await vm.startWithCard(sampleCard)
+        await vm.startWithImage(UIImage(systemName: "photo")!)
         await vm.retry()
         #expect(vm.retryCount == 2)
     }
@@ -1088,13 +1096,37 @@ struct OnboardingViewModelTests {
     // retry 成功（第一次失败后 retry）：retryCount 归零、generationResult 有值、errorMessage 清空
     @Test func retryAfterFailureSucceeds() async {
         let vm = OnboardingViewModel(service: FailOnceMock())
-        await vm.startWithCard(sampleCard)
+        await vm.startWithImage(UIImage(systemName: "photo")!)
         #expect(vm.retryCount == 1)
         await vm.retry()
         #expect(vm.generationResult != nil)
         #expect(vm.retryCount == 0)
         #expect(vm.errorMessage == nil)
         #expect(vm.isLoading == false)
+    }
+
+    // 预设卡落库成功：presetSavedToServer = true → completeOnboarding 不注入 seed
+    // （服务端记录会被 loadHistory 拉到，再注入就重复了）
+    @Test func startWithCardSaveSuccessMarksSaved() async {
+        let vm = OnboardingViewModel(
+            service: SuccessMock(),
+            presetCardSaver: PresetCardSavingMock(succeeds: true)
+        )
+        await vm.startWithCard(sampleCard)
+        #expect(vm.generationResult != nil)
+        #expect(vm.presetSavedToServer == true)
+    }
+
+    // 预设卡落库失败（断网/服务端错误）：presetSavedToServer = false →
+    // seed 兜底本次进程的 Tab1 首屏展示
+    @Test func startWithCardSaveFailureKeepsSeedPath() async {
+        let vm = OnboardingViewModel(
+            service: SuccessMock(),
+            presetCardSaver: PresetCardSavingMock(succeeds: false)
+        )
+        await vm.startWithCard(sampleCard)
+        #expect(vm.generationResult != nil)
+        #expect(vm.presetSavedToServer == false)
     }
 
     // reset：所有状态回到初始值
@@ -1117,6 +1149,44 @@ struct OnboardingViewModelTests {
         #expect(vm.isLoading == false)
         #expect(vm.generationResult == nil)
         #expect(vm.errorMessage == nil)
+    }
+}
+
+// MARK: - ProfileService pending sync tests
+
+struct ProfileServicePendingSyncTests {
+
+    // 待办标记的生命周期：默认无 → 置位 → 清除。用独立 suite 隔离 .standard。
+    @Test func pendingSyncLifecycle() {
+        let suite = "profile-service-pending-tests"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+
+        #expect(ProfileService.hasPendingOnboardingSync(defaults: defaults) == false)
+
+        ProfileService.setOnboardingSyncPending(true, defaults: defaults)
+        #expect(ProfileService.hasPendingOnboardingSync(defaults: defaults) == true)
+
+        ProfileService.setOnboardingSyncPending(false, defaults: defaults)
+        #expect(ProfileService.hasPendingOnboardingSync(defaults: defaults) == false)
+    }
+}
+
+// MARK: - MessageRecord asset 前缀解析
+
+struct MessageRecordAssetPathTests {
+
+    // "asset:<imageName>" 是预设卡图片的本地素材引用（storage 签名对其无意义）
+    @Test func assetPrefixExtractsImageName() {
+        #expect(MessageRecord.assetImageName(fromPath: "asset:card_scene_1") == "card_scene_1")
+    }
+
+    // storage 路径与空值不误判为素材引用
+    @Test func nonAssetPathsReturnNil() {
+        #expect(MessageRecord.assetImageName(fromPath: nil) == nil)
+        #expect(MessageRecord.assetImageName(fromPath: "materials/abc.jpg") == nil)
+        #expect(MessageRecord.assetImageName(fromPath: "asset:") == nil)
+        #expect(MessageRecord.assetImageName(fromPath: "asset") == nil)
     }
 }
 

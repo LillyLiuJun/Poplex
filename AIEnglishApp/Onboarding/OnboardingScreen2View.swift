@@ -21,7 +21,7 @@ struct OnboardingScreen2View: View {
             GeometryReader { geo in
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 0) {
-                        // Dummy top bar area to match backButton
+                        // 顶部为悬浮返回按钮预留的占位（与 capture 页同高）
                         Color.clear
                             .frame(height: 36)
                             .padding(.top, AppTheme.Space.paddingCard)
@@ -49,6 +49,11 @@ struct OnboardingScreen2View: View {
                 .padding(.horizontal, AppTheme.Space.paddingPage)
                 .padding(.bottom, AppTheme.Space.paddingScreenBottom)
                 .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.5)
+        }
+        .overlay(alignment: .topLeading) {
+            OnboardingBackButton(action: onBack)
+                .padding(.top, AppTheme.Space.paddingCard)
+                .padding(.leading, AppTheme.Space.paddingM)
         }
         .contentShape(Rectangle())
         .onHorizontalSwipe(onLeft: onForward, onRight: onBack)

@@ -36,6 +36,30 @@ struct OnboardingPrimaryButton: View {
     }
 }
 
+// MARK: - 返回按钮：左上角悬空圆钮（与 Settings 子页 backRow 同配方）
+
+struct OnboardingBackButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "chevron.left")
+                .font(.system(.body, weight: .semibold))
+                .foregroundStyle(AppTheme.Color.textSecondary)
+                .frame(width: AppTheme.Size.barControl, height: AppTheme.Size.barControl)
+                .background(AppTheme.Color.cardBg, in: Circle())
+                .shadow(
+                    color: AppTheme.Shadow.cardColor,
+                    radius: AppTheme.Shadow.cardRadius / 2,
+                    x: 0,
+                    y: AppTheme.Shadow.cardY / 2
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Back")
+    }
+}
+
 // MARK: - 页面背景：暖米白 + 网格点底纹 + 底部品牌橙光晕（与 CanvasBackground 参数统一）
 
 struct OnboardingAuraBackground: View {

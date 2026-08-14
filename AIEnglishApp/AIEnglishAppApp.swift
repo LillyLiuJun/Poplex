@@ -96,7 +96,21 @@ struct RootView: View {
                 }
             }
         }
-        .task { await resolveStartup() }
+        .task {
+            await resolveStartup()
+            retryPendingOnboardingSyncIfNeeded()
+        }
+    }
+
+    /// 断网走完 onboarding 的用户：启动时补发打标（机制见 ProfileService 待办注释）。
+    /// 不阻塞首屏；失败保留待办，下次启动再试。
+    private func retryPendingOnboardingSyncIfNeeded() {
+        guard onboardingCompletedAt > 0,
+              ProfileService.hasPendingOnboardingSync() else { return }
+        Task {
+            do { try await ProfileService.markOnboardingComplete() }
+            catch { print("[ProfileService] pending sync retry failed: \(error)") }
+        }
     }
 
     /// 把「确认身份」这次网络检查移出首屏关键路径。
