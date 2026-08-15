@@ -164,6 +164,7 @@ enum AppTheme {
 
         // 区标题→内容（Topics / Materials 分区标题到其卡片的呼吸距离，统一散落字面值）
         static let titleToContent: CGFloat      = Primitive.space24
+        static let onboardingUploadCardVertical: CGFloat = Primitive.space24
         // 列表行垂直节奏（Topics 进度行上下留白）
         static let listRowVertical: CGFloat     = Primitive.space12
     }
@@ -204,6 +205,7 @@ enum AppTheme {
         static let brandMid    = Primitive.primary800    // 中档填充（24–120pt）
         static let brandTint   = Primitive.primary200    // 大面积浅底（>120pt）
         static let brandWash   = Primitive.primary100    // 整块区域的最淡橙底
+        static let brandWashLight = Primitive.primary50  // 比 brandWash 再浅一档（插画天空渐变顶）
 
         // AI 追问区 / 核心词组（温润极简：透明底 + 橘色图标 + 顶部细分割线，不再整块底）
         static let accentBuddy   = Primitive.neutral700
@@ -219,7 +221,9 @@ enum AppTheme {
 
         // 描边 / 分割
         static let border       = Primitive.neutral200
-        static let borderDashed = Primitive.neutral200
+        // 虚线框是页面上的弱分组提示；降低不透明度，避免在暖纸背景上抢视觉重量。
+        static let borderDashed = Primitive.neutral200.opacity(0.65)
+        static let onboardingUploadActionBorder = Primitive.neutral200.opacity(0.75)
         static let divider      = Primitive.neutral200
 
         // 语义状态（承载文字，取加深档以保可读性：error950 仅 3.57:1 不达 AA；errorDeep 5.96:1 合规）
@@ -246,7 +250,6 @@ enum AppTheme {
         // 基色复用 warmWhite / white，透明度本身是玻璃配方的一部分。
         static let glassCardSurface = Primitive.warmWhite.opacity(0.44)
         static let glassCardEdge    = SwiftUI.Color.white.opacity(0.72)
-
         // 暖橙薄纱卡（warmGlassCard · Topics 列表容器 + Hero 卡）：单层暖纸白底 +
         // 整卡极淡橙薄纱 + 右上角品牌橙柔光，去描边。透明度是配方的一部分，在 modifier 内施加。
         static let warmGlassSurface = Primitive.warmWhite   // 暖纸白底（不透明单层）
@@ -291,7 +294,7 @@ enum AppTheme {
         static let statusNote     = SwiftUI.Font.system(.footnote)                     // 加载态 / 空态 / 系统提示性短句
         static let growthStatus   = SwiftUI.Font.system(.footnote, weight: .semibold)  // 成长线状态（如「0 pops so far」）
         static let actionNote     = SwiftUI.Font.system(.footnote)                     // 操作项的补充说明（如拍照入口副文案）
-        static let compactActionLabel = SwiftUI.Font.system(.footnote, weight: .semibold) // 紧凑胶囊动作（如 Camera / Gallery）
+        static let compactActionLabel = SwiftUI.Font.system(.subheadline, weight: .medium) // 上传胶囊动作（Camera / Gallery）：无图标时用中等字重建立操作重量
         static let chineseFaint   = SwiftUI.Font.system(.footnote)                    // 中文原文弱化
         static let chineseBody    = SwiftUI.Font.system(.subheadline)                 // 中文翻译（=参考稿 content-zh 14px 灰）
         static let date           = SwiftUI.Font.system(.caption2, weight: .semibold) // 日期分隔
@@ -306,6 +309,7 @@ enum AppTheme {
         static let ctaLabel       = SwiftUI.Font.system(.body, weight: .semibold)     // 主按钮文字（Continue / Get Started）
         static let tabLabel       = SwiftUI.Font.system(.subheadline, weight: .semibold) // 顶部 Tab 名称
         static let cardSentence   = SwiftUI.Font.system(.body, design: .serif, weight: .semibold) // 时刻卡英文主句（衬线 + 半粗，Dynamic Type 安全）
+        static let onboardingUploadTitle = SwiftUI.Font.system(.body, design: .serif, weight: .medium) // 上传卡标题：比内容主句更轻一级
         // 开屏字标「oplex」：与 App 内容字同族（design: .serif = New York，
         // 和 pageTitleSerif / wordTitle 是同一套），再加 italic 呼应 PoplexPShape 的 -6° 斜切。
         // 品牌资产特例——固定字号、不随 Dynamic Type 变化（放大后会撑破居中构图，
@@ -414,8 +418,9 @@ enum AppTheme {
         static let onboardingInlineChevronGlyph: CGFloat    = 10  // 紧跟次操作文字的 chevron
         static let onboardingUploadIllustrationWidth: CGFloat = 104 // 虚线空输入区的有机叠纸插画宽
         static let onboardingUploadIllustrationHeight: CGFloat = 72 // 虚线空输入区的有机叠纸插画高
-        static let onboardingUploadActionWidth: CGFloat     = 176 // 双入口胶囊的紧凑内容宽
-        static let onboardingUploadActionGlyph: CGFloat     = 14  // 双入口胶囊内的描边图标
+        static let onboardingUploadActionWidth: CGFloat     = 240 // 双入口胶囊宽度，建立稳定中轴
+        static let onboardingUploadActionGlyph: CGFloat     = 14 // 双入口胶囊内的轻量 SF Symbol
+        static let onboardingUploadActionBorderWidth: CGFloat = 1 // 明亮胶囊清晰描边
         static let onboardingUploadBorderWidth: CGFloat     = 1.5 // 空输入区虚线边界
         static let onboardingUploadDashLength: CGFloat      = 6   // 空输入区单段虚线长度
         static let onboardingUploadDashGap: CGFloat         = 6   // 空输入区虚线间距

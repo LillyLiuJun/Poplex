@@ -233,7 +233,7 @@ struct OnboardingCaptureView: View {
                     ScrollView(showsIndicators: false) {
                         VStack(alignment: .leading, spacing: 0) {
                             Color.clear
-                                .frame(height: 36)
+                                .frame(height: 20)
                                 .padding(.top, AppTheme.Space.paddingCard)
                             
                         selectionHeader
@@ -244,7 +244,7 @@ struct OnboardingCaptureView: View {
                                 - AppTheme.Space.paddingPage
                                 - AppTheme.Space.paddingPage
                         )
-                            .padding(.top, AppTheme.Space.paddingSection)
+                            .padding(.top, AppTheme.Space.paddingPage)
                             .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.25)
                             .background {
                                 if hasSelection {
@@ -275,7 +275,7 @@ struct OnboardingCaptureView: View {
                             Text("Or try a sample")
                                 .font(AppTheme.Font.compactSectionTitleSerif)
                                 .foregroundStyle(AppTheme.Color.textPrimary)
-                                .padding(.top, AppTheme.Space.paddingSection)
+                                .padding(.top, AppTheme.Space.paddingCard)
                                 .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.35)
 
                             presetCarousel
@@ -365,7 +365,7 @@ struct OnboardingCaptureView: View {
     }
 
     private var selectionHeader: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Space.paddingS) {
+        VStack(alignment: .leading, spacing: AppTheme.Space.paddingM) {
             Text("Snap what's around\nyou to start")
                 .font(AppTheme.Font.pageTitleSerif)
                 .foregroundStyle(AppTheme.Color.textPrimary)
@@ -408,11 +408,12 @@ struct OnboardingCaptureView: View {
                     .buttonStyle(PressableButtonStyle(pressedScale: 0.9, pressedOpacity: 0.8))
                 }
             } else {
-                VStack(spacing: AppTheme.Space.paddingM) {
+                // 试调：卡内上下收紧为 24，释放空间给下方示例图片区；内部内容节奏保持不变。
+                VStack(spacing: AppTheme.Space.paddingCard) {
                     OnboardingCaptureIllustration()
 
                     Text("Add your photo")
-                        .font(AppTheme.Font.ctaLabel)
+                        .font(AppTheme.Font.onboardingUploadTitle)
                         .foregroundStyle(AppTheme.Color.textPrimary)
 
                     VStack(spacing: AppTheme.Space.paddingS) {
@@ -424,15 +425,16 @@ struct OnboardingCaptureView: View {
 
                         OnboardingUploadActionButton(
                             title: "Gallery",
-                            systemImage: "photo.on.rectangle",
+                            systemImage: "photo",
                             action: { activeSheet = .photoLibrary }
                         )
                     }
                     .frame(width: AppTheme.Size.onboardingUploadActionWidth)
+                    .padding(.top, AppTheme.Space.paddingS) // 16+8=24 标题→Camera
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.horizontal, AppTheme.Space.paddingPage)
-                .padding(.vertical, AppTheme.Space.paddingCard)
+                .padding(.vertical, AppTheme.Space.onboardingUploadCardVertical)
                 .contentShape(RoundedRectangle(cornerRadius: AppTheme.Radius.glassContainer))
                 .overlay {
                     RoundedRectangle(cornerRadius: AppTheme.Radius.glassContainer)
@@ -714,119 +716,6 @@ struct OnboardingCaptureView: View {
 
 // MARK: - Sub-views
 
-/// 方案 C 的空输入插画：用已有实色 token 叠出纸雕层次，不用半透明橙。
-/// Path 内的坐标是矢量资产本身，不参与页面布局度量。
-private struct OnboardingCaptureIllustration: View {
-    var body: some View {
-        ZStack {
-            Canvas { context, size in
-                let scaleX = size.width / AppTheme.Size.onboardingUploadIllustrationWidth
-                let scaleY = size.height / AppTheme.Size.onboardingUploadIllustrationHeight
-
-                func scaledPath(_ build: (inout Path) -> Void) -> Path {
-                    var source = Path()
-                    build(&source)
-                    return source.applying(CGAffineTransform(scaleX: scaleX, y: scaleY))
-                }
-
-                let back = scaledPath { path in
-                    path.move(to: CGPoint(x: 30, y: 16))
-                    path.addCurve(
-                        to: CGPoint(x: 78, y: 55),
-                        control1: CGPoint(x: 50, y: 8),
-                        control2: CGPoint(x: 86, y: 16)
-                    )
-                    path.addCurve(
-                        to: CGPoint(x: 30, y: 16),
-                        control1: CGPoint(x: 59, y: 66),
-                        control2: CGPoint(x: 10, y: 47)
-                    )
-                    path.closeSubpath()
-                }
-                context.fill(back, with: .color(AppTheme.Color.brandTint))
-
-                let middle = scaledPath { path in
-                    path.move(to: CGPoint(x: 42, y: 48))
-                    path.addCurve(
-                        to: CGPoint(x: 68, y: 22),
-                        control1: CGPoint(x: 34, y: 36),
-                        control2: CGPoint(x: 48, y: 23)
-                    )
-                    path.addCurve(
-                        to: CGPoint(x: 42, y: 48),
-                        control1: CGPoint(x: 83, y: 22),
-                        control2: CGPoint(x: 76, y: 55)
-                    )
-                    path.closeSubpath()
-                }
-                context.fill(middle, with: .color(AppTheme.Color.neutralFaint))
-
-                let front = scaledPath { path in
-                    path.move(to: CGPoint(x: 28, y: 44))
-                    path.addCurve(
-                        to: CGPoint(x: 50, y: 20),
-                        control1: CGPoint(x: 24, y: 31),
-                        control2: CGPoint(x: 36, y: 19)
-                    )
-                    path.addCurve(
-                        to: CGPoint(x: 72, y: 43),
-                        control1: CGPoint(x: 65, y: 20),
-                        control2: CGPoint(x: 79, y: 31)
-                    )
-                    path.addCurve(
-                        to: CGPoint(x: 28, y: 44),
-                        control1: CGPoint(x: 67, y: 57),
-                        control2: CGPoint(x: 32, y: 57)
-                    )
-                    path.closeSubpath()
-                }
-                context.drawLayer { layer in
-                    layer.addFilter(.shadow(
-                        color: AppTheme.Shadow.paperLayerColor,
-                        radius: AppTheme.Shadow.paperLayerRadius,
-                        x: AppTheme.Shadow.paperLayerX,
-                        y: AppTheme.Shadow.paperLayerY
-                    ))
-                    layer.fill(front, with: .color(AppTheme.Color.cardBg))
-                }
-
-                let accent = scaledPath { path in
-                    path.move(to: CGPoint(x: 66, y: 21))
-                    path.addCurve(
-                        to: CGPoint(x: 77, y: 32),
-                        control1: CGPoint(x: 73, y: 19),
-                        control2: CGPoint(x: 80, y: 25)
-                    )
-                    path.addCurve(
-                        to: CGPoint(x: 66, y: 21),
-                        control1: CGPoint(x: 74, y: 39),
-                        control2: CGPoint(x: 61, y: 34)
-                    )
-                    path.closeSubpath()
-                }
-                context.drawLayer { layer in
-                    layer.addFilter(.shadow(
-                        color: AppTheme.Shadow.paperLayerColor,
-                        radius: AppTheme.Shadow.paperLayerRadius,
-                        x: AppTheme.Shadow.paperLayerX,
-                        y: AppTheme.Shadow.paperLayerY
-                    ))
-                    layer.fill(accent, with: .color(AppTheme.Color.brandStrong))
-                }
-            }
-
-            Image(systemName: "camera")
-                .font(.system(size: AppTheme.Size.onboardingCaptureGlyph, weight: .regular))
-                .foregroundStyle(AppTheme.Color.brandStrong)
-        }
-        .frame(
-            width: AppTheme.Size.onboardingUploadIllustrationWidth,
-            height: AppTheme.Size.onboardingUploadIllustrationHeight
-        )
-        .accessibilityHidden(true)
-    }
-}
-
 /// 兜底态（生成失败 / 放弃）的纸雕插画：与空输入区叠纸同族——三层暖色纸卡
 /// 叠出层次，前景卡上几条淡描边暗示"本该长出的时刻卡"，右上角一枚小橙徽标
 /// 呼应动作（retry = 刷新；explore = 前进）。橙色仅用于 ≤30pt 的小面积角标。
@@ -921,21 +810,26 @@ private struct OnboardingUploadActionButton: View {
         Button(action: action) {
             HStack(spacing: AppTheme.Space.paddingS) {
                 Image(systemName: systemImage)
+                    .symbolRenderingMode(.monochrome)
                     .font(.system(
                         size: AppTheme.Size.onboardingUploadActionGlyph,
                         weight: .regular
                     ))
+                    .foregroundStyle(AppTheme.Color.textMuted)
 
                 Text(title)
                     .font(AppTheme.Font.compactActionLabel)
+                    .foregroundStyle(AppTheme.Color.textPrimary)
             }
-            .foregroundStyle(AppTheme.Color.textSecondary)
             .frame(maxWidth: .infinity)
             .frame(height: AppTheme.Size.barControl)
             .background(AppTheme.Color.cardBg, in: Capsule())
             .overlay {
                 Capsule()
-                    .strokeBorder(AppTheme.Color.border, lineWidth: AppTheme.Size.onboardingUploadBorderWidth)
+                    .strokeBorder(
+                        AppTheme.Color.onboardingUploadActionBorder,
+                        lineWidth: AppTheme.Size.onboardingUploadActionBorderWidth
+                    )
             }
             .contentShape(Capsule())
         }
