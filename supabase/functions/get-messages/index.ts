@@ -2,6 +2,8 @@
 // 返回当前用户的历史消息，供 Tab1 历史记录展示。
 // 按 created_at 升序（最旧在前），前端按日期分组展示。
 
+import { fetchAllMessagePages } from "./pagination.mjs";
+
 const SUPABASE_URL     = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SVC_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const STORAGE_BUCKET   = "material_images";
@@ -16,6 +18,12 @@ function json(body: unknown, status = 200): Response {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+}
+
+class DatabaseError extends Error {
+  constructor(readonly status: number, readonly detail: string) {
+    super(`database request failed with ${status}`);
+  }
 }
 
 async function getAuthUserId(req: Request): Promise<string | null> {
@@ -40,30 +48,33 @@ Deno.serve(async (req) => {
   if (!userId) return json({ error: "unauthorized" }, 401);
 
   try {
-    const url = new URL(`${SUPABASE_URL}/rest/v1/messages`);
-    url.searchParams.set(
-      "select",
-      "id,role,input_type,user_content,card_type,card_content,created_at,image_url"
-    );
-    url.searchParams.set("user_id", `eq.${userId}`);
-    url.searchParams.set("status", "eq.delivered");
-    url.searchParams.set("order", "created_at.asc");
-    url.searchParams.set("limit", "300");
+    const messages = await fetchAllMessagePages(async (offset: number, limit: number) => {
+      const url = new URL(`${SUPABASE_URL}/rest/v1/messages`);
+      url.searchParams.set(
+        "select",
+        "id,role,input_type,user_content,card_type,card_content,created_at,image_url"
+      );
+      url.searchParams.set("user_id", `eq.${userId}`);
+      url.searchParams.set("status", "eq.delivered");
+      url.searchParams.set("order", "created_at.asc,id.asc");
+      url.searchParams.set("limit", String(limit));
+      url.searchParams.set("offset", String(offset));
 
-    const res = await fetch(url.toString(), {
-      headers: {
-        "Authorization": `Bearer ${SUPABASE_SVC_KEY}`,
-        "apikey": SUPABASE_SVC_KEY,
-      },
+      const res = await fetch(url.toString(), {
+        headers: {
+          "Authorization": `Bearer ${SUPABASE_SVC_KEY}`,
+          "apikey": SUPABASE_SVC_KEY,
+        },
+      });
+
+      if (!res.ok) {
+        const errBody = await res.text();
+        console.error("[get-messages] db error:", res.status, errBody);
+        throw new DatabaseError(res.status, errBody);
+      }
+
+      return await res.json() as Array<Record<string, unknown>>;
     });
-
-    if (!res.ok) {
-      const errBody = await res.text();
-      console.error("[get-messages] db error:", res.status, errBody);
-      return json({ error: "db_error", status: res.status, detail: errBody }, 502);
-    }
-
-    const messages = await res.json() as Array<Record<string, unknown>>;
 
     // 批量签发 image_url 的 1h 访问链接，注入为 signed_image_url
     const paths = messages.map(m => m.image_url as string).filter(Boolean);
@@ -103,6 +114,9 @@ Deno.serve(async (req) => {
 
     return json(result);
   } catch (e) {
+    if (e instanceof DatabaseError) {
+      return json({ error: "db_error", status: e.status, detail: e.detail }, 502);
+    }
     console.error("[get-messages] error:", e);
     return json({ error: "internal_error" }, 500);
   }
