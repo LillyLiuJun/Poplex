@@ -177,6 +177,37 @@ struct OnboardingCaptureView: View {
                 .presentationDragIndicator(.visible)
         }
         .onPreferenceChange(CarouselFramePreferenceKey.self) { carouselFrame = $0 }
+        // 被拒：清视图层暂存选中——图片不上屏、Continue 回到禁用态（fail-open 唯一例外）。
+        // 不要在 performSelection 清 pending*：backButtonAction 返回选择页时依赖它们保留以重显图片。
+        .onChange(of: viewModel.errorKind) { _, kind in
+            if kind == .contentBlocked {
+                pendingImage = nil
+                pendingCard = nil
+            }
+        }
+        .overlay(alignment: .bottom) {
+            // 被拒 toast：4s 自动消失。挂在 body 外层——被拒后切回选择页（空上传区），
+            // toast 必须高于两个内容区才能显示；选择页底部有 Continue 按钮（禁用态也在），
+            // 故底部偏移沿用原 errorToast 惯例，浮于按钮之上。
+            if viewModel.errorKind == .contentBlocked {
+                AutoDismissingAppToast(
+                    message: Binding(
+                        get: {
+                            viewModel.errorKind == .contentBlocked
+                                ? "This content can't be processed. Try another one."
+                                : nil
+                        },
+                        set: { if $0 == nil { viewModel.errorKind = nil } }
+                    ),
+                    systemImage: "exclamationmark.triangle",
+                    lifetime: AppTheme.Motion.toastLifetime
+                )
+                // 浮于底部 Continue 之上：沿用原 errorToast 的底部偏移惯例，
+                // 否则 toast 与选择页底部按钮（含禁用态）重叠 11-16pt。
+                .ignoresSafeArea(.container, edges: .bottom)
+                .padding(.bottom, AppTheme.Size.onboardingContinueBottom + AppTheme.Size.barControl)
+            }
+        }
     }
 
     // MARK: - Back
@@ -233,7 +264,7 @@ struct OnboardingCaptureView: View {
                     ScrollView(showsIndicators: false) {
                         VStack(alignment: .leading, spacing: 0) {
                             Color.clear
-                                .frame(height: 20)
+                                .frame(height: 36)
                                 .padding(.top, AppTheme.Space.paddingCard)
                             
                         selectionHeader
@@ -275,11 +306,11 @@ struct OnboardingCaptureView: View {
                             Text("Or try a sample")
                                 .font(AppTheme.Font.compactSectionTitleSerif)
                                 .foregroundStyle(AppTheme.Color.textPrimary)
-                                .padding(.top, AppTheme.Space.paddingCard)
+                                .padding(.top, AppTheme.Space.titleToContent)
                                 .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.35)
 
                             presetCarousel
-                                .padding(.top, AppTheme.Space.paddingM)
+                                .padding(.top, AppTheme.Space.paddingCard)
                                 .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.4)
                         }
                             
@@ -290,6 +321,9 @@ struct OnboardingCaptureView: View {
                         .frame(minHeight: geo.size.height)
                     }
                     .scrollBounceBehavior(.basedOnSize)
+                    .ignoresSafeArea(.container, edges: .bottom)
+
+                    OnboardingBottomFade()
 
                     VStack(spacing: AppTheme.Space.paddingCard) {
                         AutoDismissingAppToast(
@@ -315,7 +349,8 @@ struct OnboardingCaptureView: View {
                         }
                     }
                     .padding(.horizontal, AppTheme.Space.paddingPage)
-                    .padding(.bottom, AppTheme.Space.paddingScreenBottom)
+                    .ignoresSafeArea(.container, edges: .bottom)
+                    .padding(.bottom, AppTheme.Size.onboardingContinueBottom)
                 }
                 .coordinateSpace(name: OnboardingSelectionLayout.coordinateSpace)
                 .onPreferenceChange(SelectedPhotoBottomPreferenceKey.self) { bottom in
@@ -478,13 +513,6 @@ struct OnboardingCaptureView: View {
                         card: card,
                         isSelected: pendingCard?.id == card.id && pendingImage == nil
                     ) {
-                        // 预设卡落库与打标都需要网络：断网时不允许选择，
-                        // 避免「离线走完 onboarding → 服务端无记录」的静默丢数据。
-                        // 文案与 feat/onboarding-error-states 的断网档一致。
-                        guard NetworkMonitor.shared.isConnected else {
-                            photoValidationMessage = "Network unavailable. Check your network and try again."
-                            return
-                        }
                         // Sample 选中会同时让横滑列表消失并生成自然比例预览。
                         // 这里若用 spring，PreferenceKey 会先读到动画中间帧，
                         // 一次性自动避让便可能提前消耗在错误位置。先让布局一次到位，
@@ -522,12 +550,6 @@ struct OnboardingCaptureView: View {
         if let image = pendingImage {
             Task { await viewModel.startWithImage(image) }
         } else if let card = pendingCard {
-            // 选卡后网络断开：Continue 时再拦一道——生成依赖联网落库与打标。
-            // 文案与 feat/onboarding-error-states 的断网档一致。
-            guard NetworkMonitor.shared.isConnected else {
-                photoValidationMessage = "Network unavailable. Check your network and try again."
-                return
-            }
             Task { await viewModel.startWithCard(card) }
         }
     }
@@ -557,29 +579,52 @@ struct OnboardingCaptureView: View {
                                 .transition(.scale(scale: 0.96).combined(with: .opacity))
                                 .padding(.horizontal, AppTheme.Space.paddingPage)
                             Spacer()
+                        } else if let image = resultImage {
+                            // 失败态（断网/其它）：保留用户所选素材图 + 常驻状态条（fail-open——
+                            // 内容在、状态条说明原因、Try again 可重试、Continue 可用）
+                            VStack(spacing: 0) {
+                                image
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 195)
+                                    .clipped()
+                                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.large))
+                                    .allowsHitTesting(false)
+
+                                if let copy = viewModel.errorKind?.failureBarCopy {
+                                    FailureStatusBar(copy: copy) {
+                                        Task { await viewModel.retry() }
+                                    }
+                                }
+                            }
+                            .transition(.opacity)
+                            .padding(.horizontal, AppTheme.Space.paddingPage)
+                            Spacer()
                         } else {
-                            // 生成失败：插画 + 文案(+重试) 在剩余空间整体居中，
-                            // 取代原来甩在左上、中间留白的排版。
-                            fallbackStage(isFailed: viewModel.retryCount >= 2)
-                                .transition(.opacity)
-                                .padding(.horizontal, AppTheme.Space.paddingPage)
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            Spacer()
                         }
                     }
-                    .padding(.bottom, 120) // Give space for absolute bottom button
+                    .padding(.bottom, AppTheme.Size.onboardingContentBottomClearance) // Give space for absolute bottom button
                     .frame(minHeight: geo.size.height)
                 }
                 .scrollBounceBehavior(.basedOnSize)
+                .ignoresSafeArea(.container, edges: .bottom)
             }
-            
+
+            OnboardingBottomFade()
+
             if !viewModel.isLoading {
                 bottomButton
                     .padding(.horizontal, AppTheme.Space.paddingPage)
-                    .padding(.bottom, AppTheme.Space.paddingScreenBottom)
+                    .ignoresSafeArea(.container, edges: .bottom)
+                    .padding(.bottom, AppTheme.Size.onboardingContinueBottom)
             }
         }
         .animation(.easeInOut(duration: 0.3), value: viewModel.isLoading)
         .animation(.easeInOut(duration: 0.3), value: viewModel.generationResult != nil)
+        // 状态条不随网络恢复自动消失：保留到用户点 Try again 成功（或换素材/离开）——
+        // 重试入口稳定可预期；真机监控信号不可靠，自动消失会吞掉入口。
     }
 
     private var resultHeader: some View {
@@ -671,43 +716,11 @@ struct OnboardingCaptureView: View {
         }
     }
 
-    // MARK: 兜底态：纸雕插画 + 文案(+重试)，在内容区剩余空间整体居中
-    // isFailed = 重试两次后放弃（引导进 App）；否则为可重试的出错态。
-    private func fallbackStage(isFailed: Bool) -> some View {
-        VStack(spacing: AppTheme.Space.paddingSection) {
-            OnboardingFallbackIllustration(kind: isFailed ? .explore : .retry)
-
-            VStack(spacing: AppTheme.Space.paddingCard) {
-                Text(isFailed
-                     ? "No worries — you can explore inside the app."
-                     : (viewModel.errorMessage ?? "Something went wrong. Want to try again?"))
-                    .font(AppTheme.Font.englishBody)
-                    .foregroundStyle(AppTheme.Color.textSecondary)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: 260)
-
-                if !isFailed {
-                    Button(action: { Task { await viewModel.retry() } }) {
-                        Text("Try again")
-                            .font(AppTheme.Font.buddy)
-                            .foregroundStyle(AppTheme.Color.brandStrong)
-                            .padding(.horizontal, AppTheme.Space.paddingCard)
-                            .padding(.vertical, AppTheme.Space.paddingS)
-                            .background(AppTheme.Color.brandWash, in: Capsule())
-                    }
-                    .buttonStyle(PressableButtonStyle())
-                }
-            }
-        }
-        .frame(maxWidth: .infinity)
-    }
-
     @ViewBuilder
     private var bottomButton: some View {
-        if viewModel.generationResult != nil || viewModel.retryCount >= 2 {
+        if (viewModel.selectedCard != nil || viewModel.selectedImage != nil) {
             OnboardingPrimaryButton(
-                title: viewModel.retryCount >= 2 ? "Let's dive in." : "Get Started",
+                title: viewModel.generationResult != nil ? "Get Started" : "Continue",
                 action: onComplete
             )
         }
@@ -715,89 +728,6 @@ struct OnboardingCaptureView: View {
 }
 
 // MARK: - Sub-views
-
-/// 兜底态（生成失败 / 放弃）的纸雕插画：与空输入区叠纸同族——三层暖色纸卡
-/// 叠出层次，前景卡上几条淡描边暗示"本该长出的时刻卡"，右上角一枚小橙徽标
-/// 呼应动作（retry = 刷新；explore = 前进）。橙色仅用于 ≤30pt 的小面积角标。
-private struct OnboardingFallbackIllustration: View {
-    enum Kind {
-        case retry   // 可重试的出错态
-        case explore // 放弃后引导进 App
-
-        var glyph: String {
-            switch self {
-            case .retry:   return "arrow.clockwise"
-            case .explore: return "arrow.right"
-            }
-        }
-    }
-
-    let kind: Kind
-
-    private var cardSize: CGFloat { AppTheme.Size.onboardingFallbackCardSize }
-    private var badge: CGFloat { AppTheme.Size.onboardingFallbackBadge }
-
-    var body: some View {
-        ZStack(alignment: .topTrailing) {
-            // 叠纸层
-            ZStack {
-                RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
-                    .fill(AppTheme.Color.brandTint)
-                    .frame(width: cardSize + 16, height: cardSize + 8)
-                    .rotationEffect(.degrees(-7))
-                    .offset(x: -8, y: 6)
-
-                RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
-                    .fill(AppTheme.Color.neutralFaint.opacity(0.5))
-                    .frame(width: cardSize + 8, height: cardSize + 4)
-                    .rotationEffect(.degrees(4))
-                    .offset(x: 6, y: 2)
-
-                // 前景纸卡 + 淡描边"文字条"
-                RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
-                    .fill(AppTheme.Color.cardBg)
-                    .frame(width: cardSize, height: cardSize)
-                    .overlay(alignment: .leading) {
-                        VStack(alignment: .leading, spacing: 7) {
-                            RoundedRectangle(cornerRadius: 2.5)
-                                .fill(AppTheme.Color.border)
-                                .frame(width: 34, height: 5)
-                            RoundedRectangle(cornerRadius: 2.5)
-                                .fill(AppTheme.Color.border)
-                                .frame(width: 46, height: 5)
-                            RoundedRectangle(cornerRadius: 2.5)
-                                .fill(AppTheme.Color.border)
-                                .frame(width: 24, height: 5)
-                        }
-                        .padding(.leading, 12)
-                    }
-                    .shadow(
-                        color: AppTheme.Shadow.paperLayerColor,
-                        radius: AppTheme.Shadow.paperLayerRadius,
-                        x: AppTheme.Shadow.paperLayerX,
-                        y: AppTheme.Shadow.paperLayerY
-                    )
-            }
-            .frame(
-                width: AppTheme.Size.onboardingFallbackIllustrationWidth,
-                height: AppTheme.Size.onboardingFallbackIllustrationHeight
-            )
-
-            // 橙色角标
-            Image(systemName: kind.glyph)
-                .font(.system(size: AppTheme.Size.onboardingFallbackBadgeGlyph, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: badge, height: badge)
-                .background(AppTheme.Color.brandStrong, in: Circle())
-                .offset(x: 4, y: -2)
-        }
-        .frame(
-            width: AppTheme.Size.onboardingFallbackIllustrationWidth,
-            height: AppTheme.Size.onboardingFallbackIllustrationHeight
-        )
-        .accessibilityHidden(true)
-    }
-}
 
 /// 空输入区里的直接动作。没有 chevron，因为点击后立即调起系统选择器，
 /// 并不进入新的信息层级。
@@ -834,6 +764,40 @@ private struct OnboardingUploadActionButton: View {
             .contentShape(Capsule())
         }
         .buttonStyle(PressableButtonStyle())
+    }
+}
+
+/// 断网/其它失败的状态条：嵌在素材图下方、常驻（不自动消失）。
+/// 网络恢复由既有 onChange 清 errorKind → 状态条随之消失（图保留）。
+private struct FailureStatusBar: View {
+    let copy: String
+    var onRetry: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Space.paddingS) {
+            Text(copy)
+                .font(AppTheme.Font.chineseFaint)
+                .foregroundStyle(AppTheme.Color.textSecondary)
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, AppTheme.Space.paddingCard)
+
+            Button(action: onRetry) {
+                HStack(spacing: AppTheme.Space.paddingXS) {
+                    Image(systemName: "arrow.clockwise")
+                        .imageScale(.small)
+                        .foregroundStyle(AppTheme.Color.brandStrong)   // 图标点缀与 toast 一致
+                    Text("Try again")
+                        .font(AppTheme.Font.buddy)
+                        .foregroundStyle(AppTheme.Color.textOnChip)   // 深底胶囊上的浅色文字（同 toast）
+                }
+                .padding(.horizontal, AppTheme.Space.paddingCard)
+                .padding(.vertical, AppTheme.Space.paddingS)
+                .background(AppTheme.Color.textPrimary.opacity(0.82), in: Capsule())   // 同 toast 深底
+            }
+            .buttonStyle(PressableButtonStyle())
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

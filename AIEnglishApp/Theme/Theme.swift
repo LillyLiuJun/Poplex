@@ -427,9 +427,11 @@ enum AppTheme {
         static let disabledControlBorderWidth: CGFloat      = 1   // 大面积禁用 CTA 的轻描边
         static let onboardingMaxPhotoAspectRatio: CGFloat   = 2.25 // 接受常规手机全屏截图；更长/更宽素材需重选
         static let onboardingPreviewHeight: CGFloat         = 200 // 无法读取图片尺寸时的预览高度兜底
-        static let onboardingContentBottomClearance: CGFloat = 120 // 固定 Continue 槽位的内容避让
-        static let onboardingSampleWidth: CGFloat           = 90  // 样例图横滑卡宽
-        static let onboardingSampleHeight: CGFloat          = 104 // 样例图横滑卡高：给固定 CTA 留出呼吸
+        static let onboardingContentBottomClearance: CGFloat = 80 // Continue 槽位避让（内容底进遮罩渐隐区，不钻按钮背后）
+        static let onboardingContinueBottom: CGFloat = 8 // Continue 距屏幕底（配合 ignoresSafeArea 贴系统条上方；真机调）
+        static let inputBarMinHeight: CGFloat = 52 // 底部胶囊最小高度（Tab1 InputBar / Onboarding Continue 对齐）
+        static let onboardingSampleWidth: CGFloat           = 104 // 样例图横滑卡宽
+        static let onboardingSampleHeight: CGFloat          = 120 // 样例图横滑卡高：给固定 CTA 留出呼吸
         // 兜底态（生成失败 / 放弃）的纸雕插画：与空输入区叠纸同族，尺寸放大作页面锚点
         static let onboardingFallbackIllustrationWidth: CGFloat  = 140 // 兜底态叠纸插画整体宽
         static let onboardingFallbackIllustrationHeight: CGFloat = 116 // 兜底态叠纸插画整体高

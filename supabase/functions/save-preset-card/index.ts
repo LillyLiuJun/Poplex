@@ -83,13 +83,16 @@ Deno.serve(async (req) => {
     return json({ error: "missing preset_card_id or static_english" }, 400);
   }
 
-  // 幂等保护：该用户已写过同一张预设卡则跳过，防止边缘重复。
+  // 幂等保护（窗口化）：同卡 60 秒内的重复写入才跳过，防止连点/网络重发。
+  // 不能按「该用户是否写过这张卡」去重——重试/隔天再生成是合法的独立记录
+  // （生产验证：历史已存同卡导致重试被吞，重启后新内容消失）。
   try {
     const checkUrl = new URL(`${SUPABASE_URL}/rest/v1/messages`);
     checkUrl.searchParams.set("select", "id");
     checkUrl.searchParams.set("user_id", `eq.${userId}`);
     checkUrl.searchParams.set("preset_card_id", `eq.${preset_card_id}`);
     checkUrl.searchParams.set("role", "eq.user");
+    checkUrl.searchParams.set("created_at", `gt.${new Date(Date.now() - 60_000).toISOString()}`);
     checkUrl.searchParams.set("limit", "1");
     const checkRes = await fetch(checkUrl.toString(), {
       headers: {

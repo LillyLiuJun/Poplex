@@ -126,11 +126,19 @@ struct CardContent: Decodable {
 // MARK: - error 安全/无效拦截
 struct ErrorContent: Decodable {
     let errorType: String
-    let message: String
+    /// 模型可能漏填 message（漂移，见 2026-08 生产事故：unsafe 卡缺 message 导致整包解码失败），
+    /// 因此改为可选——缺失时渲染层用兜底文案，不让一个缺字段毁掉整次响应。
+    let message: String?
 
     enum CodingKeys: String, CodingKey {
         case errorType = "error_type"
         case message
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        errorType = try c.decode(String.self, forKey: .errorType)
+        message    = try c.decodeIfPresent(String.self, forKey: .message)
     }
 }
 
@@ -169,7 +177,7 @@ extension AICard {
             }
             return d
         case .error(let c):
-            return ["error_type": c.errorType, "message": c.message]
+            return ["error_type": c.errorType, "message": c.message ?? ""]
         }
     }
 
@@ -177,7 +185,7 @@ extension AICard {
     var primaryEnglish: String {
         switch self {
         case .card(let c):  return c.displayTarget
-        case .error(let c): return c.message
+        case .error(let c): return c.message ?? "This content can't be processed. Try another one."
         }
     }
 

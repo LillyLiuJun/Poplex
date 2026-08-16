@@ -35,17 +35,16 @@ struct TodayView: View {
                 VariableBlurBackdrop(direction: .bottom, extraExtend: 28)
                     .ignoresSafeArea(.container, edges: .bottom)
             }
+
+            // 轻提示（如无网点 Retry）：底部浮出，4s 自动消失
+            AutoDismissingAppToast(
+                message: $vm.offlineHint,
+                systemImage: "wifi.slash"
+            )
+            .padding(.bottom, AppTheme.Space.paddingHero)
         }
             // 首页画布装饰（网格点 + 底部橘色光晕），透明叠在 pageBg 之上、内容之下
             .background(CanvasBackground(showTopAura: false).ignoresSafeArea())
-            .alert("Can't create a lesson", isPresented: Binding(
-                get: { viewModel.contentBlockedMessage != nil },
-                set: { if !$0 { viewModel.contentBlockedMessage = nil } }
-            )) {
-                Button("OK") { viewModel.contentBlockedMessage = nil }
-            } message: {
-                Text(viewModel.contentBlockedMessage ?? "")
-            }
             .sheet(isPresented: $viewModel.showAIConsent) {
                 AIConsentView { viewModel.onConsentAgreed() }
                     .presentationDetents([.medium, .large])
@@ -56,6 +55,9 @@ struct TodayView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
                 viewModel.session.didBecomeActive()
+                // 回前台自动补拉一次历史：断网启动/断网期间拉取失败后，网络恢复时
+                // 用户切后台再回来即对齐服务器正本（loadHistory 有 isLoadingHistory 防重入）。
+                Task { await viewModel.loadHistory() }
             }
     }
 
@@ -73,12 +75,22 @@ struct TodayView: View {
                             onImagePreview?(img, anchor)
                         }, onRetry: { text, image, entryId in
                             Task { await viewModel.retrySend(text: text, image: image, failedEntryId: entryId) }
+                        }, onRetryPending: { record in
+                            guard NetworkMonitor.shared.isConnected else {
+                                viewModel.offlineHint = "You're offline. Check your connection and try again."
+                                return
+                            }
+                            Task { await viewModel.retryPending(record: record) }
                         })
                         .id(entry.id)
                     }
                 }
                 .padding(AppTheme.Space.paddingPage)
                 .padding(.bottom, 72)     // 为底部 InputBar 留出空间（胶囊 52 + 边距）
+            }
+            .refreshable {
+                // 下拉刷新：手动对齐服务器正本（断网启动后恢复网络时的主要恢复入口）
+                await viewModel.loadHistory()
             }
             .contentMargins(.top, topInset, for: .scrollContent)  // 可滚动进入的顶部 margin
             .topEdgeFade()

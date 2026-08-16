@@ -31,7 +31,8 @@ struct OnboardingScreen2View: View {
                             .padding(.top, AppTheme.Space.paddingCard)
                             .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.05)
 
-                        Spacer().frame(height: AppTheme.Space.paddingSection)
+                        // Continue 下移后底部弹性空隙变大，加大这里把拼贴整体下移、吃掉上方空
+                        Spacer().frame(height: AppTheme.Space.paddingHero)
 
                         capturedMomentsCollage
                             .frame(maxWidth: .infinity)
@@ -39,15 +40,19 @@ struct OnboardingScreen2View: View {
 
                         Spacer()
                     }
-                    .padding(.bottom, 120) // Give space for the absolute bottom button
+                    .padding(.bottom, AppTheme.Size.onboardingContentBottomClearance) // Give space for the absolute bottom button
                     .frame(minHeight: geo.size.height) // Full height
                 }
                 .scrollBounceBehavior(.basedOnSize)
+                .ignoresSafeArea(.container, edges: .bottom)
             }
+
+            OnboardingBottomFade()
 
             OnboardingPrimaryButton(title: "Continue", action: onForward)
                 .padding(.horizontal, AppTheme.Space.paddingPage)
-                .padding(.bottom, AppTheme.Space.paddingScreenBottom)
+                .ignoresSafeArea(.container, edges: .bottom)
+                .padding(.bottom, AppTheme.Size.onboardingContinueBottom)
                 .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.5)
         }
         .overlay(alignment: .topLeading) {

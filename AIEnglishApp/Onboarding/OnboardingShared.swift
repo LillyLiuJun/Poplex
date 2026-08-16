@@ -30,6 +30,7 @@ struct OnboardingPrimaryButton: View {
                             )
                     }
                 }
+                .frame(minHeight: AppTheme.Size.inputBarMinHeight) // 高度对齐 Tab1 InputBar capsule
         }
         .disabled(!isEnabled)
         .buttonStyle(PressableButtonStyle(pressedScale: 0.97, pressedOpacity: 0.85))
@@ -90,26 +91,62 @@ struct OnboardingAuraBackground: View {
             }
             .ignoresSafeArea()
 
-            // 底部橙光晕（参数与 CanvasBackground 对齐）
-            Color.clear
-                .overlay(alignment: .bottom) {
-                    Ellipse()
-                        .fill(
-                            RadialGradient(
-                                colors: [AppTheme.Color.canvasAura.opacity(0.24), .clear],
-                                center: .center,
-                                startRadius: 0,
-                                endRadius: 220
-                            )
-                        )
-                        .frame(width: 460, height: 260)
-                        .blur(radius: 44)
-                        .offset(y: 150)
-                }
-                .ignoresSafeArea()
+            // 底部橙光晕已并入 OnboardingBottomFade（纯色长雾层），
+            // 不再在这里单独画一枚 Ellipse —— 避免两层各调各的参数、边缘对不齐。
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
+    }
+}
+
+// MARK: - 底部渐隐托：纯色长雾（pageBg 渐变 + 品牌橙光晕并进同一层）
+//
+// 原先用 VariableBlurBackdrop（单层 ultraThinMaterial，模糊半径恒定、只有透明度在变）：
+// 渐隐区顶部相当于"低透明度的全模糊副本"盖在清晰内容上，在满幅静止照片背后会露出
+// 可见的重影边和亮度台阶（Tab1 能藏住是因为背后是文字气泡+留白，onboarding 背后
+// 是照片，对比更高更暴露）。换成纯色渐变没有"糊掉的副本"，物理上不存在上缘。
+// 品牌橙光晕原来是 OnboardingAuraBackground 里独立的一枚 Ellipse，现在并进这一层，
+// 避免两层各调各的参数、模糊边缘互相对不齐。
+struct OnboardingBottomFade: View {
+    private let height: CGFloat = 186
+
+    var body: some View {
+        // 缓曲线渐变：前 24% 只积累到约 14% 不透明度（慢起步，穿过的文字不会被
+        // 突兀截断），86% 处已完全不透明（把内容在够到按钮前彻底吃掉）。
+        LinearGradient(
+            stops: [
+                .init(color: AppTheme.Color.pageBg.opacity(0), location: 0.0),
+                .init(color: AppTheme.Color.pageBg.opacity(0.14), location: 0.24),
+                .init(color: AppTheme.Color.pageBg, location: 0.86),
+                .init(color: AppTheme.Color.pageBg, location: 1.0)
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        // 品牌橙光晕（参数与旧 OnboardingAuraBackground 版本对齐）用 overlay 叠加，
+        // 而不是与渐变同层的 ZStack 兄弟——overlay 内容不参与基础视图的尺寸上报。
+        // 之前用 ZStack 时，460pt 宽的椭圆会把整个组件的理想宽度顶到 460（超过页面
+        // 实际宽度 ~402pt），父级 .frame(width:) 按理想尺寸居中摆放时会把整页内容
+        // 顶偏，在页面边缘露出相邻页的内容（真机验证过）。
+        .overlay(alignment: .bottom) {
+            Ellipse()
+                .fill(
+                    RadialGradient(
+                        colors: [AppTheme.Color.canvasAura.opacity(0.24), .clear],
+                        center: .center,
+                        startRadius: 0,
+                        endRadius: 220
+                    )
+                )
+                .frame(width: 460, height: 260)
+                .blur(radius: 44)
+                .offset(y: 40)
+                .allowsHitTesting(false)
+        }
+        .frame(height: height)
+        .frame(maxHeight: .infinity, alignment: .bottom)
+        .ignoresSafeArea(edges: .bottom)
+        .allowsHitTesting(false)
     }
 }
 

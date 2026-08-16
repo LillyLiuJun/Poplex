@@ -4,6 +4,16 @@ enum OnboardingStep: Int, CaseIterable {
     case screen1, screen2, screen4
 }
 
+/// 只裁横向、向下留出余量不裁的矩形：三页并排横滑仍需要在左右边界处硬切掉相邻页，
+/// 但底边要延伸出屏幕，让内容能贯穿到物理屏底而不是在安全区下沿被切断。
+private struct HorizontalClipRect: Shape {
+    var extraBottom: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        Path(CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: rect.height + extraBottom))
+    }
+}
+
 struct OnboardingView: View {
     @State private var step: OnboardingStep = .screen1
     @State private var viewModel = OnboardingViewModel()
@@ -38,21 +48,9 @@ struct OnboardingView: View {
                 .offset(x: -CGFloat(index) * geo.size.width)
                 .animation(.easeInOut(duration: 0.35), value: step)
             }
-            .clipped()
-
-            progressDots
-                .padding(.bottom, 20)
-        }
-    }
-
-    private var progressDots: some View {
-        HStack(spacing: 6) {
-            ForEach(OnboardingStep.allCases, id: \.self) { s in
-                Capsule()
-                    .fill(s == step ? AppTheme.Color.brandStrong : AppTheme.Color.neutralFaint)
-                    .frame(width: s == step ? 20 : 6, height: 6)
-                    .animation(.spring(duration: 0.25), value: step)
-            }
+            // 只裁横向（隐藏并排偏移出的相邻页），向下留出大量余量不裁——
+            // 让各页内容能贯穿到物理屏底，而不是在安全区下沿被齐刷刷切断。
+            .clipShape(HorizontalClipRect(extraBottom: 400))
         }
     }
 
@@ -80,6 +78,18 @@ struct OnboardingView: View {
                 .userBubble(text: "Describe this image", image: image, imageStableKey: card.imageName),
                 .aiCard(result)
             ]
+        }
+        // 断网离开：写待重试记录（预设卡未落库 / 照片未生成），Tab1 展示并可 Retry。
+        // 仅断网档写——被拒同图重试必再被拒、其它档罕见，MVP 只覆盖断网场景。
+        // 用粘性标记而非瞬时 errorKind：网络恢复会清掉 errorKind（toast 下线），
+        // 若离开时仍按 errorKind 判断，照片会在「恢复后、离开前」的窗口内丢失。
+        if viewModel.offlineFailureOccurred {
+            // 不变式防御：已落库的预设卡不写待重试记录（当前不可达，防未来加「原地重试」时回归）。
+            if let card = viewModel.selectedCard, !viewModel.presetSavedToServer {
+                PendingRetryStore.shared.savePreset(cardId: card.id, imageName: card.imageName)
+            } else if let image = viewModel.selectedImage, viewModel.generationResult == nil {
+                try? PendingRetryStore.shared.savePhoto(image)
+            }
         }
         // 先记账再销账：远端打标成功（markOnboardingComplete 成功分支）才清待办。
         // 这样即使下面的 Task 来不及执行（如点完立刻杀 app）或断网失败，

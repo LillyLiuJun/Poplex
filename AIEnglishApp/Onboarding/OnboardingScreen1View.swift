@@ -40,9 +40,12 @@ struct OnboardingScreen1View: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
+            OnboardingBottomFade()
+
             OnboardingPrimaryButton(title: "Continue", action: onForward)
                 .padding(.horizontal, AppTheme.Space.paddingPage)
-                .padding(.bottom, AppTheme.Space.paddingScreenBottom)
+                .ignoresSafeArea(.container, edges: .bottom)
+                .padding(.bottom, AppTheme.Size.onboardingContinueBottom)
                 .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.30)
         }
         .contentShape(Rectangle())

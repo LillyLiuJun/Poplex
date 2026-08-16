@@ -7,6 +7,7 @@
 import { SCENE_CATEGORIES } from '../_shared/constants.ts';
 import { LEXICON_STOPWORDS, normalizeLemma, getTier } from '../_shared/lexicon.ts';
 import { buildRawContent, asStr, LearnableUnit, UnifiedRawContent } from './rawContent.ts';
+import { isModelErrorCard } from './modelGate.ts';
 
 const GEMINI_API_KEY    = Deno.env.get("GEMINI_API_KEY") ?? "";
 const GEMINI_URL        = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
@@ -508,6 +509,31 @@ async function uploadImage(
   } catch (e) {
     console.error("[uploadImage] error:", e);
     return null;
+  }
+}
+// 删除已上传图片：被拒内容不入库，也不应留在 Storage（孤儿文件 + 合规风险）。
+// 失败仅记录，不阻塞 422 响应。
+async function deleteImage(path: string | null): Promise<void> {
+  if (!path) return;
+  if (!SUPABASE_URL || !SUPABASE_SVC_KEY) return;
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}/${path}`,
+      {
+        method: "DELETE",
+        headers: {
+          "Authorization": `Bearer ${SUPABASE_SVC_KEY}`,
+          "apikey": SUPABASE_SVC_KEY,
+        },
+      }
+    );
+    if (!res.ok) {
+      console.error("[deleteImage] failed:", res.status, await res.text());
+      return;
+    }
+    console.log(`[deleteImage] ok path=${path}`);
+  } catch (e) {
+    console.error("[deleteImage] error:", e);
   }
 }
 
@@ -1025,14 +1051,27 @@ When STEP 1's OBJECT is the whole input and it has a subject and a predicate:
 
     // 内容被安全过滤器拦截（输入端或输出端）→ 返回可被客户端识别的错误码
     if (data?.promptFeedback?.blockReason) {
+      await deleteImage(sourceImagePath);
       return json({ error: "content_blocked", blockReason: data.promptFeedback.blockReason }, 422);
     }
     if (data?.candidates?.[0]?.finishReason === "SAFETY") {
+      await deleteImage(sourceImagePath);
       return json({ error: "content_blocked", blockReason: "OUTPUT_SAFETY" }, 422);
     }
 
     const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
     const parsed = JSON.parse(raw);
+
+    // 模型层安全门（STEP 0）：模型自行判定为 error 卡（unsafe / meaningless）时，
+    // 与 Gemini API 层拦截同口径返回 422 content_blocked，客户端按「内容被拒」处理。
+    // 提前返回：不写库、不存素材——不安全内容不应落库。
+    if (isModelErrorCard(parsed)) {
+      await deleteImage(sourceImagePath);   // 被拒图片不留在 Storage
+      return json(
+        { error: "content_blocked", blockReason: parsed.card_content?.error_type ?? "MODEL_GATE" },
+        422,
+      );
+    }
 
     // userCreatedAt 在 AI 调用前已锁定，保证早于 assistant 的 DB now()，排序永远正确
     await insertMessage({

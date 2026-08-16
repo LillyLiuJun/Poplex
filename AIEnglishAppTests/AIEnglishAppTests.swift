@@ -344,6 +344,28 @@ struct AIEnvelopeDecodeTests {
         #expect(c.message == "好像没有接收到内容，再说一次？")
     }
 
+    // error 卡缺 message（模型漂移）：解码不失败，message 为 nil，渲染层用兜底文案
+    @Test func decodesErrorCardWithoutMessage() throws {
+        let json = """
+        {
+            "card_type": "error",
+            "card_content": {
+                "error_type": "unsafe"
+            },
+            "extracted_concept": null
+        }
+        """.data(using: .utf8)!
+
+        let envelope = try JSONDecoder().decode(AIEnvelope.self, from: json)
+
+        guard case .error(let c) = envelope.card else {
+            Issue.record("Expected .error card"); return
+        }
+        #expect(c.errorType == "unsafe")
+        #expect(c.message == nil)
+        #expect(envelope.card.primaryEnglish == "This content can't be processed. Try another one.")
+    }
+
     // 容错：granularity/direction 缺失时用默认值（sentence + express），不抛错
     @Test func missingRoutingFieldsFallBackToDefaults() throws {
         let json = """
@@ -407,6 +429,17 @@ private struct PresetCardSavingMock: PresetCardSaving {
     func save(card: PresetCard) async -> Bool { succeeds }
 }
 
+/// 计数 saver：记录被调用次数，可配置成败——供断网跳过落库断言用。
+private final class CountingPresetCardSaver: PresetCardSaving, @unchecked Sendable {
+    private(set) var callCount = 0
+    private let succeeds: Bool
+    init(succeeds: Bool = true) { self.succeeds = succeeds }
+    func save(card: PresetCard) async -> Bool {
+        callCount += 1
+        return succeeds
+    }
+}
+
 /// 第一次抛错、之后成功——模拟"断网发送失败 → 恢复网络后重试成功"。
 /// 用 class（引用语义）才能在多次 generate 调用间共享计数。
 private final class FailOnceMock: AIServicing {
@@ -430,6 +463,14 @@ private final class FailOnceMock: AIServicing {
         }
         """.data(using: .utf8)!
         return try JSONDecoder().decode(AIEnvelope.self, from: json)
+    }
+}
+
+/// 总是抛断网错误的 mock。
+private struct OfflineMock: AIServicing {
+    func generate(text: String?, image: UIImage?, context: ContextTurn?,
+                  presetCardId: String?, source: String?) async throws -> AIEnvelope {
+        throw URLError(.notConnectedToInternet)
     }
 }
 
@@ -539,6 +580,37 @@ struct TodayViewModelTests {
         await vm.send("   ")
         #expect(vm.entries.isEmpty)
     }
+
+    private func makePendingRetryStore(suite: String) -> PendingRetryStore {
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("today-pending-retry-\(suite)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return PendingRetryStore(defaults: defaults, documentsDir: dir)
+    }
+
+    private func hasSendFailed(_ vm: TodayViewModel) -> Bool {
+        vm.entries.contains { if case .sendFailed = $0.content { return true }; return false }
+    }
+
+    // retryPending（photo）失败：记录与照片文件保留（不误删唯一副本）
+    @Test func retryPendingPhotoFailureKeepsRecord() async throws {
+        let store = makePendingRetryStore(suite: "retry-photo-fail")
+        try store.savePhoto(UIImage(systemName: "photo")!)
+        let record = store.load()[0]
+
+        let vm = TodayViewModel(service: FailingMock(), isConsentGranted: { true })
+        vm.pendingRetryStore = store
+        vm.entries = [TimelineEntry.pendingRetry(record)]
+
+        await vm.retryPending(record: record)
+
+        #expect(store.load().count == 1)             // 记录保留
+        #expect(store.photoImage(for: record) != nil) // 照片文件仍在
+        #expect(vm.entries.contains { if case .pendingRetry(let r) = $0.content { return r.id == record.id }; return false })
+        #expect(hasSendFailed(vm) == false)   // 单入口语义：失败不产生 sendFailed 行
+    }
 }
 
 // MARK: - AI consent gate + content-blocked tests (App Store 合规切片)
@@ -559,6 +631,72 @@ struct AIConsentGateTests {
     }
     private func hasLoading(_ vm: TodayViewModel) -> Bool {
         vm.entries.contains { if case .aiLoading = $0.content { return true }; return false }
+    }
+
+    private func makePendingRetryStore(suite: String) -> PendingRetryStore {
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("today-pending-retry-\(suite)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return PendingRetryStore(defaults: defaults, documentsDir: dir)
+    }
+
+    // 待重试记录注入：injectPendingRetry 后时间线顶部有 pendingRetry 条目（不重复注入）
+    @Test func pendingRetryRecordInjectedOnce() {
+        let store = makePendingRetryStore(suite: "inject")
+        store.savePreset(cardId: "1", imageName: "card_scene_1")
+
+        let vm = TodayViewModel(service: SuccessMock(), isConsentGranted: { true })
+        vm.pendingRetryStore = store
+        vm.injectPendingRetry()
+        vm.injectPendingRetry()
+
+        let count = vm.entries.filter { if case .pendingRetry = $0.content { return true }; return false }.count
+        #expect(count == 1)
+    }
+
+    // retryPending（photo）：成功后生成卡片、记录被移除
+    @Test func retryPendingPhotoGeneratesAndClearsRecord() async throws {
+        let store = makePendingRetryStore(suite: "retry-photo")
+        try store.savePhoto(UIImage(systemName: "photo")!)
+        let record = store.load()[0]
+
+        let vm = TodayViewModel(service: SuccessMock(), isConsentGranted: { true })
+        vm.pendingRetryStore = store
+        vm.entries = [TimelineEntry.pendingRetry(record)]
+
+        await vm.retryPending(record: record)
+
+        #expect(store.load().isEmpty)
+        #expect(hasCard(vm) == true)
+        #expect(hasBubble(vm) == true)   // 就地替换为「气泡 + 卡片」——图片不再消失
+        #expect(vm.entries.contains { if case .pendingRetry = $0.content { return true }; return false } == false)
+    }
+
+    // 预设卡 Retry：落库成功 → 记录移除、就地变「气泡 + 卡片」（静态卡内容）
+    @Test func retryPendingPresetCardGeneratesAndClearsRecord() async throws {
+        let store = makePendingRetryStore(suite: "retry-preset")
+        store.savePreset(cardId: "2", imageName: "card_scene_2")
+        let record = store.load()[0]
+
+        let vm = TodayViewModel(service: SuccessMock(), isConsentGranted: { true })
+        vm.pendingRetryStore = store
+        vm.presetCardSaver = PresetCardSavingMock(succeeds: true)
+        vm.entries = [TimelineEntry.pendingRetry(record)]
+
+        await vm.retryPending(record: record)
+
+        #expect(store.load().isEmpty)
+        #expect(hasCard(vm) == true)
+        #expect(hasBubble(vm) == true)
+        #expect(vm.entries.contains { if case .pendingRetry = $0.content { return true }; return false } == false)
+    }
+    private func rejectedEntry(_ vm: TodayViewModel) -> (text: String?, wasImage: Bool)? {
+        for e in vm.entries {
+            if case .userRejected(let t, let w) = e.content { return (t, w) }
+        }
+        return nil
     }
 
     // 未同意：只弹同意页 + 暂存输入，不追加气泡 / 卡片 / loading，不触发生成
@@ -592,14 +730,47 @@ struct AIConsentGateTests {
         #expect(vm.showAIConsent == false)
     }
 
-    // 内容被安全过滤拦截：设 contentBlockedMessage、移除 loading、不产出卡片
-    @Test func contentBlockedSetsMessageAndRemovesLoading() async {
+    // 图片被拒：userBubble 就地转 userRejected(wasImage: true)、loading 移除、不再有弹窗字段
+    @Test func contentBlockedImageConvertsBubbleToRejected() async {
+        let vm = TodayViewModel(service: ContentBlockedMock(), isConsentGranted: { true })
+        vm.pendingImage = UIImage(systemName: "photo")!
+        await vm.send("")
+
+        let r = rejectedEntry(vm)
+        #expect(r != nil)
+        #expect(r?.wasImage == true)
+        #expect(r?.text == "Describe this image")
+        #expect(hasBubble(vm) == false)     // 原气泡已转换，时间线不再有 userBubble
+        #expect(hasCard(vm) == false)       // 回归护栏：被拒路径不应产生卡片
+        #expect(hasLoading(vm) == false)
+        #expect(vm.isLoading == false)
+    }
+
+    // 文本被拒：气泡文本原样保留、wasImage == false
+    @Test func contentBlockedTextKeepsBubbleTextAsRejected() async {
         let vm = TodayViewModel(service: ContentBlockedMock(), isConsentGranted: { true })
         await vm.send("something the filter rejects")
 
-        #expect(vm.contentBlockedMessage != nil)
-        #expect(hasCard(vm) == false)
-        #expect(hasLoading(vm) == false)   // loading 条目已被移除，不残留
+        let r = rejectedEntry(vm)
+        #expect(r != nil)
+        #expect(r?.wasImage == false)
+        #expect(r?.text == "something the filter rejects")
+        #expect(hasBubble(vm) == false)
+        #expect(hasLoading(vm) == false)
+        #expect(vm.isLoading == false)
+    }
+
+    // 图文混合被拒：文本原样 + wasImage == true
+    @Test func contentBlockedMixedKeepsTextAndMarksImage() async {
+        let vm = TodayViewModel(service: ContentBlockedMock(), isConsentGranted: { true })
+        vm.pendingImage = UIImage(systemName: "photo")!
+        await vm.send("check this photo")
+
+        let r = rejectedEntry(vm)
+        #expect(r?.wasImage == true)
+        #expect(r?.text == "check this photo")
+        #expect(hasBubble(vm) == false)
+        #expect(hasLoading(vm) == false)
         #expect(vm.isLoading == false)
     }
 }
@@ -786,6 +957,63 @@ struct LocalCacheTests {
     }
 }
 
+// MARK: - PendingRetryStore tests
+
+struct PendingRetryStoreTests {
+
+    private func makeStore(suite: String) -> (PendingRetryStore, URL, UserDefaults) {
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("pending-retry-tests-\(suite)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return (PendingRetryStore(defaults: defaults, documentsDir: dir), dir, defaults)
+    }
+
+    // 预设卡记录：写入 → 新实例读取（杀 app 语义）→ 字段完整
+    @Test func presetRecordSurvivesReload() {
+        let (store, dir, defaults) = makeStore(suite: "pending-retry-preset")
+        store.savePreset(cardId: "2", imageName: "card_scene_2")
+
+        let reloaded = PendingRetryStore(defaults: defaults, documentsDir: dir)
+        let records = reloaded.load()
+        #expect(records.count == 1)
+        #expect(records[0].source == .presetCard)
+        #expect(records[0].presetCardId == "2")
+        #expect(records[0].presetImageName == "card_scene_2")
+    }
+
+    // 照片记录：照片落盘 → 新实例读取 → 图片往返一致
+    @Test func photoRecordSurvivesReloadWithImage() throws {
+        let (store, dir, defaults) = makeStore(suite: "pending-retry-photo")
+        let image = UIImage(systemName: "photo")!
+        try store.savePhoto(image)
+
+        let reloaded = PendingRetryStore(defaults: defaults, documentsDir: dir)
+        let records = reloaded.load()
+        #expect(records.count == 1)
+        #expect(records[0].source == .photo)
+        let restored = reloaded.photoImage(for: records[0])
+        #expect(restored != nil)
+        // SF Symbol 原图的 point 尺寸与 JPEG 重解码后的像素尺寸不同，只断言图回来了且非空
+        #expect(restored?.size != .zero)
+    }
+
+    // remove：删除后 load 为空，且照片文件被清理
+    @Test func removeClearsRecordAndFile() throws {
+        let (store, dir, defaults) = makeStore(suite: "pending-retry-remove")
+        let image = UIImage(systemName: "photo")!
+        try store.savePhoto(image)
+        let record = store.load()[0]
+
+        store.remove(id: record.id)
+
+        let reloaded = PendingRetryStore(defaults: defaults, documentsDir: dir)
+        #expect(reloaded.load().isEmpty)
+        #expect(reloaded.photoImage(for: record) == nil)
+    }
+}
+
 // MARK: - ImageCache tests
 
 struct ImageCacheTests {
@@ -899,6 +1127,48 @@ struct MessageRecordImageFieldsTests {
             Issue.record("Expected userBubble entry"); return
         }
         #expect(text == "Describe this image")
+    }
+}
+
+// MARK: - OnboardingErrorKind classify tests
+
+struct OnboardingErrorKindTests {
+
+    // contentBlocked 优先于一切：即使网络正常也判被拒
+    @Test func contentBlockedWinsEvenWhenConnected() {
+        #expect(OnboardingErrorKind.classify(error: AIServiceError.contentBlocked, isConnected: true) == .contentBlocked)
+    }
+
+    // 断网类 URLError 码逐个归 offline
+    @Test func offlineURLErrorCodesMapToOffline() {
+        #expect(OnboardingErrorKind.classify(error: URLError(.notConnectedToInternet), isConnected: true) == .offline)
+        #expect(OnboardingErrorKind.classify(error: URLError(.networkConnectionLost), isConnected: true) == .offline)
+        #expect(OnboardingErrorKind.classify(error: URLError(.dataNotAllowed), isConnected: true) == .offline)
+        #expect(OnboardingErrorKind.classify(error: URLError(.internationalRoamingOff), isConnected: true) == .offline)
+    }
+
+    // NetworkMonitor 兜底：非断网码但设备无网 → offline
+    @Test func disconnectedFallbackMapsToOffline() {
+        #expect(OnboardingErrorKind.classify(error: URLError(.timedOut), isConnected: false) == .offline)
+    }
+
+    // 有网时的超时 / 服务器错误 → generic
+    @Test func serverAndTimeoutMapToGenericWhenConnected() {
+        #expect(OnboardingErrorKind.classify(error: URLError(.timedOut), isConnected: true) == .generic)
+        #expect(OnboardingErrorKind.classify(error: URLError(.badServerResponse), isConnected: true) == .generic)
+    }
+
+    // 服务层其它错误与未知错误 → generic
+    @Test func otherErrorsMapToGeneric() {
+        #expect(OnboardingErrorKind.classify(error: AIServiceError.decodingFailed, isConnected: true) == .generic)
+        #expect(OnboardingErrorKind.classify(error: NSError(domain: "test", code: 1), isConnected: true) == .generic)
+    }
+
+    // 状态条文案映射：断网/其它有文案且常驻；被拒不映射（走 toast）
+    @Test func failureBarCopyMapping() {
+        #expect(OnboardingErrorKind.offline.failureBarCopy == "Network unavailable. Check your network and try again.")
+        #expect(OnboardingErrorKind.generic.failureBarCopy == "Something went wrong. Please try again.")
+        #expect(OnboardingErrorKind.contentBlocked.failureBarCopy == nil)
     }
 }
 
@@ -1036,20 +1306,21 @@ struct OnboardingViewModelTests {
         #expect(vm.selectedImage == nil)
         #expect(vm.generationResult == nil)
         #expect(vm.isLoading == false)
-        #expect(vm.errorMessage == nil)
-        #expect(vm.retryCount == 0)
+        #expect(vm.errorKind == nil)
     }
 
     // startWithCard 成功：selectedCard 已设、selectedImage 清空、generationResult 有值、loading 回 false
     @Test func startWithCardSuccessSetsResult() async {
-        let vm = OnboardingViewModel(service: SuccessMock())
+        let vm = OnboardingViewModel(
+            service: SuccessMock(),
+            presetCardSaver: PresetCardSavingMock(succeeds: true)
+        )
         await vm.startWithCard(sampleCard)
         #expect(vm.selectedCard?.id == sampleCard.id)
         #expect(vm.selectedImage == nil)
         #expect(vm.generationResult != nil)
         #expect(vm.isLoading == false)
-        #expect(vm.errorMessage == nil)
-        #expect(vm.retryCount == 0)
+        #expect(vm.errorKind == nil)
     }
 
     // startWithImage 成功：selectedImage 已设、selectedCard 清空
@@ -1073,35 +1344,23 @@ struct OnboardingViewModelTests {
         #expect(vm.selectedImage == nil)
     }
 
-    // generate 失败：errorMessage 有值、retryCount 为 1、generationResult 为 nil、loading 回 false
-    // 走 startWithImage：失败语义只存在于自选照片的真实 API 路径；
-    // 预设卡是静态零 API 路径，永远不会失败（见 OnboardingViewModel.generate 注释）。
-    @Test func generateFailureSetsErrorAndIncrementsRetry() async {
+    // generate 失败（服务器错误类）：errorKind == .generic、generationResult 为 nil、loading 回 false
+    @Test func generateFailureSetsErrorKind() async {
         let vm = OnboardingViewModel(service: FailingMock())
         await vm.startWithImage(UIImage(systemName: "photo")!)
-        #expect(vm.errorMessage != nil)
-        #expect(vm.retryCount == 1)
+        #expect(vm.errorKind == .generic)
         #expect(vm.generationResult == nil)
         #expect(vm.isLoading == false)
     }
 
-    // 连续失败两次：retryCount 累加到 2
-    @Test func repeatedFailuresAccumulateRetryCount() async {
-        let vm = OnboardingViewModel(service: FailingMock())
-        await vm.startWithImage(UIImage(systemName: "photo")!)
-        await vm.retry()
-        #expect(vm.retryCount == 2)
-    }
-
-    // retry 成功（第一次失败后 retry）：retryCount 归零、generationResult 有值、errorMessage 清空
+    // retry 成功（第一次断网失败后 retry）：generationResult 有值、errorKind 清空
     @Test func retryAfterFailureSucceeds() async {
         let vm = OnboardingViewModel(service: FailOnceMock())
         await vm.startWithImage(UIImage(systemName: "photo")!)
-        #expect(vm.retryCount == 1)
+        #expect(vm.errorKind == .offline)
         await vm.retry()
         #expect(vm.generationResult != nil)
-        #expect(vm.retryCount == 0)
-        #expect(vm.errorMessage == nil)
+        #expect(vm.errorKind == nil)
         #expect(vm.isLoading == false)
     }
 
@@ -1117,16 +1376,94 @@ struct OnboardingViewModelTests {
         #expect(vm.presetSavedToServer == true)
     }
 
-    // 预设卡落库失败（断网/服务端错误）：presetSavedToServer = false →
-    // seed 兜底本次进程的 Tab1 首屏展示
-    @Test func startWithCardSaveFailureKeepsSeedPath() async {
+    // 预设卡落库失败：与自选图「请求失败」同规则——断网档失败态，不展示完整卡片、
+    // 粘性标记置位（离开写待重试记录）。不再信 NetworkMonitor（真机飞行模式可能误报有网）。
+    @Test func startWithCardSaveFailureFallsToOfflineState() async {
         let vm = OnboardingViewModel(
             service: SuccessMock(),
-            presetCardSaver: PresetCardSavingMock(succeeds: false)
+            presetCardSaver: PresetCardSavingMock(succeeds: false),
+            isConnected: { true }   // 监控说有网，但落库失败——以落库结果为真相
         )
         await vm.startWithCard(sampleCard)
-        #expect(vm.generationResult != nil)
+        #expect(vm.generationResult == nil)          // 不展示完整卡片
         #expect(vm.presetSavedToServer == false)
+        #expect(vm.errorKind == .offline)            // 断网档
+        #expect(vm.offlineFailureOccurred == true)   // 写待重试记录
+        #expect(vm.isLoading == false)
+    }
+
+    // 预设卡断网：始终真实尝试落库（不预判网络——真机监控不可靠），落库失败 → 不生成内容、
+    // errorKind == .offline、粘性标记置位。与自选图断网完全同构。
+    @Test func presetCardOfflineFailsSaveAndDoesNotGenerate() async {
+        let saver = CountingPresetCardSaver(succeeds: false)   // 模拟断网时落库失败
+        let vm = OnboardingViewModel(
+            service: SuccessMock(),
+            presetCardSaver: saver,
+            isConnected: { false }
+        )
+        await vm.startWithCard(PresetCard.all[0])
+        #expect(vm.generationResult == nil)          // 落库失败不生成内容
+        #expect(saver.callCount == 1)                // 始终真实尝试（不预判）
+        #expect(vm.presetSavedToServer == false)
+        #expect(vm.errorKind == .offline)
+        #expect(vm.offlineFailureOccurred == true)
+        #expect(vm.isLoading == false)
+    }
+
+    // 预设卡有网：落库照常（回归 #28 语义）
+    @Test func presetCardOnlineStillSaves() async {
+        let saver = CountingPresetCardSaver(succeeds: true)
+        let vm = OnboardingViewModel(
+            service: SuccessMock(),
+            presetCardSaver: saver,
+            isConnected: { true }
+        )
+        await vm.startWithCard(sampleCard)
+        #expect(saver.callCount == 1)
+        #expect(vm.presetSavedToServer == true)
+        #expect(vm.errorKind == nil)
+        #expect(vm.generationResult != nil)   // 有网生成静态卡内容（#28 显式守护）
+    }
+
+    // 断网：errorKind == .offline
+    @Test func offlineFailureClassifiedAsOffline() async {
+        let vm = OnboardingViewModel(service: OfflineMock())
+        await vm.startWithImage(UIImage(systemName: "photo")!)
+        #expect(vm.errorKind == .offline)
+    }
+
+    // 内容被拒：errorKind == .contentBlocked
+    @Test func contentBlockedClassifiedAsBlocked() async {
+        let vm = OnboardingViewModel(service: ContentBlockedMock())
+        await vm.startWithImage(UIImage(systemName: "photo")!)
+        #expect(vm.errorKind == .contentBlocked)
+    }
+
+    // 被拒：rejectSelection 清空选中（图片不上屏、回空上传区）、errorKind 保留驱动 toast、
+    // 粘性标记不受影响
+    @Test func contentBlockedRejectsSelectionAndKeepsErrorKind() async {
+        let vm = OnboardingViewModel(service: ContentBlockedMock(), isConnected: { true })
+        await vm.startWithImage(UIImage(systemName: "photo")!)
+        #expect(vm.errorKind == .contentBlocked)
+        #expect(vm.selectedImage == nil)
+        #expect(vm.selectedCard == nil)
+        #expect(vm.generationResult == nil)
+        #expect(vm.isLoading == false)
+        #expect(vm.offlineFailureOccurred == false)
+    }
+
+    // Try again 链路：断网失败 → 网络恢复 → retry() 原素材重新生成成功
+    @Test func retryWhileOfflineFailsSafely() async {
+        let vm = OnboardingViewModel(service: OfflineMock(), isConnected: { false })
+        await vm.startWithImage(UIImage(systemName: "photo")!)
+        #expect(vm.errorKind == .offline)
+        #expect(vm.generationResult == nil)
+
+        // 模拟网络恢复后的重试：同 VM 不可换 mock——改用「恢复后重新生成」语义：
+        // retry() 仍走同一个 OfflineMock 会再失败，因此这里验证 retry 入口存在且再次落 offline。
+        await vm.retry()
+        #expect(vm.errorKind == .offline)
+        #expect(vm.offlineFailureOccurred == true)
     }
 
     // reset：所有状态回到初始值
@@ -1138,8 +1475,7 @@ struct OnboardingViewModelTests {
         #expect(vm.selectedImage == nil)
         #expect(vm.generationResult == nil)
         #expect(vm.isLoading == false)
-        #expect(vm.errorMessage == nil)
-        #expect(vm.retryCount == 0)
+        #expect(vm.errorKind == nil)
     }
 
     // 无选中时 generate 早退：isLoading 回 false，不修改其他状态
@@ -1148,7 +1484,23 @@ struct OnboardingViewModelTests {
         await vm.generate()
         #expect(vm.isLoading == false)
         #expect(vm.generationResult == nil)
-        #expect(vm.errorMessage == nil)
+        #expect(vm.errorKind == nil)
+    }
+
+    // 断网失败的粘性标记：状态条不随恢复消失（errorKind 保留到用户行动），
+    // 粘性标记只在 reset() 时抹掉——离开时仍写待重试记录（防内容丢失窗口）
+    @Test func offlineFailureFlagIsStickyUntilReset() async {
+        let vm = OnboardingViewModel(service: OfflineMock(), isConnected: { false })
+        await vm.startWithImage(UIImage(systemName: "photo")!)
+        #expect(vm.errorKind == .offline)
+        #expect(vm.offlineFailureOccurred == true)
+
+        // 失败态保留：不自动清除（重试入口稳定）
+        #expect(vm.errorKind == .offline)
+
+        vm.reset()
+        #expect(vm.errorKind == nil)
+        #expect(vm.offlineFailureOccurred == false)
     }
 }
 

@@ -7,7 +7,12 @@ final class TodayViewModel {
     var isLoading = false
     var isLoadingHistory = false
     var pendingImage: UIImage?
-    var contentBlockedMessage: String?
+    /// 待重试记录存储（可注入，便于单测）；loadHistory 时把记录注入时间线。
+    var pendingRetryStore = PendingRetryStore.shared
+    /// 预设卡落库（可注入，便于单测 presetCard Retry 分支）。
+    var presetCardSaver: PresetCardSaving = LivePresetCardSaver()
+    /// 无网点 Retry 等场景的轻提示（视图挂 toast，自动消失）。
+    var offlineHint: String?
     let session = ConversationSession()
 
     private let service: AIServicing
@@ -40,6 +45,8 @@ final class TodayViewModel {
             if !seed.isEmpty {
                 entries = entries + seed
             }
+            // 断网待重试记录：本地持久化的「未生成内容」始终展示（杀 app 不丢）。
+            injectPendingRetry()
         }
 
         // 1) 先读本地缓存并立即渲染——仅当时间线还空着、且本次会话未产生实时对话。
@@ -160,10 +167,11 @@ final class TodayViewModel {
         }
 
         let bubbleText = textToSend ?? (image != nil ? "Describe this image" : nil)
-        entries.append(TimelineEntry.userBubble(text: bubbleText, image: image))
+        let bubbleEntry = TimelineEntry.userBubble(text: bubbleText, image: image)
+        entries.append(bubbleEntry)
         pendingImage = nil
 
-        await runGeneration(text: textToSend, image: image)
+        await runGeneration(text: textToSend, image: image, userBubbleEntryId: bubbleEntry.id)
     }
 
     /// 用户在 AIConsentView 点击"同意"后调用：清暂存、自动重发。
@@ -177,15 +185,88 @@ final class TodayViewModel {
     /// 用户点击"重试"：不重复生成用户气泡（它已在上方保留），仅移除失败提示后重新发起生成。
     func retrySend(text: String?, image: UIImage?, failedEntryId: UUID) async {
         entries.removeAll { $0.id == failedEntryId }
-        await runGeneration(text: text, image: image)
+        await runGeneration(text: text, image: image, userBubbleEntryId: nil)
     }
 
-    /// 发起一次 AI 生成：追加 loading → 成功换成卡片 / 失败换成可重试的 sendFailed。
+    /// 把持久化的待重试记录注入时间线顶部（幂等：已有同 id 条目则跳过）。
+    func injectPendingRetry() {
+        let pending = pendingRetryStore.load()
+        for record in pending where !entries.contains(where: {
+            if case .pendingRetry(let r) = $0.content { return r.id == record.id }
+            return false
+        }) {
+            entries.insert(TimelineEntry.pendingRetry(record), at: 0)
+        }
+    }
+
+    /// 待重试记录 Retry：photo 走 AI 生成；presetCard 走静态卡 + 落库。
+    /// 防重入（isLoading 全程占用，刷新不在此期间替换时间线）；成功后把记录就地替换为
+    /// 「图片气泡 + 卡片」（与 Tab1 正常输入输出一致，图片不消失）；失败保留记录（用户可再试）。
+    func retryPending(record: PendingRetryRecord) async {
+        guard !isLoading else { return }
+        switch record.source {
+        case .photo:
+            guard let image = pendingRetryStore.photoImage(for: record) else { return }
+            // runGeneration 自行管理 isLoading（期间刷新被 guard 挡住，不替换时间线）
+            let card = await runGeneration(text: nil, image: image, userBubbleEntryId: nil, failureMode: .silent, insertCard: false)
+            if let card {
+                pendingRetryStore.remove(id: record.id)
+                replacePendingRetryWithBubbleAndCard(record: record, image: image, card: card)
+            }
+        case .presetCard:
+            guard let card = PresetCard.all.first(where: { $0.id == record.presetCardId }) else { return }
+            // 预设卡分支显式占用 isLoading：落库期间回前台刷新不会替换时间线，
+            // 避免「记录已删、卡片未插」的两头落空竞态（生产验证）。
+            isLoading = true
+            let saved = await presetCardSaver.save(card: card)
+            isLoading = false
+            if saved {
+                pendingRetryStore.remove(id: record.id)
+                replacePendingRetryWithBubbleAndCard(record: record, image: UIImage(named: card.imageName), card: card.staticCard)
+            }
+        }
+    }
+
+    /// 把待重试记录就地替换为「图片气泡 + 卡片」——图片不再消失，形态与正常输入一致。
+    /// 若时间线已找不到记录行（如刷新重建过），兜底把卡片直接插入顶部，不丢内容。
+    private func replacePendingRetryWithBubbleAndCard(record: PendingRetryRecord, image: UIImage?, card: AICard) {
+        guard let idx = entries.firstIndex(where: {
+            if case .pendingRetry(let r) = $0.content { return r.id == record.id }
+            return false
+        }) else {
+            entries.insert(TimelineEntry.userBubble(text: "Describe this image", image: image), at: 0)
+            entries.insert(TimelineEntry.aiCard(card), at: 1)
+            return
+        }
+        let entryId = entries[idx].id
+        let createdAt = entries[idx].createdAt
+        entries[idx] = TimelineEntry(
+            id: entryId, createdAt: createdAt,
+            content: .userBubble(text: "Describe this image", image: image, imageUrl: nil, imageStableKey: nil)
+        )
+        entries.insert(TimelineEntry(id: UUID(), createdAt: createdAt, content: .aiCard(card)), at: idx + 1)
+    }
+
+    /// 生成失败时 loading 条目的处置方式。
+    /// - sendFailed：换成可点击重试的 sendFailed 行（Tab1 常规发送路径）
+    /// - silent：直接移除（待重试记录路径——pendingRetry 行保持唯一重试入口，不出现双入口）
+    enum RunGenerationFailure {
+        case sendFailed
+        case silent
+    }
+
+    /// 发起一次 AI 生成：追加 loading → 成功换成卡片 / 失败按 failureMode 处置。
     /// 用户气泡由调用方负责，这里只管"生成"这一步，故 send 与 retry 可复用。
-    private func runGeneration(text: String?, image: UIImage?) async {
+    /// 返回生成的卡片（nil = 失败）：调用方据此判定「本次生成」成败，
+    /// 不能靠数时间线里的 aiCard 数量——并发 loadHistory 会污染计数。
+    /// `insertCard: false` 时成功只移除 loading 并返回卡片，由调用方就地插入
+    /// （待重试记录路径：气泡与卡片就地落到原记录位置）。
+    @discardableResult
+    private func runGeneration(text: String?, image: UIImage?, userBubbleEntryId: UUID?, failureMode: RunGenerationFailure = .sendFailed, insertCard: Bool = true) async -> AICard? {
         let loadingEntry = TimelineEntry.aiLoading()
         entries.append(loadingEntry)
         isLoading = true
+        defer { isLoading = false }
 
         do {
             let envelope = try await service.generate(
@@ -195,7 +276,11 @@ final class TodayViewModel {
                 presetCardId: nil,
                 source: "tab1"
             )
-            replace(loadingEntry.id, with: .aiCard(envelope.card))
+            if insertCard {
+                replace(loadingEntry.id, with: .aiCard(envelope.card))
+            } else {
+                entries.removeAll { $0.id == loadingEntry.id }
+            }
             let userContent = text ?? (image != nil ? "[photo]" : nil)
             if let userContent {
                 session.onAIResponseReceived(
@@ -205,15 +290,38 @@ final class TodayViewModel {
                     image: image
                 )
             }
+            return envelope.card
         } catch AIServiceError.contentBlocked {
-            // 内容被安全过滤器拦截：移除 loading 条目，显示友好提示。
+            // 内容被安全过滤拦截：移除 loading，按 id 定位对应的用户气泡就地转为「被拒」形态
+            // （图片 → 占位块；文本 → 原样），不再弹窗、不保留原图。
             entries.removeAll { $0.id == loadingEntry.id }
-            contentBlockedMessage = "This moment can't be turned into a lesson. Try another one."
+            if let bubbleId = userBubbleEntryId,
+               let idx = entries.firstIndex(where: { $0.id == bubbleId }),
+               case .userBubble(let bubbleText, let bubbleImage, let bubbleImageUrl, _) = entries[idx].content {
+                entries[idx] = TimelineEntry(
+                    id: entries[idx].id,
+                    createdAt: entries[idx].createdAt,
+                    content: .userRejected(
+                        text: bubbleText,
+                        wasImage: bubbleImage != nil || bubbleImageUrl != nil
+                    )
+                )
+            } else {
+                // 兜底：按 id 找不到气泡（异常路径）时补一条被拒条目
+                entries.append(TimelineEntry.userRejected(text: text, wasImage: image != nil))
+            }
+            return nil
         } catch {
-            // 失败（含断网）：保留用户气泡，换成可点击重试的提示，原始输入随 entry 带着以便重发。
-            replace(loadingEntry.id, with: .sendFailed(text: text, image: image))
+            // 失败（含断网）：常规发送路径保留用户气泡、换成可点击重试的提示，原始输入随 entry 带着以便重发；
+            // 待重试记录路径静默移除 loading——pendingRetry 行保持唯一重试入口，不出现第二个入口。
+            switch failureMode {
+            case .sendFailed:
+                replace(loadingEntry.id, with: .sendFailed(text: text, image: image))
+            case .silent:
+                entries.removeAll { $0.id == loadingEntry.id }
+            }
+            return nil
         }
-        isLoading = false
     }
 
     // MARK: - Private

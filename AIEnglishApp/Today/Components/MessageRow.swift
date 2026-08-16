@@ -5,6 +5,7 @@ struct TimelineRow: View {
     let entry: TimelineEntry
     var onImageTap: ((UIImage, CGRect) -> Void)? = nil
     var onRetry: ((_ text: String?, _ image: UIImage?, _ entryId: UUID) -> Void)? = nil
+    var onRetryPending: ((PendingRetryRecord) -> Void)? = nil
 
     var body: some View {
         switch entry.content {
@@ -18,8 +19,88 @@ struct TimelineRow: View {
             ErrorBanner(message: message)
         case .sendFailed(let text, let image):
             SendFailedRow { onRetry?(text, image, entry.id) }
+        case .userRejected(let text, let wasImage):
+            UserRejectedRow(text: text, wasImage: wasImage)
+        case .pendingRetry(let record):
+            PendingRetryRow(record: record) { onRetryPending?(record) }
         case .dateSeparator(let label):
             DateSeparatorView(label: label)
+        }
+    }
+}
+
+// MARK: - 断网待重试记录：与 Tab1 正常输入视觉一致——
+// 图片气泡（图 + "Describe this image"）+ 下方错误行（样式同 SendFailedRow，点击重试）
+struct PendingRetryRow: View {
+    let record: PendingRetryRecord
+    var onRetry: () -> Void
+
+    var body: some View {
+        VStack(alignment: .trailing, spacing: AppTheme.Space.paddingXS) {
+            UserBubble(
+                text: "Describe this image",
+                image: PendingRetryStore.shared.photoImage(for: record),
+                imageUrl: nil,
+                imageStableKey: nil
+            )
+
+            Button(action: onRetry) {
+                HStack(spacing: AppTheme.Space.paddingXS) {
+                    Image(systemName: "exclamationmark.arrow.circlepath")
+                        .imageScale(.small)
+                    Text("You were offline, so this wasn't generated. Tap to retry.")
+                        .font(AppTheme.Font.chineseFaint)
+                }
+                .foregroundStyle(AppTheme.Color.danger)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                .padding(.vertical, AppTheme.Space.paddingXS)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+}
+
+// MARK: - 被拒条目：图片转占位块（不合规图片不上屏），文本原样；下方一行轻提示
+private struct UserRejectedRow: View {
+    let text: String?
+    let wasImage: Bool
+    private let imageSize = UIScreen.main.bounds.width * 0.3   // 与 UserBubble 同尺寸，保持时间线节奏
+
+    var body: some View {
+        VStack(alignment: .trailing, spacing: AppTheme.Space.paddingS) {
+            if let text, !text.isEmpty {
+                Text(text)
+                    .font(AppTheme.Font.englishBody)
+                    .foregroundStyle(AppTheme.Color.bubbleUserText)
+                    .padding(.horizontal, AppTheme.Space.paddingCard)
+                    .padding(.vertical, AppTheme.Space.paddingS)
+                    .background(AppTheme.Color.bubbleUserBg, in: RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
+            }
+
+            if wasImage {
+                RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
+                    .fill(AppTheme.Color.imagePlaceholderBg)
+                    .frame(width: imageSize, height: imageSize)
+                    .overlay(
+                        VStack(spacing: AppTheme.Space.paddingS) {
+                            Image(systemName: "exclamationmark.triangle")
+                                .font(.system(size: 22, weight: .medium))
+                                .foregroundStyle(AppTheme.Color.textMuted)
+                            Text("Content blocked")
+                                .font(AppTheme.Font.statusNote)
+                                .foregroundStyle(AppTheme.Color.textMuted)
+                        }
+                    )
+            }
+
+            HStack(spacing: AppTheme.Space.paddingXS) {
+                Image(systemName: "info.circle")
+                    .imageScale(.small)
+                Text("This content can't be processed. Try another one.")
+                    .font(AppTheme.Font.chineseFaint)
+            }
+            .foregroundStyle(AppTheme.Color.textMuted)
+            .frame(maxWidth: .infinity, alignment: .center)
         }
     }
 }
@@ -115,7 +196,7 @@ private struct AICardView: View {
     var body: some View {
         switch card {
         case .card(let c):  AICardBody(content: c)
-        case .error(let c): ErrorBanner(message: c.message)
+        case .error(let c): ErrorBanner(message: c.message ?? "This content can't be processed. Try another one.")
         }
     }
 }
