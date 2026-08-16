@@ -19,26 +19,36 @@ struct AIConsentView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: AppTheme.Space.paddingCard) {
-                Text("Before you continue")
-                    .font(AppTheme.Font.sectionTitleSerif)
-                    .foregroundStyle(AppTheme.Color.textPrimary)
+            // 标题固定在弹窗顶部：滚动阅读文案时弹窗"身份"始终可见
+            // （与系统权限弹窗惯例一致——标题与按钮固定，中间内容滚动）。
+            Text("Before you continue")
+                .font(AppTheme.Font.sectionTitleSerif)
+                .foregroundStyle(AppTheme.Color.textPrimary)
+                .padding(.bottom, AppTheme.Space.paddingCard)
 
-                Text("This content is generated through Google's Gemini API. We don't collect your real identity or use your data for ads. You can delete all your data anytime in Settings.")
-                    .font(AppTheme.Font.englishBody)
-                    .foregroundStyle(AppTheme.Color.textSecondary)
-                    .lineSpacing(AppTheme.Typography.lineBody)
+            // 文案区可滚：小屏/大字号下文案变长时在弹窗内滚动，按钮始终可见。
+            // 弹窗尺寸不变（medium detent），正常字号下无感。
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: AppTheme.Space.paddingCard) {
+                    Text("This content is generated through Google's Gemini API. We don't collect your real identity or use your data for ads. You can delete all your data anytime in Settings.")
+                        .font(AppTheme.Font.englishBody)
+                        .foregroundStyle(AppTheme.Color.textSecondary)
+                        .lineSpacing(AppTheme.Typography.lineBody)
 
-                Button {
-                    showPrivacy = true
-                } label: {
-                    Text("Learn more in our Privacy Policy")
-                        .font(AppTheme.Font.buddy)
-                        .foregroundStyle(AppTheme.Color.brandStrong)
+                    Button {
+                        showPrivacy = true
+                    } label: {
+                        Text("Learn more in our Privacy Policy")
+                            .font(AppTheme.Font.buddy)
+                            .foregroundStyle(AppTheme.Color.brandStrong)
+                    }
                 }
             }
-
-            Spacer()
+            // 理想高度声明为 0：弹窗协商高度时不会把「文案完整高度」算进去，
+            // sheet 保持 medium 半屏不撑高；运行时再拿「弹窗总高 - 标题 - 按钮区」的
+            // 剩余空间，内容超出时才能滚动。
+            .frame(minHeight: 0, idealHeight: 0, maxHeight: .infinity)
+            .scrollBounceBehavior(.basedOnSize)
 
             VStack(spacing: AppTheme.Space.paddingM) {
                 Button {

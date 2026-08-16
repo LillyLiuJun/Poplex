@@ -426,7 +426,11 @@ enum AppTheme {
         static let onboardingUploadDashGap: CGFloat         = 6   // 空输入区虚线间距
         static let disabledControlBorderWidth: CGFloat      = 1   // 大面积禁用 CTA 的轻描边
         static let onboardingMaxPhotoAspectRatio: CGFloat   = 2.25 // 接受常规手机全屏截图；更长/更宽素材需重选
-        static let onboardingPreviewHeight: CGFloat         = 200 // 无法读取图片尺寸时的预览高度兜底
+        // 照片预览区的固定开销 = 按钮避让 80 + 顶部占位 56 + 照片区上间距 16 + 正常字号标题区参考高 165。
+        // 预览区最小高度 = 视口 - 该值：正常字号恰好顶到 Continue 按钮上方；
+        // 大字号/小屏时预览区不压缩、保持此高度，页面转为可滚动。
+        // 注意：标题区参考高随 Dynamic Type 变化，此常数只用于「正常字号」基准，偏差仅影响临界点。
+        static let onboardingPhotoPreviewFixedOverhead: CGFloat = 317
         static let onboardingContentBottomClearance: CGFloat = 80 // Continue 槽位避让（内容底进遮罩渐隐区，不钻按钮背后）
         static let onboardingContinueBottom: CGFloat = 8 // Continue 距屏幕底（配合 ignoresSafeArea 贴系统条上方；真机调）
         static let inputBarMinHeight: CGFloat = 52 // 底部胶囊最小高度（Tab1 InputBar / Onboarding Continue 对齐）
@@ -445,8 +449,6 @@ enum AppTheme {
         static let tabSelection: Animation = .spring(response: 0.34, dampingFraction: 0.72)
         // 顶栏滚动紧凑/恢复：稍快，确保不拖延内容阅读
         static let topBarCompact: Animation = .spring(response: 0.30, dampingFraction: 0.82)
-        // Onboarding 选图后仅在图片侵入固定 CTA 安全区时补一次滚动；短促、不抢图片本身。
-        static let onboardingPhotoAutoScroll: Animation = .easeOut(duration: 0.3)
         // 分类成长：toast 先出现 0.25s，再用 0.45s 补满；结果读完后移动分类。
         static let categoryProgressUpdate: Animation = .easeOut(duration: 0.4)
         static let categoryMilestone: Animation = .easeOut(duration: 0.45)
