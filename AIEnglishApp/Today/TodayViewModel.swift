@@ -188,14 +188,16 @@ final class TodayViewModel {
         await runGeneration(text: text, image: image, userBubbleEntryId: nil)
     }
 
-    /// 把持久化的待重试记录注入时间线顶部（幂等：已有同 id 条目则跳过）。
+    /// 把持久化的待重试记录注入时间线最新端（幂等：已有同 id 条目则跳过）。
+    /// 服务端历史按 created_at 升序返回，视图也会自动滚到末尾；
+    /// 因此待重试记录必须追加在末尾，否则刷新后会留在视口外。
     func injectPendingRetry() {
         let pending = pendingRetryStore.load()
         for record in pending where !entries.contains(where: {
             if case .pendingRetry(let r) = $0.content { return r.id == record.id }
             return false
         }) {
-            entries.insert(TimelineEntry.pendingRetry(record), at: 0)
+            entries.append(TimelineEntry.pendingRetry(record))
         }
     }
 
@@ -207,8 +209,23 @@ final class TodayViewModel {
         switch record.source {
         case .photo:
             guard let image = pendingRetryStore.photoImage(for: record) else { return }
+            let retryRecord: PendingRetryRecord
+            do {
+                retryRecord = try pendingRetryStore.ensureRequestId(for: record.id)
+            } catch {
+                return
+            }
+            guard let requestId = retryRecord.requestId else { return }
             // runGeneration 自行管理 isLoading（期间刷新被 guard 挡住，不替换时间线）
-            let card = await runGeneration(text: nil, image: image, userBubbleEntryId: nil, failureMode: .silent, insertCard: false)
+            let card = await runGeneration(
+                text: nil,
+                image: image,
+                userBubbleEntryId: nil,
+                failureMode: .silent,
+                insertCard: false,
+                requestId: requestId,
+                requiredDurableRequestId: requestId
+            )
             if let card {
                 pendingRetryStore.remove(id: record.id)
                 replacePendingRetryWithBubbleAndCard(record: record, image: image, card: card)
@@ -262,7 +279,15 @@ final class TodayViewModel {
     /// `insertCard: false` 时成功只移除 loading 并返回卡片，由调用方就地插入
     /// （待重试记录路径：气泡与卡片就地落到原记录位置）。
     @discardableResult
-    private func runGeneration(text: String?, image: UIImage?, userBubbleEntryId: UUID?, failureMode: RunGenerationFailure = .sendFailed, insertCard: Bool = true) async -> AICard? {
+    private func runGeneration(
+        text: String?,
+        image: UIImage?,
+        userBubbleEntryId: UUID?,
+        failureMode: RunGenerationFailure = .sendFailed,
+        insertCard: Bool = true,
+        requestId: UUID? = nil,
+        requiredDurableRequestId: UUID? = nil
+    ) async -> AICard? {
         let loadingEntry = TimelineEntry.aiLoading()
         entries.append(loadingEntry)
         isLoading = true
@@ -274,8 +299,17 @@ final class TodayViewModel {
                 image: image,
                 context: session.currentContext,
                 presetCardId: nil,
+                requestId: requestId,
                 source: "tab1"
             )
+            if let requiredDurableRequestId,
+               (envelope.requestId != requiredDurableRequestId
+                || envelope.userMessageId == nil
+                || envelope.assistantMessageId == nil
+                || envelope.materialId == nil) {
+                entries.removeAll { $0.id == loadingEntry.id }
+                return nil
+            }
             if insertCard {
                 replace(loadingEntry.id, with: .aiCard(envelope.card))
             } else {

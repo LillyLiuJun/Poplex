@@ -2,7 +2,7 @@ import Foundation
 import UIKit
 
 protocol AIServicing {
-    func generate(text: String?, image: UIImage?, context: ContextTurn?, presetCardId: String?, source: String?) async throws -> AIEnvelope
+    func generate(text: String?, image: UIImage?, context: ContextTurn?, presetCardId: String?, requestId: UUID?, source: String?) async throws -> AIEnvelope
 }
 
 enum AIServiceError: Error {
@@ -25,13 +25,29 @@ extension UIImage {
 }
 
 struct LiveAIService: AIServicing {
-    func generate(text: String?, image: UIImage?, context: ContextTurn?, presetCardId: String? = nil, source: String? = nil) async throws -> AIEnvelope {
+    func generate(text: String?, image: UIImage?, context: ContextTurn?, presetCardId: String? = nil, requestId: UUID? = nil, source: String? = nil) async throws -> AIEnvelope {
+        let bodyData = try Self.requestBody(
+            text: text,
+            image: image,
+            context: context,
+            presetCardId: presetCardId,
+            requestId: requestId,
+            source: source
+        )
+        return try await call(body: bodyData)
+    }
+
+    /// 生成 HTTP 请求体的纯构造 seam，供契约测试验证传给 Edge Function 的 JSON。
+    static func requestBody(text: String?, image: UIImage?, context: ContextTurn?, presetCardId: String?, requestId: UUID?, source: String?) throws -> Data {
         var body: [String: Any] = [:]
         if let text, !text.isEmpty {
             body["text"] = text
         }
         if let presetCardId {
             body["preset_card_id"] = presetCardId
+        }
+        if let requestId {
+            body["request_id"] = requestId.uuidString
         }
         if let source {
             body["source"] = source
@@ -63,7 +79,7 @@ struct LiveAIService: AIServicing {
         guard let bodyData = try? JSONSerialization.data(withJSONObject: body) else {
             throw AIServiceError.bodySerializationFailed
         }
-        return try await call(body: bodyData)
+        return bodyData
     }
 
     private func call(body: Data) async throws -> AIEnvelope {
@@ -105,7 +121,7 @@ struct LiveAIService: AIServicing {
 }
 
 struct MockAIService: AIServicing {
-    func generate(text: String?, image: UIImage?, context: ContextTurn?, presetCardId: String? = nil, source: String? = nil) async throws -> AIEnvelope {
+    func generate(text: String?, image: UIImage?, context: ContextTurn?, presetCardId: String? = nil, requestId: UUID? = nil, source: String? = nil) async throws -> AIEnvelope {
         try await mockResult()
     }
 

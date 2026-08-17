@@ -4,17 +4,29 @@ import Foundation
 struct AIEnvelope: Decodable {
     let card: AICard
     let extractedConcept: String?
+    let requestId: UUID?
+    let userMessageId: UUID?
+    let assistantMessageId: UUID?
+    let materialId: UUID?
 
     enum CodingKeys: String, CodingKey {
         case cardType = "card_type"
         case cardContent = "card_content"
         case extractedConcept = "extracted_concept"
+        case requestId = "request_id"
+        case userMessageId = "user_message_id"
+        case assistantMessageId = "assistant_message_id"
+        case materialId = "material_id"
     }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let type_ = try c.decode(String.self, forKey: .cardType)
         extractedConcept = try c.decodeIfPresent(String.self, forKey: .extractedConcept)
+        requestId = try c.decodeIfPresent(UUID.self, forKey: .requestId)
+        userMessageId = try c.decodeIfPresent(UUID.self, forKey: .userMessageId)
+        assistantMessageId = try c.decodeIfPresent(UUID.self, forKey: .assistantMessageId)
+        materialId = try c.decodeIfPresent(UUID.self, forKey: .materialId)
 
         // s1–s6 六种卡型统一解码为一个 CardContent（由 granularity/direction 驱动显隐）。
         // card_type 仍作 error 判别符保留。

@@ -391,34 +391,207 @@ struct AIEnvelopeDecodeTests {
     }
 }
 
-// MARK: - Mocks
+// MARK: - Reliable generation service contract tests
 
-private struct SuccessMock: AIServicing {
-    func generate(text: String?, image: UIImage?, context: ContextTurn?,
-                  presetCardId: String?, source: String?) async throws -> AIEnvelope {
+struct AIServiceContractTests {
+
+    // Catches a client that accepts a stable request ID but silently omits it
+    // from the actual HTTP JSON contract.
+    @Test func requestBodyEncodesRequestIDAsSnakeCase() throws {
+        let requestID = UUID(uuidString: "A9D7E4B2-7B4C-4E7A-A81D-9E122D101001")!
+
+        let data = try LiveAIService.requestBody(
+            text: "A photo from my commute",
+            image: nil,
+            context: nil,
+            presetCardId: nil,
+            requestId: requestID,
+            source: "onboarding"
+        )
+        let body = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+
+        #expect(body["request_id"] as? String == "A9D7E4B2-7B4C-4E7A-A81D-9E122D101001")
+    }
+
+    // Catches a client that loses the server proof required for durable success.
+    @Test func decodesDurableResponseMetadataFromSnakeCase() throws {
         let json = """
         {
             "card_type": "s4",
             "card_content": {
                 "granularity": "sentence",
                 "direction": "express",
-                "user_original": "今天会议推迟了",
-                "target_expression": "Today's meeting got postponed.",
-                "learnable_units": [
-                    {"form": "got postponed", "kind": "phrase", "note": "", "is_primary": true}
-                ],
+                "target_expression": "The train was packed.",
+                "learnable_units": [],
                 "examples": []
             },
-            "extracted_concept": null
+            "request_id": "A9D7E4B2-7B4C-4E7A-A81D-9E122D101001",
+            "user_message_id": "B8C6D3A1-6A3B-4D6A-B70C-8D011C202002",
+            "assistant_message_id": "C7B5C2D0-5B2A-4C5B-A60D-7C901B303003",
+            "material_id": "D6A4B1CF-4C1B-4B4C-950E-6B801A404004"
         }
         """.data(using: .utf8)!
-        return try JSONDecoder().decode(AIEnvelope.self, from: json)
+
+        let envelope = try JSONDecoder().decode(AIEnvelope.self, from: json)
+
+        #expect(envelope.requestId == UUID(uuidString: "A9D7E4B2-7B4C-4E7A-A81D-9E122D101001"))
+        #expect(envelope.userMessageId == UUID(uuidString: "B8C6D3A1-6A3B-4D6A-B70C-8D011C202002"))
+        #expect(envelope.assistantMessageId == UUID(uuidString: "C7B5C2D0-5B2A-4C5B-A60D-7C901B303003"))
+        #expect(envelope.materialId == UUID(uuidString: "D6A4B1CF-4C1B-4B4C-950E-6B801A404004"))
+    }
+
+    // Catches an additive response change that would break existing callers and mocks.
+    @Test func cardOnlyResponseStillDecodesWithoutDurableMetadata() throws {
+        let json = """
+        {
+            "card_type": "s4",
+            "card_content": {
+                "granularity": "sentence",
+                "direction": "express",
+                "target_expression": "The train was packed.",
+                "learnable_units": [],
+                "examples": []
+            }
+        }
+        """.data(using: .utf8)!
+
+        let envelope = try JSONDecoder().decode(AIEnvelope.self, from: json)
+
+        #expect(envelope.requestId == nil)
+        #expect(envelope.userMessageId == nil)
+        #expect(envelope.assistantMessageId == nil)
+        #expect(envelope.materialId == nil)
+        guard case .card = envelope.card else {
+            Issue.record("Expected legacy card to decode"); return
+        }
+    }
+}
+
+// MARK: - Mocks
+
+private struct SuccessMock: AIServicing {
+    func generate(text: String?, image: UIImage?, context: ContextTurn?,
+                  presetCardId: String?, requestId: UUID?, source: String?) async throws -> AIEnvelope {
+        return try makeSuccessEnvelope(requestId: requestId)
+    }
+}
+
+private func makeSuccessEnvelope(
+    requestId: UUID? = nil,
+    userMessageId: UUID? = UUID(uuidString: "D6A4B1CF-4C1B-4B4C-950E-6B801A404002"),
+    assistantMessageId: UUID? = UUID(uuidString: "D6A4B1CF-4C1B-4B4C-950E-6B801A404003"),
+    materialId: UUID? = UUID(uuidString: "D6A4B1CF-4C1B-4B4C-950E-6B801A404004")
+) throws -> AIEnvelope {
+    var payload: [String: Any] = [
+        "card_type": "s4",
+        "card_content": [
+            "granularity": "sentence",
+            "direction": "express",
+            "user_original": "今天会议推迟了",
+            "target_expression": "Today's meeting got postponed.",
+            "learnable_units": [
+                ["form": "got postponed", "kind": "phrase", "note": "", "is_primary": true]
+            ],
+            "examples": []
+        ],
+        "extracted_concept": NSNull()
+    ]
+    if let requestId { payload["request_id"] = requestId.uuidString }
+    if let userMessageId { payload["user_message_id"] = userMessageId.uuidString }
+    if let assistantMessageId { payload["assistant_message_id"] = assistantMessageId.uuidString }
+    if let materialId { payload["material_id"] = materialId.uuidString }
+    let data = try JSONSerialization.data(withJSONObject: payload)
+    return try JSONDecoder().decode(AIEnvelope.self, from: data)
+}
+
+private final class RecordingResponseMock: AIServicing, @unchecked Sendable {
+    enum Response: String, Sendable {
+        case matchingDurable
+        case mismatchedDurable
+        case absentRequestDurable
+        case missingUserMessage
+        case missingAssistantMessage
+        case missingMaterial
+    }
+
+    private(set) var requestIds: [UUID?] = []
+    let response: Response
+
+    init(response: Response = .matchingDurable) {
+        self.response = response
+    }
+
+    func generate(text: String?, image: UIImage?, context: ContextTurn?,
+                  presetCardId: String?, requestId: UUID?, source: String?) async throws -> AIEnvelope {
+        requestIds.append(requestId)
+        switch response {
+        case .matchingDurable:
+            return try makeSuccessEnvelope(requestId: requestId)
+        case .mismatchedDurable:
+            return try makeSuccessEnvelope(
+                requestId: UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE")!
+            )
+        case .absentRequestDurable:
+            return try makeSuccessEnvelope(requestId: nil)
+        case .missingUserMessage:
+            return try makeSuccessEnvelope(requestId: requestId, userMessageId: nil)
+        case .missingAssistantMessage:
+            return try makeSuccessEnvelope(requestId: requestId, assistantMessageId: nil)
+        case .missingMaterial:
+            return try makeSuccessEnvelope(requestId: requestId, materialId: nil)
+        }
+    }
+}
+
+private final class FailOnceRecordingMock: AIServicing, @unchecked Sendable {
+    private(set) var requestIds: [UUID?] = []
+
+    func generate(text: String?, image: UIImage?, context: ContextTurn?,
+                  presetCardId: String?, requestId: UUID?, source: String?) async throws -> AIEnvelope {
+        requestIds.append(requestId)
+        if requestIds.count == 1 { throw URLError(.notConnectedToInternet) }
+        return try makeSuccessEnvelope(requestId: requestId)
+    }
+}
+
+/// 把外部生成请求悬停到测试主动释放，用于稳定复现 A/B 逆序完成。
+private actor ControllableGenerationMock: AIServicing {
+    private var continuations: [UUID: CheckedContinuation<AIEnvelope, any Error>] = [:]
+    private var startedRequestIds: [UUID] = []
+
+    func generate(text: String?, image: UIImage?, context: ContextTurn?,
+                  presetCardId: String?, requestId: UUID?, source: String?) async throws -> AIEnvelope {
+        guard let requestId else { throw AIServiceError.requestFailed }
+        return try await withCheckedThrowingContinuation { continuation in
+            startedRequestIds.append(requestId)
+            continuations[requestId] = continuation
+        }
+    }
+
+    func waitForStartedRequests(_ count: Int) async -> [UUID] {
+        while startedRequestIds.count < count {
+            await Task.yield()
+        }
+        return startedRequestIds
+    }
+
+    func succeed(_ requestId: UUID) {
+        guard let continuation = continuations.removeValue(forKey: requestId) else { return }
+        do {
+            continuation.resume(returning: try makeSuccessEnvelope(requestId: requestId))
+        } catch {
+            continuation.resume(throwing: error)
+        }
+    }
+
+    func fail(_ requestId: UUID, with error: AIServiceError) {
+        continuations.removeValue(forKey: requestId)?.resume(throwing: error)
     }
 }
 
 private struct FailingMock: AIServicing {
     func generate(text: String?, image: UIImage?, context: ContextTurn?,
-                  presetCardId: String?, source: String?) async throws -> AIEnvelope {
+                  presetCardId: String?, requestId: UUID?, source: String?) async throws -> AIEnvelope {
         throw URLError(.badServerResponse)
     }
 }
@@ -445,31 +618,17 @@ private final class CountingPresetCardSaver: PresetCardSaving, @unchecked Sendab
 private final class FailOnceMock: AIServicing {
     private var callCount = 0
     func generate(text: String?, image: UIImage?, context: ContextTurn?,
-                  presetCardId: String?, source: String?) async throws -> AIEnvelope {
+                  presetCardId: String?, requestId: UUID?, source: String?) async throws -> AIEnvelope {
         callCount += 1
         if callCount == 1 { throw URLError(.notConnectedToInternet) }
-        let json = """
-        {
-            "card_type": "s4",
-            "card_content": {
-                "granularity": "sentence",
-                "direction": "express",
-                "user_original": "今天会议推迟了",
-                "target_expression": "Today's meeting got postponed.",
-                "learnable_units": [],
-                "examples": []
-            },
-            "extracted_concept": null
-        }
-        """.data(using: .utf8)!
-        return try JSONDecoder().decode(AIEnvelope.self, from: json)
+        return try makeSuccessEnvelope(requestId: requestId)
     }
 }
 
 /// 总是抛断网错误的 mock。
 private struct OfflineMock: AIServicing {
     func generate(text: String?, image: UIImage?, context: ContextTurn?,
-                  presetCardId: String?, source: String?) async throws -> AIEnvelope {
+                  presetCardId: String?, requestId: UUID?, source: String?) async throws -> AIEnvelope {
         throw URLError(.notConnectedToInternet)
     }
 }
@@ -478,7 +637,7 @@ private struct OfflineMock: AIServicing {
 /// AIService 解析后抛 AIServiceError.contentBlocked）。
 private struct ContentBlockedMock: AIServicing {
     func generate(text: String?, image: UIImage?, context: ContextTurn?,
-                  presetCardId: String?, source: String?) async throws -> AIEnvelope {
+                  presetCardId: String?, requestId: UUID?, source: String?) async throws -> AIEnvelope {
         throw AIServiceError.contentBlocked
     }
 }
@@ -582,12 +741,28 @@ struct TodayViewModelTests {
     }
 
     private func makePendingRetryStore(suite: String) -> PendingRetryStore {
+        makePendingRetryStoreComponents(suite: suite).store
+    }
+
+    private func makePendingRetryStoreComponents(
+        suite: String
+    ) -> (store: PendingRetryStore, directory: URL, defaults: UserDefaults) {
         let defaults = UserDefaults(suiteName: suite)!
         defaults.removePersistentDomain(forName: suite)
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("today-pending-retry-\(suite)", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return PendingRetryStore(defaults: defaults, documentsDir: dir)
+        return (PendingRetryStore(defaults: defaults, documentsDir: dir), dir, defaults)
+    }
+
+    private func removeRequestIdFromStoredMetadata(_ defaults: UserDefaults) throws {
+        let data = try #require(defaults.data(forKey: "pending_retry_records"))
+        var records = try #require(JSONSerialization.jsonObject(with: data) as? [[String: Any]])
+        records[0].removeValue(forKey: "requestId")
+        defaults.set(
+            try JSONSerialization.data(withJSONObject: records),
+            forKey: "pending_retry_records"
+        )
     }
 
     private func hasSendFailed(_ vm: TodayViewModel) -> Bool {
@@ -597,10 +772,12 @@ struct TodayViewModelTests {
     // retryPending（photo）失败：记录与照片文件保留（不误删唯一副本）
     @Test func retryPendingPhotoFailureKeepsRecord() async throws {
         let store = makePendingRetryStore(suite: "retry-photo-fail")
-        try store.savePhoto(UIImage(systemName: "photo")!)
+        let requestId = UUID(uuidString: "11111111-2222-3333-4444-555555555551")!
+        try store.savePhoto(UIImage(systemName: "photo")!, requestId: requestId)
         let record = store.load()[0]
 
-        let vm = TodayViewModel(service: FailingMock(), isConsentGranted: { true })
+        let service = FailOnceRecordingMock()
+        let vm = TodayViewModel(service: service, isConsentGranted: { true })
         vm.pendingRetryStore = store
         vm.entries = [TimelineEntry.pendingRetry(record)]
 
@@ -610,6 +787,147 @@ struct TodayViewModelTests {
         #expect(store.photoImage(for: record) != nil) // 照片文件仍在
         #expect(vm.entries.contains { if case .pendingRetry(let r) = $0.content { return r.id == record.id }; return false })
         #expect(hasSendFailed(vm) == false)   // 单入口语义：失败不产生 sendFailed 行
+        #expect(service.requestIds == [requestId])
+        #expect(vm.entries.contains { if case .aiCard = $0.content { return true }; return false } == false)
+    }
+
+    // 同 request 且三项 durable ID 齐全，才可删除本地唯一副本并展示成功结果。
+    @Test func retryPendingPhotoMatchingDurableSuccessClearsRecord() async throws {
+        let store = makePendingRetryStore(suite: "retry-photo-matching-durable")
+        let requestId = UUID(uuidString: "11111111-2222-3333-4444-555555555552")!
+        try store.savePhoto(UIImage(systemName: "photo")!, requestId: requestId)
+        let record = store.load()[0]
+        let service = RecordingResponseMock(response: .matchingDurable)
+        let vm = TodayViewModel(service: service, isConsentGranted: { true })
+        vm.pendingRetryStore = store
+        vm.entries = [TimelineEntry.pendingRetry(record)]
+
+        await vm.retryPending(record: record)
+
+        #expect(service.requestIds == [requestId])
+        #expect(store.load().isEmpty)
+        #expect(store.photoImage(for: record) == nil)
+        #expect(vm.entries.contains { if case .pendingRetry = $0.content { return true }; return false } == false)
+        #expect(vm.entries.contains { if case .userBubble = $0.content { return true }; return false })
+        #expect(vm.entries.contains { if case .aiCard = $0.content { return true }; return false })
+    }
+
+    // 不同或缺失 request ID 的成功响应不能认领当前 pending 照片。
+    @Test func retryPendingPhotoMismatchedRequestKeepsUniqueCopy() async throws {
+        let responses: [RecordingResponseMock.Response] = [
+            .mismatchedDurable,
+            .absentRequestDurable
+        ]
+
+        for response in responses {
+            let store = makePendingRetryStore(suite: "retry-photo-\(response.rawValue)")
+            let requestId = UUID(uuidString: "11111111-2222-3333-4444-555555555553")!
+            try store.savePhoto(UIImage(systemName: "photo")!, requestId: requestId)
+            let record = store.load()[0]
+            let service = RecordingResponseMock(response: response)
+            let vm = TodayViewModel(service: service, isConsentGranted: { true })
+            vm.pendingRetryStore = store
+            vm.entries = [TimelineEntry.pendingRetry(record)]
+
+            await vm.retryPending(record: record)
+
+            #expect(service.requestIds == [requestId])
+            #expect(store.load().map(\.id) == [record.id])
+            #expect(store.photoImage(for: record) != nil)
+            #expect(vm.entries.contains { if case .pendingRetry(let value) = $0.content { return value.id == record.id }; return false })
+            #expect(vm.entries.contains { if case .userBubble = $0.content { return true }; return false } == false)
+            #expect(vm.entries.contains { if case .aiCard = $0.content { return true }; return false } == false)
+        }
+    }
+
+    // 任一 durable ID 缺失都不是已提交成功；三种字段分别防回归。
+    @Test func retryPendingPhotoMissingAnyDurableIDKeepsUniqueCopy() async throws {
+        let responses: [RecordingResponseMock.Response] = [
+            .missingUserMessage,
+            .missingAssistantMessage,
+            .missingMaterial
+        ]
+
+        for (index, response) in responses.enumerated() {
+            let store = makePendingRetryStore(suite: "retry-photo-\(response.rawValue)-\(index)")
+            let requestId = UUID()
+            try store.savePhoto(UIImage(systemName: "photo")!, requestId: requestId)
+            let record = store.load()[0]
+            let service = RecordingResponseMock(response: response)
+            let vm = TodayViewModel(service: service, isConsentGranted: { true })
+            vm.pendingRetryStore = store
+            vm.entries = [TimelineEntry.pendingRetry(record)]
+
+            await vm.retryPending(record: record)
+
+            #expect(service.requestIds == [requestId])
+            #expect(store.load().map(\.id) == [record.id])
+            #expect(store.photoImage(for: record) != nil)
+            #expect(vm.entries.contains { if case .pendingRetry(let value) = $0.content { return value.id == record.id }; return false })
+            #expect(vm.entries.contains { if case .aiCard = $0.content { return true }; return false } == false)
+        }
+    }
+
+    // 旧记录首次 Retry 先持久升级 request ID；失败与 app 重启后仍复用同一 ID。
+    @Test func retryPendingLegacyPhotoPersistsAndReusesRequestIDAcrossRestart() async throws {
+        let components = makePendingRetryStoreComponents(suite: "retry-photo-legacy-round-trip")
+        try components.store.savePhoto(UIImage(systemName: "photo")!, requestId: UUID())
+        try removeRequestIdFromStoredMetadata(components.defaults)
+        let legacyRecord = try #require(components.store.load().first)
+        #expect(legacyRecord.requestId == nil)
+
+        let service = FailOnceRecordingMock()
+        let firstVM = TodayViewModel(service: service, isConsentGranted: { true })
+        firstVM.pendingRetryStore = components.store
+        firstVM.entries = [TimelineEntry.pendingRetry(legacyRecord)]
+        await firstVM.retryPending(record: legacyRecord)
+
+        let reloadedStore = PendingRetryStore(
+            defaults: components.defaults,
+            documentsDir: components.directory
+        )
+        let upgradedRecord = try #require(reloadedStore.load().first)
+        let persistedRequestId = try #require(upgradedRecord.requestId)
+        #expect(service.requestIds == [persistedRequestId])
+        #expect(reloadedStore.photoImage(for: upgradedRecord) != nil)
+
+        let restartedVM = TodayViewModel(service: service, isConsentGranted: { true })
+        restartedVM.pendingRetryStore = reloadedStore
+        restartedVM.entries = [TimelineEntry.pendingRetry(upgradedRecord)]
+        await restartedVM.retryPending(record: upgradedRecord)
+
+        #expect(service.requestIds == [persistedRequestId, persistedRequestId])
+        #expect(reloadedStore.load().isEmpty)
+        #expect(reloadedStore.photoImage(for: upgradedRecord) == nil)
+        #expect(restartedVM.entries.contains { if case .aiCard = $0.content { return true }; return false })
+    }
+
+    // legacy metadata 升级写失败时，不能发 AI 请求，也不能覆盖记录或删除 JPEG。
+    @Test func retryPendingLegacyPhotoUpgradePersistFailureStopsBeforeGeneration() async throws {
+        let components = makePendingRetryStoreComponents(suite: "retry-photo-legacy-persist-failure")
+        try components.store.savePhoto(UIImage(systemName: "photo")!, requestId: UUID())
+        try removeRequestIdFromStoredMetadata(components.defaults)
+        let legacyRecord = try #require(components.store.load().first)
+        let failingStore = PendingRetryStore(
+            defaults: components.defaults,
+            documentsDir: components.directory,
+            metadataWriter: { _ in
+                throw NSError(domain: "test", code: 1)
+            }
+        )
+        let service = RecordingResponseMock()
+        let vm = TodayViewModel(service: service, isConsentGranted: { true })
+        vm.pendingRetryStore = failingStore
+        vm.entries = [TimelineEntry.pendingRetry(legacyRecord)]
+
+        await vm.retryPending(record: legacyRecord)
+
+        #expect(service.requestIds.isEmpty)
+        #expect(failingStore.load().map(\.id) == [legacyRecord.id])
+        #expect(failingStore.load().first?.requestId == nil)
+        #expect(failingStore.photoImage(for: legacyRecord) != nil)
+        #expect(vm.entries.contains { if case .pendingRetry(let value) = $0.content { return value.id == legacyRecord.id }; return false })
+        #expect(vm.entries.contains { if case .aiCard = $0.content { return true }; return false } == false)
     }
 }
 
@@ -656,10 +974,32 @@ struct AIConsentGateTests {
         #expect(count == 1)
     }
 
+    // 自动刷新用服务器历史重建时间线后，待重试记录仍应位于最新端；
+    // 否则页面的自动滚底会把它留在视口外，看起来像刷新后消失。
+    @Test func pendingRetryRemainsVisibleAtLatestEndAfterHistoryReplacement() {
+        let store = makePendingRetryStore(suite: "inject-after-refresh")
+        store.savePreset(cardId: "1", imageName: "card_scene_1")
+
+        let vm = TodayViewModel(service: SuccessMock(), isConsentGranted: { true })
+        vm.pendingRetryStore = store
+        vm.entries = [TimelineEntry.userBubble(text: "Older server history", image: nil)]
+
+        vm.injectPendingRetry()
+
+        guard let last = vm.entries.last else {
+            Issue.record("Expected a pending retry entry after refresh replacement")
+            return
+        }
+        guard case .pendingRetry = last.content else {
+            Issue.record("Pending retry must stay at the latest end of the timeline")
+            return
+        }
+    }
+
     // retryPending（photo）：成功后生成卡片、记录被移除
     @Test func retryPendingPhotoGeneratesAndClearsRecord() async throws {
         let store = makePendingRetryStore(suite: "retry-photo")
-        try store.savePhoto(UIImage(systemName: "photo")!)
+        try store.savePhoto(UIImage(systemName: "photo")!, requestId: UUID())
         let record = store.load()[0]
 
         let vm = TodayViewModel(service: SuccessMock(), isConsentGranted: { true })
@@ -987,12 +1327,14 @@ struct PendingRetryStoreTests {
     @Test func photoRecordSurvivesReloadWithImage() throws {
         let (store, dir, defaults) = makeStore(suite: "pending-retry-photo")
         let image = UIImage(systemName: "photo")!
-        try store.savePhoto(image)
+        let requestId = UUID(uuidString: "11111111-2222-3333-4444-555555555555")!
+        try store.savePhoto(image, requestId: requestId)
 
         let reloaded = PendingRetryStore(defaults: defaults, documentsDir: dir)
         let records = reloaded.load()
         #expect(records.count == 1)
         #expect(records[0].source == .photo)
+        #expect(records[0].requestId == requestId)
         let restored = reloaded.photoImage(for: records[0])
         #expect(restored != nil)
         // SF Symbol 原图的 point 尺寸与 JPEG 重解码后的像素尺寸不同，只断言图回来了且非空
@@ -1003,7 +1345,7 @@ struct PendingRetryStoreTests {
     @Test func removeClearsRecordAndFile() throws {
         let (store, dir, defaults) = makeStore(suite: "pending-retry-remove")
         let image = UIImage(systemName: "photo")!
-        try store.savePhoto(image)
+        try store.savePhoto(image, requestId: UUID())
         let record = store.load()[0]
 
         store.remove(id: record.id)
@@ -1011,6 +1353,27 @@ struct PendingRetryStoreTests {
         let reloaded = PendingRetryStore(defaults: defaults, documentsDir: dir)
         #expect(reloaded.load().isEmpty)
         #expect(reloaded.photoImage(for: record) == nil)
+    }
+
+    // 旧版本 JSON 没有 requestId：升级后仍能读取，身份留空等待后续 Retry 升级。
+    @Test func legacyRecordWithoutRequestIdStillDecodes() {
+        let (store, _, defaults) = makeStore(suite: "pending-retry-legacy")
+        let legacyJSON = """
+        [{
+          "id":"11111111-2222-3333-4444-555555555555",
+          "source":"photo",
+          "presetCardId":null,
+          "presetImageName":null,
+          "photoFileName":"legacy.jpg",
+          "createdAt":0
+        }]
+        """.data(using: .utf8)!
+        defaults.set(legacyJSON, forKey: "pending_retry_records")
+
+        let records = store.load()
+
+        #expect(records.count == 1)
+        #expect(records[0].requestId == nil)
     }
 }
 
@@ -1186,6 +1549,254 @@ struct OnboardingViewModelTests {
         #expect(vm.generationResult == nil)
         #expect(vm.isLoading == false)
         #expect(vm.errorKind == nil)
+        #expect(vm.currentRequestId == nil)
+        #expect(vm.hasUnconfirmedPhotoGeneration == false)
+    }
+
+    // 同一张照片第一次生成分配一个 request ID；失败后的 Retry 必须复用它。
+    @Test func retryReusesRequestIdForCurrentPhoto() async {
+        let service = FailOnceRecordingMock()
+        let vm = OnboardingViewModel(service: service, isConnected: { false })
+
+        await vm.startWithImage(UIImage(systemName: "photo")!)
+        let firstId = vm.currentRequestId
+        await vm.retry()
+
+        #expect(firstId != nil)
+        #expect(service.requestIds.count == 2)
+        #expect(service.requestIds[0] == firstId)
+        #expect(service.requestIds[1] == firstId)
+        #expect(vm.currentRequestId == firstId)
+    }
+
+    // 换一张图就是新的用户动作，不能复用上一张图的幂等键。
+    @Test func replacementPhotoCreatesDifferentRequestId() async {
+        let service = RecordingResponseMock()
+        let vm = OnboardingViewModel(service: service)
+
+        await vm.startWithImage(UIImage(systemName: "photo")!)
+        let firstId = vm.currentRequestId
+        await vm.startWithImage(UIImage(systemName: "camera")!)
+
+        #expect(firstId != nil)
+        #expect(vm.currentRequestId != nil)
+        #expect(vm.currentRequestId != firstId)
+        #expect(service.requestIds == [firstId, vm.currentRequestId])
+    }
+
+    // generic/解码/401 等失败仍保留当前照片，Continue 时必须可进入 pending。
+    @Test func genericFailureLeavesPhotoUnconfirmed() async {
+        let vm = OnboardingViewModel(service: FailingMock(), isConnected: { true })
+
+        await vm.startWithImage(UIImage(systemName: "photo")!)
+
+        #expect(vm.errorKind == .generic)
+        #expect(vm.hasUnconfirmedPhotoGeneration)
+        #expect(vm.currentRequestId != nil)
+    }
+
+    // 只有同 request ID 且三个 durable ID 齐全的响应，才是可展示的确认成功。
+    @Test func matchingDurableResponseConfirmsPhoto() async {
+        let vm = OnboardingViewModel(service: RecordingResponseMock(response: .matchingDurable))
+
+        await vm.startWithImage(UIImage(systemName: "photo")!)
+
+        #expect(vm.generationResult != nil)
+        #expect(vm.errorKind == nil)
+        #expect(vm.hasUnconfirmedPhotoGeneration == false)
+    }
+
+    @Test func mismatchedResponseRequestIdIsGenericFailureEvenWhenOffline() async {
+        let vm = OnboardingViewModel(
+            service: RecordingResponseMock(response: .mismatchedDurable),
+            isConnected: { false }
+        )
+
+        await vm.startWithImage(UIImage(systemName: "photo")!)
+
+        #expect(vm.generationResult == nil)
+        #expect(vm.errorKind == .generic)
+        #expect(vm.hasUnconfirmedPhotoGeneration)
+    }
+
+    @Test func absentResponseRequestIdIsGenericFailureEvenWhenOffline() async {
+        let vm = OnboardingViewModel(
+            service: RecordingResponseMock(response: .absentRequestDurable),
+            isConnected: { false }
+        )
+
+        await vm.startWithImage(UIImage(systemName: "photo")!)
+
+        #expect(vm.generationResult == nil)
+        #expect(vm.errorKind == .generic)
+        #expect(vm.hasUnconfirmedPhotoGeneration)
+    }
+
+    @Test func missingMaterialIdIsGenericFailureEvenWhenOffline() async {
+        let vm = OnboardingViewModel(
+            service: RecordingResponseMock(response: .missingMaterial),
+            isConnected: { false }
+        )
+
+        await vm.startWithImage(UIImage(systemName: "photo")!)
+
+        #expect(vm.generationResult == nil)
+        #expect(vm.errorKind == .generic)
+        #expect(vm.hasUnconfirmedPhotoGeneration)
+    }
+
+    @Test func missingUserMessageIdIsGenericFailureEvenWhenOffline() async {
+        let vm = OnboardingViewModel(
+            service: RecordingResponseMock(response: .missingUserMessage),
+            isConnected: { false }
+        )
+
+        await vm.startWithImage(UIImage(systemName: "photo")!)
+
+        #expect(vm.generationResult == nil)
+        #expect(vm.errorKind == .generic)
+        #expect(vm.hasUnconfirmedPhotoGeneration)
+    }
+
+    @Test func missingAssistantMessageIdIsGenericFailureEvenWhenOffline() async {
+        let vm = OnboardingViewModel(
+            service: RecordingResponseMock(response: .missingAssistantMessage),
+            isConnected: { false }
+        )
+
+        await vm.startWithImage(UIImage(systemName: "photo")!)
+
+        #expect(vm.generationResult == nil)
+        #expect(vm.errorKind == .generic)
+        #expect(vm.hasUnconfirmedPhotoGeneration)
+    }
+
+    // A 成功晚于 B 启动时，A 不能把 B 的 loading 收掉，也不能写入 A 的结果/错误。
+    @Test @MainActor func staleSuccessCannotMutateReplacementAttempt() async {
+        let service = ControllableGenerationMock()
+        let vm = OnboardingViewModel(service: service)
+
+        let taskA = Task { await vm.startWithImage(UIImage(systemName: "photo")!) }
+        let requestA = await service.waitForStartedRequests(1)[0]
+        vm.reset()
+        let taskB = Task { await vm.startWithImage(UIImage(systemName: "camera")!) }
+        let requests = await service.waitForStartedRequests(2)
+        let requestB = requests[1]
+
+        await service.succeed(requestA)
+        await taskA.value
+
+        #expect(vm.currentRequestId == requestB)
+        #expect(vm.selectedImage != nil)
+        #expect(vm.generationResult == nil)
+        #expect(vm.errorKind == nil)
+        #expect(vm.isLoading)
+
+        await service.succeed(requestB)
+        await taskB.value
+        #expect(vm.currentRequestId == requestB)
+        #expect(vm.generationResult != nil)
+        #expect(vm.errorKind == nil)
+        #expect(vm.isLoading == false)
+    }
+
+    // A 的 contentBlocked 晚到时不能 reject/清空当前 B。
+    @Test @MainActor func staleContentBlockedCannotRejectReplacementAttempt() async {
+        let service = ControllableGenerationMock()
+        let vm = OnboardingViewModel(service: service)
+
+        let taskA = Task { await vm.startWithImage(UIImage(systemName: "photo")!) }
+        let requestA = await service.waitForStartedRequests(1)[0]
+        vm.reset()
+        let taskB = Task { await vm.startWithImage(UIImage(systemName: "camera")!) }
+        let requestB = await service.waitForStartedRequests(2)[1]
+
+        await service.fail(requestA, with: .contentBlocked)
+        await taskA.value
+
+        #expect(vm.currentRequestId == requestB)
+        #expect(vm.selectedImage != nil)
+        #expect(vm.errorKind == nil)
+        #expect(vm.isLoading)
+
+        await service.succeed(requestB)
+        await taskB.value
+        #expect(vm.currentRequestId == requestB)
+        #expect(vm.generationResult != nil)
+        #expect(vm.errorKind == nil)
+        #expect(vm.isLoading == false)
+    }
+
+    // A 的普通失败晚到时不能覆盖 B 的错误态，也不能提前结束 B 的 loading。
+    @Test @MainActor func staleGenericFailureCannotMutateReplacementAttempt() async {
+        let service = ControllableGenerationMock()
+        let vm = OnboardingViewModel(service: service, isConnected: { true })
+
+        let taskA = Task { await vm.startWithImage(UIImage(systemName: "photo")!) }
+        let requestA = await service.waitForStartedRequests(1)[0]
+        vm.reset()
+        let taskB = Task { await vm.startWithImage(UIImage(systemName: "camera")!) }
+        let requestB = await service.waitForStartedRequests(2)[1]
+
+        await service.fail(requestA, with: .requestFailed)
+        await taskA.value
+
+        #expect(vm.currentRequestId == requestB)
+        #expect(vm.selectedImage != nil)
+        #expect(vm.errorKind == nil)
+        #expect(vm.isLoading)
+
+        await service.succeed(requestB)
+        await taskB.value
+        #expect(vm.currentRequestId == requestB)
+        #expect(vm.generationResult != nil)
+        #expect(vm.errorKind == nil)
+        #expect(vm.isLoading == false)
+    }
+
+    // loading 期间重复选图必须在改 selection/request ID 前拒绝，不能让活跃请求失去所属输入。
+    @Test @MainActor func reentrantImageSelectionDoesNotReplaceActiveAttempt() async {
+        let service = ControllableGenerationMock()
+        let vm = OnboardingViewModel(service: service)
+
+        let taskA = Task { await vm.startWithImage(UIImage(systemName: "photo")!) }
+        let requestA = await service.waitForStartedRequests(1)[0]
+
+        await vm.startWithImage(UIImage(systemName: "camera")!)
+
+        #expect(vm.currentRequestId == requestA)
+        #expect(vm.selectedCard == nil)
+        #expect(vm.isLoading)
+
+        await service.succeed(requestA)
+        await taskA.value
+        #expect(vm.currentRequestId == requestA)
+        #expect(vm.generationResult != nil)
+        #expect(vm.errorKind == nil)
+        #expect(vm.isLoading == false)
+    }
+
+    // loading 期间切预设卡也必须在改 selection 前拒绝，旧照片请求仍拥有当前状态。
+    @Test @MainActor func reentrantCardSelectionDoesNotReplaceActiveAttempt() async {
+        let service = ControllableGenerationMock()
+        let vm = OnboardingViewModel(service: service)
+
+        let taskA = Task { await vm.startWithImage(UIImage(systemName: "photo")!) }
+        let requestA = await service.waitForStartedRequests(1)[0]
+
+        await vm.startWithCard(sampleCard)
+
+        #expect(vm.currentRequestId == requestA)
+        #expect(vm.selectedImage != nil)
+        #expect(vm.selectedCard == nil)
+        #expect(vm.isLoading)
+
+        await service.succeed(requestA)
+        await taskA.value
+        #expect(vm.currentRequestId == requestA)
+        #expect(vm.generationResult != nil)
+        #expect(vm.errorKind == nil)
+        #expect(vm.isLoading == false)
     }
 
     // startWithCard 成功：selectedCard 已设、selectedImage 清空、generationResult 有值、loading 回 false
@@ -1329,6 +1940,8 @@ struct OnboardingViewModelTests {
         #expect(vm.generationResult == nil)
         #expect(vm.isLoading == false)
         #expect(vm.offlineFailureOccurred == false)
+        #expect(vm.currentRequestId == nil)
+        #expect(vm.hasUnconfirmedPhotoGeneration == false)
     }
 
     // Try again 链路：断网失败 → 网络恢复 → retry() 原素材重新生成成功
@@ -1355,6 +1968,8 @@ struct OnboardingViewModelTests {
         #expect(vm.generationResult == nil)
         #expect(vm.isLoading == false)
         #expect(vm.errorKind == nil)
+        #expect(vm.currentRequestId == nil)
+        #expect(vm.hasUnconfirmedPhotoGeneration == false)
     }
 
     // 无选中时 generate 早退：isLoading 回 false，不修改其他状态
@@ -1380,6 +1995,127 @@ struct OnboardingViewModelTests {
         vm.reset()
         #expect(vm.errorKind == nil)
         #expect(vm.offlineFailureOccurred == false)
+    }
+}
+
+// MARK: - Onboarding completion ordering tests
+
+struct OnboardingCompletionCoordinatorTests {
+
+    private func makeStore(suite: String) -> (PendingRetryStore, URL, UserDefaults) {
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("onboarding-completion-\(suite)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return (PendingRetryStore(defaults: defaults, documentsDir: dir), dir, defaults)
+    }
+
+    // pending 照片必须先落盘，之后才能写本地完成/同步标记并离开 onboarding。
+    @Test func unconfirmedPhotoPersistsBeforeCompletionMarkersAndExit() async {
+        let (store, _, defaults) = makeStore(suite: "completion-order")
+        let vm = OnboardingViewModel(service: FailingMock(), isConnected: { true })
+        await vm.startWithImage(UIImage(systemName: "photo")!)
+        let requestId = vm.currentRequestId
+        var events: [String] = []
+        let coordinator = OnboardingCompletionCoordinator(
+            pendingRetryStore: store,
+            defaults: defaults,
+            setSyncPending: {
+                #expect(store.load().first?.requestId == requestId)
+                #expect(defaults.double(forKey: "onboarding_completed_at") > 0)
+                events.append("sync-pending")
+            },
+            startRemoteSync: {
+                #expect(store.load().first?.requestId == requestId)
+                events.append("remote-sync")
+            }
+        )
+
+        let completed = coordinator.complete(viewModel: vm) {
+            #expect(store.load().first?.requestId == requestId)
+            #expect(defaults.double(forKey: "onboarding_completed_at") > 0)
+            events.append("complete")
+        }
+
+        #expect(completed)
+        #expect(events == ["sync-pending", "remote-sync", "complete"])
+        #expect(store.load().count == 1)
+    }
+
+    // JPEG 写失败时必须留在 onboarding；完成标记、同步和退出都不可发生。
+    @Test func jpegPersistenceFailureKeepsOnboardingOpen() async {
+        let suite = "completion-jpeg-failure"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        let missingDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("missing-\(UUID().uuidString)", isDirectory: true)
+        let store = PendingRetryStore(defaults: defaults, documentsDir: missingDir)
+        let vm = OnboardingViewModel(service: FailingMock(), isConnected: { true })
+        await vm.startWithImage(UIImage(systemName: "photo")!)
+        var sideEffectCount = 0
+        let coordinator = OnboardingCompletionCoordinator(
+            pendingRetryStore: store,
+            defaults: defaults,
+            setSyncPending: { sideEffectCount += 1 },
+            startRemoteSync: { sideEffectCount += 1 }
+        )
+
+        let completed = coordinator.complete(viewModel: vm) { sideEffectCount += 1 }
+
+        #expect(completed == false)
+        #expect(vm.errorKind == .generic)
+        #expect(vm.hasUnconfirmedPhotoGeneration)
+        #expect(defaults.double(forKey: "onboarding_completed_at") == 0)
+        #expect(sideEffectCount == 0)
+    }
+
+    // 元数据写失败与 JPEG 失败同等处理，不能只保住文件却误报 onboarding 已完成。
+    @Test func metadataPersistenceFailureKeepsOnboardingOpen() async {
+        let (_, dir, defaults) = makeStore(suite: "completion-metadata-failure")
+        let store = PendingRetryStore(
+            defaults: defaults,
+            documentsDir: dir,
+            metadataWriter: { _ in throw NSError(domain: "test", code: 9) }
+        )
+        let vm = OnboardingViewModel(service: FailingMock(), isConnected: { true })
+        await vm.startWithImage(UIImage(systemName: "photo")!)
+        var sideEffectCount = 0
+        let coordinator = OnboardingCompletionCoordinator(
+            pendingRetryStore: store,
+            defaults: defaults,
+            setSyncPending: { sideEffectCount += 1 },
+            startRemoteSync: { sideEffectCount += 1 }
+        )
+
+        let completed = coordinator.complete(viewModel: vm) { sideEffectCount += 1 }
+
+        #expect(completed == false)
+        #expect(vm.errorKind == .generic)
+        #expect(vm.hasUnconfirmedPhotoGeneration)
+        #expect(defaults.double(forKey: "onboarding_completed_at") == 0)
+        #expect(store.load().isEmpty)
+        #expect(sideEffectCount == 0)
+    }
+
+    // 已由匹配 durable 响应确认的照片不需要 pending 副本。
+    @Test func confirmedPhotoCompletesWithoutPendingRecord() async {
+        let (store, _, defaults) = makeStore(suite: "completion-confirmed")
+        let vm = OnboardingViewModel(service: RecordingResponseMock(response: .matchingDurable))
+        await vm.startWithImage(UIImage(systemName: "photo")!)
+        var didComplete = false
+        let coordinator = OnboardingCompletionCoordinator(
+            pendingRetryStore: store,
+            defaults: defaults,
+            setSyncPending: {},
+            startRemoteSync: {}
+        )
+
+        let completed = coordinator.complete(viewModel: vm) { didComplete = true }
+
+        #expect(completed)
+        #expect(didComplete)
+        #expect(store.load().isEmpty)
     }
 }
 
