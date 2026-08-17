@@ -185,10 +185,12 @@ enum AppTheme {
         // 1.73:1 —— 永远不可用于需要阅读的文字（WCAG 豁免非文字/禁用态对比度要求）。
         // 与 border(neutral200 #E3DFD9) 不同值：border 是发丝线语义，neutralFaint 是浅灰实心填充语义。
         static let neutralFaint  = Primitive.neutral300  // #C7C3BD
-        // 满宽禁用 CTA：比页面明确一档，但仍远弱于可用态的暖近黑。
-        // 背景与文字拉开明度，避免整枚按钮糊成一块无法辨认的浅灰。
-        static let controlDisabledBg = Primitive.neutral200
-        static let controlDisabledText = Primitive.neutral500
+        // 满宽禁用 CTA：惰性面（方案 B）。neutral200 是描边/分割语义，拿它做大面积
+        // 填充是越权——填充改用 neutral100（用户气泡/图片占位底同档），描边归位到
+        // 专属的 controlDisabledBorder，两者不再同值导致描边视觉隐形。
+        static let controlDisabledBg = Primitive.neutral100
+        static let controlDisabledBorder = Primitive.neutral200
+        static let controlDisabledText = Primitive.neutral600
 
         static let textOnChip    = Primitive.neutral50   // chip 胶囊 / 深底按钮上的浅色文字
 
@@ -411,6 +413,13 @@ enum AppTheme {
         static let emptyStateWatermarkBottom: CGFloat       = 130 // P 水印距底，避开 CTA
         static let emptyStateCaptureIconGlyph: CGFloat      = 19  // 空态 CTA 描边相机图标
 
+        // ── Onboarding 顶部节奏（N-1）────────────────────────────────────
+        // 标题位置与返回按钮位置各自单一真源，互不通过占位块耦合——
+        // 旧实现靠「占位块高 36 + header 自带 padding 16」两个数字拼出标题位置，
+        // 占位块本身又比返回按钮触区少 8pt，纯属巧合而非设计。
+        static let onboardingBackInset: CGFloat             = 2   // 返回 chevron 触区距安全区上沿
+        static let onboardingHeaderTop: CGFloat             = 48  // 页面标题（S1 报头 / S2 / S3a / S3b）布局顶距安全区上沿
+
         // ── Onboarding 拍照页（视觉规范 §06）───────────────────────────────
         static let onboardingCaptureGlyph: CGFloat          = 24  // 主拍照入口描边相机
         static let onboardingPhotosGlyph: CGFloat           = 20  // 紧凑相册入口描边图标
@@ -426,13 +435,24 @@ enum AppTheme {
         static let onboardingUploadDashGap: CGFloat         = 6   // 空输入区虚线间距
         static let disabledControlBorderWidth: CGFloat      = 1   // 大面积禁用 CTA 的轻描边
         static let onboardingMaxPhotoAspectRatio: CGFloat   = 2.25 // 接受常规手机全屏截图；更长/更宽素材需重选
-        // 照片预览区的固定开销 = 按钮避让 80 + 顶部占位 56 + 照片区上间距 16 + 正常字号标题区参考高 165。
+        // 照片预览区的固定开销（N-1 后随标题上移 20 而减少：317 → 297）。
         // 预览区最小高度 = 视口 - 该值：正常字号恰好顶到 Continue 按钮上方；
         // 大字号/小屏时预览区不压缩、保持此高度，页面转为可滚动。
         // 注意：标题区参考高随 Dynamic Type 变化，此常数只用于「正常字号」基准，偏差仅影响临界点。
-        static let onboardingPhotoPreviewFixedOverhead: CGFloat = 317
+        static let onboardingPhotoPreviewFixedOverhead: CGFloat = 297
+        // 结果页（N-3）时刻卡的固定开销：同上一枚是同一类常数，只是给结果页的
+        // 「标题 + 卡片」结构用。卡片总高 = 视口 - 该值（16 Pro ≈ 419），
+        // 卡内 photoHeight = clamp(卡片总高 - 实测文字区高, 180, 320)，
+        // 卡片外框因此与内容长度无关，只随视口变化。
+        // 数值按 N-1 后的 resultHeader 结构与需求文档 §3.2 的算例（16 Pro：451-32=419）
+        // 反推得出，未在真机复核实际渲染的 header 高度，正常字号下需真机校准。
+        static let onboardingResultCardFixedOverhead: CGFloat = 379
         static let onboardingContentBottomClearance: CGFloat = 80 // Continue 槽位避让（内容底进遮罩渐隐区，不钻按钮背后）
-        static let onboardingContinueBottom: CGFloat = 8 // Continue 距屏幕底（配合 ignoresSafeArea 贴系统条上方；真机调）
+        // Continue 距屏幕底：这个 8 不是贴物理屏底，是加在安全区下沿（34）之上——
+        // 承载各页的 GeometryReader 已被安全区内缩，ignoresSafeArea 只解除 Continue
+        // 自身的内缩，8 因此落在安全区之上，真实落点 ≈36–42pt，Home Indicator 完全让开。
+        // 之前的注释写反了（写成「贴系统条上方」），照它"修"成真 8pt 会直接压到系统条上。
+        static let onboardingContinueBottom: CGFloat = 8
         static let inputBarMinHeight: CGFloat = 52 // 底部胶囊最小高度（Tab1 InputBar / Onboarding Continue 对齐）
         static let onboardingSampleWidth: CGFloat           = 104 // 样例图横滑卡宽
         static let onboardingSampleHeight: CGFloat          = 120 // 样例图横滑卡高：给固定 CTA 留出呼吸

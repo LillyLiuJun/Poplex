@@ -25,19 +25,27 @@ struct OnboardingPrimaryButton: View {
                     if !isEnabled {
                         Capsule()
                             .strokeBorder(
-                                AppTheme.Color.border,
+                                AppTheme.Color.controlDisabledBorder,
                                 lineWidth: AppTheme.Size.disabledControlBorderWidth
                             )
                     }
                 }
                 .frame(minHeight: AppTheme.Size.inputBarMinHeight) // 高度对齐 Tab1 InputBar capsule
+                .animation(.easeInOut(duration: 0.2), value: isEnabled)
         }
         .disabled(!isEnabled)
         .buttonStyle(PressableButtonStyle(pressedScale: 0.97, pressedOpacity: 0.85))
     }
 }
 
-// MARK: - 返回按钮：左上角悬空圆钮（与 Settings 子页 backRow 同配方）
+// MARK: - 返回按钮：裸 chevron（N-1）
+//
+// 曾是白圆+阴影（与 Settings 子页 backRow 同配方），已去掉：白圆 cardBg 压在
+// pageBg 上对比仅 1.06:1，圆形本身几乎不可见，形完全靠阴影撑出——「靠阴影定义
+// 的形」在视觉层级里读作"浮在最上层"＝最重要，但返回是本页最不重要的控件。
+// 它也是整个 onboarding 里唯一的圆形（其余全为胶囊/圆角矩形），形状独一即抓眼；
+// 44pt 直径与 Camera/Gallery 胶囊高度相当，次要动作占用了主控件体量。
+// 去掉盒子后标题才可能贴近它上移，是 N-1 顶部收紧 20pt 的前提。
 
 struct OnboardingBackButton: View {
     let action: () -> Void
@@ -48,13 +56,7 @@ struct OnboardingBackButton: View {
                 .font(.system(.body, weight: .semibold))
                 .foregroundStyle(AppTheme.Color.textSecondary)
                 .frame(width: AppTheme.Size.barControl, height: AppTheme.Size.barControl)
-                .background(AppTheme.Color.cardBg, in: Circle())
-                .shadow(
-                    color: AppTheme.Shadow.cardColor,
-                    radius: AppTheme.Shadow.cardRadius / 2,
-                    x: 0,
-                    y: AppTheme.Shadow.cardY / 2
-                )
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Back")
@@ -147,63 +149,6 @@ struct OnboardingBottomFade: View {
         .frame(maxHeight: .infinity, alignment: .bottom)
         .ignoresSafeArea(edges: .bottom)
         .allowsHitTesting(false)
-    }
-}
-
-// MARK: - 时刻卡：照片贴顶 + MOMENT chip + 英文句子 + 中文释义 (方案 A · 统一时刻卡)
-/// 结果渲染为与 App 内统一的时刻卡容器，形成"看到样品→亲手做出"闭环。
-
-struct OnboardingMomentCard: View {
-    let image: Image
-    let sentence: String
-    var translation: String? = nil
-    var photoHeight: CGFloat = 195
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            image
-                .resizable()
-                .scaledToFill()
-                .frame(maxWidth: .infinity)
-                .frame(height: photoHeight)
-                .clipped()
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text("MOMENT")
-                    .font(AppTheme.Font.sectionLabel)
-                    .tracking(1.2)
-                    .foregroundStyle(AppTheme.Color.textMuted)
-                    .padding(.bottom, 2)
-
-                Text(sentence)
-                    .font(AppTheme.Font.englishPrimary)
-                    .foregroundStyle(AppTheme.Color.textPrimary)
-                    .lineSpacing(AppTheme.Typography.lineBody)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                if let zh = translation, !zh.isEmpty {
-                    Text(zh)
-                        .font(AppTheme.Font.chineseBody)
-                        .foregroundStyle(AppTheme.Color.textMuted)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.top, 2)
-                }
-            }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 16)
-        }
-        .background(AppTheme.Color.cardBg)
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.large))
-        .overlay(
-            RoundedRectangle(cornerRadius: AppTheme.Radius.large)
-                .stroke(AppTheme.Color.border.opacity(0.6), lineWidth: 1)
-        )
-        .shadow(
-            color: AppTheme.Shadow.cardColor,
-            radius: AppTheme.Shadow.cardRadius,
-            x: AppTheme.Shadow.cardX,
-            y: AppTheme.Shadow.cardY
-        )
     }
 }
 

@@ -54,7 +54,6 @@ struct OnboardingCaptureView: View {
     @State private var stagedImage: UIImage?
     @State private var photoValidationMessage: String?
     @State private var appeared = false
-    @State private var skeletonPulse = false
     // 样例图横滑条在页面坐标空间里的 frame；翻页手势起点落在其中时不翻页
     @State private var carouselFrame: CGRect?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -90,7 +89,7 @@ struct OnboardingCaptureView: View {
         .coordinateSpace(name: OnboardingCaptureLayout.pageSpace)
         .overlay(alignment: .topLeading) {
             OnboardingBackButton(action: backButtonAction)
-                .padding(.top, AppTheme.Space.paddingCard)
+                .padding(.top, AppTheme.Size.onboardingBackInset)
                 .padding(.leading, AppTheme.Space.paddingM)
         }
         // One sheet, switched by CaptureSource — never two live modals at once,
@@ -212,11 +211,9 @@ struct OnboardingCaptureView: View {
             ZStack(alignment: .bottom) {
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 0) {
-                        Color.clear
-                            .frame(height: 36)
-                            .padding(.top, AppTheme.Space.paddingCard)
-
+                        // 标题顶部位置只由 onboardingHeaderTop 一个数决定（N-1 单一真源）。
                         selectionHeader
+                            .padding(.top, AppTheme.Size.onboardingHeaderTop)
                             .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.05)
 
                         if hasSelection {
@@ -290,7 +287,6 @@ struct OnboardingCaptureView: View {
                 .foregroundStyle(AppTheme.Color.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.top, AppTheme.Space.paddingCard)
     }
 
     // MARK: 空输入区（虚线动作卡）；选照片后由 photoPreviewArea 接替
@@ -435,56 +431,33 @@ struct OnboardingCaptureView: View {
         }
     }
 
-    // MARK: - Result content (moment card as hero, 方案 A 统一时刻卡)
+    // MARK: - Result content (moment card as hero, N-3 三态共用一个容器与同一张照片)
 
     private var resultContent: some View {
         ZStack(alignment: .bottom) {
             GeometryReader { geo in
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 0) {
-                        Color.clear
-                            .frame(height: 36)
-                            .padding(.top, AppTheme.Space.paddingCard)
-
+                        // 标题顶部位置只由 onboardingHeaderTop 一个数决定（N-1 单一真源）。
                         resultHeader
+                            .padding(.top, AppTheme.Size.onboardingHeaderTop)
                             .padding(.horizontal, AppTheme.Space.paddingPage)
                             .padding(.bottom, AppTheme.Space.paddingCard)
 
-                        if viewModel.isLoading {
-                            loadingCard
-                                .transition(.opacity)
-                                .padding(.horizontal, AppTheme.Space.paddingPage)
-                            Spacer(minLength: 0)
-                        } else if let result = viewModel.generationResult {
-                            resultCard(result)
-                                .transition(.scale(scale: 0.96).combined(with: .opacity))
-                                .padding(.horizontal, AppTheme.Space.paddingPage)
-                            Spacer(minLength: 0)
-                        } else if let image = resultImage {
-                            // 失败态（断网/其它）：保留用户所选素材图 + 常驻状态条（fail-open——
-                            // 内容在、状态条说明原因、Try again 可重试、Continue 可用）
-                            VStack(spacing: 0) {
-                                image
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(maxWidth: .infinity)
-                                    .frame(height: 195)
-                                    .clipped()
-                                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.large))
-                                    .allowsHitTesting(false)
-
-                                if let copy = viewModel.errorKind?.failureBarCopy {
-                                    FailureStatusBar(copy: copy) {
-                                        Task { await viewModel.retry() }
-                                    }
-                                }
-                            }
-                            .transition(.opacity)
+                        if let image = resultImage {
+                            // 卡片总高（cardHeight）纯几何、不随内容变化——卡内 photoHeight
+                            // 由 OnboardingResultCard 自己按文字区实测高度 clamp(180,320)
+                            // 求出，卡片外框因此在生成中/成功两态之间保持恒定（N-3 §3.2）。
+                            OnboardingResultCard(
+                                image: image,
+                                state: resultCardState,
+                                cardHeight: max(0, geo.size.height - AppTheme.Size.onboardingResultCardFixedOverhead),
+                                onRetry: { Task { await viewModel.retry() } }
+                            )
                             .padding(.horizontal, AppTheme.Space.paddingPage)
-                            Spacer(minLength: 0)
-                        } else {
-                            Spacer(minLength: 0)
                         }
+
+                        Spacer(minLength: 0)
                     }
                     .padding(.bottom, AppTheme.Size.onboardingContentBottomClearance) // Give space for absolute bottom button
                     .frame(minHeight: geo.size.height)
@@ -495,17 +468,30 @@ struct OnboardingCaptureView: View {
 
             OnboardingBottomFade()
 
-            if !viewModel.isLoading {
-                bottomButton
-                    .padding(.horizontal, AppTheme.Space.paddingPage)
-                    .ignoresSafeArea(.container, edges: .bottom)
-                    .padding(.bottom, AppTheme.Size.onboardingContinueBottom)
-            }
+            // 生成中就渲染禁用态 Continue（材质切换靠 N-2 的 0.2s 过渡），
+            // 位置全程不动，成功后原位切可用态 + 文案变 Get Started。
+            OnboardingResultBottomButton(
+                isLoading: viewModel.isLoading,
+                isSuccess: viewModel.generationResult != nil,
+                action: onComplete
+            )
+            .padding(.horizontal, AppTheme.Space.paddingPage)
+            .ignoresSafeArea(.container, edges: .bottom)
+            .padding(.bottom, AppTheme.Size.onboardingContinueBottom)
         }
-        .animation(.easeInOut(duration: 0.3), value: viewModel.isLoading)
-        .animation(.easeInOut(duration: 0.3), value: viewModel.generationResult != nil)
         // 状态条不随网络恢复自动消失：保留到用户点 Try again 成功（或换素材/离开）——
         // 重试入口稳定可预期；真机监控信号不可靠，自动消失会吞掉入口。
+    }
+
+    /// 三态：生成中 / 成功 / 失败（断网/其它，fail-open——内容在、状态条说明原因、
+    /// Try again 可重试、Continue 可用）。落在 OnboardingResultCard 内部渲染。
+    private var resultCardState: OnboardingResultCard.Phase {
+        if viewModel.isLoading { return .loading }
+        if let result = viewModel.generationResult {
+            return .success(sentence: result.primaryEnglish, translation: result.nativeMeaning)
+        }
+        if let copy = viewModel.errorKind?.failureBarCopy { return .failure(copy: copy) }
+        return .loading
     }
 
     private var resultHeader: some View {
@@ -519,91 +505,6 @@ struct OnboardingCaptureView: View {
                 .font(AppTheme.Font.onboardingLeadSerif)
                 .foregroundStyle(AppTheme.Color.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(.top, AppTheme.Space.paddingCard)
-    }
-
-    // MARK: 结果卡：与第一页样品卡同构 —— 用户亲手做出的第一张卡
-
-    private func resultCard(_ card: AICard) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if let image = resultImage {
-                OnboardingMomentCard(
-                    image: image,
-                    sentence: card.primaryEnglish,
-                    translation: card.nativeMeaning,
-                    photoHeight: 195
-                )
-            }
-        }
-    }
-
-    // MARK: 生成中：照片定格 + 暖色骨架（呼吸脉冲）+ 状态文案（与结果卡同构）
-
-    private var loadingCard: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Space.paddingM) {
-            VStack(alignment: .leading, spacing: 0) {
-                if let image = resultImage {
-                    image
-                        .resizable()
-                        .scaledToFill()
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 195)
-                        .clipped()
-                        .allowsHitTesting(false)
-                }
-
-                VStack(alignment: .leading, spacing: 10) {
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.small)
-                        .fill(AppTheme.Color.imagePlaceholderBg)
-                        .frame(width: 60, height: 12)
-                        .padding(.bottom, 2)
-
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.small)
-                        .fill(AppTheme.Color.imagePlaceholderBg)
-                        .frame(height: 20)
-                        .frame(maxWidth: .infinity)
-
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.small)
-                        .fill(AppTheme.Color.imagePlaceholderBg)
-                        .frame(width: 180, height: 14)
-                }
-                .padding(.horizontal, 18)
-                .padding(.vertical, 16)
-                .opacity(skeletonPulse ? 0.45 : 1)
-                .animation(
-                    reduceMotion ? nil : .easeInOut(duration: 0.8).repeatForever(autoreverses: true),
-                    value: skeletonPulse
-                )
-            }
-            .background(AppTheme.Color.cardBg)
-            .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.large))
-            .overlay(
-                RoundedRectangle(cornerRadius: AppTheme.Radius.large)
-                    .stroke(AppTheme.Color.border.opacity(0.6), lineWidth: 1)
-            )
-            .shadow(
-                color: AppTheme.Shadow.cardColor,
-                radius: AppTheme.Shadow.cardRadius,
-                x: AppTheme.Shadow.cardX,
-                y: AppTheme.Shadow.cardY
-            )
-            .onAppear { skeletonPulse = true }
-
-            Text("Turning your moment into English…")
-                .font(AppTheme.Font.buddy)
-                .foregroundStyle(AppTheme.Color.textMuted)
-                .padding(.horizontal, 2)
-        }
-    }
-
-    @ViewBuilder
-    private var bottomButton: some View {
-        if (viewModel.selectedCard != nil || viewModel.selectedImage != nil) {
-            OnboardingPrimaryButton(
-                title: viewModel.generationResult != nil ? "Get Started" : "Continue",
-                action: onComplete
-            )
         }
     }
 }
@@ -648,37 +549,212 @@ private struct OnboardingUploadActionButton: View {
     }
 }
 
-/// 断网/其它失败的状态条：嵌在素材图下方、常驻（不自动消失）。
-/// 网络恢复由既有 onChange 清 errorKind → 状态条随之消失（图保留）。
-private struct FailureStatusBar: View {
-    let copy: String
-    var onRetry: () -> Void
+/// 结果页时刻卡：生成中 / 成功 / 失败三态共用一个容器与同一张照片（N-3）。
+/// 卡片总高（cardHeight）由调用处按视口几何算出、与内容无关；照片高度反过来
+/// 由「cardHeight − 实测文字区高」clamp 到 [180, 320] 得出——文字区量多少，
+/// 照片就让多少，卡片外框因此不随生成中→成功、也不随素材长短变化。
+/// 三态文字区统一为「标签行 / 说明行 / 第三行」同构结构，只有内容区做 crossfade。
+private struct OnboardingResultCard: View {
+    enum Phase: Equatable {
+        case loading
+        case success(sentence: String, translation: String?)
+        case failure(copy: String)
+    }
+
+    let image: Image
+    let state: Phase
+    let cardHeight: CGFloat
+    var onRetry: () -> Void = {}
+
+    @State private var textRegionHeight: CGFloat = 140
+    @State private var skeletonPulse = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var photoHeight: CGFloat {
+        min(320, max(180, cardHeight - textRegionHeight))
+    }
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            image
+                .resizable()
+                .scaledToFill()
+                .frame(maxWidth: .infinity)
+                .frame(height: photoHeight)
+                .clipped()
+                .allowsHitTesting(false)
+                .animation(.easeInOut(duration: 0.35), value: photoHeight)
+
+            textRegion
+                .padding(.horizontal, 18)
+                .padding(.vertical, 16)
+                .background(
+                    GeometryReader { g in
+                        Color.clear.preference(key: ResultTextHeightKey.self, value: g.size.height)
+                    }
+                )
+                .animation(.easeInOut(duration: 0.25), value: state)
+        }
+        .onPreferenceChange(ResultTextHeightKey.self) { textRegionHeight = $0 }
+        .background(AppTheme.Color.cardBg)
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.large))
+        .overlay(
+            RoundedRectangle(cornerRadius: AppTheme.Radius.large)
+                .stroke(AppTheme.Color.border.opacity(0.6), lineWidth: 1)
+        )
+        .shadow(
+            color: AppTheme.Shadow.cardColor,
+            radius: AppTheme.Shadow.cardRadius,
+            x: AppTheme.Shadow.cardX,
+            y: AppTheme.Shadow.cardY
+        )
+        .onAppear { skeletonPulse = true }
+    }
+
+    @ViewBuilder
+    private var textRegion: some View {
+        switch state {
+        case .loading:
+            loadingText.transition(.opacity)
+        case .success(let sentence, let translation):
+            successText(sentence, translation).transition(.opacity)
+        case .failure(let copy):
+            failureText(copy).transition(.opacity)
+        }
+    }
+
+    // MARK: 生成中：骨架模拟真实行数/行高，脉冲不含照片；状态文案挂在文字区里（与成功/失败同构）
+
+    private var loadingText: some View {
         VStack(alignment: .leading, spacing: AppTheme.Space.paddingS) {
+            RoundedRectangle(cornerRadius: AppTheme.Radius.small)
+                .fill(AppTheme.Color.imagePlaceholderBg)
+                .frame(width: 56, height: 11)
+
+            VStack(alignment: .leading, spacing: 8) {
+                skeletonLine(widthFraction: 1)
+                skeletonLine(widthFraction: 1)
+                skeletonLine(widthFraction: 0.7)
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                skeletonLine(widthFraction: 1, height: 14)
+                skeletonLine(widthFraction: 0.55, height: 14)
+            }
+
+            Text("Turning your moment into English…")
+                .font(AppTheme.Font.statusNote)
+                .foregroundStyle(AppTheme.Color.textMuted)
+                .padding(.top, 2)
+        }
+        .opacity(skeletonPulse ? 0.55 : 1)
+        .animation(
+            reduceMotion ? nil : .easeInOut(duration: 0.8).repeatForever(autoreverses: true),
+            value: skeletonPulse
+        )
+    }
+
+    private func skeletonLine(widthFraction: CGFloat, height: CGFloat = 16) -> some View {
+        GeometryReader { g in
+            RoundedRectangle(cornerRadius: AppTheme.Radius.small)
+                .fill(AppTheme.Color.imagePlaceholderBg)
+                .frame(width: g.size.width * widthFraction, height: height)
+        }
+        .frame(height: height)
+    }
+
+    // MARK: 成功：与原 OnboardingMomentCard 文字区同一配方
+
+    private func successText(_ sentence: String, _ translation: String?) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("MOMENT")
+                .font(AppTheme.Font.sectionLabel)
+                .tracking(1.2)
+                .foregroundStyle(AppTheme.Color.textMuted)
+                .padding(.bottom, 2)
+
+            Text(sentence)
+                .font(AppTheme.Font.englishPrimary)
+                .foregroundStyle(AppTheme.Color.textPrimary)
+                .lineSpacing(AppTheme.Typography.lineBody)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if let translation, !translation.isEmpty {
+                Text(translation)
+                    .font(AppTheme.Font.chineseBody)
+                    .foregroundStyle(AppTheme.Color.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 2)
+            }
+        }
+    }
+
+    // MARK: 失败：断网/其它（fail-open——内容在、说明原因、Try again 可重试、Continue 可用）。
+    // 定稿规格（N-3 §3.4）：图标走 danger（≤24pt 图形，合规），文案走 textPrimary——
+    // 红色文字按钮在 iOS 语义里读作"破坏性操作"，Try again 是建设性动作，红只留在图标上。
+    // 无容器：这是常驻页面元素，不是 AppToast 那种浮层，借浮层深底材质是类别错误。
+    // 触区 44：`.frame(height: barControl)` + `.contentShape(Rectangle())`。
+
+    private func failureText(_ copy: String) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("COULDN'T GENERATE")
+                .font(AppTheme.Font.sectionLabel)
+                .tracking(1.2)
+                .foregroundStyle(AppTheme.Color.danger)
+
             Text(copy)
-                .font(AppTheme.Font.chineseFaint)
+                .font(AppTheme.Font.statusNote)
                 .foregroundStyle(AppTheme.Color.textSecondary)
                 .multilineTextAlignment(.leading)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.top, AppTheme.Space.paddingCard)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, AppTheme.Space.paddingS)
 
             Button(action: onRetry) {
                 HStack(spacing: AppTheme.Space.paddingXS) {
                     Image(systemName: "arrow.clockwise")
                         .imageScale(.small)
-                        .foregroundStyle(AppTheme.Color.brandStrong)   // 图标点缀与 toast 一致
+                        .foregroundStyle(AppTheme.Color.danger)
                     Text("Try again")
-                        .font(AppTheme.Font.buddy)
-                        .foregroundStyle(AppTheme.Color.textOnChip)   // 深底胶囊上的浅色文字（同 toast）
+                        .font(AppTheme.Font.statusNote)
+                        .foregroundStyle(AppTheme.Color.textPrimary)
                 }
-                .padding(.horizontal, AppTheme.Space.paddingCard)
-                .padding(.vertical, AppTheme.Space.paddingS)
-                .background(AppTheme.Color.textPrimary.opacity(0.82), in: Capsule())   // 同 toast 深底
+                .frame(height: AppTheme.Size.barControl)
+                .contentShape(Rectangle())
             }
-            .buttonStyle(PressableButtonStyle())
+            .buttonStyle(.plain)
+            .padding(.top, AppTheme.Space.paddingXS)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct ResultTextHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
+
+/// 结果页底部按钮：生成中禁用态 Continue → 成功后原位切可用态 + 文案变 Get Started，
+/// 位置全程不动。切到可用态时叠一次 scale 0.98→1.0（0.25s，reduceMotion 跳过）——
+/// 这是整个 onboarding 唯一的"完成"时刻。
+private struct OnboardingResultBottomButton: View {
+    let isLoading: Bool
+    let isSuccess: Bool
+    let action: () -> Void
+
+    @State private var scale: CGFloat = 1.0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        OnboardingPrimaryButton(
+            title: isSuccess ? "Get Started" : "Continue",
+            isEnabled: !isLoading,
+            action: action
+        )
+        .scaleEffect(scale)
+        .onChange(of: isSuccess) { old, new in
+            guard new, !old, !reduceMotion else { return }
+            scale = 0.98
+            withAnimation(.easeOut(duration: 0.25)) { scale = 1.0 }
+        }
     }
 }
 

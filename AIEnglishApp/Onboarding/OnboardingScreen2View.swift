@@ -21,14 +21,10 @@ struct OnboardingScreen2View: View {
             GeometryReader { geo in
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 0) {
-                        // 顶部为悬浮返回按钮预留的占位（与 capture 页同高）
-                        Color.clear
-                            .frame(height: 36)
-                            .padding(.top, AppTheme.Space.paddingCard)
-
+                        // 标题顶部位置只由 onboardingHeaderTop 一个数决定（N-1 单一真源）。
                         textBlock
                             .padding(.horizontal, AppTheme.Space.paddingPage)
-                            .padding(.top, AppTheme.Space.paddingCard)
+                            .padding(.top, AppTheme.Size.onboardingHeaderTop)
                             .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.05)
 
                         // Continue 下移后底部弹性空隙变大，加大这里把拼贴整体下移、吃掉上方空
@@ -57,7 +53,7 @@ struct OnboardingScreen2View: View {
         }
         .overlay(alignment: .topLeading) {
             OnboardingBackButton(action: onBack)
-                .padding(.top, AppTheme.Space.paddingCard)
+                .padding(.top, AppTheme.Size.onboardingBackInset)
                 .padding(.leading, AppTheme.Space.paddingM)
         }
         .contentShape(Rectangle())

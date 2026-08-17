@@ -22,16 +22,12 @@ struct OnboardingScreen1View: View {
             GeometryReader { geo in
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 0) {
-                        // 顶部预留：与 Screen2 的返回栏同高（36 + paddingCard），让下方报头与
-                        // Screen2 的标题处在同一起始高度、到灵动岛的间距一致。
-                        Color.clear
-                            .frame(height: 36)
-                            .padding(.top, AppTheme.Space.paddingCard)
-
                         // 品牌报头（长版字标 Poplex.，与开屏 / 图标同源）。左对齐、与标题共左轴。
+                        // 顶部位置只由 onboardingHeaderTop 一个数决定（N-1 单一真源），
+                        // 与 Screen2 / Capture 三处标题的起始高度一致。
                         PoplexWordmark(capHeight: mastheadCapHeight)
                             .padding(.leading, AppTheme.Space.paddingPage)
-                            .padding(.top, AppTheme.Space.paddingCard)
+                            .padding(.top, AppTheme.Size.onboardingHeaderTop)
                             .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.0)
 
                         // 文字组垂直居中：上下均分留白。
