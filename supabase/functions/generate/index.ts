@@ -4,52 +4,16 @@
 //       同时将可提取的素材写入 materials 表（两阶段：内容写入 + 分类打标）。
 // 安全：GEMINI_API_KEY 只存在于这里的环境变量，绝不下发到 App。
 
-import { SCENE_CATEGORIES } from "../_shared/constants.ts";
-import {
-  getTier,
-  LEXICON_STOPWORDS,
-  normalizeLemma,
-} from "../_shared/lexicon.ts";
-import { buildRawContent, UnifiedRawContent } from "./rawContent.ts";
-import { isModelErrorCard } from "./modelGate.ts";
-import {
-  authenticateCaller,
-  commitGeneratedContent,
-  CommittedContent,
-  FetchLike,
-  resolveCommittedRequest,
-} from "./reliableCommit.ts";
+import { SCENE_CATEGORIES } from '../_shared/constants.ts';
+import { LEXICON_STOPWORDS, normalizeLemma, getTier } from '../_shared/lexicon.ts';
+import { buildRawContent, asStr, LearnableUnit, UnifiedRawContent } from './rawContent.ts';
+import { isModelErrorCard } from './modelGate.ts';
 
-function environmentValue(name: string): string {
-  try {
-    return Deno.env.get(name) ?? "";
-  } catch {
-    return "";
-  }
-}
-
-const GEMINI_API_KEY = environmentValue("GEMINI_API_KEY");
-const GEMINI_URL =
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
-const SUPABASE_URL = environmentValue("SUPABASE_URL");
-const SUPABASE_ANON_KEY = environmentValue("SUPABASE_ANON_KEY");
-const SUPABASE_SVC_KEY = environmentValue("SUPABASE_SERVICE_ROLE_KEY");
-const STORAGE_BUCKET = "material_images";
-
-export function buildGenerateAccessConfig(input: {
-  anonKey: string;
-  serviceRoleKey: string;
-}): { callerApiKey: string; privilegedApiKey: string } {
-  return {
-    callerApiKey: input.anonKey,
-    privilegedApiKey: input.serviceRoleKey,
-  };
-}
-
-const GENERATE_ACCESS_CONFIG = buildGenerateAccessConfig({
-  anonKey: SUPABASE_ANON_KEY,
-  serviceRoleKey: SUPABASE_SVC_KEY,
-});
+const GEMINI_API_KEY    = Deno.env.get("GEMINI_API_KEY") ?? "";
+const GEMINI_URL        = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
+const SUPABASE_URL      = Deno.env.get("SUPABASE_URL") ?? "";
+const SUPABASE_SVC_KEY  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+const STORAGE_BUCKET    = "material_images";
 
 // ──────────────────────────────────────────────────────
 // 提示词 · 第 8 刀：拆图片路 + passage
@@ -495,15 +459,12 @@ Return ONLY valid JSON, exactly this top-level shape (no markdown, no extra text
 `.trim();
 
 // ── 完整提示词：拼接 ──
-const SYSTEM_PROMPT_TEXT =
-  `${SHARED_HEADER}\n\n${TEXT_STEP_0}\n\n${SHARED_CORE}`;
-const SYSTEM_PROMPT_IMAGE =
-  `${SHARED_HEADER}\n\n${IMAGE_STEP_0}\n\n${IMAGE_READING}\n\n${SHARED_CORE}`;
+const SYSTEM_PROMPT_TEXT  = `${SHARED_HEADER}\n\n${TEXT_STEP_0}\n\n${SHARED_CORE}`;
+const SYSTEM_PROMPT_IMAGE = `${SHARED_HEADER}\n\n${IMAGE_STEP_0}\n\n${IMAGE_READING}\n\n${SHARED_CORE}`;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
 // ──────────────────────────────────────────────────────
@@ -516,14 +477,14 @@ const corsHeaders = {
 async function uploadImage(
   base64: string,
   mimeType: string,
-  userId: string | null,
+  userId: string | null
 ): Promise<string | null> {
   if (!SUPABASE_URL || !SUPABASE_SVC_KEY) return null;
   try {
-    const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
-    const ext = mimeType.includes("png") ? "png" : "jpg";
+    const bytes  = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+    const ext    = mimeType.includes("png") ? "png" : "jpg";
     const folder = userId ?? "anonymous";
-    const path = `${folder}/${crypto.randomUUID()}.${ext}`;
+    const path   = `${folder}/${crypto.randomUUID()}.${ext}`;
 
     const res = await fetch(
       `${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}/${path}`,
@@ -531,12 +492,12 @@ async function uploadImage(
         method: "POST",
         headers: {
           "Authorization": `Bearer ${SUPABASE_SVC_KEY}`,
-          "apikey": SUPABASE_SVC_KEY, // API Gateway 要求：识别项目用，缺少会在网关层被拒
+          "apikey": SUPABASE_SVC_KEY,   // API Gateway 要求：识别项目用，缺少会在网关层被拒
           "Content-Type": mimeType,
           "x-upsert": "true",
         },
         body: bytes,
-      },
+      }
     );
     if (!res.ok) {
       console.error("[uploadImage] failed:", res.status, await res.text());
@@ -564,7 +525,7 @@ async function deleteImage(path: string | null): Promise<void> {
           "Authorization": `Bearer ${SUPABASE_SVC_KEY}`,
           "apikey": SUPABASE_SVC_KEY,
         },
-      },
+      }
     );
     if (!res.ok) {
       console.error("[deleteImage] failed:", res.status, await res.text());
@@ -573,6 +534,51 @@ async function deleteImage(path: string | null): Promise<void> {
     console.log(`[deleteImage] ok path=${path}`);
   } catch (e) {
     console.error("[deleteImage] error:", e);
+  }
+}
+
+// 从请求的 Authorization 头解析出登录用户 id（切片 B：user_id 数据隔离）。
+// 关键：走 /auth/v1/user 端点让 Supabase【验证 JWT 签名与过期】后返回 user，
+// 而不是自己 base64 解码 token——后者不验签，任何人伪造一个 sub 就能冒充他人写库。
+// 拿不到（未登录 / token 失效）时返回 null，由调用方决定如何降级。
+async function getAuthUserId(req: Request): Promise<string | null> {
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader || !SUPABASE_URL || !SUPABASE_SVC_KEY) return null;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      headers: {
+        "Authorization": authHeader,   // 用户 JWT，交给 GoTrue 验签
+        "apikey": SUPABASE_SVC_KEY,    // apikey 头只用于标识本项目
+      },
+    });
+    if (!res.ok) return null;
+    const user = await res.json();
+    return typeof user?.id === "string" ? user.id : null;
+  } catch (e) {
+    console.error("getAuthUserId failed:", e);
+    return null;
+  }
+}
+
+async function insertMessage(
+  row: Record<string, unknown>,
+  userId: string | null,
+  imageUrl: string | null = null
+): Promise<void> {
+  if (!SUPABASE_URL || !SUPABASE_SVC_KEY) return;
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/messages`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${SUPABASE_SVC_KEY}`,
+        "apikey": SUPABASE_SVC_KEY,
+        "Prefer": "return=minimal",
+      },
+      body: JSON.stringify({ ...row, user_id: userId, image_url: imageUrl }),
+    });
+  } catch (e) {
+    console.error("insertMessage failed:", e);
   }
 }
 
@@ -588,137 +594,94 @@ async function classifyScene(
   targetText: string,
   nativeText: string,
   userOriginal?: string,
-): Promise<{ category: string; subScene: string | null }> {
+): Promise<{category: string; subScene: string | null}> {
   try {
     const prompt =
-      `Classify this daily-life scene into ONE category. Reply in JSON ONLY.
+`Classify this daily-life scene into ONE category. Reply in JSON ONLY.
 
 Categories:
 家庭与人际、工作与学业、日常起居、饮食、购物消费、出行交通、运动健康、休闲娱乐、科技数码、天气环境、情绪社交、其他
 
 Note: watching sport/film/show → 休闲娱乐; playing/training sport yourself → 运动健康
 
-Scene: "${targetText}"${userOriginal ? `\nContext: "${userOriginal}"` : ""}
+Scene: "${targetText}"${userOriginal ? `\nContext: "${userOriginal}"` : ''}
 
 JSON: {"category":"<from list above>","sub_scene":"<specific activity in English, never null>"}
 
 sub_scene: complete activity in English, strip qualifiers ("做晚饭"→"Cooking"). Anchors: 饮食→Cooking/Eating out; 休闲娱乐→Watching sports/Watching a show; 运动健康→Running/Playing sports; 出行交通→Commuting/Driving.`;
 
     const res = await fetch(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
         generationConfig: {
-          responseMimeType: "application/json",
+          responseMimeType: 'application/json',
           maxOutputTokens: 100,
           thinkingConfig: { thinkingBudget: 0 },
         },
         safetySettings: [
-          {
-            category: "HARM_CATEGORY_HARASSMENT",
-            threshold: "BLOCK_MEDIUM_AND_ABOVE",
-          },
-          {
-            category: "HARM_CATEGORY_HATE_SPEECH",
-            threshold: "BLOCK_MEDIUM_AND_ABOVE",
-          },
-          {
-            category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-            threshold: "BLOCK_MEDIUM_AND_ABOVE",
-          },
-          {
-            category: "HARM_CATEGORY_DANGEROUS_CONTENT",
-            threshold: "BLOCK_MEDIUM_AND_ABOVE",
-          },
+          { category: "HARM_CATEGORY_HARASSMENT",        threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+          { category: "HARM_CATEGORY_HATE_SPEECH",       threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+          { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+          { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
         ],
       }),
     });
-    if (!res.ok) {
-      throw new Error(
-        `classifyScene failed with ${res.status}: ${await res.text()}`,
-      );
-    }
     const data = await res.json();
     // thinkingBudget:0 suppresses thought parts, but defensively skip any thought:true parts
     const parts = data?.candidates?.[0]?.content?.parts ?? [];
-    const raw = (parts.find((p: { thought?: boolean; text?: string }) =>
-      !p.thought
-    )?.text ?? "").trim();
-    console.log("[classifyScene] raw:", raw, "| parts count:", parts.length);
+    const raw = (parts.find((p: {thought?: boolean; text?: string}) => !p.thought)?.text ?? '').trim();
+    console.log('[classifyScene] raw:', raw, '| parts count:', parts.length);
     const parsed = JSON.parse(raw);
-    const category =
-      (SCENE_CATEGORIES as readonly string[]).includes(parsed.category)
-        ? parsed.category
-        : "其他";
-    const subScene =
-      (typeof parsed.sub_scene === "string" && parsed.sub_scene.trim())
-        ? parsed.sub_scene.trim()
-        : null;
+    const category = (SCENE_CATEGORIES as readonly string[]).includes(parsed.category)
+      ? parsed.category : '其他';
+    const subScene = (typeof parsed.sub_scene === 'string' && parsed.sub_scene.trim())
+      ? parsed.sub_scene.trim() : null;
     return { category, subScene };
   } catch (e) {
-    console.error("[classifyScene] failed:", e);
-    return { category: "其他", subScene: null };
+    console.error('[classifyScene] failed:', e);
+    return { category: '其他', subScene: null };
   }
 }
+
 
 // 词卡分类：按该词最高频的日常使用场景归类，不允许留空。
 async function classifyVocabCategory(wordText: string): Promise<string | null> {
   try {
-    const categories = SCENE_CATEGORIES.filter((c) => c !== "其他").join("、");
+    const categories = SCENE_CATEGORIES.filter(c => c !== '其他').join('、');
     const prompt =
-      `In everyday life, which category do people most often encounter or use this word/phrase?
+`In everyday life, which category do people most often encounter or use this word/phrase?
 Categories: ${categories}
 Word/phrase: "${wordText}"
 You MUST pick exactly one category from the list above — do not reply 其他 or anything else.
 Reply with the category name ONLY.`;
 
     const res = await fetch(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
         generationConfig: { maxOutputTokens: 20 },
         safetySettings: [
-          {
-            category: "HARM_CATEGORY_HARASSMENT",
-            threshold: "BLOCK_MEDIUM_AND_ABOVE",
-          },
-          {
-            category: "HARM_CATEGORY_HATE_SPEECH",
-            threshold: "BLOCK_MEDIUM_AND_ABOVE",
-          },
-          {
-            category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-            threshold: "BLOCK_MEDIUM_AND_ABOVE",
-          },
-          {
-            category: "HARM_CATEGORY_DANGEROUS_CONTENT",
-            threshold: "BLOCK_MEDIUM_AND_ABOVE",
-          },
+          { category: "HARM_CATEGORY_HARASSMENT",        threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+          { category: "HARM_CATEGORY_HATE_SPEECH",       threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+          { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+          { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
         ],
       }),
     });
-    if (!res.ok) {
-      throw new Error(
-        `classifyVocabCategory failed with ${res.status}: ${await res.text()}`,
-      );
-    }
     const data = await res.json();
     // 去掉末尾标点（Gemini 偶尔在分类名后附加标点）
-    const raw = (data?.candidates?.[0]?.content?.parts?.find((
-      p: { thought?: boolean; text?: string },
-    ) => !p.thought)?.text ?? "").trim();
-    const result = raw.replace(/[，。！？,.!?、；;：:]+$/, "").trim();
+    const raw = (data?.candidates?.[0]?.content?.parts?.find((p: {thought?: boolean; text?: string}) => !p.thought)?.text ?? '').trim();
+    const result = raw.replace(/[，。！？,.!?、；;：:]+$/, '').trim();
     if ((SCENE_CATEGORIES as readonly string[]).includes(result)) return result;
     // AI 未能匹配已知分类 → 兜底为「其他」，词条仍可进 Tab2
-    console.warn(
-      `[classifyVocabCategory] unmatched "${raw}" for "${wordText}", fallback→其他`,
-    );
-    return "其他";
+    console.warn(`[classifyVocabCategory] unmatched "${raw}" for "${wordText}", fallback→其他`);
+    return '其他';
   } catch (e) {
     console.error(`[classifyVocabCategory] error for "${wordText}":`, e);
-    return "其他";
+    return '其他';
   }
 }
 
@@ -731,214 +694,197 @@ async function recordLexicon(
   materialId: string,
   userId: string | null,
   sceneCategory: string | null,
-  sceneDetail: string | null, // 子场景标签（scene 材料有；vocabulary 和判不出时为 null）
+  sceneDetail: string | null,   // 子场景标签（scene 材料有；vocabulary 和判不出时为 null）
 ): Promise<void> {
   if (!SUPABASE_URL || !SUPABASE_SVC_KEY || !userId) return;
 
   try {
-    const rawUnits = Array.isArray(rawContent.learnable_units)
-      ? rawContent.learnable_units
-      : [];
+    const rawUnits = Array.isArray(rawContent.learnable_units) ? rawContent.learnable_units : [];
     // 词卡只记第一个词条（用户真正查的词），prompt 保证它永远排第一。
     // 不依赖 AI 的 is_primary 字段——字段可能缺失或类型不对，导致词条被静默丢弃。
-    const filteredUnits = rawContent.granularity === "word"
+    const filteredUnits = rawContent.granularity === 'word'
       ? (rawUnits.length > 0 ? [rawUnits[0]] : [])
       : rawUnits;
-    console.log(
-      `[recordLexicon] granularity=${rawContent.granularity} rawUnits=${rawUnits.length} filteredUnits=${filteredUnits.length}`,
-    );
+    console.log(`[recordLexicon] granularity=${rawContent.granularity} rawUnits=${rawUnits.length} filteredUnits=${filteredUnits.length}`);
     const baseUnits = filteredUnits
-      .map((u) => {
+      .map(u => {
         const lemma = normalizeLemma(u?.form);
         return {
           lemma,
-          display_form: (typeof u?.form === "string" ? u.form.trim() : "") ||
-            null,
-          entry_kind: (typeof u?.kind === "string" ? u.kind : "") || null,
-          note: (typeof u?.note === "string" ? u.note.trim() : "") || null,
+          display_form: (typeof u?.form === 'string' ? u.form.trim() : '') || null,
+          entry_kind: (typeof u?.kind === 'string' ? u.kind : '') || null,
+          note: (typeof u?.note === 'string' ? u.note.trim() : '') || null,
           tier: lemma ? getTier(lemma) : null,
         };
       })
-      .filter((u) => u.lemma && !LEXICON_STOPWORDS.has(u.lemma));
+      .filter(u => u.lemma && !LEXICON_STOPWORDS.has(u.lemma));
 
     if (baseUnits.length === 0) {
-      console.log(
-        `[recordLexicon] no units after filtering for material=${materialId}`,
-      );
+      console.log(`[recordLexicon] no units after filtering for material=${materialId}`);
       return;
     }
 
     // 缺口 7 修复：passage 素材的 sample_sentence 应为该词所在的那一行，
     // 而不是整篇文章（target_expression 对 passage 是全文，会造成存储浪费和显示异常）。
     // passage_lines 是 [{en, zh}]，在每个 unit 的 display_form 里找第一个包含该词的行。
-    const isPassage = rawContent.granularity === "passage";
+    const isPassage = rawContent.granularity === 'passage';
     const passageLines = isPassage && Array.isArray(rawContent.passage_lines)
-      ? rawContent.passage_lines
-      : null;
+      ? rawContent.passage_lines : null;
 
     // 材料级共享样例句（非 passage 路径）
-    const sharedSample = isPassage
-      ? null
+    const sharedSample = isPassage ? null
       : (rawContent.target_expression ?? rawContent.user_original ?? null);
 
-    const units = baseUnits.map((u) => {
+    const units = baseUnits.map(u => {
       if (!passageLines) return u;
       // passage：找该词所在的行；找不到则 null（RPC 会 fallback 到 p_sample_sentence = null）
-      const form = (u.display_form ?? u.lemma ?? "").toLowerCase();
-      const matched = passageLines.find((l) =>
-        l.en.toLowerCase().includes(form)
-      );
+      const form = (u.display_form ?? u.lemma ?? '').toLowerCase();
+      const matched = passageLines.find(l => l.en.toLowerCase().includes(form));
       return { ...u, sample_sentence: matched?.en ?? null };
     });
 
-    const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/rpc/record_lexicon_material_units`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${SUPABASE_SVC_KEY}`,
-          "apikey": SUPABASE_SVC_KEY,
-        },
-        body: JSON.stringify({
-          p_user_id: userId,
-          p_source_id: materialId,
-          p_scene_category: sceneCategory,
-          p_scene_detail: sceneDetail,
-          p_input_lang: rawContent.input_lang ?? null,
-          p_input_lang_code: rawContent.input_lang_code ?? null,
-          p_source_granularity: rawContent.granularity ?? null,
-          p_source_direction: rawContent.direction ?? null,
-          p_intent_text: rawContent.intent ?? null,
-          p_intent_source:
-            rawContent.input_lang === "native" && rawContent.intent !== null
-              ? "stated"
-              : rawContent.user_original === null &&
-                  rawContent.direction === "express"
-              ? "inferred"
-              : null,
-          p_sample_sentence: sharedSample,
-          p_units: units,
-        }),
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/record_lexicon_material_units`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${SUPABASE_SVC_KEY}`,
+        'apikey': SUPABASE_SVC_KEY,
       },
-    );
+      body: JSON.stringify({
+        p_user_id: userId,
+        p_source_id: materialId,
+        p_scene_category: sceneCategory,
+        p_scene_detail: sceneDetail,
+        p_input_lang: rawContent.input_lang ?? null,
+        p_input_lang_code: rawContent.input_lang_code ?? null,
+        p_source_granularity: rawContent.granularity ?? null,
+        p_source_direction: rawContent.direction ?? null,
+        p_intent_text: rawContent.intent ?? null,
+        p_intent_source:
+          rawContent.input_lang === 'native' && rawContent.intent !== null
+            ? 'stated'
+            : rawContent.user_original === null && rawContent.direction === 'express'
+            ? 'inferred'
+            : null,
+        p_sample_sentence: sharedSample,
+        p_units: units,
+      }),
+    });
 
     if (!res.ok) {
       // §5.3.1：记账失败 → 跳过、告警、不阻塞；靠补账作业补回。
-      console.error(
-        "[recordLexicon] rpc failed (non-blocking):",
-        await res.text(),
-      );
+      console.error('[recordLexicon] rpc failed (non-blocking):', await res.text());
       return;
     }
     const recorded = await res.json();
-    console.log(
-      `[recordLexicon] recorded ${recorded} occurrence(s) for material=${materialId}`,
-    );
+    console.log(`[recordLexicon] recorded ${recorded} occurrence(s) for material=${materialId}`);
   } catch (e) {
-    console.error("[recordLexicon] error (non-blocking):", e);
+    console.error('[recordLexicon] error (non-blocking):', e);
   }
 }
 
-async function enrichCommittedMaterial(
-  extracted: NonNullable<ReturnType<typeof buildRawContent>>,
-  materialId: string,
-  userId: string,
+
+async function saveMaterial(
+  cardType: string,
+  cardContent: Record<string, unknown>,
+  userText: string,
+  userId: string | null,
+  sourceImageUrl: string | null,
+  source: string
 ): Promise<void> {
   if (!SUPABASE_URL || !SUPABASE_SVC_KEY) return;
+
+  const extracted = buildRawContent(cardType, cardContent, userText, sourceImageUrl);
+  if (!extracted) return;
+
   const { materialType, rawContent } = extracted;
 
+  // 切片 B：素材必须归属到登录用户；拿不到 uid 说明鉴权没生效，
+  // 记录告警但不阻塞生成体验（脏数据由切片 C 的回填/RLS 兜底）。
+  if (!userId) {
+    console.warn('[saveMaterial] no userId from JWT — material will be written with null user_id');
+  }
+
   try {
-    // Core material 已由原子 RPC 插入；这里只做非核心派生，绝不再插入第二份 material。
+    // Stage 1: INSERT — vocabulary直接 categorized，scene 先 pending
+    const insertRes = await fetch(`${SUPABASE_URL}/rest/v1/materials`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${SUPABASE_SVC_KEY}`,
+        'apikey': SUPABASE_SVC_KEY,
+        'Prefer': 'return=representation',
+      },
+      body: JSON.stringify({
+        user_id: userId,
+        material_type: materialType,
+        status: materialType === 'vocabulary' ? 'categorized' : 'pending',
+        raw_content: rawContent,
+        source,
+      }),
+    });
+
+    if (!insertRes.ok) {
+      console.error('[saveMaterial] insert failed:', await insertRes.text());
+      return;
+    }
+
+    // materialId 两类都要（Stage 3 记账要拿它当 occurrence 的 source_id）。
+    const rows = await insertRes.json() as Array<{ id: string }>;
+    const materialId = rows[0]?.id;
+    if (!materialId) return;
+
     // Stage 2: 分类。scene → classifyScene（输出 category + subScene）；
     //          vocabulary → classifyVocabCategory（仅 category，判不准留 null）。
     let sceneCategory: string | null = null;
     let sceneDetail: string | null = null;
 
-    if (materialType === "scene") {
-      const targetText = rawContent.target_expression ??
-        rawContent.user_original ?? "";
-      const nativeText = rawContent.native_meaning ??
-        rawContent.user_original ?? "";
+    if (materialType === 'scene') {
+      const targetText = rawContent.target_expression ?? rawContent.user_original ?? '';
+      const nativeText = rawContent.native_meaning ?? rawContent.user_original ?? '';
       const userOriginal = rawContent.user_original ?? undefined;
-      const { category, subScene } = await classifyScene(
-        targetText,
-        nativeText,
-        userOriginal,
-      );
+      const { category, subScene } = await classifyScene(targetText, nativeText, userOriginal);
       sceneCategory = category;
-      sceneDetail = subScene;
+      sceneDetail   = subScene;
 
-      const patchResponse = await fetch(
-        `${SUPABASE_URL}/rest/v1/materials?id=eq.${materialId}&user_id=eq.${userId}`,
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${SUPABASE_SVC_KEY}`,
-            "apikey": SUPABASE_SVC_KEY,
-            "Prefer": "return=minimal",
-          },
-          body: JSON.stringify({
-            scene_category: sceneCategory,
-            status: "categorized",
-          }),
+      await fetch(`${SUPABASE_URL}/rest/v1/materials?id=eq.${materialId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SUPABASE_SVC_KEY}`,
+          'apikey': SUPABASE_SVC_KEY,
+          'Prefer': 'return=minimal',
         },
-      );
-      if (!patchResponse.ok) {
-        console.error(
-          "[enrichCommittedMaterial] scene patch failed:",
-          await patchResponse.text(),
-        );
-      }
+        body: JSON.stringify({ scene_category: sceneCategory, status: 'categorized' }),
+      });
 
-      console.log(
-        `[enrichCommittedMaterial] scene id=${materialId} category=${sceneCategory} subScene=${sceneDetail}`,
-      );
+      console.log(`[saveMaterial] scene id=${materialId} category=${sceneCategory} subScene=${sceneDetail}`);
     } else {
       // 词卡也判分类（设计方案 §1.05-3）：判不准留 null，不计入任何分类桶。
-      const wordText = rawContent.target_expression ??
-        rawContent.user_original ?? "";
+      const wordText = rawContent.target_expression ?? rawContent.user_original ?? '';
       if (wordText) {
         sceneCategory = await classifyVocabCategory(wordText);
         if (sceneCategory) {
-          const patchResponse = await fetch(
-            `${SUPABASE_URL}/rest/v1/materials?id=eq.${materialId}&user_id=eq.${userId}`,
-            {
-              method: "PATCH",
-              headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${SUPABASE_SVC_KEY}`,
-                "apikey": SUPABASE_SVC_KEY,
-                "Prefer": "return=minimal",
-              },
-              body: JSON.stringify({ scene_category: sceneCategory }),
+          await fetch(`${SUPABASE_URL}/rest/v1/materials?id=eq.${materialId}`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${SUPABASE_SVC_KEY}`,
+              'apikey': SUPABASE_SVC_KEY,
+              'Prefer': 'return=minimal',
             },
-          );
-          if (!patchResponse.ok) {
-            console.error(
-              "[enrichCommittedMaterial] vocabulary patch failed:",
-              await patchResponse.text(),
-            );
-          }
+            body: JSON.stringify({ scene_category: sceneCategory }),
+          });
         }
       }
       // sceneDetail 对词卡永远是 null（无场景上下文）
-      console.log(
-        `[enrichCommittedMaterial] vocab id=${materialId} category=${sceneCategory}`,
-      );
+      console.log(`[saveMaterial] vocab id=${materialId} category=${sceneCategory}`);
     }
 
     // Stage 3: 记账（非阻塞）。scene 在分类后调，occurrence 的 scene_category 才有值。
-    await recordLexicon(
-      rawContent,
-      materialId,
-      userId,
-      sceneCategory,
-      sceneDetail,
-    );
+    await recordLexicon(rawContent, materialId, userId, sceneCategory, sceneDetail);
   } catch (e) {
-    console.error("[enrichCommittedMaterial] error (non-blocking):", e);
+    console.error('[saveMaterial] error:', e);
   }
 }
 
@@ -953,439 +899,208 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
-interface GenerateRequestBody {
-  request_id?: unknown;
-  text?: string;
-  image_base64?: string;
-  mime_type?: string;
-  preset_card_id?: string;
-  source?: string;
-  context?: {
-    user: string;
-    card_content: Record<string, unknown>;
-    image_base64?: string;
-    mime_type?: string;
-  } | null;
-}
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
 
-interface AfterCommitInput {
-  extracted: NonNullable<ReturnType<typeof buildRawContent>>;
-  committed: CommittedContent;
-  userId: string;
-}
+  if (!GEMINI_API_KEY) {
+    return json({ error: "missing_api_key" }, 500);
+  }
 
-export interface GenerateHandlerDependencies {
-  geminiApiKey: string;
-  supabaseUrl: string;
-  supabaseApiKey: string;
-  fetch: FetchLike;
-  uploadImage: (
-    base64: string,
-    mimeType: string,
-    userId: string,
-  ) => Promise<string | null>;
-  deleteImage: (path: string | null) => Promise<void>;
-  afterCommit: (input: AfterCommitInput) => Promise<void>;
-  waitUntil: (promise: Promise<unknown>) => void;
-  randomUUID: () => string;
-  now: () => Date;
-}
+  try {
+    // 切片 B：从用户 JWT 解析出 uid，稍后写进 materials.user_id 完成数据归属。
+    const userId = await getAuthUserId(req);
 
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const body = await req.json();
+    const { text, image_base64, mime_type, context, preset_card_id, source } = body as {
+      text?: string;
+      image_base64?: string;
+      mime_type?: string;
+      preset_card_id?: string;
+      source?: string;
+      context?: {
+        user: string;
+        card_content: Record<string, unknown>;
+        image_base64?: string;   // 上一轮图片，follow-up 时重发让 AI 真正看到历史图片
+        mime_type?: string;
+      } | null;
+    };
 
-function successBody(
-  committed: CommittedContent,
-  extractedConcept: unknown = committed.extracted_concept,
-): Record<string, unknown> {
-  return {
-    card_type: committed.card_type,
-    card_content: committed.card_content,
-    extracted_concept: typeof extractedConcept === "string"
-      ? extractedConcept
-      : null,
-    request_id: committed.request_id,
-    user_message_id: committed.user_message_id,
-    assistant_message_id: committed.assistant_message_id,
-    material_id: committed.material_id,
-    already_committed: committed.already_committed,
-  };
-}
-
-export function createGenerateHandler(
-  overrides: Partial<GenerateHandlerDependencies> = {},
-): (req: Request) => Promise<Response> {
-  const dependencies: GenerateHandlerDependencies = {
-    geminiApiKey: GEMINI_API_KEY,
-    supabaseUrl: SUPABASE_URL,
-    supabaseApiKey: GENERATE_ACCESS_CONFIG.callerApiKey,
-    fetch,
-    uploadImage,
-    deleteImage,
-    afterCommit: async ({ extracted, committed, userId }) => {
-      await enrichCommittedMaterial(extracted, committed.material_id, userId);
-    },
-    waitUntil: (promise) => {
-      const edgeRuntime = (globalThis as typeof globalThis & {
-        EdgeRuntime?: { waitUntil(promise: Promise<unknown>): void };
-      }).EdgeRuntime;
-      edgeRuntime?.waitUntil(promise);
-    },
-    randomUUID: () => crypto.randomUUID(),
-    now: () => new Date(),
-    ...overrides,
-  };
-
-  return async (req: Request): Promise<Response> => {
-    if (req.method === "OPTIONS") {
-      return new Response("ok", { headers: corsHeaders });
+    if (!text && !image_base64) {
+      return json({ error: "missing_input" }, 400);
     }
 
-    try {
-      if (!dependencies.supabaseUrl || !dependencies.supabaseApiKey) {
-        return json({ error: "missing_supabase_config" }, 500);
-      }
+    // onboarding 每次重新生成前清掉旧记录，确保 DB 里只保留最终一条。
+    // 先查 profiles：若已有 onboarding_completed_at（走完引导的用户），跳过清理，
+    // 保留已有数据不被覆盖；只有明确"尚未完成"的用户才需要清旧记录重试。
+    if (source === 'onboarding' && userId && SUPABASE_URL && SUPABASE_SVC_KEY) {
+      const profileRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}&select=onboarding_completed_at`,
+        {
+          headers: {
+            'Authorization': `Bearer ${SUPABASE_SVC_KEY}`,
+            'apikey': SUPABASE_SVC_KEY,
+          },
+        }
+      );
+      const profiles = await profileRes.json() as Array<{ onboarding_completed_at: string | null }>;
+      const alreadyCompleted = profiles.length > 0 && profiles[0].onboarding_completed_at != null;
 
-      const authorization = req.headers.get("Authorization");
-      let userId: string | null;
-      try {
-        userId = await authenticateCaller({
-          supabaseUrl: dependencies.supabaseUrl,
-          apiKey: dependencies.supabaseApiKey,
-          authorization,
-          fetch: dependencies.fetch,
-        });
-      } catch (error) {
-        console.error("[generate] authentication failed:", error);
-        return json({ error: "persistence_unavailable" }, 502);
+      if (!alreadyCompleted) {
+        const svcHeaders = {
+          'Authorization': `Bearer ${SUPABASE_SVC_KEY}`,
+          'apikey': SUPABASE_SVC_KEY,
+        };
+        await Promise.all([
+          fetch(`${SUPABASE_URL}/rest/v1/messages?user_id=eq.${userId}&source=eq.onboarding`, { method: 'DELETE', headers: svcHeaders }),
+          fetch(`${SUPABASE_URL}/rest/v1/materials?user_id=eq.${userId}&source=eq.onboarding`, { method: 'DELETE', headers: svcHeaders }),
+        ]);
       }
-      if (!userId) {
-        return json({ error: "unauthorized" }, 401);
-      }
+    }
 
-      const body = await req.json() as GenerateRequestBody;
-      const suppliedRequestId = body.request_id;
-      const requestIdCandidate =
-        suppliedRequestId === undefined || suppliedRequestId === null
-          ? dependencies.randomUUID()
-          : suppliedRequestId;
-      const rawRequestId = typeof requestIdCandidate === "string"
-        ? requestIdCandidate
-        : "";
-      const requestId = UUID_PATTERN.test(rawRequestId)
-        ? rawRequestId.toLowerCase()
-        : rawRequestId;
+    // 在 AI 调用之前就锁定 user 消息时间戳，确保比 assistant 的 now() 早，与异步顺序无关
+    const userCreatedAt = new Date().toISOString();
 
-      let resolved;
-      try {
-        resolved = await resolveCommittedRequest({
-          supabaseUrl: dependencies.supabaseUrl,
-          apiKey: dependencies.supabaseApiKey,
-          authorization,
-          requestId,
-          verifiedUserId: userId,
-          fetch: dependencies.fetch,
-        });
-      } catch (error) {
-        console.error(
-          "[generate] authentication/idempotency lookup failed:",
-          error,
-        );
-        return json(
-          { error: "persistence_unavailable", request_id: requestId },
-          502,
-        );
-      }
+    // Build current-turn Gemini parts（同步，不阻塞）
+    // 第 8 刀：有图 → IMAGE_PROMPT，无图 → TEXT_PROMPT
+    const hasImage = !!image_base64;
+    let systemPrompt = hasImage ? SYSTEM_PROMPT_IMAGE : SYSTEM_PROMPT_TEXT;
 
-      if (!UUID_PATTERN.test(requestId)) {
-        return json({ error: "invalid_request_id" }, 400);
-      }
-      if (resolved.committed) {
-        return json(successBody(resolved.committed), 200);
-      }
-
-      const { text, image_base64, mime_type, context, preset_card_id, source } =
-        body;
-      if (!text && !image_base64) {
-        return json({ error: "missing_input" }, 400);
-      }
-      if (!dependencies.geminiApiKey) {
-        return json({ error: "missing_api_key" }, 500);
-      }
-
-      // 在 AI 调用之前就锁定 user 消息时间戳，确保比 assistant 的 now() 早。
-      const userCreatedAt = dependencies.now().toISOString();
-
-      // Build current-turn Gemini parts（同步，不阻塞）
-      // 第 8 刀：有图 → IMAGE_PROMPT，无图 → TEXT_PROMPT
-      const hasImage = !!image_base64;
-      let systemPrompt = hasImage ? SYSTEM_PROMPT_IMAGE : SYSTEM_PROMPT_TEXT;
-
-      // 第8刀修正：passage 的 300 字符阈值是确定性判断，不能交给模型数——LLM 本质上数不准字符。
-      // 纯文字路在服务器端量出精确长度（按 Unicode code point，1 个汉字=1），作为「权威长度」注入提示词，
-      // 模型只需照这个数走 STEP 3 的 ≤300 / >300 分界，不再自己估算。
-      // 图片路的待处理文字长度只有模型读图后才知道，服务器量不到，那条仍由模型判断。
-      if (!hasImage && typeof text === "string" && text.trim()) {
-        const charCount = [...text.trim()].length;
-        systemPrompt +=
-          `\n\n═══ INPUT LENGTH (authoritative — measured by the server) ═══
+    // 第8刀修正：passage 的 300 字符阈值是确定性判断，不能交给模型数——LLM 本质上数不准字符。
+    // 纯文字路在服务器端量出精确长度（按 Unicode code point，1 个汉字=1），作为「权威长度」注入提示词，
+    // 模型只需照这个数走 STEP 3 的 ≤300 / >300 分界，不再自己估算。
+    // 图片路的待处理文字长度只有模型读图后才知道，服务器量不到，那条仍由模型判断。
+    if (!hasImage && typeof text === "string" && text.trim()) {
+      const charCount = [...text.trim()].length;
+      systemPrompt += `\n\n═══ INPUT LENGTH (authoritative — measured by the server) ═══
 The user's raw text is exactly ${charCount} characters long.
 Use THIS number for the STEP 3 length boundary; do NOT estimate the length yourself.
 When STEP 1's OBJECT is the whole input and it has a subject and a predicate:
   · ${charCount} <= 300 -> sentence (s2 / s4)
   · ${charCount} > 300  -> PASSAGE (s5 / s6) — you MUST split it into passage_lines.`;
-      }
-
-      let userParts: unknown[];
-      if (image_base64 && !text) {
-        // 纯图：只发图片，提示词里的 IMAGE READING 负责判定
-        userParts = [
-          {
-            inline_data: {
-              mime_type: mime_type ?? "image/jpeg",
-              data: image_base64,
-            },
-          },
-        ];
-      } else if (image_base64 && text) {
-        // 图文混合：发图片 + 用户文字，提示词里的 RELATIONSHIP CHECK 负责判定
-        userParts = [
-          {
-            inline_data: {
-              mime_type: mime_type ?? "image/jpeg",
-              data: image_base64,
-            },
-          },
-          { text },
-        ];
-      } else {
-        if (typeof text !== "string" || text.trim() === "") {
-          return json({ error: "missing_text" }, 400);
-        }
-        userParts = [{ text }];
-      }
-
-      // 多轮对话：客户端传来上一轮 (user, card_content, 可选 image_base64)，注入为 Gemini history
-      // Gemini 用 "model" role（OpenAI 用 "assistant"），此处对应
-      const contents: Array<{ role: string; parts: unknown[] }> = [];
-      if (context?.user && context?.card_content) {
-        // 如果上一轮有图片，重放到历史 user turn，让 AI 在 follow-up 时真正看到图片
-        const ctxUserParts: unknown[] = [];
-        if (context.image_base64) {
-          ctxUserParts.push({
-            inline_data: {
-              mime_type: context.mime_type ?? "image/jpeg",
-              data: context.image_base64,
-            },
-          });
-        }
-        ctxUserParts.push({ text: context.user });
-        contents.push({ role: "user", parts: ctxUserParts });
-        contents.push({
-          role: "model",
-          parts: [{ text: JSON.stringify(context.card_content) }],
-        });
-      }
-      contents.push({ role: "user", parts: userParts });
-
-      // 优先级3：Storage 上传与 Gemini 调用并行——图片消息不比纯文字消息慢。
-      // 图片上传与 Gemini 并行；任一图片上传失败都不能进入 durable success。
-      const [geminiRes, sourceImagePath] = await Promise.all([
-        dependencies.fetch(`${GEMINI_URL}?key=${dependencies.geminiApiKey}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            systemInstruction: { parts: [{ text: systemPrompt }] },
-            contents,
-            generationConfig: { responseMimeType: "application/json" },
-            safetySettings: [
-              {
-                category: "HARM_CATEGORY_HARASSMENT",
-                threshold: "BLOCK_MEDIUM_AND_ABOVE",
-              },
-              {
-                category: "HARM_CATEGORY_HATE_SPEECH",
-                threshold: "BLOCK_MEDIUM_AND_ABOVE",
-              },
-              {
-                category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-                threshold: "BLOCK_MEDIUM_AND_ABOVE",
-              },
-              {
-                category: "HARM_CATEGORY_DANGEROUS_CONTENT",
-                threshold: "BLOCK_MEDIUM_AND_ABOVE",
-              },
-            ],
-          }),
-        }),
-        image_base64
-          ? dependencies.uploadImage(
-            image_base64,
-            mime_type ?? "image/jpeg",
-            userId,
-          )
-          : Promise.resolve(null),
-      ]);
-
-      if (!geminiRes.ok) {
-        return json({
-          error: "gemini_failed",
-          status: geminiRes.status,
-          request_id: requestId,
-        }, 502);
-      }
-
-      const data = await geminiRes.json();
-
-      // 内容被安全过滤器拦截（输入端或输出端）→ 返回可被客户端识别的错误码
-      if (data?.promptFeedback?.blockReason) {
-        await dependencies.deleteImage(sourceImagePath);
-        return json({
-          error: "content_blocked",
-          blockReason: data.promptFeedback.blockReason,
-          request_id: requestId,
-        }, 422);
-      }
-      if (data?.candidates?.[0]?.finishReason === "SAFETY") {
-        await dependencies.deleteImage(sourceImagePath);
-        return json({
-          error: "content_blocked",
-          blockReason: "OUTPUT_SAFETY",
-          request_id: requestId,
-        }, 422);
-      }
-
-      const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
-      const parsed = JSON.parse(raw);
-
-      // 模型层安全门（STEP 0）：模型自行判定为 error 卡（unsafe / meaningless）时，
-      // 与 Gemini API 层拦截同口径返回 422 content_blocked，客户端按「内容被拒」处理。
-      // 提前返回：不写库、不存素材——不安全内容不应落库。
-      if (isModelErrorCard(parsed)) {
-        await dependencies.deleteImage(sourceImagePath); // 被拒图片不留在 Storage
-        return json(
-          {
-            error: "content_blocked",
-            blockReason: parsed.card_content?.error_type ?? "MODEL_GATE",
-            request_id: requestId,
-          },
-          422,
-        );
-      }
-
-      if (image_base64 && !sourceImagePath) {
-        return json(
-          { error: "image_upload_failed", request_id: requestId },
-          502,
-        );
-      }
-
-      const cardType = typeof parsed.card_type === "string"
-        ? parsed.card_type
-        : "";
-      const cardContent = parsed.card_content !== null &&
-          typeof parsed.card_content === "object" &&
-          !Array.isArray(parsed.card_content)
-        ? parsed.card_content as Record<string, unknown>
-        : {};
-      const extracted = buildRawContent(
-        cardType,
-        cardContent,
-        (text ?? "").trim(),
-        sourceImagePath,
-      );
-      if (!extracted) {
-        console.error(
-          `[generate] generated card cannot build core material request_id=${requestId} image_path=${
-            sourceImagePath ?? "null"
-          }`,
-        );
-        return json({
-          error: "invalid_generated_content",
-          request_id: requestId,
-        }, 502);
-      }
-
-      let committed: CommittedContent;
-      try {
-        committed = await commitGeneratedContent({
-          supabaseUrl: dependencies.supabaseUrl,
-          apiKey: dependencies.supabaseApiKey,
-          authorization,
-          requestId,
-          fetch: dependencies.fetch,
-          userMessage: {
-            created_at: userCreatedAt,
-            input_type: preset_card_id
-              ? "preset_card"
-              : (image_base64 ? "image" : "text"),
-            user_content: image_base64
-              ? (text ? `[photo] ${text.trim()}` : "[photo]")
-              : (text ?? "").trim(),
-            preset_card_id: preset_card_id ?? null,
-            source: source ?? "tab1",
-            status: "delivered",
-            image_url: sourceImagePath,
-          },
-          assistantMessage: {
-            card_type: cardType,
-            card_content: cardContent,
-            extracted_concept: parsed.extracted_concept ?? null,
-            source: source ?? "tab1",
-            status: "delivered",
-          },
-          material: {
-            material_type: extracted.materialType,
-            status: extracted.materialType === "vocabulary"
-              ? "categorized"
-              : "pending",
-            scene_category: null,
-            raw_content: extracted.rawContent,
-            source: source ?? "tab1",
-          },
-        });
-      } catch (error) {
-        // 图片保留在私有 Storage，便于同 request_id 重试或后续对账；这里绝不删。
-        console.error(
-          `[generate] durable commit failed request_id=${requestId} image_path=${
-            sourceImagePath ?? "null"
-          }:`,
-          error,
-        );
-        return json({ error: "commit_failed", request_id: requestId }, 502);
-      }
-
-      if (!committed.already_committed) {
-        const derivation = Promise.resolve().then(() =>
-          dependencies.afterCommit({
-            extracted,
-            committed,
-            userId,
-          })
-        ).catch((error) => {
-          console.error(
-            "[generate] post-commit derivation failed (non-blocking):",
-            error,
-          );
-        });
-        try {
-          dependencies.waitUntil(derivation);
-        } catch (error) {
-          console.error(
-            "[generate] waitUntil failed after durable commit:",
-            error,
-          );
-        }
-      }
-
-      return json(successBody(committed), 200);
-    } catch (error) {
-      console.error("[generate] internal error:", error);
-      return json({ error: "internal_error" }, 500);
     }
-  };
-}
 
-if (import.meta.main) {
-  Deno.serve(createGenerateHandler());
-}
+    let userParts: unknown[];
+    if (image_base64 && !text) {
+      // 纯图：只发图片，提示词里的 IMAGE READING 负责判定
+      userParts = [
+        { inline_data: { mime_type: mime_type ?? "image/jpeg", data: image_base64 } },
+      ];
+    } else if (image_base64 && text) {
+      // 图文混合：发图片 + 用户文字，提示词里的 RELATIONSHIP CHECK 负责判定
+      userParts = [
+        { inline_data: { mime_type: mime_type ?? "image/jpeg", data: image_base64 } },
+        { text },
+      ];
+    } else {
+      if (typeof text !== "string" || text.trim() === "") {
+        return json({ error: "missing_text" }, 400);
+      }
+      userParts = [{ text }];
+    }
+
+    // 多轮对话：客户端传来上一轮 (user, card_content, 可选 image_base64)，注入为 Gemini history
+    // Gemini 用 "model" role（OpenAI 用 "assistant"），此处对应
+    const contents: Array<{ role: string; parts: unknown[] }> = [];
+    if (context?.user && context?.card_content) {
+      // 如果上一轮有图片，重放到历史 user turn，让 AI 在 follow-up 时真正看到图片
+      const ctxUserParts: unknown[] = [];
+      if (context.image_base64) {
+        ctxUserParts.push({
+          inline_data: {
+            mime_type: context.mime_type ?? "image/jpeg",
+            data: context.image_base64,
+          },
+        });
+      }
+      ctxUserParts.push({ text: context.user });
+      contents.push({ role: "user",  parts: ctxUserParts });
+      contents.push({ role: "model", parts: [{ text: JSON.stringify(context.card_content) }] });
+    }
+    contents.push({ role: "user", parts: userParts });
+
+    // 优先级3：Storage 上传与 Gemini 调用并行——图片消息不比纯文字消息慢。
+    // 上传失败时 sourceImagePath=null，素材正常保存只是没有图片，不阻塞主流程。
+    const [geminiRes, sourceImagePath] = await Promise.all([
+      fetch(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: systemPrompt }] },
+          contents,
+          generationConfig: { responseMimeType: "application/json" },
+          safetySettings: [
+            { category: "HARM_CATEGORY_HARASSMENT",        threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+            { category: "HARM_CATEGORY_HATE_SPEECH",       threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+            { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+            { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+          ],
+        }),
+      }),
+      image_base64
+        ? uploadImage(image_base64, mime_type ?? "image/jpeg", userId)
+        : Promise.resolve(null),
+    ]);
+
+    if (!geminiRes.ok) {
+      return json({ error: "gemini_failed", status: geminiRes.status }, 502);
+    }
+
+    const data = await geminiRes.json();
+
+    // 内容被安全过滤器拦截（输入端或输出端）→ 返回可被客户端识别的错误码
+    if (data?.promptFeedback?.blockReason) {
+      await deleteImage(sourceImagePath);
+      return json({ error: "content_blocked", blockReason: data.promptFeedback.blockReason }, 422);
+    }
+    if (data?.candidates?.[0]?.finishReason === "SAFETY") {
+      await deleteImage(sourceImagePath);
+      return json({ error: "content_blocked", blockReason: "OUTPUT_SAFETY" }, 422);
+    }
+
+    const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
+    const parsed = JSON.parse(raw);
+
+    // 模型层安全门（STEP 0）：模型自行判定为 error 卡（unsafe / meaningless）时，
+    // 与 Gemini API 层拦截同口径返回 422 content_blocked，客户端按「内容被拒」处理。
+    // 提前返回：不写库、不存素材——不安全内容不应落库。
+    if (isModelErrorCard(parsed)) {
+      await deleteImage(sourceImagePath);   // 被拒图片不留在 Storage
+      return json(
+        { error: "content_blocked", blockReason: parsed.card_content?.error_type ?? "MODEL_GATE" },
+        422,
+      );
+    }
+
+    // userCreatedAt 在 AI 调用前已锁定，保证早于 assistant 的 DB now()，排序永远正确
+    await insertMessage({
+      role: "user",
+      created_at: userCreatedAt,
+      input_type: preset_card_id ? "preset_card" : (image_base64 ? "image" : "text"),
+      user_content: image_base64
+        ? (text ? `[photo] ${text.trim()}` : "[photo]")
+        : (text ?? "").trim(),
+      preset_card_id: preset_card_id ?? null,
+      source: source ?? "tab1",
+      status: "delivered",
+    }, userId, sourceImagePath);
+
+    // assistant 消息和素材提取并行，失败不影响主响应
+    await Promise.all([
+      insertMessage({
+        role: "assistant",
+        source: source ?? "tab1",
+        card_type: parsed.card_type ?? null,
+        card_content: parsed.card_content ?? null,
+        extracted_concept: parsed.extracted_concept ?? null,
+        status: "delivered",
+      }, userId, null),
+      saveMaterial(parsed.card_type ?? '', parsed.card_content ?? {}, (text ?? '').trim(), userId, sourceImagePath, source ?? 'tab1'),
+    ]);
+
+    return json(parsed, 200);
+  } catch (_error) {
+    return json({ error: "internal_error" }, 500);
+  }
+});
