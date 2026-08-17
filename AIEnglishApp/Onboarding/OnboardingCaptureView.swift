@@ -269,7 +269,10 @@ struct OnboardingCaptureView: View {
                     )
                 }
                 .padding(.horizontal, AppTheme.Space.paddingPage)
-                .padding(.bottom, AppTheme.Space.paddingScreenBottom)
+                // 与 resultContent / Screen1 / Screen2 一致：贴底 8pt（#31 设计）。
+                // merge 时曾被自动合并静默丢回 56pt 上浮，已修复。
+                .ignoresSafeArea(.container, edges: .bottom)
+                .padding(.bottom, AppTheme.Size.onboardingContinueBottom)
             }
             .animation(.easeInOut(duration: 0.3), value: hasSelection)
         }
@@ -342,10 +345,10 @@ struct OnboardingCaptureView: View {
     // 顶部始终在同一条线上。无底纹，仅保留圆角裁剪。
 
     private var photoPreviewArea: some View {
-        // GeometryReader 的"理想高度"极小（同 Spacer），在 ScrollView 的 VStack 里
-        // 才能正确吃掉"标题下方 → Continue 按钮上方"的剩余空间。若用 ZStack 直接
-        // 作为 flexible 子项，其 ideal 高度会传递成图片原始高度，容器被撑到原图高、
-        // 照片按宽边自然放大并延伸到按钮后方（ScrollView 里 minHeight 无法约束它）。
+        // 固定容器由调用处提供：外层 frame(minHeight: 视口 - onboardingPhotoPreviewFixedOverhead)
+        // 保底「正常字号恰好顶到 Continue 按钮上方」的高度，大字号/小屏下不压缩、页面滚动。
+        // GeometryReader 把容器的确定尺寸提案传给图片：scaledToFit 按原比例贴边缩放
+        // （横图贴宽、竖图贴高），frame alignment .top = 水平居中 + 顶部对齐。
         GeometryReader { geo in
             Group {
                 if let image = pendingImage {
