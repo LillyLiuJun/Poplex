@@ -38,7 +38,7 @@ struct OnboardingPrimaryButton: View {
     }
 }
 
-// MARK: - 返回按钮：裸 chevron（N-1）
+// MARK: - 返回按钮：裸 arrow.left 细线（N-1 + F-1）
 //
 // 曾是白圆+阴影（与 Settings 子页 backRow 同配方），已去掉：白圆 cardBg 压在
 // pageBg 上对比仅 1.06:1，圆形本身几乎不可见，形完全靠阴影撑出——「靠阴影定义
@@ -46,14 +46,19 @@ struct OnboardingPrimaryButton: View {
 // 它也是整个 onboarding 里唯一的圆形（其余全为胶囊/圆角矩形），形状独一即抓眼；
 // 44pt 直径与 Camera/Gallery 胶囊高度相当，次要动作占用了主控件体量。
 // 去掉盒子后标题才可能贴近它上移，是 N-1 顶部收紧 20pt 的前提。
+//
+// 字形（F-1）：chevron.left → arrow.left。标准 SF chevron 在 .body/semibold 下
+// 笔画约 2.6pt、等宽、粗短圆头，是 iOS 通用几何形；这一页其余全是衬线排版，
+// 形态语言不同族。细线 arrow 呼应衬线字的细横线，横杆给出更明确的方向感。
+// 若真机上 .regular 的笔画仍偏粗，退回自绘 Path（22×22，lineWidth 1.6，.round 线帽）。
 
 struct OnboardingBackButton: View {
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: "chevron.left")
-                .font(.system(.body, weight: .semibold))
+            Image(systemName: "arrow.left")
+                .font(.system(size: 19, weight: .regular))
                 .foregroundStyle(AppTheme.Color.textSecondary)
                 .frame(width: AppTheme.Size.barControl, height: AppTheme.Size.barControl)
                 .contentShape(Rectangle())

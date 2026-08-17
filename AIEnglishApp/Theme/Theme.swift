@@ -448,11 +448,12 @@ enum AppTheme {
         // 反推得出，未在真机复核实际渲染的 header 高度，正常字号下需真机校准。
         static let onboardingResultCardFixedOverhead: CGFloat = 379
         static let onboardingContentBottomClearance: CGFloat = 80 // Continue 槽位避让（内容底进遮罩渐隐区，不钻按钮背后）
-        // Continue 距屏幕底：这个 8 不是贴物理屏底，是加在安全区下沿（34）之上——
-        // 承载各页的 GeometryReader 已被安全区内缩，ignoresSafeArea 只解除 Continue
-        // 自身的内缩，8 因此落在安全区之上，真实落点 ≈36–42pt，Home Indicator 完全让开。
-        // 之前的注释写反了（写成「贴系统条上方」），照它"修"成真 8pt 会直接压到系统条上。
-        static let onboardingContinueBottom: CGFloat = 8
+        // Continue 距安全区下沿（F-2）。四页四态原本各挂一份 `.ignoresSafeArea(.container,
+        // edges: .bottom)`，但承载各页的 GeometryReader 本身已被安全区内缩，这句在 CTA 上
+        // 实际不起作用——只是让这个数的语义变得不可读（旧注释写的是「贴系统条上方」，
+        // 是错的）。F-2 已删掉全部 8 处 ignoresSafeArea，这个数现在是字面意义的
+        // 「距安全区下沿」：34 + 12 = 46，Home Indicator（8–13）净空 33pt。
+        static let onboardingContinueBottom: CGFloat = 12
         static let inputBarMinHeight: CGFloat = 52 // 底部胶囊最小高度（Tab1 InputBar / Onboarding Continue 对齐）
         static let onboardingSampleWidth: CGFloat           = 104 // 样例图横滑卡宽
         static let onboardingSampleHeight: CGFloat          = 120 // 样例图横滑卡高：给固定 CTA 留出呼吸

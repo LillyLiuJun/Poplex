@@ -48,7 +48,6 @@ struct OnboardingScreen1View: View {
 
             OnboardingPrimaryButton(title: "Continue", action: onForward)
                 .padding(.horizontal, AppTheme.Space.paddingPage)
-                .ignoresSafeArea(.container, edges: .bottom)
                 .padding(.bottom, AppTheme.Size.onboardingContinueBottom)
                 .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.30)
         }

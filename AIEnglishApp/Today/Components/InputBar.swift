@@ -1,5 +1,4 @@
 import SwiftUI
-import AVFoundation
 
 private enum RightButtonMode: Equatable {
     case camera
@@ -103,10 +102,7 @@ struct InputBar: View {
                 }
             }
             .alert("Camera Access Required", isPresented: $showCameraPermissionAlert) {
-                Button("Open Settings") {
-                    guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
-                    UIApplication.shared.open(url)
-                }
+                Button("Open Settings") { PermissionService.openSettings() }
                 Button("Cancel", role: .cancel) {}
             } message: {
                 Text("Camera access is required to take photos. Open Settings to allow access.")
@@ -372,16 +368,16 @@ struct InputBar: View {
     }
 
     private func checkCameraPermission() {
-        switch AVCaptureDevice.authorizationStatus(for: .video) {
-        case .authorized:
+        switch PermissionService.cameraStatus {
+        case .granted:
             activeSheet = .camera
-        case .notDetermined:
-            AVCaptureDevice.requestAccess(for: .video) { granted in
-                DispatchQueue.main.async {
-                    if granted { activeSheet = .camera }
+        case .undetermined:
+            Task {
+                if await PermissionService.requestCamera() {
+                    activeSheet = .camera
                 }
             }
-        default:
+        case .denied:
             showCameraPermissionAlert = true
         }
     }

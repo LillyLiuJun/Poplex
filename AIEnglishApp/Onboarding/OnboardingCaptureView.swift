@@ -22,6 +22,8 @@ enum OnboardingPhotoAspectValidator {
 private enum OnboardingCaptureLayout {
     // 页面级坐标空间：翻页手势的 startLocation 与样例图条的 frame 都以此为参照
     static let pageSpace = "onboardingCapturePage"
+    // 样例卡横滑条的 ScrollViewReader id：相机权限被拒时"Use a sample instead"用它滚过去
+    static let sampleCarouselID = "onboardingSampleCarousel"
 }
 
 private struct CarouselFramePreferenceKey: PreferenceKey {
@@ -54,6 +56,8 @@ struct OnboardingCaptureView: View {
     @State private var stagedImage: UIImage?
     @State private var photoValidationMessage: String?
     @State private var appeared = false
+    // 相机权限被拒：不弹通用 alert，Camera 行内变成说明 + 两个出口（F-3/C-1）
+    @State private var cameraPermissionDenied = false
     // 样例图横滑条在页面坐标空间里的 frame；翻页手势起点落在其中时不翻页
     @State private var carouselFrame: CGRect?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -155,10 +159,12 @@ struct OnboardingCaptureView: View {
                     systemImage: "exclamationmark.triangle",
                     lifetime: AppTheme.Motion.toastLifetime
                 )
-                // 浮于底部 Continue 之上：沿用原 errorToast 的底部偏移惯例，
-                // 否则 toast 与选择页底部按钮（含禁用态）重叠 11-16pt。
-                .ignoresSafeArea(.container, edges: .bottom)
-                .padding(.bottom, AppTheme.Size.onboardingContinueBottom + AppTheme.Size.barControl)
+                // 浮于底部 Continue 之上：原来错用 barControl(44) 当 CTA 高度，
+                // 但 CTA 实际高度是 inputBarMinHeight(52)，导致 toast 与按钮重叠 12pt
+                // （F-2 修正）。距安全区下沿 = Continue 底距(12) + CTA 高(52) + 间距(12)。
+                .padding(.bottom, AppTheme.Size.onboardingContinueBottom
+                    + AppTheme.Size.inputBarMinHeight
+                    + AppTheme.Space.paddingM)
             }
         }
     }
@@ -208,70 +214,70 @@ struct OnboardingCaptureView: View {
 
     private var selectionContent: some View {
         GeometryReader { geo in
-            ZStack(alignment: .bottom) {
-                ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 0) {
-                        // 标题顶部位置只由 onboardingHeaderTop 一个数决定（N-1 单一真源）。
-                        selectionHeader
-                            .padding(.top, AppTheme.Size.onboardingHeaderTop)
-                            .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.05)
+            ScrollViewReader { scrollProxy in
+                ZStack(alignment: .bottom) {
+                    ScrollView(showsIndicators: false) {
+                        VStack(alignment: .leading, spacing: 0) {
+                            // 标题顶部位置只由 onboardingHeaderTop 一个数决定（N-1 单一真源）。
+                            selectionHeader
+                                .padding(.top, AppTheme.Size.onboardingHeaderTop)
+                                .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.05)
 
-                        if hasSelection {
-                            // 已选照片：固定容器（顶部=副标题下方，底部=Continue 按钮上方），
-                            // 不再随图片比例撑开布局，也无需滚动避让。
-                            // minHeight 保底「正常字号时顶到按钮」的高度：大字号/小屏下
-                            // 照片区不被压缩、保持此高度，页面转为可滚动。
-                            photoPreviewArea
-                                .frame(minHeight: geo.size.height - AppTheme.Size.onboardingPhotoPreviewFixedOverhead)
-                                .padding(.top, AppTheme.Space.paddingCard)
-                                .transition(.opacity)
-                        } else {
-                            actionCard()
-                                .padding(.top, AppTheme.Space.paddingPage)
-                                .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.25)
+                            if hasSelection {
+                                // 已选照片：固定容器（顶部=副标题下方，底部=Continue 按钮上方），
+                                // 不再随图片比例撑开布局，也无需滚动避让。
+                                // minHeight 保底「正常字号时顶到按钮」的高度：大字号/小屏下
+                                // 照片区不被压缩、保持此高度，页面转为可滚动。
+                                photoPreviewArea
+                                    .frame(minHeight: geo.size.height - AppTheme.Size.onboardingPhotoPreviewFixedOverhead)
+                                    .padding(.top, AppTheme.Space.paddingCard)
+                                    .transition(.opacity)
+                            } else {
+                                actionCard(scrollProxy: scrollProxy)
+                                    .padding(.top, AppTheme.Space.paddingPage)
+                                    .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.25)
 
-                            Text("Or try a sample")
-                                .font(AppTheme.Font.compactSectionTitleSerif)
-                                .foregroundStyle(AppTheme.Color.textPrimary)
-                                .padding(.top, AppTheme.Space.titleToContent)
-                                .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.35)
+                                Text("Or try a sample")
+                                    .font(AppTheme.Font.compactSectionTitleSerif)
+                                    .foregroundStyle(AppTheme.Color.textPrimary)
+                                    .padding(.top, AppTheme.Space.titleToContent)
+                                    .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.35)
 
-                            presetCarousel
-                                .padding(.top, AppTheme.Space.paddingCard)
-                                .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.4)
+                                presetCarousel
+                                    .id(OnboardingCaptureLayout.sampleCarouselID)
+                                    .padding(.top, AppTheme.Space.paddingCard)
+                                    .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.4)
 
-                            Spacer(minLength: 0)
+                                Spacer(minLength: 0)
+                            }
                         }
+                        .padding(.horizontal, AppTheme.Space.paddingPage)
+                        .padding(.bottom, AppTheme.Size.onboardingContentBottomClearance) // Give space for the absolute bottom button
+                        .frame(minHeight: geo.size.height)
+                    }
+                    .scrollBounceBehavior(.basedOnSize)
+
+                    OnboardingBottomFade()
+
+                    VStack(spacing: AppTheme.Space.paddingCard) {
+                        AutoDismissingAppToast(
+                            message: $photoValidationMessage,
+                            systemImage: "exclamationmark.triangle",
+                            lifetime: AppTheme.Motion.onboardingPhotoToastLifetime
+                        )
+
+                        OnboardingPrimaryButton(
+                            title: "Continue",
+                            isEnabled: hasSelection,
+                            action: confirmSelection
+                        )
                     }
                     .padding(.horizontal, AppTheme.Space.paddingPage)
-                    .padding(.bottom, AppTheme.Size.onboardingContentBottomClearance) // Give space for the absolute bottom button
-                    .frame(minHeight: geo.size.height)
+                    // 与 resultContent / Screen1 / Screen2 一致：距安全区下沿（F-2 统一语义）。
+                    .padding(.bottom, AppTheme.Size.onboardingContinueBottom)
                 }
-                .scrollBounceBehavior(.basedOnSize)
-                .ignoresSafeArea(.container, edges: .bottom)
-
-                OnboardingBottomFade()
-
-                VStack(spacing: AppTheme.Space.paddingCard) {
-                    AutoDismissingAppToast(
-                        message: $photoValidationMessage,
-                        systemImage: "exclamationmark.triangle",
-                        lifetime: AppTheme.Motion.onboardingPhotoToastLifetime
-                    )
-
-                    OnboardingPrimaryButton(
-                        title: "Continue",
-                        isEnabled: hasSelection,
-                        action: confirmSelection
-                    )
-                }
-                .padding(.horizontal, AppTheme.Space.paddingPage)
-                // 与 resultContent / Screen1 / Screen2 一致：贴底 8pt（#31 设计）。
-                // merge 时曾被自动合并静默丢回 56pt 上浮，已修复。
-                .ignoresSafeArea(.container, edges: .bottom)
-                .padding(.bottom, AppTheme.Size.onboardingContinueBottom)
+                .animation(.easeInOut(duration: 0.3), value: hasSelection)
             }
-            .animation(.easeInOut(duration: 0.3), value: hasSelection)
         }
     }
 
@@ -291,7 +297,7 @@ struct OnboardingCaptureView: View {
 
     // MARK: 空输入区（虚线动作卡）；选照片后由 photoPreviewArea 接替
 
-    private func actionCard() -> some View {
+    private func actionCard(scrollProxy: ScrollViewProxy) -> some View {
         // 试调：卡内上下收紧为 24，释放空间给下方示例图片区；内部内容节奏保持不变。
         VStack(spacing: AppTheme.Space.paddingCard) {
             OnboardingCaptureIllustration()
@@ -300,11 +306,24 @@ struct OnboardingCaptureView: View {
                 .font(AppTheme.Font.onboardingUploadTitle)
                 .foregroundStyle(AppTheme.Color.textPrimary)
 
+            // 相机权限被拒：不弹通用 alert，行内给两个出口（F-3/C-1）——
+            // Open Settings，以及滚到下方已有的「Or try a sample」预设卡区，被拒不是死路。
+            if cameraPermissionDenied {
+                CameraAccessDeniedNotice(
+                    onOpenSettings: { PermissionService.openSettings() },
+                    onUseSample: {
+                        withAnimation {
+                            scrollProxy.scrollTo(OnboardingCaptureLayout.sampleCarouselID, anchor: .top)
+                        }
+                    }
+                )
+            }
+
             VStack(spacing: AppTheme.Space.paddingS) {
                 OnboardingUploadActionButton(
                     title: "Camera",
                     systemImage: "camera",
-                    action: { activeSheet = .camera }
+                    action: checkCameraPermission
                 )
 
                 OnboardingUploadActionButton(
@@ -332,6 +351,28 @@ struct OnboardingCaptureView: View {
                         ]
                     )
                 )
+        }
+    }
+
+    /// 与 InputBar 共用同一份 `PermissionService`，消除相机权限检查的两套实现（F-3/C-1）。
+    /// `.undetermined` 时 await 请求结果，授权后才置 `activeSheet`——首次进入时如果不等
+    /// 授权就先呈现 sheet，session 会在权限未决下配置完成，用户点「允许」后画面仍不出现。
+    private func checkCameraPermission() {
+        switch PermissionService.cameraStatus {
+        case .granted:
+            cameraPermissionDenied = false
+            activeSheet = .camera
+        case .undetermined:
+            Task {
+                if await PermissionService.requestCamera() {
+                    cameraPermissionDenied = false
+                    activeSheet = .camera
+                } else {
+                    cameraPermissionDenied = true
+                }
+            }
+        case .denied:
+            cameraPermissionDenied = true
         }
     }
 
@@ -463,7 +504,6 @@ struct OnboardingCaptureView: View {
                     .frame(minHeight: geo.size.height)
                 }
                 .scrollBounceBehavior(.basedOnSize)
-                .ignoresSafeArea(.container, edges: .bottom)
             }
 
             OnboardingBottomFade()
@@ -476,7 +516,6 @@ struct OnboardingCaptureView: View {
                 action: onComplete
             )
             .padding(.horizontal, AppTheme.Space.paddingPage)
-            .ignoresSafeArea(.container, edges: .bottom)
             .padding(.bottom, AppTheme.Size.onboardingContinueBottom)
         }
         // 状态条不随网络恢复自动消失：保留到用户点 Try again 成功（或换素材/离开）——
@@ -546,6 +585,38 @@ private struct OnboardingUploadActionButton: View {
             .contentShape(Capsule())
         }
         .buttonStyle(PressableButtonStyle())
+    }
+}
+
+/// 相机权限被拒时的行内说明（F-3/C-1）：被拒不能是死路，给两个出口。
+/// 橙做文字走 `brandInk`（唯一合规出口），底用 `imagePlaceholderBg`（既有浅色填充语义）。
+private struct CameraAccessDeniedNotice: View {
+    var onOpenSettings: () -> Void
+    var onUseSample: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Space.paddingXS) {
+            Text("Camera access is off")
+                .font(AppTheme.Font.compactActionLabel)
+                .foregroundStyle(AppTheme.Color.textPrimary)
+
+            Text("Turn it on in Settings, or use one of the samples below.")
+                .font(AppTheme.Font.statusNote)
+                .foregroundStyle(AppTheme.Color.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: AppTheme.Space.paddingCard) {
+                Button("Open Settings", action: onOpenSettings)
+                Button("See samples", action: onUseSample)
+            }
+            .font(AppTheme.Font.statusNote)
+            .foregroundStyle(AppTheme.Color.brandInk)
+            .padding(.top, AppTheme.Space.paddingXS)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(AppTheme.Space.paddingCard)
+        .background(AppTheme.Color.imagePlaceholderBg, in: RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
+        .buttonStyle(.plain)
     }
 }
 
