@@ -42,6 +42,7 @@ struct AIConsentView: View {
                             .font(AppTheme.Font.buddy)
                             .foregroundStyle(AppTheme.Color.brandStrong)
                     }
+                    .buttonStyle(.plain)
                 }
             }
             // 理想高度声明为 0：弹窗协商高度时不会把「文案完整高度」算进去，
@@ -63,6 +64,7 @@ struct AIConsentView: View {
                         .padding(.vertical, AppTheme.Space.paddingCard)
                         .background(AppTheme.Color.interactive, in: RoundedRectangle(cornerRadius: AppTheme.Radius.large))
                 }
+                .buttonStyle(.plain)
 
                 Button {
                     dismiss()
@@ -73,6 +75,7 @@ struct AIConsentView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, AppTheme.Space.paddingS)
                 }
+                .buttonStyle(.plain)
             }
         }
         .padding(.horizontal, AppTheme.Space.paddingPage)
