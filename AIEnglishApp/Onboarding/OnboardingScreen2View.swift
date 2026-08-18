@@ -11,6 +11,7 @@ struct OnboardingScreen2View: View {
 
     @State private var appeared = false
     @State private var cursorVisible = true
+    @State private var scrollOffset: CGFloat = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// 语音条声波的柱高（固定示意波形）。
@@ -21,14 +22,10 @@ struct OnboardingScreen2View: View {
             GeometryReader { geo in
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 0) {
-                        // 顶部为悬浮返回按钮预留的占位（与 capture 页同高）
-                        Color.clear
-                            .frame(height: 36)
-                            .padding(.top, AppTheme.Space.paddingCard)
-
+                        // 标题顶部位置只由 onboardingHeaderTop 一个数决定（N-1 单一真源）。
                         textBlock
                             .padding(.horizontal, AppTheme.Space.paddingPage)
-                            .padding(.top, AppTheme.Space.paddingCard)
+                            .padding(.top, AppTheme.Size.onboardingHeaderTop)
                             .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.05)
 
                         // Continue 下移后底部弹性空隙变大，加大这里把拼贴整体下移、吃掉上方空
@@ -42,22 +39,25 @@ struct OnboardingScreen2View: View {
                     }
                     .padding(.bottom, AppTheme.Size.onboardingContentBottomClearance) // Give space for the absolute bottom button
                     .frame(minHeight: geo.size.height) // Full height
+                    .onboardingScrollOffsetProbe()   // iOS 17 走 PreferenceKey 兜底，iOS 18+ 无副作用
                 }
                 .scrollBounceBehavior(.basedOnSize)
-                .ignoresSafeArea(.container, edges: .bottom)
+                .onboardingScrollOffsetTracking($scrollOffset)
             }
+
+            // 顶部渐隐随滚动出现（F-4）：静止时标题完整，一滚才吃掉标题顶部。
+            OnboardingTopFade(scrollOffset: scrollOffset)
 
             OnboardingBottomFade()
 
             OnboardingPrimaryButton(title: "Continue", action: onForward)
                 .padding(.horizontal, AppTheme.Space.paddingPage)
-                .ignoresSafeArea(.container, edges: .bottom)
                 .padding(.bottom, AppTheme.Size.onboardingContinueBottom)
                 .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.5)
         }
         .overlay(alignment: .topLeading) {
             OnboardingBackButton(action: onBack)
-                .padding(.top, AppTheme.Space.paddingCard)
+                .padding(.top, AppTheme.Size.onboardingBackInset)
                 .padding(.leading, AppTheme.Space.paddingM)
         }
         .contentShape(Rectangle())

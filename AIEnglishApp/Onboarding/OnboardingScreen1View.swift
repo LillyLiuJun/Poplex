@@ -10,6 +10,7 @@ struct OnboardingScreen1View: View {
     var onForward: () -> Void
 
     @State private var appeared = false
+    @State private var scrollOffset: CGFloat = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// 报头字标的 P 字高。
@@ -22,16 +23,12 @@ struct OnboardingScreen1View: View {
             GeometryReader { geo in
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 0) {
-                        // 顶部预留：与 Screen2 的返回栏同高（36 + paddingCard），让下方报头与
-                        // Screen2 的标题处在同一起始高度、到灵动岛的间距一致。
-                        Color.clear
-                            .frame(height: 36)
-                            .padding(.top, AppTheme.Space.paddingCard)
-
                         // 品牌报头（长版字标 Poplex.，与开屏 / 图标同源）。左对齐、与标题共左轴。
+                        // 顶部位置只由 onboardingHeaderTop 一个数决定（N-1 单一真源），
+                        // 与 Screen2 / Capture 三处标题的起始高度一致。
                         PoplexWordmark(capHeight: mastheadCapHeight)
                             .padding(.leading, AppTheme.Space.paddingPage)
-                            .padding(.top, AppTheme.Space.paddingCard)
+                            .padding(.top, AppTheme.Size.onboardingHeaderTop)
                             .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.0)
 
                         // 文字组垂直居中：上下均分留白。
@@ -44,15 +41,19 @@ struct OnboardingScreen1View: View {
                     }
                     .padding(.bottom, AppTheme.Size.onboardingContentBottomClearance) // Give space for the absolute bottom button
                     .frame(minHeight: geo.size.height)
+                    .onboardingScrollOffsetProbe()   // iOS 17 走 PreferenceKey 兜底，iOS 18+ 无副作用
                 }
                 .scrollBounceBehavior(.basedOnSize)
+                .onboardingScrollOffsetTracking($scrollOffset)
             }
+
+            // 顶部渐隐随滚动出现（F-4）：静止时标题完整，一滚才吃掉标题顶部。
+            OnboardingTopFade(scrollOffset: scrollOffset)
 
             OnboardingBottomFade()
 
             OnboardingPrimaryButton(title: "Continue", action: onForward)
                 .padding(.horizontal, AppTheme.Space.paddingPage)
-                .ignoresSafeArea(.container, edges: .bottom)
                 .padding(.bottom, AppTheme.Size.onboardingContinueBottom)
                 .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.30)
         }

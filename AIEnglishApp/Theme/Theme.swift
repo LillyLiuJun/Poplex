@@ -185,10 +185,12 @@ enum AppTheme {
         // 1.73:1 —— 永远不可用于需要阅读的文字（WCAG 豁免非文字/禁用态对比度要求）。
         // 与 border(neutral200 #E3DFD9) 不同值：border 是发丝线语义，neutralFaint 是浅灰实心填充语义。
         static let neutralFaint  = Primitive.neutral300  // #C7C3BD
-        // 满宽禁用 CTA：比页面明确一档，但仍远弱于可用态的暖近黑。
-        // 背景与文字拉开明度，避免整枚按钮糊成一块无法辨认的浅灰。
-        static let controlDisabledBg = Primitive.neutral200
-        static let controlDisabledText = Primitive.neutral500
+        // 满宽禁用 CTA：惰性面（方案 B）。neutral200 是描边/分割语义，拿它做大面积
+        // 填充是越权——填充改用 neutral100（用户气泡/图片占位底同档），描边归位到
+        // 专属的 controlDisabledBorder，两者不再同值导致描边视觉隐形。
+        static let controlDisabledBg = Primitive.neutral100
+        static let controlDisabledBorder = Primitive.neutral200
+        static let controlDisabledText = Primitive.neutral600
 
         static let textOnChip    = Primitive.neutral50   // chip 胶囊 / 深底按钮上的浅色文字
 
@@ -411,6 +413,31 @@ enum AppTheme {
         static let emptyStateWatermarkBottom: CGFloat       = 130 // P 水印距底，避开 CTA
         static let emptyStateCaptureIconGlyph: CGFloat      = 19  // 空态 CTA 描边相机图标
 
+        // ── Onboarding 顶部节奏（N-1）────────────────────────────────────
+        // 标题位置与返回按钮位置各自单一真源，互不通过占位块耦合——
+        // 旧实现靠「占位块高 36 + header 自带 padding 16」两个数字拼出标题位置，
+        // 占位块本身又比返回按钮触区少 8pt，纯属巧合而非设计。
+        static let onboardingBackInset: CGFloat             = 2   // 返回 chevron 触区距安全区上沿
+        static let onboardingHeaderTop: CGFloat             = 48  // 页面标题（S1 报头 / S2 / S3a / S3b）布局顶距安全区上沿
+
+        // ── Onboarding 顶部渐隐（F-4）─────────────────────────────────────
+        // 遮罩的「不透明段」由 safeTop + onboardingBackInset + barControl 实算得出
+        // （= 返回箭头下沿），不写死——safeTop 逐机型不同（16 Pro 62 / 15 Pro 59 /
+        // 13 mini 50 / SE 20），写死会在小屏上多盖 40pt、在大屏上盖不住箭头。
+        // 这里只定义「不透明段之后还要走多长才彻底透明」和「滚多少判定为已滚动」。
+        // 不透明段：只需盖住返回箭头的**字形**，不必盖满 44 的触区——
+        // arrow.left 在 19pt 下字形高约 13pt，居中于触区后下沿在页面坐标 ~31，
+        // 取 36 留 5pt 余量。顶端必须从 0 开始：内容在安全区上沿被硬切，
+        // 这一段实色就是用来把切边藏掉的。
+        // ⚠️ 改返回按钮字号/触区时要一起复核这个数。
+        static let onboardingTopFadeOpaque: CGFloat         = 36
+        // 渐隐跑道：不透明段之后再走多远彻底透明。
+        // 64 → 80 → 40 → 28：整层高随之 110→126→86→64。收得太狠会让 alpha 的
+        // 单位落差变大、逼近当初 20pt 线性收尾那条"横向硬边"——
+        // 28 时约 0.041/pt，已接近可察觉阈值，**不建议再往下压**。
+        static let onboardingTopFadeRunway: CGFloat         = 28
+        static let onboardingTopFadeRamp: CGFloat           = 16  // 滚动位移 → 遮罩整体不透明度的爬升距离
+
         // ── Onboarding 拍照页（视觉规范 §06）───────────────────────────────
         static let onboardingCaptureGlyph: CGFloat          = 24  // 主拍照入口描边相机
         static let onboardingPhotosGlyph: CGFloat           = 20  // 紧凑相册入口描边图标
@@ -426,13 +453,26 @@ enum AppTheme {
         static let onboardingUploadDashGap: CGFloat         = 6   // 空输入区虚线间距
         static let disabledControlBorderWidth: CGFloat      = 1   // 大面积禁用 CTA 的轻描边
         static let onboardingMaxPhotoAspectRatio: CGFloat   = 2.25 // 接受常规手机全屏截图；更长/更宽素材需重选
-        // 照片预览区的固定开销 = 按钮避让 80 + 顶部占位 56 + 照片区上间距 16 + 正常字号标题区参考高 165。
+        // 照片预览区的固定开销（N-1 后随标题上移 20 而减少：317 → 297）。
         // 预览区最小高度 = 视口 - 该值：正常字号恰好顶到 Continue 按钮上方；
         // 大字号/小屏时预览区不压缩、保持此高度，页面转为可滚动。
         // 注意：标题区参考高随 Dynamic Type 变化，此常数只用于「正常字号」基准，偏差仅影响临界点。
-        static let onboardingPhotoPreviewFixedOverhead: CGFloat = 317
+        static let onboardingPhotoPreviewFixedOverhead: CGFloat = 297
+        // 结果页时刻卡的照片高度（F-6，替换 N-3 §3.2 的「卡片总高恒定 + 垂直居中 +
+        // 照片自适应 clamp」）：那套策略下卡片总高不变、照片却随文字长度反向伸缩，
+        // 短句时照片下沿下移 66pt、长句时上移 43pt——照片是画面主体，一动就是「跳」。
+        // 现在反过来：照片高度锁定，卡片总高 = 照片高 + 文字区实际高，随内容自然伸缩，
+        // 顶对齐。变化量从「照片」（最显眼）赶到「卡片下边缘/空场」（没人盯着看）。
+        // 230 是两头夹出来的：260 时长句卡底会溢出遮罩顶 22pt；200 时短句照片偏小、
+        // 失去主体感。四态（生成中/成功/失败）全部引用它，不得再出现硬编码高度。
+        static let onboardingResultPhotoHeight: CGFloat = 230
         static let onboardingContentBottomClearance: CGFloat = 80 // Continue 槽位避让（内容底进遮罩渐隐区，不钻按钮背后）
-        static let onboardingContinueBottom: CGFloat = 8 // Continue 距屏幕底（配合 ignoresSafeArea 贴系统条上方；真机调）
+        // Continue 距安全区下沿（F-2）。四页四态原本各挂一份 `.ignoresSafeArea(.container,
+        // edges: .bottom)`，但承载各页的 GeometryReader 本身已被安全区内缩，这句在 CTA 上
+        // 实际不起作用——只是让这个数的语义变得不可读（旧注释写的是「贴系统条上方」，
+        // 是错的）。F-2 已删掉全部 8 处 ignoresSafeArea，这个数现在是字面意义的
+        // 「距安全区下沿」：34 + 12 = 46，Home Indicator（8–13）净空 33pt。
+        static let onboardingContinueBottom: CGFloat = 12
         static let inputBarMinHeight: CGFloat = 52 // 底部胶囊最小高度（Tab1 InputBar / Onboarding Continue 对齐）
         static let onboardingSampleWidth: CGFloat           = 104 // 样例图横滑卡宽
         static let onboardingSampleHeight: CGFloat          = 120 // 样例图横滑卡高：给固定 CTA 留出呼吸

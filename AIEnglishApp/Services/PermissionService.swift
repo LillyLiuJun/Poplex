@@ -36,6 +36,17 @@ enum PermissionService {
         micStatus == .granted && speechStatus == .granted
     }
 
+    /// Camera (video capture) permission, shared by Tab1's InputBar and Onboarding's
+    /// Capture page so the two entry points to the same camera stop diverging (F-3/C-1).
+    static var cameraStatus: Status {
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:      return .granted
+        case .denied, .restricted: return .denied
+        case .notDetermined:   return .undetermined
+        @unknown default:      return .denied
+        }
+    }
+
     // MARK: - Requests
 
     /// Request mic permission. Must be called from a non-main context (iOS may
@@ -52,6 +63,14 @@ enum PermissionService {
         await withCheckedContinuation { continuation in
             SFSpeechRecognizer.requestAuthorization { status in
                 continuation.resume(returning: status == .authorized)
+            }
+        }
+    }
+
+    static func requestCamera() async -> Bool {
+        await withCheckedContinuation { continuation in
+            AVCaptureDevice.requestAccess(for: .video) { granted in
+                continuation.resume(returning: granted)
             }
         }
     }

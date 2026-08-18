@@ -22,6 +22,8 @@ enum OnboardingPhotoAspectValidator {
 private enum OnboardingCaptureLayout {
     // 页面级坐标空间：翻页手势的 startLocation 与样例图条的 frame 都以此为参照
     static let pageSpace = "onboardingCapturePage"
+    // 样例卡横滑条的 ScrollViewReader id：相机权限被拒时"Use a sample instead"用它滚过去
+    static let sampleCarouselID = "onboardingSampleCarousel"
 }
 
 private struct CarouselFramePreferenceKey: PreferenceKey {
@@ -54,7 +56,10 @@ struct OnboardingCaptureView: View {
     @State private var stagedImage: UIImage?
     @State private var photoValidationMessage: String?
     @State private var appeared = false
-    @State private var skeletonPulse = false
+    // 相机权限被拒：不弹通用 alert，Camera 行内变成说明 + 两个出口（F-3/C-1）
+    @State private var cameraPermissionDenied = false
+    // 顶部渐隐随滚动出现（F-4）；selectionContent / resultContent 互斥显示，共用一个值
+    @State private var scrollOffset: CGFloat = 0
     // 样例图横滑条在页面坐标空间里的 frame；翻页手势起点落在其中时不翻页
     @State private var carouselFrame: CGRect?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -70,7 +75,9 @@ struct OnboardingCaptureView: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            OnboardingAuraBackground()
+            // 这里原本又画了一层 OnboardingAuraBackground —— 与 OnboardingView 在
+            // 三页背后铺的那层重复。光晕移进背景层之后重复就会叠成双份亮度（点阵
+            // 底纹同理），故移除；背景由 OnboardingView 统一提供。
 
             // Content area morphs in-place on Continue.
             if isSelecting {
@@ -80,6 +87,17 @@ struct OnboardingCaptureView: View {
                 resultContent
                     .transition(.opacity)
             }
+
+            // 顶部渐隐随滚动出现（F-4）：静止时标题完整，一滚才吃掉标题顶部。
+            //
+            // 挂在 body 的外层 ZStack、而不是各自内容里：selectionContent 的层级是
+            // GeometryReader → ScrollViewReader → ZStack，遮罩若放在最内层 ZStack 里，
+            // 就成了 GeometryReader 的后代——此时 .ignoresSafeArea(edges: .top) 已经
+            // 没有安全区可让它扩展（外层 GeometryReader 已把安全区吃掉），遮罩顶只到
+            // 安全区上沿、且 z 序被限制在该子树内，真机表现为「这一页滚动时遮罩不出现」。
+            // Screen1 / Screen2 / resultContent 的遮罩本来就是 GeometryReader 的兄弟节点，
+            // 所以只有选择页翻车。提到最外层后四处结构一致，也顺便去掉了重复实例。
+            OnboardingTopFade(scrollOffset: scrollOffset)
         }
         .animation(.easeInOut(duration: 0.3), value: isSelecting)
         .contentShape(Rectangle())
@@ -90,7 +108,7 @@ struct OnboardingCaptureView: View {
         .coordinateSpace(name: OnboardingCaptureLayout.pageSpace)
         .overlay(alignment: .topLeading) {
             OnboardingBackButton(action: backButtonAction)
-                .padding(.top, AppTheme.Space.paddingCard)
+                .padding(.top, AppTheme.Size.onboardingBackInset)
                 .padding(.leading, AppTheme.Space.paddingM)
         }
         // One sheet, switched by CaptureSource — never two live modals at once,
@@ -116,6 +134,9 @@ struct OnboardingCaptureView: View {
         // 三页并排渲染，onAppear 启动即触发——入场动画必须在页面真正可见时才播
         .onAppear { if isActive { appeared = true } }
         .onChange(of: isActive) { _, active in if active { appeared = true } }
+        // 选择页与结果页共用同一个 scrollOffset（同一时刻只渲染其中一个）。切换的瞬间
+        // 新页面的 ScrollView 还没上报，旧值会残留一帧、顶部渐隐闪一下——切换时清零。
+        .onChange(of: isSelecting) { _, _ in scrollOffset = 0 }
         .sheet(isPresented: $showConsentSheet) {
             // 弹窗高度固定（仅 medium）：不可拉大——拉大会让"内容在上、按钮在下"
             // 的布局中间出现大片空白。文案多时在弹窗内部滚动，按钮始终可见。
@@ -156,10 +177,12 @@ struct OnboardingCaptureView: View {
                     systemImage: "exclamationmark.triangle",
                     lifetime: AppTheme.Motion.toastLifetime
                 )
-                // 浮于底部 Continue 之上：沿用原 errorToast 的底部偏移惯例，
-                // 否则 toast 与选择页底部按钮（含禁用态）重叠 11-16pt。
-                .ignoresSafeArea(.container, edges: .bottom)
-                .padding(.bottom, AppTheme.Size.onboardingContinueBottom + AppTheme.Size.barControl)
+                // 浮于底部 Continue 之上：原来错用 barControl(44) 当 CTA 高度，
+                // 但 CTA 实际高度是 inputBarMinHeight(52)，导致 toast 与按钮重叠 12pt
+                // （F-2 修正）。距安全区下沿 = Continue 底距(12) + CTA 高(52) + 间距(12)。
+                .padding(.bottom, AppTheme.Size.onboardingContinueBottom
+                    + AppTheme.Size.inputBarMinHeight
+                    + AppTheme.Space.paddingM)
             }
         }
     }
@@ -209,72 +232,72 @@ struct OnboardingCaptureView: View {
 
     private var selectionContent: some View {
         GeometryReader { geo in
-            ZStack(alignment: .bottom) {
-                ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 0) {
-                        Color.clear
-                            .frame(height: 36)
-                            .padding(.top, AppTheme.Space.paddingCard)
+            ScrollViewReader { scrollProxy in
+                ZStack(alignment: .bottom) {
+                    ScrollView(showsIndicators: false) {
+                        VStack(alignment: .leading, spacing: 0) {
+                            // 标题顶部位置只由 onboardingHeaderTop 一个数决定（N-1 单一真源）。
+                            selectionHeader
+                                .padding(.top, AppTheme.Size.onboardingHeaderTop)
+                                .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.05)
 
-                        selectionHeader
-                            .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.05)
+                            if hasSelection {
+                                // 已选照片：固定容器（顶部=副标题下方，底部=Continue 按钮上方），
+                                // 不再随图片比例撑开布局，也无需滚动避让。
+                                // minHeight 保底「正常字号时顶到按钮」的高度：大字号/小屏下
+                                // 照片区不被压缩、保持此高度，页面转为可滚动。
+                                photoPreviewArea
+                                    .frame(minHeight: geo.size.height - AppTheme.Size.onboardingPhotoPreviewFixedOverhead)
+                                    .padding(.top, AppTheme.Space.paddingCard)
+                                    .transition(.opacity)
+                            } else {
+                                actionCard(scrollProxy: scrollProxy)
+                                    .padding(.top, AppTheme.Space.paddingPage)
+                                    .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.25)
 
-                        if hasSelection {
-                            // 已选照片：固定容器（顶部=副标题下方，底部=Continue 按钮上方），
-                            // 不再随图片比例撑开布局，也无需滚动避让。
-                            // minHeight 保底「正常字号时顶到按钮」的高度：大字号/小屏下
-                            // 照片区不被压缩、保持此高度，页面转为可滚动。
-                            photoPreviewArea
-                                .frame(minHeight: geo.size.height - AppTheme.Size.onboardingPhotoPreviewFixedOverhead)
-                                .padding(.top, AppTheme.Space.paddingCard)
-                                .transition(.opacity)
-                        } else {
-                            actionCard()
-                                .padding(.top, AppTheme.Space.paddingPage)
-                                .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.25)
+                                Text("Or try a sample")
+                                    .font(AppTheme.Font.compactSectionTitleSerif)
+                                    .foregroundStyle(AppTheme.Color.textPrimary)
+                                    .padding(.top, AppTheme.Space.titleToContent)
+                                    .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.35)
 
-                            Text("Or try a sample")
-                                .font(AppTheme.Font.compactSectionTitleSerif)
-                                .foregroundStyle(AppTheme.Color.textPrimary)
-                                .padding(.top, AppTheme.Space.titleToContent)
-                                .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.35)
+                                presetCarousel
+                                    .id(OnboardingCaptureLayout.sampleCarouselID)
+                                    .padding(.top, AppTheme.Space.paddingCard)
+                                    .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.4)
 
-                            presetCarousel
-                                .padding(.top, AppTheme.Space.paddingCard)
-                                .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.4)
-
-                            Spacer(minLength: 0)
+                                Spacer(minLength: 0)
+                            }
                         }
+                        .padding(.horizontal, AppTheme.Space.paddingPage)
+                        .padding(.bottom, AppTheme.Size.onboardingContentBottomClearance) // Give space for the absolute bottom button
+                        .frame(minHeight: geo.size.height)
+                        .onboardingScrollOffsetProbe()   // iOS 17 走 PreferenceKey 兜底，iOS 18+ 无副作用
+                    }
+                    .scrollBounceBehavior(.basedOnSize)
+                    .onboardingScrollOffsetTracking($scrollOffset)
+
+                    OnboardingBottomFade()
+
+                    VStack(spacing: AppTheme.Space.paddingCard) {
+                        AutoDismissingAppToast(
+                            message: $photoValidationMessage,
+                            systemImage: "exclamationmark.triangle",
+                            lifetime: AppTheme.Motion.onboardingPhotoToastLifetime
+                        )
+
+                        OnboardingPrimaryButton(
+                            title: "Continue",
+                            isEnabled: hasSelection,
+                            action: confirmSelection
+                        )
                     }
                     .padding(.horizontal, AppTheme.Space.paddingPage)
-                    .padding(.bottom, AppTheme.Size.onboardingContentBottomClearance) // Give space for the absolute bottom button
-                    .frame(minHeight: geo.size.height)
+                    // 与 resultContent / Screen1 / Screen2 一致：距安全区下沿（F-2 统一语义）。
+                    .padding(.bottom, AppTheme.Size.onboardingContinueBottom)
                 }
-                .scrollBounceBehavior(.basedOnSize)
-                .ignoresSafeArea(.container, edges: .bottom)
-
-                OnboardingBottomFade()
-
-                VStack(spacing: AppTheme.Space.paddingCard) {
-                    AutoDismissingAppToast(
-                        message: $photoValidationMessage,
-                        systemImage: "exclamationmark.triangle",
-                        lifetime: AppTheme.Motion.onboardingPhotoToastLifetime
-                    )
-
-                    OnboardingPrimaryButton(
-                        title: "Continue",
-                        isEnabled: hasSelection,
-                        action: confirmSelection
-                    )
-                }
-                .padding(.horizontal, AppTheme.Space.paddingPage)
-                // 与 resultContent / Screen1 / Screen2 一致：贴底 8pt（#31 设计）。
-                // merge 时曾被自动合并静默丢回 56pt 上浮，已修复。
-                .ignoresSafeArea(.container, edges: .bottom)
-                .padding(.bottom, AppTheme.Size.onboardingContinueBottom)
+                .animation(.easeInOut(duration: 0.3), value: hasSelection)
             }
-            .animation(.easeInOut(duration: 0.3), value: hasSelection)
         }
     }
 
@@ -290,12 +313,11 @@ struct OnboardingCaptureView: View {
                 .foregroundStyle(AppTheme.Color.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.top, AppTheme.Space.paddingCard)
     }
 
     // MARK: 空输入区（虚线动作卡）；选照片后由 photoPreviewArea 接替
 
-    private func actionCard() -> some View {
+    private func actionCard(scrollProxy: ScrollViewProxy) -> some View {
         // 试调：卡内上下收紧为 24，释放空间给下方示例图片区；内部内容节奏保持不变。
         VStack(spacing: AppTheme.Space.paddingCard) {
             OnboardingCaptureIllustration()
@@ -304,11 +326,24 @@ struct OnboardingCaptureView: View {
                 .font(AppTheme.Font.onboardingUploadTitle)
                 .foregroundStyle(AppTheme.Color.textPrimary)
 
+            // 相机权限被拒：不弹通用 alert，行内给两个出口（F-3/C-1）——
+            // Open Settings，以及滚到下方已有的「Or try a sample」预设卡区，被拒不是死路。
+            if cameraPermissionDenied {
+                CameraAccessDeniedNotice(
+                    onOpenSettings: { PermissionService.openSettings() },
+                    onUseSample: {
+                        withAnimation {
+                            scrollProxy.scrollTo(OnboardingCaptureLayout.sampleCarouselID, anchor: .top)
+                        }
+                    }
+                )
+            }
+
             VStack(spacing: AppTheme.Space.paddingS) {
                 OnboardingUploadActionButton(
                     title: "Camera",
                     systemImage: "camera",
-                    action: { activeSheet = .camera }
+                    action: checkCameraPermission
                 )
 
                 OnboardingUploadActionButton(
@@ -336,6 +371,28 @@ struct OnboardingCaptureView: View {
                         ]
                     )
                 )
+        }
+    }
+
+    /// 与 InputBar 共用同一份 `PermissionService`，消除相机权限检查的两套实现（F-3/C-1）。
+    /// `.undetermined` 时 await 请求结果，授权后才置 `activeSheet`——首次进入时如果不等
+    /// 授权就先呈现 sheet，session 会在权限未决下配置完成，用户点「允许」后画面仍不出现。
+    private func checkCameraPermission() {
+        switch PermissionService.cameraStatus {
+        case .granted:
+            cameraPermissionDenied = false
+            activeSheet = .camera
+        case .undetermined:
+            Task {
+                if await PermissionService.requestCamera() {
+                    cameraPermissionDenied = false
+                    activeSheet = .camera
+                } else {
+                    cameraPermissionDenied = true
+                }
+            }
+        case .denied:
+            cameraPermissionDenied = true
         }
     }
 
@@ -435,77 +492,69 @@ struct OnboardingCaptureView: View {
         }
     }
 
-    // MARK: - Result content (moment card as hero, 方案 A 统一时刻卡)
+    // MARK: - Result content (moment card as hero, N-3 三态共用一个容器与同一张照片)
 
     private var resultContent: some View {
         ZStack(alignment: .bottom) {
             GeometryReader { geo in
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 0) {
-                        Color.clear
-                            .frame(height: 36)
-                            .padding(.top, AppTheme.Space.paddingCard)
-
+                        // 标题顶部位置只由 onboardingHeaderTop 一个数决定（N-1 单一真源）。
                         resultHeader
+                            .padding(.top, AppTheme.Size.onboardingHeaderTop)
                             .padding(.horizontal, AppTheme.Space.paddingPage)
                             .padding(.bottom, AppTheme.Space.paddingCard)
 
-                        if viewModel.isLoading {
-                            loadingCard
-                                .transition(.opacity)
-                                .padding(.horizontal, AppTheme.Space.paddingPage)
-                            Spacer(minLength: 0)
-                        } else if let result = viewModel.generationResult {
-                            resultCard(result)
-                                .transition(.scale(scale: 0.96).combined(with: .opacity))
-                                .padding(.horizontal, AppTheme.Space.paddingPage)
-                            Spacer(minLength: 0)
-                        } else if let image = resultImage {
-                            // 失败态（断网/其它）：保留用户所选素材图 + 常驻状态条（fail-open——
-                            // 内容在、状态条说明原因、Try again 可重试、Continue 可用）
-                            VStack(spacing: 0) {
-                                image
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(maxWidth: .infinity)
-                                    .frame(height: 195)
-                                    .clipped()
-                                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.large))
-                                    .allowsHitTesting(false)
-
-                                if let copy = viewModel.errorKind?.failureBarCopy {
-                                    FailureStatusBar(copy: copy) {
-                                        Task { await viewModel.retry() }
-                                    }
-                                }
-                            }
-                            .transition(.opacity)
+                        if let image = resultImage {
+                            // 照片高度锁定、卡片顶对齐（F-6，替换 N-3 §3.2 的居中+自适应）——
+                            // 卡片总高 = 锁定照片高 + 文字区实际高，随内容自然伸缩，
+                            // 变化量落在卡片下边缘，不落在照片上。
+                            OnboardingResultCard(
+                                image: image,
+                                state: resultCardState,
+                                onRetry: { Task { await viewModel.retry() } }
+                            )
                             .padding(.horizontal, AppTheme.Space.paddingPage)
-                            Spacer(minLength: 0)
-                        } else {
-                            Spacer(minLength: 0)
+                            .animation(.easeInOut(duration: 0.35), value: viewModel.generationResult != nil)
                         }
+
+                        Spacer(minLength: 0)
                     }
                     .padding(.bottom, AppTheme.Size.onboardingContentBottomClearance) // Give space for absolute bottom button
                     .frame(minHeight: geo.size.height)
+                    .onboardingScrollOffsetProbe()   // iOS 17 走 PreferenceKey 兜底，iOS 18+ 无副作用
                 }
                 .scrollBounceBehavior(.basedOnSize)
-                .ignoresSafeArea(.container, edges: .bottom)
+                .onboardingScrollOffsetTracking($scrollOffset)
             }
 
             OnboardingBottomFade()
 
+            // F-5：撤回「生成中就渲染禁用态 Continue」——卡片位置在 F-6 后已经稳定，
+            // 按钮生成中不出现，结果落地时才淡入 + 轻微上移（非硬出现，见
+            // OnboardingResultBottomButton 的入场动效）。
             if !viewModel.isLoading {
-                bottomButton
-                    .padding(.horizontal, AppTheme.Space.paddingPage)
-                    .ignoresSafeArea(.container, edges: .bottom)
-                    .padding(.bottom, AppTheme.Size.onboardingContinueBottom)
+                OnboardingResultBottomButton(
+                    isSuccess: viewModel.generationResult != nil,
+                    action: onComplete
+                )
+                .padding(.horizontal, AppTheme.Space.paddingPage)
+                .padding(.bottom, AppTheme.Size.onboardingContinueBottom)
             }
         }
-        .animation(.easeInOut(duration: 0.3), value: viewModel.isLoading)
-        .animation(.easeInOut(duration: 0.3), value: viewModel.generationResult != nil)
         // 状态条不随网络恢复自动消失：保留到用户点 Try again 成功（或换素材/离开）——
         // 重试入口稳定可预期；真机监控信号不可靠，自动消失会吞掉入口。
+    }
+
+    /// 三态：生成中 / 成功 / 失败（断网/其它，fail-open——内容在、状态条说明原因、
+    /// Try again 可重试、Continue 可用）。落在 OnboardingResultCard 内部渲染。
+    private var resultCardState: OnboardingResultCard.Phase {
+        if viewModel.isLoading { return .loading }
+        if let result = viewModel.generationResult {
+            return .success(sentence: result.primaryEnglish, translation: result.nativeMeaning)
+        }
+        if let copy = viewModel.errorKind?.failureBarCopy { return .failure(copy: copy) }
+        return .loading
     }
 
     private var resultHeader: some View {
@@ -519,91 +568,6 @@ struct OnboardingCaptureView: View {
                 .font(AppTheme.Font.onboardingLeadSerif)
                 .foregroundStyle(AppTheme.Color.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(.top, AppTheme.Space.paddingCard)
-    }
-
-    // MARK: 结果卡：与第一页样品卡同构 —— 用户亲手做出的第一张卡
-
-    private func resultCard(_ card: AICard) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if let image = resultImage {
-                OnboardingMomentCard(
-                    image: image,
-                    sentence: card.primaryEnglish,
-                    translation: card.nativeMeaning,
-                    photoHeight: 195
-                )
-            }
-        }
-    }
-
-    // MARK: 生成中：照片定格 + 暖色骨架（呼吸脉冲）+ 状态文案（与结果卡同构）
-
-    private var loadingCard: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Space.paddingM) {
-            VStack(alignment: .leading, spacing: 0) {
-                if let image = resultImage {
-                    image
-                        .resizable()
-                        .scaledToFill()
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 195)
-                        .clipped()
-                        .allowsHitTesting(false)
-                }
-
-                VStack(alignment: .leading, spacing: 10) {
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.small)
-                        .fill(AppTheme.Color.imagePlaceholderBg)
-                        .frame(width: 60, height: 12)
-                        .padding(.bottom, 2)
-
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.small)
-                        .fill(AppTheme.Color.imagePlaceholderBg)
-                        .frame(height: 20)
-                        .frame(maxWidth: .infinity)
-
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.small)
-                        .fill(AppTheme.Color.imagePlaceholderBg)
-                        .frame(width: 180, height: 14)
-                }
-                .padding(.horizontal, 18)
-                .padding(.vertical, 16)
-                .opacity(skeletonPulse ? 0.45 : 1)
-                .animation(
-                    reduceMotion ? nil : .easeInOut(duration: 0.8).repeatForever(autoreverses: true),
-                    value: skeletonPulse
-                )
-            }
-            .background(AppTheme.Color.cardBg)
-            .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.large))
-            .overlay(
-                RoundedRectangle(cornerRadius: AppTheme.Radius.large)
-                    .stroke(AppTheme.Color.border.opacity(0.6), lineWidth: 1)
-            )
-            .shadow(
-                color: AppTheme.Shadow.cardColor,
-                radius: AppTheme.Shadow.cardRadius,
-                x: AppTheme.Shadow.cardX,
-                y: AppTheme.Shadow.cardY
-            )
-            .onAppear { skeletonPulse = true }
-
-            Text("Turning your moment into English…")
-                .font(AppTheme.Font.buddy)
-                .foregroundStyle(AppTheme.Color.textMuted)
-                .padding(.horizontal, 2)
-        }
-    }
-
-    @ViewBuilder
-    private var bottomButton: some View {
-        if (viewModel.selectedCard != nil || viewModel.selectedImage != nil) {
-            OnboardingPrimaryButton(
-                title: viewModel.generationResult != nil ? "Get Started" : "Continue",
-                action: onComplete
-            )
         }
     }
 }
@@ -648,37 +612,239 @@ private struct OnboardingUploadActionButton: View {
     }
 }
 
-/// 断网/其它失败的状态条：嵌在素材图下方、常驻（不自动消失）。
-/// 网络恢复由既有 onChange 清 errorKind → 状态条随之消失（图保留）。
-private struct FailureStatusBar: View {
-    let copy: String
-    var onRetry: () -> Void
+/// 相机权限被拒时的行内说明（F-3/C-1）：被拒不能是死路，给两个出口。
+/// 橙做文字走 `brandInk`（唯一合规出口），底用 `imagePlaceholderBg`（既有浅色填充语义）。
+private struct CameraAccessDeniedNotice: View {
+    var onOpenSettings: () -> Void
+    var onUseSample: () -> Void
 
     var body: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Space.paddingXS) {
+            Text("Camera access is off")
+                .font(AppTheme.Font.compactActionLabel)
+                .foregroundStyle(AppTheme.Color.textPrimary)
+
+            Text("Turn it on in Settings, or use one of the samples below.")
+                .font(AppTheme.Font.statusNote)
+                .foregroundStyle(AppTheme.Color.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: AppTheme.Space.paddingCard) {
+                Button("Open Settings", action: onOpenSettings)
+                Button("See samples", action: onUseSample)
+            }
+            .font(AppTheme.Font.statusNote)
+            .foregroundStyle(AppTheme.Color.brandInk)
+            .padding(.top, AppTheme.Space.paddingXS)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(AppTheme.Space.paddingCard)
+        .background(AppTheme.Color.imagePlaceholderBg, in: RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
+        .buttonStyle(.plain)
+    }
+}
+
+/// 结果页时刻卡：生成中 / 成功 / 失败三态共用一个容器与同一张照片（N-3，高度策略 F-6 改）。
+/// 照片高度锁定（onboardingResultPhotoHeight），卡片总高 = 照片高 + 文字区实际高，
+/// 随内容自然伸缩、顶对齐——不再用「卡片总高恒定 + 照片自适应」反向推导：那套策略下
+/// 卡片总高不变但照片会随文字长度反向伸缩，照片是画面主体，一动就是「跳」。
+/// 现在变化量落在卡片下边缘（没人盯着看），照片、MOMENT 标签、卡顶逐帧恒定。
+/// 三态文字区统一为「标签行 / 说明行 / 第三行」同构结构，只有内容区做 crossfade。
+private struct OnboardingResultCard: View {
+    enum Phase: Equatable {
+        case loading
+        case success(sentence: String, translation: String?)
+        case failure(copy: String)
+    }
+
+    let image: Image
+    let state: Phase
+    var onRetry: () -> Void = {}
+
+    @State private var skeletonPulse = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // 照片高度锁定（F-6，AppTheme.Size.onboardingResultPhotoHeight）——不再随
+            // 文字区高度反算，四态（含失败态）共用同一个数，照片下沿因此逐帧恒定。
+            image
+                .resizable()
+                .scaledToFill()
+                .frame(maxWidth: .infinity)
+                .frame(height: AppTheme.Size.onboardingResultPhotoHeight)
+                .clipped()
+                .allowsHitTesting(false)
+
+            textRegion
+                .padding(.horizontal, 18)
+                .padding(.vertical, 16)
+                .animation(.easeInOut(duration: 0.25), value: state)
+        }
+        .background(AppTheme.Color.cardBg)
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.large))
+        .overlay(
+            RoundedRectangle(cornerRadius: AppTheme.Radius.large)
+                .stroke(AppTheme.Color.border.opacity(0.6), lineWidth: 1)
+        )
+        .shadow(
+            color: AppTheme.Shadow.cardColor,
+            radius: AppTheme.Shadow.cardRadius,
+            x: AppTheme.Shadow.cardX,
+            y: AppTheme.Shadow.cardY
+        )
+        .onAppear { skeletonPulse = true }
+    }
+
+    @ViewBuilder
+    private var textRegion: some View {
+        switch state {
+        case .loading:
+            loadingText.transition(.opacity)
+        case .success(let sentence, let translation):
+            successText(sentence, translation).transition(.opacity)
+        case .failure(let copy):
+            failureText(copy).transition(.opacity)
+        }
+    }
+
+    // MARK: 生成中：骨架模拟真实行数/行高，脉冲不含照片；状态文案挂在文字区里（与成功/失败同构）
+
+    private var loadingText: some View {
         VStack(alignment: .leading, spacing: AppTheme.Space.paddingS) {
+            RoundedRectangle(cornerRadius: AppTheme.Radius.small)
+                .fill(AppTheme.Color.imagePlaceholderBg)
+                .frame(width: 56, height: 11)
+
+            VStack(alignment: .leading, spacing: 8) {
+                skeletonLine(widthFraction: 1)
+                skeletonLine(widthFraction: 1)
+                skeletonLine(widthFraction: 0.7)
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                skeletonLine(widthFraction: 1, height: 14)
+                skeletonLine(widthFraction: 0.55, height: 14)
+            }
+
+            Text("Turning your moment into English…")
+                .font(AppTheme.Font.statusNote)
+                .foregroundStyle(AppTheme.Color.textMuted)
+                .padding(.top, 2)
+        }
+        .opacity(skeletonPulse ? 0.55 : 1)
+        .animation(
+            reduceMotion ? nil : .easeInOut(duration: 0.8).repeatForever(autoreverses: true),
+            value: skeletonPulse
+        )
+    }
+
+    private func skeletonLine(widthFraction: CGFloat, height: CGFloat = 16) -> some View {
+        GeometryReader { g in
+            RoundedRectangle(cornerRadius: AppTheme.Radius.small)
+                .fill(AppTheme.Color.imagePlaceholderBg)
+                .frame(width: g.size.width * widthFraction, height: height)
+        }
+        .frame(height: height)
+    }
+
+    // MARK: 成功：与原 OnboardingMomentCard 文字区同一配方
+
+    private func successText(_ sentence: String, _ translation: String?) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("MOMENT")
+                .font(AppTheme.Font.sectionLabel)
+                .tracking(1.2)
+                .foregroundStyle(AppTheme.Color.textMuted)
+                .padding(.bottom, 2)
+
+            Text(sentence)
+                .font(AppTheme.Font.englishPrimary)
+                .foregroundStyle(AppTheme.Color.textPrimary)
+                .lineSpacing(AppTheme.Typography.lineBody)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if let translation, !translation.isEmpty {
+                Text(translation)
+                    .font(AppTheme.Font.chineseBody)
+                    .foregroundStyle(AppTheme.Color.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 2)
+            }
+        }
+    }
+
+    // MARK: 失败：断网/其它（fail-open——内容在、说明原因、Try again 可重试、Continue 可用）。
+    // 定稿规格（N-3 §3.4）：图标走 danger（≤24pt 图形，合规），文案走 textPrimary——
+    // 红色文字按钮在 iOS 语义里读作"破坏性操作"，Try again 是建设性动作，红只留在图标上。
+    // 无容器：这是常驻页面元素，不是 AppToast 那种浮层，借浮层深底材质是类别错误。
+    // 触区 44：`.frame(height: barControl)` + `.contentShape(Rectangle())`。
+
+    private func failureText(_ copy: String) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("COULDN'T GENERATE")
+                .font(AppTheme.Font.sectionLabel)
+                .tracking(1.2)
+                .foregroundStyle(AppTheme.Color.danger)
+
             Text(copy)
-                .font(AppTheme.Font.chineseFaint)
+                .font(AppTheme.Font.statusNote)
                 .foregroundStyle(AppTheme.Color.textSecondary)
                 .multilineTextAlignment(.leading)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.top, AppTheme.Space.paddingCard)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, AppTheme.Space.paddingS)
 
             Button(action: onRetry) {
                 HStack(spacing: AppTheme.Space.paddingXS) {
                     Image(systemName: "arrow.clockwise")
                         .imageScale(.small)
-                        .foregroundStyle(AppTheme.Color.brandStrong)   // 图标点缀与 toast 一致
+                        .foregroundStyle(AppTheme.Color.danger)
                     Text("Try again")
-                        .font(AppTheme.Font.buddy)
-                        .foregroundStyle(AppTheme.Color.textOnChip)   // 深底胶囊上的浅色文字（同 toast）
+                        .font(AppTheme.Font.statusNote)
+                        .foregroundStyle(AppTheme.Color.textPrimary)
                 }
-                .padding(.horizontal, AppTheme.Space.paddingCard)
-                .padding(.vertical, AppTheme.Space.paddingS)
-                .background(AppTheme.Color.textPrimary.opacity(0.82), in: Capsule())   // 同 toast 深底
+                .frame(height: AppTheme.Size.barControl)
+                .contentShape(Rectangle())
             }
-            .buttonStyle(PressableButtonStyle())
+            .buttonStyle(.plain)
+            .padding(.top, AppTheme.Space.paddingXS)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// 结果页底部按钮：生成中禁用态 Continue → 成功后原位切可用态 + 文案变 Get Started，
+/// 位置全程不动。切到可用态时叠一次 scale 0.98→1.0（0.25s，reduceMotion 跳过）——
+/// 这是整个 onboarding 唯一的"完成"时刻。
+/// 结果页底部按钮：只在 `!isLoading` 时挂载（F-5，撤回「生成中就渲染禁用态 Continue」
+/// 的上一轮决定）——挂载即淡入 + 6pt 上移（非硬出现），reduceMotion 时只淡入。
+/// isSuccess 从 false→true（重试成功等场景）时再叠一次 scale 0.98→1.0 的完成态 pop。
+private struct OnboardingResultBottomButton: View {
+    let isSuccess: Bool
+    let action: () -> Void
+
+    @State private var scale: CGFloat = 1.0
+    @State private var appearedButton = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        OnboardingPrimaryButton(
+            title: isSuccess ? "Get Started" : "Continue",
+            action: action
+        )
+        .scaleEffect(scale)
+        .opacity(appearedButton ? 1 : 0)
+        .offset(y: (appearedButton || reduceMotion) ? 0 : 6)
+        .animation(.easeOut(duration: 0.25), value: appearedButton)
+        .onAppear {
+            // 延到下一帧再翻，否则初始隐藏态来不及渲染，淡入会被 SwiftUI 跳过
+            // （与 OnboardingScreen1View.triggerEntrance 同款处理）。
+            DispatchQueue.main.async { appearedButton = true }
+        }
+        .onChange(of: isSuccess) { old, new in
+            guard new, !old, !reduceMotion else { return }
+            scale = 0.98
+            withAnimation(.easeOut(duration: 0.25)) { scale = 1.0 }
+        }
     }
 }
 
