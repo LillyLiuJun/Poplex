@@ -109,7 +109,7 @@ struct OnboardingCaptureView: View {
         .overlay(alignment: .topLeading) {
             OnboardingBackButton(action: backButtonAction)
                 .padding(.top, AppTheme.Size.onboardingBackInset)
-                .padding(.leading, AppTheme.Space.paddingM)
+                .padding(.leading, AppTheme.Size.onboardingBackLeading)
         }
         // One sheet, switched by CaptureSource — never two live modals at once,
         // so SwiftUI's presentation state can't desync between camera & photo.
@@ -248,22 +248,29 @@ struct OnboardingCaptureView: View {
                                 // 照片区不被压缩、保持此高度，页面转为可滚动。
                                 photoPreviewArea
                                     .frame(minHeight: geo.size.height - AppTheme.Size.onboardingPhotoPreviewFixedOverhead)
-                                    .padding(.top, AppTheme.Space.paddingCard)
+                                    // 与空态的虚线卡同一个「标题组→内容」间距：两态切换时内容顶不跳。
+                                    .padding(.top, AppTheme.Space.onboardingHeaderToContent)
                                     .transition(.opacity)
                             } else {
                                 actionCard(scrollProxy: scrollProxy)
-                                    .padding(.top, AppTheme.Space.paddingPage)
+                                    .padding(.top, AppTheme.Space.onboardingHeaderToContent)
                                     .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.25)
 
                                 Text("Or try a sample")
                                     .font(AppTheme.Font.compactSectionTitleSerif)
                                     .foregroundStyle(AppTheme.Color.textPrimary)
-                                    .padding(.top, AppTheme.Space.titleToContent)
+                                    // 虚线卡与例图区是两个组：32
+                                    .padding(.top, AppTheme.Space.onboardingHeaderToContent)
                                     .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.35)
 
                                 presetCarousel
                                     .id(OnboardingCaptureLayout.sampleCarouselID)
-                                    .padding(.top, AppTheme.Space.paddingCard)
+                                    // 标签是例图条的引导语，与「标题→副标」是同一种关系：8
+                                    .padding(.top, AppTheme.Space.onboardingTitleToLead)
+                                    // 右侧出血到屏幕边缘：四张卡总宽 464（104×4 + 16×3）> 内容宽 362，本来就要滑，
+                                    // 让最后一张被屏幕边缘切开是最有效的可滚动暗示。
+                                    // 代价是右边不再有对齐轴——滑动内容本就不该当作对齐元素。
+                                    .padding(.trailing, -AppTheme.Space.paddingPage)
                                     .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.4)
 
                                 Spacer(minLength: 0)
@@ -302,7 +309,7 @@ struct OnboardingCaptureView: View {
     }
 
     private var selectionHeader: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Space.paddingM) {
+        VStack(alignment: .leading, spacing: AppTheme.Space.onboardingTitleToLead) {
             Text("Snap what's around\nyou to start")
                 .font(AppTheme.Font.pageTitleSerif)
                 .foregroundStyle(AppTheme.Color.textPrimary)
@@ -448,7 +455,8 @@ struct OnboardingCaptureView: View {
 
     private var presetCarousel: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: AppTheme.Space.paddingM) {
+            // 卡间距 12 → 16：四张卡此前挤成一片色块，读不出「这是四个独立选项」。
+            HStack(spacing: AppTheme.Space.paddingCard) {
                 ForEach(PresetCard.all) { card in
                     PresetCarouselTile(
                         card: card,
@@ -503,7 +511,9 @@ struct OnboardingCaptureView: View {
                         resultHeader
                             .padding(.top, AppTheme.Size.onboardingHeaderTop)
                             .padding(.horizontal, AppTheme.Space.paddingPage)
-                            .padding(.bottom, AppTheme.Space.paddingCard)
+                            // 结果页特例 12（非 24）：长句时卡底距遮罩顶只剩 8pt。与标题→副标
+                            // 的 8→12 恰好抵消，卡片位置与改前逐像素相同。
+                            .padding(.bottom, AppTheme.Space.onboardingResultHeaderToCard)
 
                         if let image = resultImage {
                             // 照片高度锁定、卡片顶对齐（F-6，替换 N-3 §3.2 的居中+自适应）——
@@ -558,15 +568,17 @@ struct OnboardingCaptureView: View {
     }
 
     private var resultHeader: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Space.paddingS) {
+        VStack(alignment: .leading, spacing: AppTheme.Space.onboardingTitleToLead) {
             (Text("Here's your first ") + Text("moment.").foregroundStyle(AppTheme.Color.brandStrong))
                 .font(AppTheme.Font.pageTitleSerif)
                 .foregroundStyle(AppTheme.Color.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
 
+            // 副标颜色与前三页统一（此前是 textMuted #7C7773 4.4:1，浅了两档色阶，
+            // 而它承载的是全流程最该被读到的那句点题话）。
             Text("Your photo, now something you can say.")
                 .font(AppTheme.Font.onboardingLeadSerif)
-                .foregroundStyle(AppTheme.Color.textMuted)
+                .foregroundStyle(AppTheme.Color.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }

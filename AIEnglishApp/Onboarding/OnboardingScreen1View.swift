@@ -24,22 +24,33 @@ struct OnboardingScreen1View: View {
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 0) {
                         // 品牌报头（长版字标 Poplex.，与开屏 / 图标同源）。左对齐、与标题共左轴。
-                        // 顶部位置只由 onboardingHeaderTop 一个数决定（N-1 单一真源），
-                        // 与 Screen2 / Capture 三处标题的起始高度一致。
+                        // 顶部位置由 onboardingS1MastheadTop 一个数决定：报头是刊头、不是页面标题，
+                        // 且本页没有返回按钮，故比其余三页的标题线低 16（封面留白大于内页）。
+                        // 横滑 S1→S2 时报头与标题会错开 16，已确认接受。
                         PoplexWordmark(capHeight: mastheadCapHeight)
                             .padding(.leading, AppTheme.Space.paddingPage)
-                            .padding(.top, AppTheme.Size.onboardingHeaderTop)
+                            .padding(.top, AppTheme.Size.onboardingS1MastheadTop)
                             .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.0)
 
-                        // 文字组垂直居中：上下均分留白。
-                        Spacer(minLength: AppTheme.Space.paddingSection)
+                        // 上方留白弹性吸收机型差异（下限 = 组间距）。
+                        Spacer(minLength: AppTheme.Space.onboardingHeaderToContent)
 
                         textBlock
                             .padding(.horizontal, AppTheme.Space.paddingPage)
 
-                        Spacer(minLength: AppTheme.Space.paddingSection)
+                        // 锚定 CTA：文字组下缘 → Continue 上缘 = onboardingHeroToCTA。
+                        // 尾块 = 该距离 + 按钮自身占位（下边距 + 高），因此这里不再叠加
+                        // onboardingContentBottomClearance，否则同一段空白记两次账。
+                        // 已知局限：inputBarMinHeight 是按钮的**最小**高，超大字号下按钮会长高，
+                        // 尾块按 52 预留就会少留那一截，实际间距小于 200（不会重叠，因为按钮
+                        // 是从屏底往上长、而上方留白由弹性 Spacer 吸收）。要做到严格 200 得把
+                        // 按钮实测高经 preference 喂回来，代价大于收益，故记录而不实现。
+                        Color.clear.frame(
+                            height: AppTheme.Size.onboardingHeroToCTA
+                                + AppTheme.Size.onboardingContinueBottom
+                                + AppTheme.Size.inputBarMinHeight
+                        )
                     }
-                    .padding(.bottom, AppTheme.Size.onboardingContentBottomClearance) // Give space for the absolute bottom button
                     .frame(minHeight: geo.size.height)
                     .onboardingScrollOffsetProbe()   // iOS 17 走 PreferenceKey 兜底，iOS 18+ 无副作用
                 }
@@ -74,7 +85,9 @@ struct OnboardingScreen1View: View {
     // 标题 / 副标题错峰入场，形成封面揭幕的层次。
 
     private var textBlock: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Space.paddingCard) {
+        // 标题→副标：与其余三页同档。光学间距的参照是行高——46pt 标题行高约 55、
+        // 副标行高 22，8pt 的间隙在两个行盒之间读起来与 34pt 标题页一致，不需要单开一档。
+        VStack(alignment: .leading, spacing: AppTheme.Space.onboardingTitleToLead) {
             Text("Build your expression\nfrom work & life.")
                 .font(AppTheme.Font.onboardingHeroSerif)
                 .tracking(AppTheme.Typography.trackingDisplay)

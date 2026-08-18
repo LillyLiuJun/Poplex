@@ -42,7 +42,6 @@ struct AIConsentView: View {
                             .font(AppTheme.Font.buddy)
                             .foregroundStyle(AppTheme.Color.brandStrong)
                     }
-                    .buttonStyle(.plain)
                 }
             }
             // 理想高度声明为 0：弹窗协商高度时不会把「文案完整高度」算进去，
@@ -64,7 +63,6 @@ struct AIConsentView: View {
                         .padding(.vertical, AppTheme.Space.paddingCard)
                         .background(AppTheme.Color.interactive, in: RoundedRectangle(cornerRadius: AppTheme.Radius.large))
                 }
-                .buttonStyle(.plain)
 
                 Button {
                     dismiss()
@@ -75,9 +73,15 @@ struct AIConsentView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, AppTheme.Space.paddingS)
                 }
-                .buttonStyle(.plain)
             }
         }
+        // ⚠️ 不要删：iOS 18+ 会给 sheet 里的 Button 自动加一层灰色圆角底 + 阴影，
+        // 三个按钮（Privacy Policy 链接 / Agree / Not now）会各自套上一个系统灰底，
+        // 与这套暖纸材质完全不搭。.plain 是关掉它的开关。
+        // buttonStyle 走 environment，会向下传染到子树里所有 Button，故挂在最外层一次即可
+        // （此前是三个按钮各写一次）。本视图内没有需要系统样式的 Button；
+        // 若将来在这里加了需要默认样式的按钮，请在那个按钮上单独覆盖，而不是删掉这一行。
+        .buttonStyle(.plain)
         .padding(.horizontal, AppTheme.Space.paddingPage)
         .padding(.top, AppTheme.Space.paddingHero)
         .padding(.bottom, AppTheme.Space.paddingScreenBottom)

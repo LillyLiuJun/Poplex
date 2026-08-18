@@ -163,10 +163,42 @@ enum AppTheme {
         static let paddingScreenBottom: CGFloat = Primitive.space56
 
         // 区标题→内容（Topics / Materials 分区标题到其卡片的呼吸距离，统一散落字面值）
+        // 与 onboardingHeaderToContent 当前同值（24）但**用途不同、各自演化**，故不合并：
+        // 合并会把两个没有设计因果关系的间距绑死——改 Tab2 的分区节奏时 onboarding 会跟着动。
         static let titleToContent: CGFloat      = Primitive.space24
-        static let onboardingUploadCardVertical: CGFloat = Primitive.space24
+        // 虚线空输入区的上下内边距。24 → 16：框内实测 276 高里有 98pt 是纯空，
+        // 「标题组→虚线框」的距离感其实一半来自框内的空，压缩这里比拉外间距更对症。
+        static let onboardingUploadCardVertical: CGFloat = Primitive.space16
         // 列表行垂直节奏（Topics 进度行上下留白）
         static let listRowVertical: CGFloat     = Primitive.space12
+
+        // ── Onboarding 中段节奏（承接 N-1 顶部单一真源；四页不再各写各的）─────────────
+        // 此前四页的「标题→副标」分别是 16 / 8 / 12 / 8，「标题组→内容」是 弹性 / 48 / 20 / 16，
+        // 全部借用通用 padding 档、无语义。下列 token 是这两跳的单一真源。
+        /// 「引导 → 被引导」：后者是前者的展开，两者读作一个单元。
+        /// 用于四页的标题→副标，以及 S3a 的「Or try a sample」→例图条（同一种关系，同一个数）。
+        static let onboardingTitleToLead: CGFloat     = Primitive.space8
+        /// 「组 → 组」：标题组到它下面第一块内容。与上一档比值 1:3。
+        /// 与 Tab2 的 titleToContent 当前同值（24），有意保留为两个 token —— 见那边的注释。
+        /// 只允许这两档，中间不再插值。**已知的两处例外，都是被物理约束夹出来的、不是漏改**：
+        ///   - S3b 标题组→结果卡 16（onboardingResultHeaderToCard）——长句卡高 + 遮罩顶
+        ///   - S2  标题组→拼贴   36（onboardingCollageTop）——相邻块是实心照片卡，且下沿受遮罩顶限
+        /// 新增第三处例外前，先确认它同样有物理理由，否则应该收回这两档。
+        /// 本档用于 S3a（标题组→虚线框、虚线框→例图区）。
+        /// 32 → 24 的依据（真机实测）：S3a 是全流程唯一真正用到这一档的页面，而虚线框是
+        /// 低对比容器 + 24 内边距，标题到框内第一笔墨实测 74pt——框线在 32 处已经读作「太远」。
+        static let onboardingHeaderToContent: CGFloat = Primitive.space24
+        /// 标题组→结果卡（S3b，全流程唯一的间距例外）：长句态卡高 443，
+        /// 48 + 112(标题组) + G + 443 ≤ 626(遮罩顶) → G ≤ 23，吃不下 32。
+        /// 16 是被卡高与遮罩顶夹出来的物理值，不是节奏选择。改动前先核对长句态卡底位置。
+        static let onboardingResultHeaderToCard: CGFloat = Primitive.space16
+        /// 标题组→S2 拼贴墨迹上沿。**刻意不与 S3a 的 24 同档**，两页的第一块内容不在同一线上。
+        /// 理由：间距要跟相邻元素的视觉重量走。S3a 接的是低对比虚线框（轻，24 就够），
+        /// S2 接的是带照片的实心卡（重）；同样的 24 压在重块上读起来就紧。
+        /// 而且拼贴的上沿是旋转卡的一个**角尖**、不是一条直边，比直边更需要余量。
+        /// 36 是两头夹出来的：下界由观感（24 偏紧），上界由遮罩顶——墨迹高 428，
+        /// 副标块底 221.3 + G + 428 ≤ 688 → **G ≤ 38.4**。想再大只能先把整堆压矮。
+        static let onboardingCollageTop: CGFloat      = 36
     }
 
     enum Color {
@@ -285,6 +317,14 @@ enum AppTheme {
         static let englishPrimary = SwiftUI.Font.system(.body, design: .serif)                    // 英文主内容（内容衬线，规则用 .body 保 Dynamic Type）
         static let wordTitle      = SwiftUI.Font.system(.title2, design: .serif, weight: .semibold) // 词条大标题（内容衬线，半粗以有分量不过重）
         static let englishBody    = SwiftUI.Font.system(.body)                        // 英文例句
+        // Onboarding 拼贴里的示意微文案（照片注脚 / 语音转写 / 便签正文）。
+        // 尺寸：15（比 englishBody 17 降一档）——这些字是「让人认出这是什么输入」的示意，
+        //   不是要读的内容；17pt 主色会让三张卡同时抢主标题的注意力，整页发重。
+        // 字族：**衬线**。这三行是用户产生的内容，和结果页的英文主句（englishPrimary，
+        //   同为内容衬线）是同一类东西，理应同族；且整页其余全是衬线，卡上突然出现无衬线
+        //   就是「形态语言不同族」，与 N-1 里 chevron 的问题同类。
+        // 不挪用 chineseBody（语义是中文）或 statusNote（语义是加载/空态提示）。
+        static let onboardingCollageNote = SwiftUI.Font.system(.subheadline, design: .serif)
         static let buddy          = SwiftUI.Font.system(.subheadline, weight: .medium) // 场景追问（=参考稿 14.5/500）
         static let keyPhrase      = SwiftUI.Font.system(.subheadline, weight: .bold)  // 核心词组（=参考稿 kp-word 15/700 加黑）
         static let phonetic       = SwiftUI.Font.system(.footnote, design: .monospaced) // IPA 音标（等宽）
@@ -418,7 +458,19 @@ enum AppTheme {
         // 旧实现靠「占位块高 36 + header 自带 padding 16」两个数字拼出标题位置，
         // 占位块本身又比返回按钮触区少 8pt，纯属巧合而非设计。
         static let onboardingBackInset: CGFloat             = 2   // 返回 chevron 触区距安全区上沿
-        static let onboardingHeaderTop: CGFloat             = 48  // 页面标题（S1 报头 / S2 / S3a / S3b）布局顶距安全区上沿
+        static let onboardingHeaderTop: CGFloat             = 48  // 页面标题（S2 / S3a / S3b）布局顶距安全区上沿。S1 报头不用此值，见下
+        // S1 是品牌页：没有返回按钮，那条线上方的 44pt 触区是空的，报头贴在内页标题线上会显得被顶到天花板。
+        // 刊头惯例是封面留白大于内页，故单开一档。代价：横滑 S1→S2 时报头与标题错开 16pt（已确认接受，
+        // 验收「三页标题同高」不含 S1）。若真机觉得仍不够，下一档是 80，不要取中间值。
+        static let onboardingS1MastheadTop: CGFloat         = 64
+        // S1 hero 文字组下缘 → Continue 上缘。文字组由「几何居中」改为「锚定 CTA」：
+        // 居中的参照系（视口）随机型变，而封面页真正要恒定的是标题到行动召唤的距离；
+        // 机型差异被赶到上方留白（没人盯着看的地方）。与 F-6 在结果页的取舍同源。
+        static let onboardingHeroToCTA: CGFloat             = 200
+        // 返回按钮 leading：触区 44 宽、arrow.left 字形约 22 宽居中 → 字形左缘 = leading + 11。
+        // 要字形左缘落在页面左轴 20（用户看到的是墨、不是触区），故 leading = 20 - 11 = 9。
+        // 此前用 paddingM(12)，字形左缘落在 23，左轴因此有两个值。
+        static let onboardingBackLeading: CGFloat           = 9
 
         // ── Onboarding 顶部渐隐（F-4）─────────────────────────────────────
         // 遮罩的「不透明段」由 safeTop + onboardingBackInset + barControl 实算得出
@@ -444,7 +496,9 @@ enum AppTheme {
         static let onboardingCardChevronGlyph: CGFloat      = 13  // 主卡右端 chevron
         static let onboardingInlineChevronGlyph: CGFloat    = 10  // 紧跟次操作文字的 chevron
         static let onboardingUploadIllustrationWidth: CGFloat = 104 // 虚线空输入区的有机叠纸插画宽
-        static let onboardingUploadIllustrationHeight: CGFloat = 72 // 虚线空输入区的有机叠纸插画高
+        // 插画墨迹实测约 58.4 高（底片 72×52 旋转 −8° 后 61.5，再 ×0.95），
+        // 名义 72 意味着上下白留了 13.6 的透明边距 —— 收到 60，框内不再有看不见的空。
+        static let onboardingUploadIllustrationHeight: CGFloat = 60 // 虚线空输入区的有机叠纸插画高
         static let onboardingUploadActionWidth: CGFloat     = 240 // 双入口胶囊宽度，建立稳定中轴
         static let onboardingUploadActionGlyph: CGFloat     = 14 // 双入口胶囊内的轻量 SF Symbol
         static let onboardingUploadActionBorderWidth: CGFloat = 1 // 明亮胶囊清晰描边
@@ -453,11 +507,16 @@ enum AppTheme {
         static let onboardingUploadDashGap: CGFloat         = 6   // 空输入区虚线间距
         static let disabledControlBorderWidth: CGFloat      = 1   // 大面积禁用 CTA 的轻描边
         static let onboardingMaxPhotoAspectRatio: CGFloat   = 2.25 // 接受常规手机全屏截图；更长/更宽素材需重选
-        // 照片预览区的固定开销（N-1 后随标题上移 20 而减少：317 → 297）。
-        // 预览区最小高度 = 视口 - 该值：正常字号恰好顶到 Continue 按钮上方；
+        // 照片预览区的固定开销。此前是 317 → 297 一路试出来的魔法数字，现改为由布局推导：
+        //   overhead = headerTop 48 + 标题组 134.6 + 组间距 24 + 底部净空 64.3 + 卡底→CTA 32 = 303
+        // 其中「标题组 134.6」= 标题 2 行(41×2) + 8 + 副标 2 行(22.3×2)；
+        //     「底部净空 64.3」= onboardingContinueBottom 12 + 按钮高 52。
+        // 预览区最小高度 = 视口 - 该值：正常字号下沿距 CTA 顶 32（与页面组间距同值）；
         // 大字号/小屏时预览区不压缩、保持此高度，页面转为可滚动。
-        // 注意：标题区参考高随 Dynamic Type 变化，此常数只用于「正常字号」基准，偏差仅影响临界点。
-        static let onboardingPhotoPreviewFixedOverhead: CGFloat = 297
+        // 上沿与空态虚线卡同线 —— 两态切换时内容顶不位移（此前会跳 4pt）。
+        // 注意：标题区高随 Dynamic Type 变化，此常数只用于「正常字号」基准，偏差仅影响临界点。
+        // 任何一项变了就重算，不要再在真机上试。
+        static let onboardingPhotoPreviewFixedOverhead: CGFloat = 303
         // 结果页时刻卡的照片高度（F-6，替换 N-3 §3.2 的「卡片总高恒定 + 垂直居中 +
         // 照片自适应 clamp」）：那套策略下卡片总高不变、照片却随文字长度反向伸缩，
         // 短句时照片下沿下移 66pt、长句时上移 43pt——照片是画面主体，一动就是「跳」。
@@ -475,7 +534,9 @@ enum AppTheme {
         static let onboardingContinueBottom: CGFloat = 12
         static let inputBarMinHeight: CGFloat = 52 // 底部胶囊最小高度（Tab1 InputBar / Onboarding Continue 对齐）
         static let onboardingSampleWidth: CGFloat           = 104 // 样例图横滑卡宽
-        static let onboardingSampleHeight: CGFloat          = 120 // 样例图横滑卡高：给固定 CTA 留出呼吸
+        // tile 比例 = 原图比例 3:4 → scaledToFill 零裁切，四张都完整显示。
+        // 120(0.867) → 139(0.750)：此前每张上下各被吃掉 9.5pt，「不舒展」有一半来自这个裁切。
+        static let onboardingSampleHeight: CGFloat          = 139 // 样例图横滑卡高（= 宽 ÷ 0.75）
         // 兜底态（生成失败 / 放弃）的纸雕插画：与空输入区叠纸同族，尺寸放大作页面锚点
         static let onboardingFallbackIllustrationWidth: CGFloat  = 140 // 兜底态叠纸插画整体宽
         static let onboardingFallbackIllustrationHeight: CGFloat = 116 // 兜底态叠纸插画整体高
