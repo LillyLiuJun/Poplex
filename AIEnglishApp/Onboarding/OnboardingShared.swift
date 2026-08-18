@@ -81,7 +81,31 @@ struct OnboardingAuraBackground: View {
 
     var body: some View {
         ZStack {
-            AppTheme.Color.pageBg.ignoresSafeArea()
+            AppTheme.Color.pageBg
+                .ignoresSafeArea()
+                // 底部品牌橙光晕。原先挂在 OnboardingBottomFade 上，那层位于
+                // ScrollView **之后**，于是光晕画在内容之上，把照片、卡片、文字
+                // 全蒙了一道橙——装饰性的氛围光不该染内容。移到背景层后氛围不变
+                // （页面底色上照样有这团暖光），内容盖在它上面。
+                // 用 .overlay 而非 ZStack 兄弟：460pt 宽超过页宽，作兄弟会把整个
+                // 组件的理想宽度顶到 460，父级按理想尺寸居中时会把整页顶偏、
+                // 在页边露出相邻页（真机验证过）。overlay 内容不参与尺寸上报。
+                // 挂在已 ignoresSafeArea 的 pageBg 上 → 相对**物理**屏底定位。
+                .overlay(alignment: .bottom) {
+                    Ellipse()
+                        .fill(
+                            RadialGradient(
+                                colors: [AppTheme.Color.canvasAura.opacity(0.24), .clear],
+                                center: .center,
+                                startRadius: 0,
+                                endRadius: 220
+                            )
+                        )
+                        .frame(width: 460, height: 260)
+                        .blur(radius: 44)
+                        .offset(y: 40)
+                        .allowsHitTesting(false)
+                }
 
             // 网格点底纹（与 Tab1/Tab2 CanvasBackground 一致）
             Canvas { context, size in
@@ -103,22 +127,22 @@ struct OnboardingAuraBackground: View {
             }
             .ignoresSafeArea()
 
-            // 底部橙光晕已并入 OnboardingBottomFade（纯色长雾层），
-            // 不再在这里单独画一枚 Ellipse —— 避免两层各调各的参数、边缘对不齐。
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
 }
 
-// MARK: - 底部渐隐托：纯色长雾（pageBg 渐变 + 品牌橙光晕并进同一层）
+// MARK: - 底部渐隐托：纯色长雾（只做 pageBg 渐变；光晕见 OnboardingAuraBackground）
 //
 // 原先用 VariableBlurBackdrop（单层 ultraThinMaterial，模糊半径恒定、只有透明度在变）：
 // 渐隐区顶部相当于"低透明度的全模糊副本"盖在清晰内容上，在满幅静止照片背后会露出
 // 可见的重影边和亮度台阶（Tab1 能藏住是因为背后是文字气泡+留白，onboarding 背后
 // 是照片，对比更高更暴露）。换成纯色渐变没有"糊掉的副本"，物理上不存在上缘。
-// 品牌橙光晕原来是 OnboardingAuraBackground 里独立的一枚 Ellipse，现在并进这一层，
-// 避免两层各调各的参数、模糊边缘互相对不齐。
+// 品牌橙光晕曾经并进这一层，现已移回 OnboardingAuraBackground——这一层位于
+// ScrollView 之后，光晕挂在这里会画在**内容之上**、把照片和卡片蒙一层橙。
+// 当初合并是为了「避免两层各调各的参数」，而现在全 App 只有背景层一处画光晕，
+// 那个顾虑本身就不存在了。这一层现在只做纯色长雾，不再有任何叠加。
 struct OnboardingBottomFade: View {
     private let height: CGFloat = 186
 
@@ -135,26 +159,6 @@ struct OnboardingBottomFade: View {
             startPoint: .top,
             endPoint: .bottom
         )
-        // 品牌橙光晕（参数与旧 OnboardingAuraBackground 版本对齐）用 overlay 叠加，
-        // 而不是与渐变同层的 ZStack 兄弟——overlay 内容不参与基础视图的尺寸上报。
-        // 之前用 ZStack 时，460pt 宽的椭圆会把整个组件的理想宽度顶到 460（超过页面
-        // 实际宽度 ~402pt），父级 .frame(width:) 按理想尺寸居中摆放时会把整页内容
-        // 顶偏，在页面边缘露出相邻页的内容（真机验证过）。
-        .overlay(alignment: .bottom) {
-            Ellipse()
-                .fill(
-                    RadialGradient(
-                        colors: [AppTheme.Color.canvasAura.opacity(0.24), .clear],
-                        center: .center,
-                        startRadius: 0,
-                        endRadius: 220
-                    )
-                )
-                .frame(width: 460, height: 260)
-                .blur(radius: 44)
-                .offset(y: 40)
-                .allowsHitTesting(false)
-        }
         .frame(height: height)
         .frame(maxHeight: .infinity, alignment: .bottom)
         .ignoresSafeArea(edges: .bottom)

@@ -75,7 +75,9 @@ struct OnboardingCaptureView: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            OnboardingAuraBackground()
+            // 这里原本又画了一层 OnboardingAuraBackground —— 与 OnboardingView 在
+            // 三页背后铺的那层重复。光晕移进背景层之后重复就会叠成双份亮度（点阵
+            // 底纹同理），故移除；背景由 OnboardingView 统一提供。
 
             // Content area morphs in-place on Continue.
             if isSelecting {
