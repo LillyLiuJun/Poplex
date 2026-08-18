@@ -440,13 +440,14 @@ enum AppTheme {
         // 大字号/小屏时预览区不压缩、保持此高度，页面转为可滚动。
         // 注意：标题区参考高随 Dynamic Type 变化，此常数只用于「正常字号」基准，偏差仅影响临界点。
         static let onboardingPhotoPreviewFixedOverhead: CGFloat = 297
-        // 结果页（N-3）时刻卡的固定开销：同上一枚是同一类常数，只是给结果页的
-        // 「标题 + 卡片」结构用。卡片总高 = 视口 - 该值（16 Pro ≈ 419），
-        // 卡内 photoHeight = clamp(卡片总高 - 实测文字区高, 180, 320)，
-        // 卡片外框因此与内容长度无关，只随视口变化。
-        // 数值按 N-1 后的 resultHeader 结构与需求文档 §3.2 的算例（16 Pro：451-32=419）
-        // 反推得出，未在真机复核实际渲染的 header 高度，正常字号下需真机校准。
-        static let onboardingResultCardFixedOverhead: CGFloat = 379
+        // 结果页时刻卡的照片高度（F-6，替换 N-3 §3.2 的「卡片总高恒定 + 垂直居中 +
+        // 照片自适应 clamp」）：那套策略下卡片总高不变、照片却随文字长度反向伸缩，
+        // 短句时照片下沿下移 66pt、长句时上移 43pt——照片是画面主体，一动就是「跳」。
+        // 现在反过来：照片高度锁定，卡片总高 = 照片高 + 文字区实际高，随内容自然伸缩，
+        // 顶对齐。变化量从「照片」（最显眼）赶到「卡片下边缘/空场」（没人盯着看）。
+        // 230 是两头夹出来的：260 时长句卡底会溢出遮罩顶 22pt；200 时短句照片偏小、
+        // 失去主体感。四态（生成中/成功/失败）全部引用它，不得再出现硬编码高度。
+        static let onboardingResultPhotoHeight: CGFloat = 230
         static let onboardingContentBottomClearance: CGFloat = 80 // Continue 槽位避让（内容底进遮罩渐隐区，不钻按钮背后）
         // Continue 距安全区下沿（F-2）。四页四态原本各挂一份 `.ignoresSafeArea(.container,
         // edges: .bottom)`，但承载各页的 GeometryReader 本身已被安全区内缩，这句在 CTA 上

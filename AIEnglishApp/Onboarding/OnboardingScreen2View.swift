@@ -1,5 +1,10 @@
 import SwiftUI
 
+private enum OnboardingScreen2Layout {
+    // 滚动位移探针的坐标空间名（F-4 TopFade）
+    static let scrollSpace = "onboardingScreen2Scroll"
+}
+
 /// Onboarding 第二页：机制说明 —— 回答"它是怎么工作的"。
 /// 结构 = 文案（怎么做）+ 「捕捉瞬间」视觉拼贴（照片碎片 / 语音条 / 打字气泡，
 /// 用视觉元素本身呈现三种输入，而非图标+文字清单）+ 单一 CTA。
@@ -11,6 +16,7 @@ struct OnboardingScreen2View: View {
 
     @State private var appeared = false
     @State private var cursorVisible = true
+    @State private var scrollOffset: CGFloat = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// 语音条声波的柱高（固定示意波形）。
@@ -38,9 +44,22 @@ struct OnboardingScreen2View: View {
                     }
                     .padding(.bottom, AppTheme.Size.onboardingContentBottomClearance) // Give space for the absolute bottom button
                     .frame(minHeight: geo.size.height) // Full height
+                    .background(
+                        GeometryReader { contentGeo in
+                            Color.clear.preference(
+                                key: OnboardingScrollOffsetKey.self,
+                                value: -contentGeo.frame(in: .named(OnboardingScreen2Layout.scrollSpace)).minY
+                            )
+                        }
+                    )
                 }
+                .coordinateSpace(name: OnboardingScreen2Layout.scrollSpace)
                 .scrollBounceBehavior(.basedOnSize)
+                .onPreferenceChange(OnboardingScrollOffsetKey.self) { scrollOffset = $0 }
             }
+
+            // 顶部渐隐随滚动出现（F-4）：静止时标题完整，一滚才吃掉标题顶部。
+            OnboardingTopFade(progress: min(1, max(0, scrollOffset / 24)))
 
             OnboardingBottomFade()
 

@@ -24,6 +24,11 @@ private enum OnboardingCaptureLayout {
     static let pageSpace = "onboardingCapturePage"
     // 样例卡横滑条的 ScrollViewReader id：相机权限被拒时"Use a sample instead"用它滚过去
     static let sampleCarouselID = "onboardingSampleCarousel"
+    // 滚动位移探针的坐标空间名（F-4 TopFade）。必须锚在 ScrollView 自己身上、
+    // 不能复用 pageSpace——那个锚在页面级容器上，静止态 minY 不是 0，会让
+    // TopFade 的响应窗口凭空多出一段死区。selectionContent / resultContent 的
+    // ScrollView 互斥存在，同名安全。
+    static let scrollSpace = "onboardingCaptureScroll"
 }
 
 private struct CarouselFramePreferenceKey: PreferenceKey {
@@ -58,6 +63,8 @@ struct OnboardingCaptureView: View {
     @State private var appeared = false
     // 相机权限被拒：不弹通用 alert，Camera 行内变成说明 + 两个出口（F-3/C-1）
     @State private var cameraPermissionDenied = false
+    // 顶部渐隐随滚动出现（F-4）；selectionContent / resultContent 互斥显示，共用一个值
+    @State private var scrollOffset: CGFloat = 0
     // 样例图横滑条在页面坐标空间里的 frame；翻页手势起点落在其中时不翻页
     @State private var carouselFrame: CGRect?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -254,8 +261,21 @@ struct OnboardingCaptureView: View {
                         .padding(.horizontal, AppTheme.Space.paddingPage)
                         .padding(.bottom, AppTheme.Size.onboardingContentBottomClearance) // Give space for the absolute bottom button
                         .frame(minHeight: geo.size.height)
+                        .background(
+                            GeometryReader { contentGeo in
+                                Color.clear.preference(
+                                    key: OnboardingScrollOffsetKey.self,
+                                    value: -contentGeo.frame(in: .named(OnboardingCaptureLayout.scrollSpace)).minY
+                                )
+                            }
+                        )
                     }
+                    .coordinateSpace(name: OnboardingCaptureLayout.scrollSpace)
                     .scrollBounceBehavior(.basedOnSize)
+                    .onPreferenceChange(OnboardingScrollOffsetKey.self) { scrollOffset = $0 }
+
+                    // 顶部渐隐随滚动出现（F-4）：静止时标题完整，一滚才吃掉标题顶部。
+                    OnboardingTopFade(progress: min(1, max(0, scrollOffset / 24)))
 
                     OnboardingBottomFade()
 
@@ -486,37 +506,52 @@ struct OnboardingCaptureView: View {
                             .padding(.bottom, AppTheme.Space.paddingCard)
 
                         if let image = resultImage {
-                            // 卡片总高（cardHeight）纯几何、不随内容变化——卡内 photoHeight
-                            // 由 OnboardingResultCard 自己按文字区实测高度 clamp(180,320)
-                            // 求出，卡片外框因此在生成中/成功两态之间保持恒定（N-3 §3.2）。
+                            // 照片高度锁定、卡片顶对齐（F-6，替换 N-3 §3.2 的居中+自适应）——
+                            // 卡片总高 = 锁定照片高 + 文字区实际高，随内容自然伸缩，
+                            // 变化量落在卡片下边缘，不落在照片上。
                             OnboardingResultCard(
                                 image: image,
                                 state: resultCardState,
-                                cardHeight: max(0, geo.size.height - AppTheme.Size.onboardingResultCardFixedOverhead),
                                 onRetry: { Task { await viewModel.retry() } }
                             )
                             .padding(.horizontal, AppTheme.Space.paddingPage)
+                            .animation(.easeInOut(duration: 0.35), value: viewModel.generationResult != nil)
                         }
 
                         Spacer(minLength: 0)
                     }
                     .padding(.bottom, AppTheme.Size.onboardingContentBottomClearance) // Give space for absolute bottom button
                     .frame(minHeight: geo.size.height)
+                    .background(
+                        GeometryReader { contentGeo in
+                            Color.clear.preference(
+                                key: OnboardingScrollOffsetKey.self,
+                                value: -contentGeo.frame(in: .named(OnboardingCaptureLayout.scrollSpace)).minY
+                            )
+                        }
+                    )
                 }
+                .coordinateSpace(name: OnboardingCaptureLayout.scrollSpace)
                 .scrollBounceBehavior(.basedOnSize)
+                .onPreferenceChange(OnboardingScrollOffsetKey.self) { scrollOffset = $0 }
             }
+
+            // 顶部渐隐随滚动出现（F-4）：静止时标题完整，一滚才吃掉标题顶部。
+            OnboardingTopFade(progress: min(1, max(0, scrollOffset / 24)))
 
             OnboardingBottomFade()
 
-            // 生成中就渲染禁用态 Continue（材质切换靠 N-2 的 0.2s 过渡），
-            // 位置全程不动，成功后原位切可用态 + 文案变 Get Started。
-            OnboardingResultBottomButton(
-                isLoading: viewModel.isLoading,
-                isSuccess: viewModel.generationResult != nil,
-                action: onComplete
-            )
-            .padding(.horizontal, AppTheme.Space.paddingPage)
-            .padding(.bottom, AppTheme.Size.onboardingContinueBottom)
+            // F-5：撤回「生成中就渲染禁用态 Continue」——卡片位置在 F-6 后已经稳定，
+            // 按钮生成中不出现，结果落地时才淡入 + 轻微上移（非硬出现，见
+            // OnboardingResultBottomButton 的入场动效）。
+            if !viewModel.isLoading {
+                OnboardingResultBottomButton(
+                    isSuccess: viewModel.generationResult != nil,
+                    action: onComplete
+                )
+                .padding(.horizontal, AppTheme.Space.paddingPage)
+                .padding(.bottom, AppTheme.Size.onboardingContinueBottom)
+            }
         }
         // 状态条不随网络恢复自动消失：保留到用户点 Try again 成功（或换素材/离开）——
         // 重试入口稳定可预期；真机监控信号不可靠，自动消失会吞掉入口。
@@ -620,10 +655,11 @@ private struct CameraAccessDeniedNotice: View {
     }
 }
 
-/// 结果页时刻卡：生成中 / 成功 / 失败三态共用一个容器与同一张照片（N-3）。
-/// 卡片总高（cardHeight）由调用处按视口几何算出、与内容无关；照片高度反过来
-/// 由「cardHeight − 实测文字区高」clamp 到 [180, 320] 得出——文字区量多少，
-/// 照片就让多少，卡片外框因此不随生成中→成功、也不随素材长短变化。
+/// 结果页时刻卡：生成中 / 成功 / 失败三态共用一个容器与同一张照片（N-3，高度策略 F-6 改）。
+/// 照片高度锁定（onboardingResultPhotoHeight），卡片总高 = 照片高 + 文字区实际高，
+/// 随内容自然伸缩、顶对齐——不再用「卡片总高恒定 + 照片自适应」反向推导：那套策略下
+/// 卡片总高不变但照片会随文字长度反向伸缩，照片是画面主体，一动就是「跳」。
+/// 现在变化量落在卡片下边缘（没人盯着看），照片、MOMENT 标签、卡顶逐帧恒定。
 /// 三态文字区统一为「标签行 / 说明行 / 第三行」同构结构，只有内容区做 crossfade。
 private struct OnboardingResultCard: View {
     enum Phase: Equatable {
@@ -634,39 +670,28 @@ private struct OnboardingResultCard: View {
 
     let image: Image
     let state: Phase
-    let cardHeight: CGFloat
     var onRetry: () -> Void = {}
 
-    @State private var textRegionHeight: CGFloat = 140
     @State private var skeletonPulse = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private var photoHeight: CGFloat {
-        min(320, max(180, cardHeight - textRegionHeight))
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            // 照片高度锁定（F-6，AppTheme.Size.onboardingResultPhotoHeight）——不再随
+            // 文字区高度反算，四态（含失败态）共用同一个数，照片下沿因此逐帧恒定。
             image
                 .resizable()
                 .scaledToFill()
                 .frame(maxWidth: .infinity)
-                .frame(height: photoHeight)
+                .frame(height: AppTheme.Size.onboardingResultPhotoHeight)
                 .clipped()
                 .allowsHitTesting(false)
-                .animation(.easeInOut(duration: 0.35), value: photoHeight)
 
             textRegion
                 .padding(.horizontal, 18)
                 .padding(.vertical, 16)
-                .background(
-                    GeometryReader { g in
-                        Color.clear.preference(key: ResultTextHeightKey.self, value: g.size.height)
-                    }
-                )
                 .animation(.easeInOut(duration: 0.25), value: state)
         }
-        .onPreferenceChange(ResultTextHeightKey.self) { textRegionHeight = $0 }
         .background(AppTheme.Color.cardBg)
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.large))
         .overlay(
@@ -798,29 +823,34 @@ private struct OnboardingResultCard: View {
     }
 }
 
-private struct ResultTextHeightKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
-}
-
 /// 结果页底部按钮：生成中禁用态 Continue → 成功后原位切可用态 + 文案变 Get Started，
 /// 位置全程不动。切到可用态时叠一次 scale 0.98→1.0（0.25s，reduceMotion 跳过）——
 /// 这是整个 onboarding 唯一的"完成"时刻。
+/// 结果页底部按钮：只在 `!isLoading` 时挂载（F-5，撤回「生成中就渲染禁用态 Continue」
+/// 的上一轮决定）——挂载即淡入 + 6pt 上移（非硬出现），reduceMotion 时只淡入。
+/// isSuccess 从 false→true（重试成功等场景）时再叠一次 scale 0.98→1.0 的完成态 pop。
 private struct OnboardingResultBottomButton: View {
-    let isLoading: Bool
     let isSuccess: Bool
     let action: () -> Void
 
     @State private var scale: CGFloat = 1.0
+    @State private var appearedButton = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         OnboardingPrimaryButton(
             title: isSuccess ? "Get Started" : "Continue",
-            isEnabled: !isLoading,
             action: action
         )
         .scaleEffect(scale)
+        .opacity(appearedButton ? 1 : 0)
+        .offset(y: (appearedButton || reduceMotion) ? 0 : 6)
+        .animation(.easeOut(duration: 0.25), value: appearedButton)
+        .onAppear {
+            // 延到下一帧再翻，否则初始隐藏态来不及渲染，淡入会被 SwiftUI 跳过
+            // （与 OnboardingScreen1View.triggerEntrance 同款处理）。
+            DispatchQueue.main.async { appearedButton = true }
+        }
         .onChange(of: isSuccess) { old, new in
             guard new, !old, !reduceMotion else { return }
             scale = 0.98

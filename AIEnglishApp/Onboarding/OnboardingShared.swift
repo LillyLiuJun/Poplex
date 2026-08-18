@@ -51,6 +51,11 @@ struct OnboardingPrimaryButton: View {
 // 笔画约 2.6pt、等宽、粗短圆头，是 iOS 通用几何形；这一页其余全是衬线排版，
 // 形态语言不同族。细线 arrow 呼应衬线字的细横线，横杆给出更明确的方向感。
 // 若真机上 .regular 的笔画仍偏粗，退回自绘 Path（22×22，lineWidth 1.6，.round 线帽）。
+//
+// 颜色（F-4）：textSecondary(8.69:1) → textPrimary(16.25:1)。去掉白底和阴影后
+// 箭头是左上角唯一的墨迹，8.69 是「次要文字」的重量，撑不起「这里有个可点控件」。
+// 中间档 neutral800(13.57:1) 观感也可以，但色板里没有对应语义 token——
+// 不直接引用 Primitive，本轮用 textPrimary。
 
 struct OnboardingBackButton: View {
     let action: () -> Void
@@ -59,7 +64,7 @@ struct OnboardingBackButton: View {
         Button(action: action) {
             Image(systemName: "arrow.left")
                 .font(.system(size: 19, weight: .regular))
-                .foregroundStyle(AppTheme.Color.textSecondary)
+                .foregroundStyle(AppTheme.Color.textPrimary)
                 .frame(width: AppTheme.Size.barControl, height: AppTheme.Size.barControl)
                 .contentShape(Rectangle())
         }
@@ -154,6 +159,44 @@ struct OnboardingBottomFade: View {
         .frame(maxHeight: .infinity, alignment: .bottom)
         .ignoresSafeArea(edges: .bottom)
         .allowsHitTesting(false)
+    }
+}
+
+// MARK: - 滚动位移探针（F-4）：与 OnboardingCaptureView 里的 CarouselFramePreferenceKey
+// 同款做法——PreferenceKey 上报，不用 iOS 18+ 的 onScrollGeometryChange（项目要兼容 iOS 17）。
+// 四个状态共用同一枚 key，各自的宿主页把探针挂在滚动内容的 .background(GeometryReader{})上。
+
+struct OnboardingScrollOffsetKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
+
+// MARK: - 顶部渐隐托（F-4）：BottomFade 的镜像，同一套 pageBg 纯色渐变，不引入新材质。
+//
+// 必须绑滚动位移、不能常驻：标题 cap-top 在 118，箭头下沿在 108，只差 10pt——
+// 常驻的顶部渐隐会把静止状态下的标题顶部也吃掉。绑上滚动之后静止时标题完整，
+// 一滚才出现，这正是 iOS 自己的 scroll edge effect 的做法。
+// 同时解决两个问题：正文从裸箭头背后穿过（和标题叠字）、标题在安全区上沿的硬切边。
+struct OnboardingTopFade: View {
+    var progress: CGFloat            // 0…1，由滚动位移驱动
+    private let height: CGFloat = 152   // 安全区 62 + 箭头 2+44 + 渐隐跑道 44
+
+    var body: some View {
+        LinearGradient(
+            stops: [
+                .init(color: AppTheme.Color.pageBg,               location: 0.00),
+                .init(color: AppTheme.Color.pageBg,               location: 0.60),  // 不透明到箭头下沿(108)
+                .init(color: AppTheme.Color.pageBg.opacity(0.86), location: 0.71),
+                .init(color: AppTheme.Color.pageBg.opacity(0),    location: 1.00)
+            ],
+            startPoint: .top, endPoint: .bottom
+        )
+        .frame(height: height)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .ignoresSafeArea(edges: .top)
+        .opacity(progress)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
 
