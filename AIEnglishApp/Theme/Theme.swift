@@ -420,6 +420,24 @@ enum AppTheme {
         static let onboardingBackInset: CGFloat             = 2   // 返回 chevron 触区距安全区上沿
         static let onboardingHeaderTop: CGFloat             = 48  // 页面标题（S1 报头 / S2 / S3a / S3b）布局顶距安全区上沿
 
+        // ── Onboarding 顶部渐隐（F-4）─────────────────────────────────────
+        // 遮罩的「不透明段」由 safeTop + onboardingBackInset + barControl 实算得出
+        // （= 返回箭头下沿），不写死——safeTop 逐机型不同（16 Pro 62 / 15 Pro 59 /
+        // 13 mini 50 / SE 20），写死会在小屏上多盖 40pt、在大屏上盖不住箭头。
+        // 这里只定义「不透明段之后还要走多长才彻底透明」和「滚多少判定为已滚动」。
+        // 不透明段：只需盖住返回箭头的**字形**，不必盖满 44 的触区——
+        // arrow.left 在 19pt 下字形高约 13pt，居中于触区后下沿在页面坐标 ~31，
+        // 取 36 留 5pt 余量。顶端必须从 0 开始：内容在安全区上沿被硬切，
+        // 这一段实色就是用来把切边藏掉的。
+        // ⚠️ 改返回按钮字号/触区时要一起复核这个数。
+        static let onboardingTopFadeOpaque: CGFloat         = 36
+        // 渐隐跑道：不透明段之后再走多远彻底透明。
+        // 64 → 80 → 40 → 28：整层高随之 110→126→86→64。收得太狠会让 alpha 的
+        // 单位落差变大、逼近当初 20pt 线性收尾那条"横向硬边"——
+        // 28 时约 0.041/pt，已接近可察觉阈值，**不建议再往下压**。
+        static let onboardingTopFadeRunway: CGFloat         = 28
+        static let onboardingTopFadeRamp: CGFloat           = 16  // 滚动位移 → 遮罩整体不透明度的爬升距离
+
         // ── Onboarding 拍照页（视觉规范 §06）───────────────────────────────
         static let onboardingCaptureGlyph: CGFloat          = 24  // 主拍照入口描边相机
         static let onboardingPhotosGlyph: CGFloat           = 20  // 紧凑相册入口描边图标

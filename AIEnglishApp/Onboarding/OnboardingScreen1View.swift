@@ -1,10 +1,5 @@
 import SwiftUI
 
-private enum OnboardingScreen1Layout {
-    // 滚动位移探针的坐标空间名（F-4 TopFade）
-    static let scrollSpace = "onboardingScreen1Scroll"
-}
-
 /// Onboarding 第一页：品牌第一印象 + 价值主张。
 /// 视觉 = 顶部品牌字标「Poplex.」报头（左对齐、与标题共左轴）+ 居中纯黑衬线封面大
 /// 标题 + 一句灰副标题。报头用共享的 `PoplexWordmark`（与开屏 / 图标同源、同度量，
@@ -46,22 +41,14 @@ struct OnboardingScreen1View: View {
                     }
                     .padding(.bottom, AppTheme.Size.onboardingContentBottomClearance) // Give space for the absolute bottom button
                     .frame(minHeight: geo.size.height)
-                    .background(
-                        GeometryReader { contentGeo in
-                            Color.clear.preference(
-                                key: OnboardingScrollOffsetKey.self,
-                                value: -contentGeo.frame(in: .named(OnboardingScreen1Layout.scrollSpace)).minY
-                            )
-                        }
-                    )
+                    .onboardingScrollOffsetProbe()   // iOS 17 走 PreferenceKey 兜底，iOS 18+ 无副作用
                 }
-                .coordinateSpace(name: OnboardingScreen1Layout.scrollSpace)
                 .scrollBounceBehavior(.basedOnSize)
-                .onPreferenceChange(OnboardingScrollOffsetKey.self) { scrollOffset = $0 }
+                .onboardingScrollOffsetTracking($scrollOffset)
             }
 
             // 顶部渐隐随滚动出现（F-4）：静止时标题完整，一滚才吃掉标题顶部。
-            OnboardingTopFade(progress: min(1, max(0, scrollOffset / 24)))
+            OnboardingTopFade(scrollOffset: scrollOffset)
 
             OnboardingBottomFade()
 

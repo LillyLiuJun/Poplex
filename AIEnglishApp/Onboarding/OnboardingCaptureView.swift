@@ -24,11 +24,6 @@ private enum OnboardingCaptureLayout {
     static let pageSpace = "onboardingCapturePage"
     // 样例卡横滑条的 ScrollViewReader id：相机权限被拒时"Use a sample instead"用它滚过去
     static let sampleCarouselID = "onboardingSampleCarousel"
-    // 滚动位移探针的坐标空间名（F-4 TopFade）。必须锚在 ScrollView 自己身上、
-    // 不能复用 pageSpace——那个锚在页面级容器上，静止态 minY 不是 0，会让
-    // TopFade 的响应窗口凭空多出一段死区。selectionContent / resultContent 的
-    // ScrollView 互斥存在，同名安全。
-    static let scrollSpace = "onboardingCaptureScroll"
 }
 
 private struct CarouselFramePreferenceKey: PreferenceKey {
@@ -90,6 +85,17 @@ struct OnboardingCaptureView: View {
                 resultContent
                     .transition(.opacity)
             }
+
+            // 顶部渐隐随滚动出现（F-4）：静止时标题完整，一滚才吃掉标题顶部。
+            //
+            // 挂在 body 的外层 ZStack、而不是各自内容里：selectionContent 的层级是
+            // GeometryReader → ScrollViewReader → ZStack，遮罩若放在最内层 ZStack 里，
+            // 就成了 GeometryReader 的后代——此时 .ignoresSafeArea(edges: .top) 已经
+            // 没有安全区可让它扩展（外层 GeometryReader 已把安全区吃掉），遮罩顶只到
+            // 安全区上沿、且 z 序被限制在该子树内，真机表现为「这一页滚动时遮罩不出现」。
+            // Screen1 / Screen2 / resultContent 的遮罩本来就是 GeometryReader 的兄弟节点，
+            // 所以只有选择页翻车。提到最外层后四处结构一致，也顺便去掉了重复实例。
+            OnboardingTopFade(scrollOffset: scrollOffset)
         }
         .animation(.easeInOut(duration: 0.3), value: isSelecting)
         .contentShape(Rectangle())
@@ -126,6 +132,9 @@ struct OnboardingCaptureView: View {
         // 三页并排渲染，onAppear 启动即触发——入场动画必须在页面真正可见时才播
         .onAppear { if isActive { appeared = true } }
         .onChange(of: isActive) { _, active in if active { appeared = true } }
+        // 选择页与结果页共用同一个 scrollOffset（同一时刻只渲染其中一个）。切换的瞬间
+        // 新页面的 ScrollView 还没上报，旧值会残留一帧、顶部渐隐闪一下——切换时清零。
+        .onChange(of: isSelecting) { _, _ in scrollOffset = 0 }
         .sheet(isPresented: $showConsentSheet) {
             // 弹窗高度固定（仅 medium）：不可拉大——拉大会让"内容在上、按钮在下"
             // 的布局中间出现大片空白。文案多时在弹窗内部滚动，按钮始终可见。
@@ -261,21 +270,10 @@ struct OnboardingCaptureView: View {
                         .padding(.horizontal, AppTheme.Space.paddingPage)
                         .padding(.bottom, AppTheme.Size.onboardingContentBottomClearance) // Give space for the absolute bottom button
                         .frame(minHeight: geo.size.height)
-                        .background(
-                            GeometryReader { contentGeo in
-                                Color.clear.preference(
-                                    key: OnboardingScrollOffsetKey.self,
-                                    value: -contentGeo.frame(in: .named(OnboardingCaptureLayout.scrollSpace)).minY
-                                )
-                            }
-                        )
+                        .onboardingScrollOffsetProbe()   // iOS 17 走 PreferenceKey 兜底，iOS 18+ 无副作用
                     }
-                    .coordinateSpace(name: OnboardingCaptureLayout.scrollSpace)
                     .scrollBounceBehavior(.basedOnSize)
-                    .onPreferenceChange(OnboardingScrollOffsetKey.self) { scrollOffset = $0 }
-
-                    // 顶部渐隐随滚动出现（F-4）：静止时标题完整，一滚才吃掉标题顶部。
-                    OnboardingTopFade(progress: min(1, max(0, scrollOffset / 24)))
+                    .onboardingScrollOffsetTracking($scrollOffset)
 
                     OnboardingBottomFade()
 
@@ -522,22 +520,11 @@ struct OnboardingCaptureView: View {
                     }
                     .padding(.bottom, AppTheme.Size.onboardingContentBottomClearance) // Give space for absolute bottom button
                     .frame(minHeight: geo.size.height)
-                    .background(
-                        GeometryReader { contentGeo in
-                            Color.clear.preference(
-                                key: OnboardingScrollOffsetKey.self,
-                                value: -contentGeo.frame(in: .named(OnboardingCaptureLayout.scrollSpace)).minY
-                            )
-                        }
-                    )
+                    .onboardingScrollOffsetProbe()   // iOS 17 走 PreferenceKey 兜底，iOS 18+ 无副作用
                 }
-                .coordinateSpace(name: OnboardingCaptureLayout.scrollSpace)
                 .scrollBounceBehavior(.basedOnSize)
-                .onPreferenceChange(OnboardingScrollOffsetKey.self) { scrollOffset = $0 }
+                .onboardingScrollOffsetTracking($scrollOffset)
             }
-
-            // 顶部渐隐随滚动出现（F-4）：静止时标题完整，一滚才吃掉标题顶部。
-            OnboardingTopFade(progress: min(1, max(0, scrollOffset / 24)))
 
             OnboardingBottomFade()
 

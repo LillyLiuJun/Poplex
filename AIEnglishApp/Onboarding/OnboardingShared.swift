@@ -162,41 +162,134 @@ struct OnboardingBottomFade: View {
     }
 }
 
-// MARK: - 滚动位移探针（F-4）：与 OnboardingCaptureView 里的 CarouselFramePreferenceKey
-// 同款做法——PreferenceKey 上报，不用 iOS 18+ 的 onScrollGeometryChange（项目要兼容 iOS 17）。
-// 四个状态共用同一枚 key，各自的宿主页把探针挂在滚动内容的 .background(GeometryReader{})上。
+// MARK: - 滚动位移探针（F-4）
+//
+// 两条路并存，不再做「iOS 17 直接没有」的降级：
+//   · iOS 18+：onScrollGeometryChange，系统原生。
+//   · iOS 17 ：命名坐标空间 + PreferenceKey 探针。
+//
+// 上一版只留了 iOS 18 分支，理由是「PreferenceKey 写法滚动时不重新触发」。
+// 那次失败的真正原因是**探针没有落在一个命名坐标空间里**：GeometryReader 若相对
+// .global 或未命名空间取 frame，ScrollView 内容平移不会引起该 frame 变化，于是
+// preference 永远是同一个值、看起来像"不触发"。补上 .coordinateSpace(name:)，
+// 并把探针贴在滚动内容（而不是 ScrollView 本身）上之后，内容相对 ScrollView 的
+// minY 会随滚动实时变化，preference 正常重发。
+private enum OnboardingScrollSpace {
+    static let name = "onboardingScroll"
+}
 
-struct OnboardingScrollOffsetKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+private struct OnboardingScrollOffsetKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
+private struct OnboardingScrollOffsetTracking: ViewModifier {
+    @Binding var scrollOffset: CGFloat
+
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            // contentOffset.y 的零点是「内容顶边贴住 ScrollView 的内容内边距上沿」，
+            // 也就是静止时它等于 -contentInsets.top（安全区、scrollIndicatorInsets 等
+            // 都会计进来）。直接 max(0, contentOffset.y) 会把「已经滚了但还没超过
+            // inset」的那一段全部夹成 0——真机上表现为 off 恒等于 0、遮罩永不出现。
+            // 加回 contentInsets.top 之后，静止 = 0、下滚为正，语义才对得上。
+            content.onScrollGeometryChange(for: CGFloat.self) { geometry in
+                max(0, geometry.contentOffset.y + geometry.contentInsets.top)
+            } action: { _, newValue in
+                scrollOffset = newValue
+            }
+        } else {
+            content
+                .coordinateSpace(name: OnboardingScrollSpace.name)
+                .onPreferenceChange(OnboardingScrollOffsetKey.self) { value in
+                    scrollOffset = max(0, value)
+                }
+        }
+    }
+}
+
+extension View {
+    /// 贴在 **ScrollView 本身** 上：声明命名坐标空间并接收探针上报。
+    func onboardingScrollOffsetTracking(_ scrollOffset: Binding<CGFloat>) -> some View {
+        modifier(OnboardingScrollOffsetTracking(scrollOffset: scrollOffset))
+    }
+
+    /// 贴在 **滚动内容**（ScrollView 的直接子视图）上：上报内容顶边相对 ScrollView
+    /// 的位移。iOS 18+ 走 onScrollGeometryChange 用不到它，但挂着无副作用——
+    /// GeometryReader 放在 .background 里不参与父视图的尺寸上报。
+    func onboardingScrollOffsetProbe() -> some View {
+        background(
+            GeometryReader { proxy in
+                Color.clear.preference(
+                    key: OnboardingScrollOffsetKey.self,
+                    value: -proxy.frame(in: .named(OnboardingScrollSpace.name)).minY
+                )
+            }
+        )
+    }
 }
 
 // MARK: - 顶部渐隐托（F-4）：BottomFade 的镜像，同一套 pageBg 纯色渐变，不引入新材质。
 //
-// 必须绑滚动位移、不能常驻：标题 cap-top 在 118，箭头下沿在 108，只差 10pt——
-// 常驻的顶部渐隐会把静止状态下的标题顶部也吃掉。绑上滚动之后静止时标题完整，
-// 一滚才出现，这正是 iOS 自己的 scroll edge effect 的做法。
-// 同时解决两个问题：正文从裸箭头背后穿过（和标题叠字）、标题在安全区上沿的硬切边。
+// 必须绑滚动位移、不能常驻：静止时标题 cap-top 只在箭头下沿以下 10pt，常驻的顶部
+// 渐隐会把静止状态的标题顶部也吃掉。绑上滚动之后静止时标题完整、一滚才出现——
+// 这正是 iOS 自己的 scroll edge effect 的做法。
+//
+// ⚠️ 坐标系：**页面坐标（安全区上沿 = 0），不是屏幕坐标。**
+//
+// 上一版按「屏幕坐标 + safeAreaTop 实算 + .ignoresSafeArea(edges: .top)」写，真机翻车：
+// 页面跑在 OnboardingView 已内缩安全区的 GeometryReader 里，向 key window 取
+// safeAreaInsets.top 拿到 0，于是不透明段只到 46 而整块渐变又贴着物理屏顶，
+// 结果标题第一行只被盖掉一部分、第二行完全没盖到（真机截图实测）。
+//
+// 现在不再需要知道 safeTop：
+//   · ScrollView 本身就被安全区内缩，内容**根本画不到安全区上沿以上**（截图里标题
+//     那条硬切边就是这条线），所以遮罩没有任何理由往上越过它；
+//   · 状态栏那条已经由 OnboardingAuraBackground 的 pageBg 实色铺满，不需要再盖一层。
+// 于是不透明段 = onboardingBackInset + barControl（＝返回箭头下沿，页面坐标 46），
+// 全程只用 token 算，逐机型自洽，不碰 UIKit、不依赖 ignoresSafeArea 的传播行为。
+//
+// 收尾用缓曲线而非线性断崖：把 BottomFade 的曲线反过来用——跑道前 14% 只掉到 .86
+// （慢起步），中段 62% 走完主要落差，最后 24% 收尾。与底部同一套手感，上下呼应。
+// （最早那版是 20pt 内线性砸到 0，扫过文字时会露出一条看得见的横向硬边。）
 struct OnboardingTopFade: View {
-    var progress: CGFloat            // 0…1，由滚动位移驱动
-    private let height: CGFloat = 152   // 安全区 62 + 箭头 2+44 + 渐隐跑道 44
+    /// 直接吃滚动位移；clamp 与缓动都在组件内做，避免四个调用点各写一遍。
+    var scrollOffset: CGFloat
+
+    /// 不透明段下沿（页面坐标）。只盖箭头字形，不盖满 44 触区——见 token 注释。
+    private var opaqueTo: CGFloat { AppTheme.Size.onboardingTopFadeOpaque }
+
+    private var runway: CGFloat { AppTheme.Size.onboardingTopFadeRunway }
+
+    private var height: CGFloat { opaqueTo + runway }
 
     var body: some View {
         LinearGradient(
             stops: [
-                .init(color: AppTheme.Color.pageBg,               location: 0.00),
-                .init(color: AppTheme.Color.pageBg,               location: 0.60),  // 不透明到箭头下沿(108)
-                .init(color: AppTheme.Color.pageBg.opacity(0.86), location: 0.71),
-                .init(color: AppTheme.Color.pageBg.opacity(0),    location: 1.00)
+                .init(color: AppTheme.Color.pageBg,               location: 0),
+                .init(color: AppTheme.Color.pageBg,               location: opaqueTo / height),
+                .init(color: AppTheme.Color.pageBg.opacity(0.86), location: (opaqueTo + runway * 0.14) / height),
+                .init(color: AppTheme.Color.pageBg.opacity(0.14), location: (opaqueTo + runway * 0.76) / height),
+                .init(color: AppTheme.Color.pageBg.opacity(0),    location: 1)
             ],
-            startPoint: .top, endPoint: .bottom
+            startPoint: .top,
+            endPoint: .bottom
         )
         .frame(height: height)
-        .frame(maxHeight: .infinity, alignment: .top)
-        .ignoresSafeArea(edges: .top)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        // 刻意不加 .ignoresSafeArea——见上方坐标系说明。
         .opacity(progress)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
+    }
+
+
+    /// smoothstep 而非线性：线性起步在刚开始滚的第一帧就有一层灰扑上来，很"啪"。
+    private var progress: CGFloat {
+        let t = min(max(scrollOffset / AppTheme.Size.onboardingTopFadeRamp, 0), 1)
+        return t * t * (3 - 2 * t)
     }
 }
 
