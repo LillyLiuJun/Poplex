@@ -14,3 +14,7 @@ supabase/.temp/
 
 # Superpowers visual-companion mockups (local only)
 .superpowers/
+
+# 本地密钥文件（如 GEMINI_API_KEY），绝不提交
+supabase/.env.local
+supabase/functions/.env.local

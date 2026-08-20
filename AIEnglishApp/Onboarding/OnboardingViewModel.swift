@@ -37,6 +37,11 @@ extension OnboardingErrorKind {
     }
 }
 
+/// 卡片响应没有确认本次请求已耐久落库。它是响应契约失败，不受网络监控影响。
+private enum OnboardingGenerationValidationError: Error {
+    case invalidDurableIdentity
+}
+
 @Observable
 final class OnboardingViewModel {
     var selectedCard: PresetCard?
@@ -44,6 +49,12 @@ final class OnboardingViewModel {
     var generationResult: AICard?
     var isLoading = false
     var errorKind: OnboardingErrorKind?
+    /// 当前所选素材（照片或预设卡）的稳定幂等键：换素材新建，Retry 复用，reset/reject 清除。
+    private(set) var currentRequestId: UUID?
+    /// 只由「当前仍选着照片 + 尚无确认结果」表达，不依赖某一种错误分类。
+    var hasUnconfirmedPhotoGeneration: Bool {
+        selectedImage != nil && generationResult == nil
+    }
     /// 粘性标记：本次 onboarding 是否曾断网失败。errorKind 是瞬时信号（网络恢复即清，
     /// toast 随之下线），但它会被清掉——离开页面时仍要写待重试记录，靠的是这个标记。
     /// 只在 reset() 时抹掉（用户主动换素材重来）。
@@ -54,6 +65,8 @@ final class OnboardingViewModel {
 
     private let service: AIServicing
     private let presetCardSaver: PresetCardSaving
+    /// 当前异步生成的状态所有权 token；reset/reject 会让悬空请求立即失效。
+    private var activeAttemptId: UUID?
     /// 是否联网的判定（注入点，便于单测模拟断网）。默认读全局 NetworkMonitor。
     private let isConnected: @Sendable () -> Bool
 
@@ -69,15 +82,23 @@ final class OnboardingViewModel {
 
     // Called when user picks a preset card and taps Continue
     func startWithCard(_ card: PresetCard) async {
+        // Loading UI 不允许换素材；必须在改 selection 前拒绝重入。
+        guard !isLoading else { return }
+        activeAttemptId = nil
         selectedCard = card
         selectedImage = nil
+        currentRequestId = UUID()
         await generate()
     }
 
     // Called when user picks a photo (camera or library) and taps Continue
     func startWithImage(_ image: UIImage) async {
+        // Loading UI 不允许换素材；必须在改 selection/request ID 前拒绝重入。
+        guard !isLoading else { return }
+        activeAttemptId = nil
         selectedImage = image
         selectedCard = nil
+        currentRequestId = UUID()
         await generate()
     }
 
@@ -86,8 +107,10 @@ final class OnboardingViewModel {
     }
 
     func reset() {
+        activeAttemptId = nil
         selectedCard = nil
         selectedImage = nil
+        currentRequestId = nil
         generationResult = nil
         isLoading = false
         errorKind = nil
@@ -98,8 +121,10 @@ final class OnboardingViewModel {
     /// 内容被拒：清空选中回上传页（图片不上屏）。errorKind 保留驱动 toast（4s 自动消失）；
     /// offlineFailureOccurred 不动（被拒不是断网失败）。
     func rejectSelection() {
+        activeAttemptId = nil
         selectedCard = nil
         selectedImage = nil
+        currentRequestId = nil
         generationResult = nil
         isLoading = false
         presetSavedToServer = false
@@ -108,10 +133,19 @@ final class OnboardingViewModel {
     func generate() async {
         // 防重入：Try again/Continue 双击防护——loading 期间再触发直接忽略
         guard !isLoading else { return }
+        let attemptId = UUID()
+        activeAttemptId = attemptId
         isLoading = true
         errorKind = nil
         generationResult = nil
         presetSavedToServer = false
+        defer {
+            // 旧 attempt 完成时绝不能收掉新 attempt 的 loading。
+            if activeAttemptId == attemptId {
+                isLoading = false
+                activeAttemptId = nil
+            }
+        }
 
         do {
             if let card = selectedCard {
@@ -121,8 +155,11 @@ final class OnboardingViewModel {
                 // 始终真实尝试落库、不预判网络：真机飞行模式下 NetworkMonitor 双向不可靠
                 // （生产验证：断网时不报断网、恢复时不报恢复），预判会卡死重试路径。
                 // 断网时尝试落库 = 一次瞬间失败的轻量请求，代价可忽略。
+                guard let requestId = currentRequestId else {
+                    throw AIServiceError.requestFailed
+                }
                 async let warmUp: Void = { _ = try? await SupabaseManager.ensureSignedIn() }()
-                let saveTask = Task { await presetCardSaver.save(card: card) }
+                let saveTask = Task { await presetCardSaver.save(card: card, requestId: requestId) }
                 try await Task.sleep(for: .milliseconds(3000))
                 _ = await warmUp
                 // 写库带 1.5s 上限竞速：正常网络早已完成；超时按失败处理。
@@ -136,6 +173,7 @@ final class OnboardingViewModel {
                     group.cancelAll()
                     return first ?? nil
                 }) == true
+                guard activeAttemptId == attemptId else { return }
                 presetSavedToServer = saved
                 if saved {
                     generationResult = card.staticCard
@@ -146,22 +184,50 @@ final class OnboardingViewModel {
                 }
             } else if let image = selectedImage {
                 // 自选拍照/相册依然走实时 AI API
-                let envelope = try await service.generate(text: nil, image: image, context: nil, presetCardId: nil, source: "onboarding")
+                guard let requestId = currentRequestId else {
+                    throw AIServiceError.requestFailed
+                }
+                let envelope = try await service.generate(
+                    text: nil,
+                    image: image,
+                    context: nil,
+                    presetCardId: nil,
+                    requestId: requestId,
+                    source: "onboarding"
+                )
+                guard activeAttemptId == attemptId else { return }
+                guard currentRequestId == requestId,
+                      envelope.requestId == requestId,
+                      envelope.userMessageId != nil,
+                      envelope.assistantMessageId != nil,
+                      envelope.materialId != nil else {
+                    throw OnboardingGenerationValidationError.invalidDurableIdentity
+                }
                 generationResult = envelope.card
             } else {
-                isLoading = false
                 return
             }
         } catch {
-            let kind = OnboardingErrorKind.classify(error: error, isConnected: isConnected())
+            guard activeAttemptId == attemptId else { return }
+            let kind: OnboardingErrorKind
+            if error is OnboardingGenerationValidationError {
+                kind = .generic
+            } else {
+                kind = OnboardingErrorKind.classify(error: error, isConnected: isConnected())
+            }
             errorKind = kind
             if kind == .offline {
                 offlineFailureOccurred = true
             } else if kind == .contentBlocked {
                 // 被拒：清选中回空上传区（图片不上屏）。不允许空手进 App——换新图是唯一前进路径。
-                rejectSelection()
+                rejectSelection(ownedBy: attemptId)
             }
         }
-        isLoading = false
+    }
+
+    /// 仅当前 attempt 可以用 content-blocked 结果清空选择。
+    private func rejectSelection(ownedBy attemptId: UUID) {
+        guard activeAttemptId == attemptId else { return }
+        rejectSelection()
     }
 }

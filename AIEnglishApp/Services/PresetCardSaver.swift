@@ -5,11 +5,12 @@ import Foundation
 protocol PresetCardSaving: Sendable {
     /// 成功返回 true；任何失败（断网 / 服务端错误）返回 false——
     /// 失败不阻塞流程，由内存 seed 兜底本次进程的 Tab1 首屏展示。
-    func save(card: PresetCard) async -> Bool
+    /// requestId 是本次尝试的幂等键，同一次尝试的重试必须复用同一个值。
+    func save(card: PresetCard, requestId: UUID) async -> Bool
 }
 
 struct LivePresetCardSaver: PresetCardSaving {
-    func save(card: PresetCard) async -> Bool {
+    func save(card: PresetCard, requestId: UUID) async -> Bool {
         var request = URLRequest(url: SupabaseConfig.savePresetCardFunctionURL)
         request.httpMethod = "POST"
         request.timeoutInterval = 10
@@ -17,6 +18,7 @@ struct LivePresetCardSaver: PresetCardSaving {
             try await SupabaseManager.setAuthHeaders(on: &request)
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             let body: [String: String] = [
+                "request_id": requestId.uuidString,
                 "preset_card_id": card.id,
                 "static_english": card.staticEnglish,
                 "static_chinese": card.staticChinese,

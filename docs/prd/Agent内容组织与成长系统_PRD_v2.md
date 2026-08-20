@@ -396,7 +396,7 @@ word / phrase / collocation(词伙) / slang / idiom / **pattern(固定句型)**�
 | `entry_id` | uuid NOT NULL FK→lexicon_entries | 属于哪个词条 |
 | `user_id` | uuid NOT NULL | 冗余存一份便于直接按用户查 |
 | `source_type` | text CHECK ('material','dialogue') | 来自素材还是对话 |
-| `source_id` | uuid | 对应 materials.id 或 messages.id（继承链、反查来源） |
+| `source_id` | uuid | 对应 materials.id（`source_type='material'`）或 **dialogue_turns.id**（`='dialogue'`）（继承链、反查来源）。**2026-08-20 更正**：本行原写 messages.id，那是对话功能落地前的设想；实际实现给了对话专属的 `dialogue_turns` 表，对话流程完全不写 `messages`，故以代码为准 |
 | `scene_category` | text | 情境。**对话来源按当前推断话题记**（5.2.2） |
 | `used_correctly` | boolean | 这次用对了吗。null=不适用；true/false 仅对话中用户主动产出时判定。**注意：这是"正确性判定"，不是已废除的"达标判定"，界线见 6.3.2** |
 | `input_lang` | text | 这次输入/产出的语言 |
@@ -580,7 +580,9 @@ invoice          n.    ○ 还没说过        工作
 
 #### 6.3.1 记账落库
 
-对话产生的词条走同一套记账动作（5.3），`source_type='dialogue'`、`source_id` = 对应 message、`scene_category` = 当前推断话题、`input_lang`、`is_known_gap`、`sample_sentence` = 用户实际说的那句。
+对话产生的词条走同一套记账动作（5.3），`source_type='dialogue'`、`source_id` = **对应 `dialogue_turns.id`（该词被说出的那一轮）**、`scene_category` = 当前推断话题、`input_lang`、`is_known_gap`、`sample_sentence` = 用户实际说的那句。
+
+> **2026-08-20 更正**：本节原写 `source_id` = 对应 message。那是对话功能落地前的设想——本 PRD 与词汇表迁移（`20260728000000`）都成文于对话表建立之前。实际实现（`20260801000000` 建 `dialogue_sessions`/`dialogue_turns`，`20260801020000` 的 `record_lexicon_dialogue_units`）指向的是 `dialogue_turns.id`，并以 turn 级幂等键防重计；对话链路**完全不写 `messages` 表**，故指向 message 在物理上不成立。按「文档与代码冲突时以代码为准」更正。
 
 **说出来的词额外更新**：`spoken_count += 1`；若是第一次，写 `first_spoken_at` 并生成一条 `breakthrough` 事件（见 6.3.3）。
 

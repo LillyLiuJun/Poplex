@@ -14,6 +14,60 @@ private struct HorizontalClipRect: Shape {
     }
 }
 
+/// 把「先保住唯一照片，再完成 onboarding」收敛成可注入、可单测的同步边界。
+/// 远端同步仍沿用原来的 fire-and-forget；只有本地 pending 持久化是离开前硬门槛。
+struct OnboardingCompletionCoordinator {
+    let pendingRetryStore: PendingRetryStore
+    let defaults: UserDefaults
+    let setSyncPending: () -> Void
+    let startRemoteSync: () -> Void
+
+    @discardableResult
+    func complete(viewModel: OnboardingViewModel, onComplete: () -> Void) -> Bool {
+        do {
+            if viewModel.hasUnconfirmedPhotoGeneration {
+                guard let image = viewModel.selectedImage,
+                      let requestId = viewModel.currentRequestId else {
+                    throw AIServiceError.requestFailed
+                }
+                try pendingRetryStore.savePhoto(image, requestId: requestId)
+            } else if viewModel.offlineFailureOccurred,
+                      let card = viewModel.selectedCard,
+                      !viewModel.presetSavedToServer {
+                // 预设卡与照片共用同一套 request ID 生命周期：currentRequestId
+                // 在 startWithCard 时生成，落库失败时随待重试记录一起持久化。
+                guard let requestId = viewModel.currentRequestId else {
+                    throw AIServiceError.requestFailed
+                }
+                pendingRetryStore.savePreset(cardId: card.id, imageName: card.imageName, requestId: requestId)
+            }
+        } catch {
+            // 沿用现有常驻 generic 失败态；不新增文案，不允许写完成标记或离开。
+            viewModel.errorKind = .generic
+            return false
+        }
+
+        defaults.set(Date().timeIntervalSince1970, forKey: "onboarding_completed_at")
+
+        // Preset card: build [userBubble(asset image) + aiCard] so Tab1 shows image + description.
+        // Own photo: server already has the record or is represented by pending retry metadata.
+        if let card = viewModel.selectedCard,
+           let result = viewModel.generationResult,
+           !viewModel.presetSavedToServer {
+            let image = UIImage(named: card.imageName)
+            OnboardingSeedStore.shared.entries = [
+                .userBubble(text: "Describe this image", image: image, imageStableKey: card.imageName),
+                .aiCard(result)
+            ]
+        }
+
+        setSyncPending()
+        startRemoteSync()
+        onComplete()
+        return true
+    }
+}
+
 struct OnboardingView: View {
     @State private var step: OnboardingStep = .screen1
     @State private var viewModel = OnboardingViewModel()
@@ -67,39 +121,17 @@ struct OnboardingView: View {
     }
 
     private func completeOnboarding() {
-        UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: "onboarding_completed_at")
-        // Preset card: build [userBubble(asset image) + aiCard] so Tab1 shows image + description.
-        // Own photo: server already has the record; leave seed empty, loadHistory() handles it.
-        // 已成功落库的预设卡不再注入 seed——服务端记录会被 loadHistory 拉到，再注入就重复了。
-        if let card = viewModel.selectedCard, let result = viewModel.generationResult,
-           !viewModel.presetSavedToServer {
-            let image = UIImage(named: card.imageName)
-            OnboardingSeedStore.shared.entries = [
-                .userBubble(text: "Describe this image", image: image, imageStableKey: card.imageName),
-                .aiCard(result)
-            ]
-        }
-        // 断网离开：写待重试记录（预设卡未落库 / 照片未生成），Tab1 展示并可 Retry。
-        // 仅断网档写——被拒同图重试必再被拒、其它档罕见，MVP 只覆盖断网场景。
-        // 用粘性标记而非瞬时 errorKind：网络恢复会清掉 errorKind（toast 下线），
-        // 若离开时仍按 errorKind 判断，照片会在「恢复后、离开前」的窗口内丢失。
-        if viewModel.offlineFailureOccurred {
-            // 不变式防御：已落库的预设卡不写待重试记录（当前不可达，防未来加「原地重试」时回归）。
-            if let card = viewModel.selectedCard, !viewModel.presetSavedToServer {
-                PendingRetryStore.shared.savePreset(cardId: card.id, imageName: card.imageName)
-            } else if let image = viewModel.selectedImage, viewModel.generationResult == nil {
-                try? PendingRetryStore.shared.savePhoto(image)
+        OnboardingCompletionCoordinator(
+            pendingRetryStore: .shared,
+            defaults: .standard,
+            setSyncPending: { ProfileService.setOnboardingSyncPending(true) },
+            startRemoteSync: {
+                Task {
+                    do { try await ProfileService.markOnboardingComplete() }
+                    catch { print("[Onboarding] ERROR remote sync failed: \(error)") }
+                }
             }
-        }
-        // 先记账再销账：远端打标成功（markOnboardingComplete 成功分支）才清待办。
-        // 这样即使下面的 Task 来不及执行（如点完立刻杀 app）或断网失败，
-        // 待办仍在，下次启动自动补发——不依赖打标 Task 是否真正跑到。
-        ProfileService.setOnboardingSyncPending(true)
-        Task {
-            do { try await ProfileService.markOnboardingComplete() }
-            catch { print("[Onboarding] ERROR remote sync failed: \(error)") }
-        }
-        onComplete()
+        ).complete(viewModel: viewModel, onComplete: onComplete)
     }
 }
 

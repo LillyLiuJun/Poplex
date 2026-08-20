@@ -1,148 +1,186 @@
 // Supabase Edge Function: save-preset-card
 // 预设卡轻量落库：引导页预设卡的英文描述是 App 内置静态文案（零 AI 调用），
 // 原本只在客户端内存里交接给 Tab1 首屏，重启后从服务端拉历史就查无此卡。
-// 本函数把静态文案作为一条正常消息记录写入 messages（user + assistant 两条），
-// 使 Tab1 历史重启后仍能看到这张卡。不调任何 AI，纯一次轻量写入。
+//
+// 走与照片生成同款的原子提交 RPC（commit_generated_content，p_material 传 null）：
+// user 行 + assistant 行在一次数据库事务里全有或全无，不再是两次独立 INSERT。
+// request_id 是幂等键——同一次尝试的重试直接拿回上次落库结果，不会再出现
+// 「user 行写成功、assistant 行写失败」的半张卡被 60 秒去重窗口误判成"已存在"、
+// 从此再也补不全的问题（旧版只查 user 行是否存在，这个问题在生产验证过）。
 
-const SUPABASE_URL     = Deno.env.get("SUPABASE_URL") ?? "";
-const SUPABASE_SVC_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+function isUuid(value: unknown): value is string {
+  return typeof value === "string" && UUID_PATTERN.test(value);
+}
+
+function corsHeaders(): Record<string, string> {
+  return {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers":
+      "authorization, x-client-info, apikey, content-type",
+  };
+}
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    headers: { ...corsHeaders(), "Content-Type": "application/json" },
   });
 }
 
-// 关键：走 /auth/v1/user 端点让 Supabase【验证 JWT 签名与过期】后返回 user，
-// 不本地解码 token。拿不到 uid 一律 401。
-async function getAuthUserId(req: Request): Promise<string | null> {
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader || !SUPABASE_URL || !SUPABASE_SVC_KEY) return null;
-  try {
-    const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
-      headers: { "Authorization": authHeader, "apikey": SUPABASE_SVC_KEY },
+interface RequestBody {
+  request_id?: unknown;
+  preset_card_id?: string;
+  static_english?: string;
+  static_chinese?: string;
+  image_name?: string;
+}
+
+interface CommitResult {
+  request_id?: unknown;
+  user_message_id?: unknown;
+  assistant_message_id?: unknown;
+  already_committed?: unknown;
+}
+
+export interface SavePresetCardDeps {
+  supabaseUrl: string;
+  anonKey: string;
+  fetch: typeof fetch;
+  randomUUID: () => string;
+}
+
+export function createSavePresetCardHandler(
+  overrides: Partial<SavePresetCardDeps> = {},
+): (req: Request) => Promise<Response> {
+  const deps: SavePresetCardDeps = {
+    supabaseUrl: Deno.env.get("SUPABASE_URL") ?? "",
+    anonKey: Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+    fetch: overrides.fetch ?? fetch,
+    randomUUID: overrides.randomUUID ?? (() => crypto.randomUUID()),
+    ...overrides,
+  };
+
+  // 关键：走 /auth/v1/user 端点让 Supabase【验证 JWT 签名与过期】后返回 user，
+  // 不本地解码 token。拿不到 uid 一律 401——绝不用未确认身份的调用者继续写库。
+  async function authenticateCaller(
+    authHeader: string,
+  ): Promise<string | null> {
+    const res = await deps.fetch(`${deps.supabaseUrl}/auth/v1/user`, {
+      headers: { "Authorization": authHeader, "apikey": deps.anonKey },
     });
     if (!res.ok) return null;
     const user = await res.json();
     return typeof user?.id === "string" ? user.id : null;
-  } catch {
-    return null;
-  }
-}
-
-async function insertMessage(
-  row: Record<string, unknown>,
-  userId: string,
-  imageUrl: string | null = null
-): Promise<boolean> {
-  try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/messages`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${SUPABASE_SVC_KEY}`,
-        "apikey": SUPABASE_SVC_KEY,
-        "Prefer": "return=minimal",
-      },
-      body: JSON.stringify({ ...row, user_id: userId, image_url: imageUrl }),
-    });
-    return res.ok;
-  } catch (e) {
-    console.error("save-preset-card insertMessage failed:", e);
-    return false;
-  }
-}
-
-Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  if (req.method !== "POST") return json({ error: "method not allowed" }, 405);
-
-  const userId = await getAuthUserId(req);
-  if (!userId) return json({ error: "unauthorized" }, 401);
-
-  let body: {
-    preset_card_id?: string;
-    static_english?: string;
-    static_chinese?: string;
-    image_name?: string;
-  };
-  try {
-    body = await req.json();
-  } catch {
-    return json({ error: "invalid JSON body" }, 400);
   }
 
-  const { preset_card_id, static_english, static_chinese, image_name } = body;
-  if (!preset_card_id || !static_english) {
-    return json({ error: "missing preset_card_id or static_english" }, 400);
-  }
-
-  // 幂等保护（窗口化）：同卡 60 秒内的重复写入才跳过，防止连点/网络重发。
-  // 不能按「该用户是否写过这张卡」去重——重试/隔天再生成是合法的独立记录
-  // （生产验证：历史已存同卡导致重试被吞，重启后新内容消失）。
-  try {
-    const checkUrl = new URL(`${SUPABASE_URL}/rest/v1/messages`);
-    checkUrl.searchParams.set("select", "id");
-    checkUrl.searchParams.set("user_id", `eq.${userId}`);
-    checkUrl.searchParams.set("preset_card_id", `eq.${preset_card_id}`);
-    checkUrl.searchParams.set("role", "eq.user");
-    checkUrl.searchParams.set("created_at", `gt.${new Date(Date.now() - 60_000).toISOString()}`);
-    checkUrl.searchParams.set("limit", "1");
-    const checkRes = await fetch(checkUrl.toString(), {
-      headers: {
-        "Authorization": `Bearer ${SUPABASE_SVC_KEY}`,
-        "apikey": SUPABASE_SVC_KEY,
-      },
-    });
-    if (checkRes.ok) {
-      const existing = await checkRes.json();
-      if (Array.isArray(existing) && existing.length > 0) {
-        return json({ ok: true, deduplicated: true });
-      }
+  return async function handler(req: Request): Promise<Response> {
+    if (req.method === "OPTIONS") {
+      return new Response("ok", { headers: corsHeaders() });
     }
-  } catch (e) {
-    console.error("save-preset-card dedupe check failed (continuing):", e);
-  }
+    if (req.method !== "POST") {
+      return json({ error: "method not allowed" }, 405);
+    }
 
-  // user 行：气泡。预设卡图片是 App 内置 asset（非 storage），
-  // image_url 存 "asset:<imageName>" 标记，客户端解码时用本地素材渲染。
-  // user_content 与客户端 MessageRecord 的 preset_card 兜底文案一致。
-  const userOk = await insertMessage(
-    {
-      role: "user",
-      input_type: "preset_card",
-      user_content: "Describe this image",
-      preset_card_id,
-      status: "delivered",
-    },
-    userId,
-    image_name ? `asset:${image_name}` : null
-  );
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) return json({ error: "unauthorized" }, 401);
 
-  // assistant 行：静态学习卡（与客户端 PresetCard.staticCard 同构）。
-  const cardOk = await insertMessage(
-    {
-      role: "assistant",
-      card_type: "card",
-      card_content: {
-        granularity: "sentence",
-        direction: "express",
-        target_expression: static_english,
-        native_meaning: static_chinese ?? null,
+    let userId: string | null;
+    try {
+      userId = await authenticateCaller(authHeader);
+    } catch (e) {
+      console.error("save-preset-card auth check failed:", e);
+      return json({ error: "unauthorized" }, 401);
+    }
+    if (!userId) return json({ error: "unauthorized" }, 401);
+
+    let body: RequestBody;
+    try {
+      body = await req.json();
+    } catch {
+      return json({ error: "invalid JSON body" }, 400);
+    }
+
+    const { preset_card_id, static_english, static_chinese, image_name } = body;
+    if (!preset_card_id || !static_english) {
+      return json({ error: "missing preset_card_id or static_english" }, 400);
+    }
+
+    // 旧客户端尚未发 request_id 时服务端兜底生成一个：本次落库仍然正确，只是
+    // 没有跨请求的幂等保护——和 generate 函数对旧客户端的兼容策略一致。
+    const requestId = isUuid(body.request_id)
+      ? body.request_id
+      : deps.randomUUID();
+
+    const rpcRes = await deps.fetch(
+      `${deps.supabaseUrl}/rest/v1/rpc/commit_generated_content`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": authHeader,
+          "apikey": deps.anonKey,
+        },
+        body: JSON.stringify({
+          p_request_id: requestId,
+          p_user_message: {
+            input_type: "preset_card",
+            user_content: "Describe this image",
+            preset_card_id,
+            status: "delivered",
+            source: "onboarding",
+            image_url: image_name ? `asset:${image_name}` : null,
+          },
+          p_assistant_message: {
+            card_type: "card",
+            card_content: {
+              granularity: "sentence",
+              direction: "express",
+              target_expression: static_english,
+              native_meaning: static_chinese ?? null,
+            },
+            status: "delivered",
+            source: "onboarding",
+          },
+          p_material: null,
+        }),
       },
-      status: "delivered",
-    },
-    userId
-  );
+    );
 
-  if (!userOk || !cardOk) {
-    return json({ error: "insert failed" }, 502);
-  }
-  return json({ ok: true });
-});
+    if (!rpcRes.ok) {
+      console.error(
+        "save-preset-card commit failed:",
+        rpcRes.status,
+        await rpcRes.text(),
+      );
+      return json({ error: "commit_failed", request_id: requestId }, 502);
+    }
+
+    const committed = await rpcRes.json() as CommitResult;
+    if (
+      !isUuid(committed.user_message_id) ||
+      !isUuid(committed.assistant_message_id) ||
+      typeof committed.already_committed !== "boolean"
+    ) {
+      console.error(
+        "save-preset-card commit returned an invalid response:",
+        committed,
+      );
+      return json({ error: "commit_failed", request_id: requestId }, 502);
+    }
+
+    return json({
+      ok: true,
+      request_id: requestId,
+      user_message_id: committed.user_message_id,
+      assistant_message_id: committed.assistant_message_id,
+      already_committed: committed.already_committed,
+    });
+  };
+}
+
+if (import.meta.main) {
+  Deno.serve(createSavePresetCardHandler());
+}

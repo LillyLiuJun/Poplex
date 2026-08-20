@@ -28,7 +28,7 @@ export interface UnifiedRawContent {
 }
 
 export const asStr = (v: unknown): string | null =>
-  typeof v === 'string' && v.length > 0 ? v : null;
+  typeof v === "string" && v.length > 0 ? v : null;
 
 /**
  * 把 AI 返回的统一 card_content 落成统一 raw_content。
@@ -40,28 +40,30 @@ export function buildRawContent(
   content: Record<string, unknown>,
   userText: string,
   sourceImageUrl: string | null,
-): { materialType: 'scene' | 'vocabulary'; rawContent: UnifiedRawContent } | null {
-  if (!['s1', 's2', 's3', 's4', 's5', 's6'].includes(cardType)) {
+):
+  | { materialType: "scene" | "vocabulary"; rawContent: UnifiedRawContent }
+  | null {
+  if (!["s1", "s2", "s3", "s4", "s5", "s6"].includes(cardType)) {
     return null;
   }
 
-  const granularity =
-    asStr(content.granularity) ??
-    (cardType === 's1' || cardType === 's3'
-      ? 'word'
-      : cardType === 's5' || cardType === 's6'
-      ? 'passage'
-      : 'sentence');
+  const granularity = asStr(content.granularity) ??
+    (cardType === "s1" || cardType === "s3"
+      ? "word"
+      : cardType === "s5" || cardType === "s6"
+      ? "passage"
+      : "sentence");
 
-  const materialType: 'scene' | 'vocabulary' =
-    granularity === 'word' ? 'vocabulary' : 'scene';
+  const materialType: "scene" | "vocabulary" = granularity === "word"
+    ? "vocabulary"
+    : "scene";
 
   const units = content.learnable_units;
   const examples = Array.isArray(content.examples)
-    ? (content.examples as Array<{ en?: unknown; zh?: unknown }>).map(e => ({
-        en: String(e?.en ?? ''),
-        zh: String(e?.zh ?? ''),
-      }))
+    ? (content.examples as Array<{ en?: unknown; zh?: unknown }>).map((e) => ({
+      en: String(e?.en ?? ""),
+      zh: String(e?.zh ?? ""),
+    }))
     : [];
 
   const pos = Array.isArray(content.pos)
@@ -71,22 +73,23 @@ export function buildRawContent(
     : [];
 
   const passageLines = Array.isArray(content.passage_lines)
-    ? (content.passage_lines as Array<{ en?: unknown; zh?: unknown }>).map(l => ({
-        en: String(l?.en ?? ''),
-        zh: String(l?.zh ?? ''),
-      }))
+    ? (content.passage_lines as Array<{ en?: unknown; zh?: unknown }>).map(
+      (l) => ({
+        en: String(l?.en ?? ""),
+        zh: String(l?.zh ?? ""),
+      }),
+    )
     : [];
 
-  const userOriginal =
-    asStr(content.user_original) ?? (userText.trim() ? userText.trim() : null);
+  const userOriginal = asStr(content.user_original) ??
+    (userText.trim() ? userText.trim() : null);
 
   const rawContent: UnifiedRawContent = {
     granularity,
-    direction:
-      asStr(content.direction) ??
-      (cardType === 's1' || cardType === 's2' || cardType === 's5'
-        ? 'comprehend'
-        : 'express'),
+    direction: asStr(content.direction) ??
+      (cardType === "s1" || cardType === "s2" || cardType === "s5"
+        ? "comprehend"
+        : "express"),
     revision_type: asStr(content.revision_type),
     learnable_units: Array.isArray(units) ? (units as LearnableUnit[]) : [],
     user_original: userOriginal,
