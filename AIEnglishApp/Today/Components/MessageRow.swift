@@ -4,7 +4,7 @@ import Combine
 struct TimelineRow: View {
     let entry: TimelineEntry
     var onImageTap: ((UIImage, CGRect) -> Void)? = nil
-    var onRetry: ((_ text: String?, _ image: UIImage?, _ entryId: UUID) -> Void)? = nil
+    var onRetry: ((_ text: String?, _ image: UIImage?, _ entryId: UUID, _ requestId: UUID?, _ bubbleEntryId: UUID?) -> Void)? = nil
     var onRetryPending: ((PendingRetryRecord) -> Void)? = nil
 
     var body: some View {
@@ -17,8 +17,8 @@ struct TimelineRow: View {
             AICardView(card: card)
         case .aiError(let message):
             ErrorBanner(message: message)
-        case .sendFailed(let text, let image):
-            SendFailedRow { onRetry?(text, image, entry.id) }
+        case .sendFailed(let text, let image, let requestId, let bubbleEntryId):
+            SendFailedRow { onRetry?(text, image, entry.id, requestId, bubbleEntryId) }
         case .userRejected(let text, let wasImage):
             UserRejectedRow(text: text, wasImage: wasImage)
         case .pendingRetry(let record):

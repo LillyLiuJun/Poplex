@@ -960,6 +960,7 @@ interface GenerateRequestBody {
   mime_type?: string;
   preset_card_id?: string;
   source?: string;
+  original_created_at?: unknown;
   context?: {
     user: string;
     card_content: Record<string, unknown>;
@@ -1114,7 +1115,24 @@ export function createGenerateHandler(
       }
 
       // 在 AI 调用之前就锁定 user 消息时间戳，确保比 assistant 的 now() 早。
-      const userCreatedAt = dependencies.now().toISOString();
+      // 重试请求携带 original_created_at（写作时刻）：服务器按该时刻落库——
+      // user 行 = 写作时刻、assistant 行 = +1ms，客户端原位摆放与服务器时间线一致，
+      // 刷新永不跳。正常发送不带该字段，行为不变。
+      // 校验：不可解析 → 静默回退到请求时刻；未来时间 → 截断到请求时刻。
+      const parsedOriginalMs = Date.parse(
+        typeof body.original_created_at === "string" ? body.original_created_at : "",
+      );
+      const hasOriginalTimestamp = Number.isFinite(parsedOriginalMs);
+      const lockedNowMs = dependencies.now().getTime();
+      const userCreatedAtMs = hasOriginalTimestamp
+        ? Math.min(parsedOriginalMs, lockedNowMs)
+        : lockedNowMs;
+      const userCreatedAt = new Date(userCreatedAtMs).toISOString();
+      // assistant 行时间戳仅在重试路径显式给出（= 写作时刻 +1ms）；正常发送
+      // 不传，RPC 走 GREATEST(now(), user+1ms) 的既有兜底，行为零变化。
+      const assistantTimestamp = hasOriginalTimestamp
+        ? { created_at: new Date(userCreatedAtMs + 1).toISOString() }
+        : {};
 
       // Build current-turn Gemini parts（同步，不阻塞）
       // 第 8 刀：有图 → IMAGE_PROMPT，无图 → TEXT_PROMPT
@@ -1333,6 +1351,7 @@ When STEP 1's OBJECT is the whole input and it has a subject and a predicate:
             extracted_concept: parsed.extracted_concept ?? null,
             source: source ?? "tab1",
             status: "delivered",
+            ...assistantTimestamp,
           },
           material: {
             material_type: extracted.materialType,

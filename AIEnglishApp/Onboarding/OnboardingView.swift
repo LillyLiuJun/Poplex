@@ -59,6 +59,9 @@ struct OnboardingCompletionCoordinator {
                 .userBubble(text: "Describe this image", image: image, imageStableKey: card.imageName),
                 .aiCard(result)
             ]
+            // 幂等键随 seed 一起交接：弱网下服务器其实已落库（1.5s 竞速误判失败）时，
+            // loadHistory 据此与服务端记录去重，避免首屏重复卡。
+            OnboardingSeedStore.shared.requestId = viewModel.currentRequestId
         }
 
         setSyncPending()

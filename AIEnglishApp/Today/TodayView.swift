@@ -73,8 +73,8 @@ struct TodayView: View {
                                 y: frame.midY / screen.height
                             )
                             onImagePreview?(img, anchor)
-                        }, onRetry: { text, image, entryId in
-                            Task { await viewModel.retrySend(text: text, image: image, failedEntryId: entryId) }
+                        }, onRetry: { text, image, entryId, requestId, bubbleEntryId in
+                            Task { await viewModel.retrySend(text: text, image: image, failedEntryId: entryId, requestId: requestId, bubbleEntryId: bubbleEntryId) }
                         }, onRetryPending: { record in
                             guard NetworkMonitor.shared.isConnected else {
                                 viewModel.offlineHint = "You're offline. Check your connection and try again."
@@ -103,8 +103,16 @@ struct TodayView: View {
                 UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
             })
             .onChange(of: viewModel.entries.count) {
+                // 重试期间视图锚在原地（scrollTargetId 非空）：条目的原地增删
+                // 不触发「自动滚到最后一条」，否则用户会被拽离重试现场
+                guard viewModel.scrollTargetId == nil else { return }
                 if let last = viewModel.entries.last {
                     withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                }
+            }
+            .onChange(of: viewModel.scrollTargetId) {
+                if let target = viewModel.scrollTargetId {
+                    withAnimation { proxy.scrollTo(target, anchor: .center) }
                 }
             }
         }

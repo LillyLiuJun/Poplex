@@ -11,7 +11,7 @@ struct TimelineEntry: Identifiable {
         case aiLoading
         case aiCard(AICard)
         case aiError(message: String)
-        case sendFailed(text: String?, image: UIImage?)   // 生成请求失败（含断网）：可点击重试，携带原始输入以重发
+        case sendFailed(text: String?, image: UIImage?, requestId: UUID?, bubbleEntryId: UUID?)   // 生成请求失败（含断网）：可点击重试；requestId=本次尝试幂等键（重试复用），bubbleEntryId=对应的用户气泡（重试成功时整组挪到末尾）
         case userRejected(text: String?, wasImage: Bool)   // 安全拦截：文本原样展示、图片转占位块；不带原图数据（不渲染、不重试）
         case pendingRetry(PendingRetryRecord)   // 断网待重试记录：带图 + 文案 + Retry（不参与服务端历史）
         case dateSeparator(String)   // "Today" / "Yesterday" / "Jul 3"

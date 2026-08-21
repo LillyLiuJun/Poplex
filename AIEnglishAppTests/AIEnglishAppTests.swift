@@ -413,6 +413,28 @@ struct AIServiceContractTests {
         #expect(body["request_id"] as? String == "A9D7E4B2-7B4C-4E7A-A81D-9E122D101001")
     }
 
+    // 方案丙契约：重试时把气泡的写作时刻作为 original_created_at（ISO8601 带小数秒）
+    // 传给服务器；不传时请求体里不得出现该字段（正常发送行为不变）。
+    @Test func requestBodyEncodesOriginalCreatedAt() throws {
+        let original = Date(timeIntervalSince1970: 1_700_000_000.123)
+
+        let withTimestamp = try LiveAIService.requestBody(
+            text: "今天会议推迟了", image: nil, context: nil, presetCardId: nil,
+            requestId: nil, source: "tab1", originalCreatedAt: original
+        )
+        let body = try #require(JSONSerialization.jsonObject(with: withTimestamp) as? [String: Any])
+        let fmt = ISO8601DateFormatter()
+        fmt.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        #expect(body["original_created_at"] as? String == fmt.string(from: original))
+
+        let withoutTimestamp = try LiveAIService.requestBody(
+            text: "今天会议推迟了", image: nil, context: nil, presetCardId: nil,
+            requestId: nil, source: "tab1"
+        )
+        let plainBody = try #require(JSONSerialization.jsonObject(with: withoutTimestamp) as? [String: Any])
+        #expect(plainBody["original_created_at"] == nil)
+    }
+
     // Catches a client that loses the server proof required for durable success.
     @Test func decodesDurableResponseMetadataFromSnakeCase() throws {
         let json = """
@@ -471,7 +493,7 @@ struct AIServiceContractTests {
 
 private struct SuccessMock: AIServicing {
     func generate(text: String?, image: UIImage?, context: ContextTurn?,
-                  presetCardId: String?, requestId: UUID?, source: String?) async throws -> AIEnvelope {
+                  presetCardId: String?, requestId: UUID?, source: String?, originalCreatedAt: Date?) async throws -> AIEnvelope {
         return try makeSuccessEnvelope(requestId: requestId)
     }
 }
@@ -480,7 +502,8 @@ private func makeSuccessEnvelope(
     requestId: UUID? = nil,
     userMessageId: UUID? = UUID(uuidString: "D6A4B1CF-4C1B-4B4C-950E-6B801A404002"),
     assistantMessageId: UUID? = UUID(uuidString: "D6A4B1CF-4C1B-4B4C-950E-6B801A404003"),
-    materialId: UUID? = UUID(uuidString: "D6A4B1CF-4C1B-4B4C-950E-6B801A404004")
+    materialId: UUID? = UUID(uuidString: "D6A4B1CF-4C1B-4B4C-950E-6B801A404004"),
+    alreadyCommitted: Bool = false
 ) throws -> AIEnvelope {
     var payload: [String: Any] = [
         "card_type": "s4",
@@ -500,6 +523,7 @@ private func makeSuccessEnvelope(
     if let userMessageId { payload["user_message_id"] = userMessageId.uuidString }
     if let assistantMessageId { payload["assistant_message_id"] = assistantMessageId.uuidString }
     if let materialId { payload["material_id"] = materialId.uuidString }
+    if alreadyCommitted { payload["already_committed"] = true }
     let data = try JSONSerialization.data(withJSONObject: payload)
     return try JSONDecoder().decode(AIEnvelope.self, from: data)
 }
@@ -522,7 +546,7 @@ private final class RecordingResponseMock: AIServicing, @unchecked Sendable {
     }
 
     func generate(text: String?, image: UIImage?, context: ContextTurn?,
-                  presetCardId: String?, requestId: UUID?, source: String?) async throws -> AIEnvelope {
+                  presetCardId: String?, requestId: UUID?, source: String?, originalCreatedAt: Date?) async throws -> AIEnvelope {
         requestIds.append(requestId)
         switch response {
         case .matchingDurable:
@@ -545,12 +569,31 @@ private final class RecordingResponseMock: AIServicing, @unchecked Sendable {
 
 private final class FailOnceRecordingMock: AIServicing, @unchecked Sendable {
     private(set) var requestIds: [UUID?] = []
+    /// 每次调用收到的 originalCreatedAt——用于断言重试携带了气泡的写作时刻。
+    private(set) var originalCreatedAts: [Date?] = []
 
     func generate(text: String?, image: UIImage?, context: ContextTurn?,
-                  presetCardId: String?, requestId: UUID?, source: String?) async throws -> AIEnvelope {
+                  presetCardId: String?, requestId: UUID?, source: String?, originalCreatedAt: Date?) async throws -> AIEnvelope {
         requestIds.append(requestId)
+        originalCreatedAts.append(originalCreatedAt)
         if requestIds.count == 1 { throw URLError(.notConnectedToInternet) }
         return try makeSuccessEnvelope(requestId: requestId)
+    }
+}
+
+/// 模拟「第一次其实已落库、但响应丢失」：重试时服务端幂等回放已存内容
+/// （响应里 already_committed=true，客户端不再解码该字段——方案丙下回放与
+/// 全新落库摆放行为一致，都放原位）。真实服务器仍会发送该字段，契约保持兼容。
+private final class FailOnceThenReplayMock: AIServicing, @unchecked Sendable {
+    private(set) var requestIds: [UUID?] = []
+    private var callCount = 0
+
+    func generate(text: String?, image: UIImage?, context: ContextTurn?,
+                  presetCardId: String?, requestId: UUID?, source: String?, originalCreatedAt: Date?) async throws -> AIEnvelope {
+        requestIds.append(requestId)
+        callCount += 1
+        if callCount == 1 { throw URLError(.notConnectedToInternet) }
+        return try makeSuccessEnvelope(requestId: requestId, alreadyCommitted: true)
     }
 }
 
@@ -560,7 +603,7 @@ private actor ControllableGenerationMock: AIServicing {
     private var startedRequestIds: [UUID] = []
 
     func generate(text: String?, image: UIImage?, context: ContextTurn?,
-                  presetCardId: String?, requestId: UUID?, source: String?) async throws -> AIEnvelope {
+                  presetCardId: String?, requestId: UUID?, source: String?, originalCreatedAt: Date?) async throws -> AIEnvelope {
         guard let requestId else { throw AIServiceError.requestFailed }
         return try await withCheckedThrowingContinuation { continuation in
             startedRequestIds.append(requestId)
@@ -591,7 +634,18 @@ private actor ControllableGenerationMock: AIServicing {
 
 private struct FailingMock: AIServicing {
     func generate(text: String?, image: UIImage?, context: ContextTurn?,
-                  presetCardId: String?, requestId: UUID?, source: String?) async throws -> AIEnvelope {
+                  presetCardId: String?, requestId: UUID?, source: String?, originalCreatedAt: Date?) async throws -> AIEnvelope {
+        throw URLError(.badServerResponse)
+    }
+}
+
+/// 每次生成都失败、同时记录 requestIds——用于断言重试幂等键的延续。
+private final class AlwaysFailRecordingMock: AIServicing, @unchecked Sendable {
+    private(set) var requestIds: [UUID?] = []
+
+    func generate(text: String?, image: UIImage?, context: ContextTurn?,
+                  presetCardId: String?, requestId: UUID?, source: String?, originalCreatedAt: Date?) async throws -> AIEnvelope {
+        requestIds.append(requestId)
         throw URLError(.badServerResponse)
     }
 }
@@ -620,7 +674,7 @@ private final class CountingPresetCardSaver: PresetCardSaving, @unchecked Sendab
 private final class FailOnceMock: AIServicing {
     private var callCount = 0
     func generate(text: String?, image: UIImage?, context: ContextTurn?,
-                  presetCardId: String?, requestId: UUID?, source: String?) async throws -> AIEnvelope {
+                  presetCardId: String?, requestId: UUID?, source: String?, originalCreatedAt: Date?) async throws -> AIEnvelope {
         callCount += 1
         if callCount == 1 { throw URLError(.notConnectedToInternet) }
         return try makeSuccessEnvelope(requestId: requestId)
@@ -630,7 +684,7 @@ private final class FailOnceMock: AIServicing {
 /// 总是抛断网错误的 mock。
 private struct OfflineMock: AIServicing {
     func generate(text: String?, image: UIImage?, context: ContextTurn?,
-                  presetCardId: String?, requestId: UUID?, source: String?) async throws -> AIEnvelope {
+                  presetCardId: String?, requestId: UUID?, source: String?, originalCreatedAt: Date?) async throws -> AIEnvelope {
         throw URLError(.notConnectedToInternet)
     }
 }
@@ -639,7 +693,7 @@ private struct OfflineMock: AIServicing {
 /// AIService 解析后抛 AIServiceError.contentBlocked）。
 private struct ContentBlockedMock: AIServicing {
     func generate(text: String?, image: UIImage?, context: ContextTurn?,
-                  presetCardId: String?, requestId: UUID?, source: String?) async throws -> AIEnvelope {
+                  presetCardId: String?, requestId: UUID?, source: String?, originalCreatedAt: Date?) async throws -> AIEnvelope {
         throw AIServiceError.contentBlocked
     }
 }
@@ -687,7 +741,7 @@ struct TodayViewModelTests {
             if case .sendFailed = $0.content { return true }
             return false
         }
-        guard let failed, case .sendFailed(let text, let image) = failed.content else {
+        guard let failed, case .sendFailed(let text, let image, _, _) = failed.content else {
             Issue.record("Expected sendFailed entry"); return
         }
         #expect(text == "今天会议推迟了")
@@ -703,7 +757,7 @@ struct TodayViewModelTests {
         guard let failed = vm.entries.first(where: {
             if case .sendFailed = $0.content { return true }
             return false
-        }), case .sendFailed(let text, let image) = failed.content else {
+        }), case .sendFailed(let text, let image, let requestId, let bubbleEntryId) = failed.content else {
             Issue.record("Expected sendFailed entry after first send"); return
         }
 
@@ -712,7 +766,7 @@ struct TodayViewModelTests {
             return false
         }.count
 
-        await vm.retrySend(text: text, image: image, failedEntryId: failed.id)
+        await vm.retrySend(text: text, image: image, failedEntryId: failed.id, requestId: requestId, bubbleEntryId: bubbleEntryId)
 
         // 失败提示已移除
         let stillFailed = vm.entries.contains {
@@ -734,6 +788,172 @@ struct TodayViewModelTests {
             return false
         }.count
         #expect(bubbleCountAfter == bubbleCountBefore)
+    }
+
+    // 修复 C：send 时生成幂等键，重试复用同一个 requestId——服务端按它去重，
+    // 超时重试只会拿回第一次已落库的内容，不产生第二组记录
+    @Test func retryReusesOriginalRequestId() async {
+        let service = FailOnceRecordingMock()
+        let vm = TodayViewModel(service: service, isConsentGranted: { true })
+        await vm.send("今天会议推迟了")
+
+        guard let failed = vm.entries.first(where: {
+            if case .sendFailed = $0.content { return true }
+            return false
+        }), case .sendFailed(let text, let image, let requestId, let bubbleEntryId) = failed.content else {
+            Issue.record("Expected sendFailed entry"); return
+        }
+        #expect(requestId != nil)   // 失败行已携带本次尝试的幂等键
+        #expect(service.requestIds == [requestId])
+
+        await vm.retrySend(text: text, image: image, failedEntryId: failed.id,
+                           requestId: requestId, bubbleEntryId: bubbleEntryId)
+
+        #expect(service.requestIds == [requestId, requestId])   // 重试复用同一个幂等键
+        let hasCard = vm.entries.contains {
+            if case .aiCard = $0.content { return true }
+            return false
+        }
+        #expect(hasCard)
+    }
+
+    // 修复 B（方案丙 · 写作时刻语义）：迟到重试成功后，卡片放回气泡原位而不是
+    // 挪到时间线末尾。客户端把气泡的原始发送时刻一并发给服务器按写作时刻落库，
+    // 原位摆放与服务器时间线一致，刷新永不跳。回放与全新落库行为相同（都原位）。
+    @Test func lateRetryKeepsGroupInPlace() async {
+        let service = FailOnceRecordingMock()
+        let vm = TodayViewModel(service: service, isConsentGranted: { true })
+        await vm.send("旧消息")            // 第 1 次调用失败 → 气泡 + sendFailed
+        await vm.send("新消息")            // 第 2 次调用成功 → 气泡 + 卡片
+
+        guard let failed = vm.entries.first(where: {
+            if case .sendFailed = $0.content { return true }
+            return false
+        }), case .sendFailed(let text, let image, let requestId, let bubbleEntryId) = failed.content else {
+            Issue.record("Expected sendFailed entry"); return
+        }
+
+        await vm.retrySend(text: text, image: image, failedEntryId: failed.id,
+                           requestId: requestId, bubbleEntryId: bubbleEntryId)
+
+        // 旧气泡仍在原位，卡片紧跟其后：[sep, 旧气泡, 旧卡, 新气泡, 新卡]
+        let oldBubbleIdx = vm.entries.firstIndex(where: {
+            if case .userBubble(let t, _, _, _) = $0.content { return t == "旧消息" }
+            return false
+        })
+        guard let idx = oldBubbleIdx else { Issue.record("Expected old bubble in place"); return }
+        guard idx + 1 < vm.entries.count,
+              case .aiCard = vm.entries[idx + 1].content else {
+            Issue.record("Expected card right after the old bubble"); return
+        }
+        // 组没有被挪到末尾：末尾仍是「新消息」的卡片
+        guard case .aiCard = vm.entries[vm.entries.count - 1].content else {
+            Issue.record("Expected newest card still at the end"); return
+        }
+        #expect(vm.entries.count == 5)
+
+        // 「旧消息」气泡唯一，且没有残留 sendFailed
+        let oldBubbles = vm.entries.filter {
+            if case .userBubble(let t, _, _, _) = $0.content { return t == "旧消息" }
+            return false
+        }
+        #expect(oldBubbles.count == 1)
+        #expect(hasSendFailed(vm) == false)
+
+        // 重试请求携带气泡的写作时刻（前两次正常发送不带）——服务端据此按写作时刻落库
+        #expect(service.originalCreatedAts.count == 3)   // 旧消息失败 + 新消息成功 + 重试
+        #expect(service.originalCreatedAts[0] == nil)
+        #expect(service.originalCreatedAts[1] == nil)
+        let bubbleCreatedAt = vm.entries[idx].createdAt
+        #expect(service.originalCreatedAts[2] == bubbleCreatedAt)
+    }
+
+    // 修复 B（回放侧契约）：第一次发送其实已落库、响应丢失时，服务端幂等回放
+    // （already_committed=true）。方案丙下客户端对回放与全新落库不做区分——
+    // 两者都放原位，本测试锁住「回放响应不会把卡片挪到别处」。
+    @Test func replayedRetryKeepsCardInPlace() async {
+        let service = FailOnceThenReplayMock()
+        let vm = TodayViewModel(service: service, isConsentGranted: { true })
+        await vm.send("旧消息")            // 第 1 次失败（模拟响应丢失，服务端其实已落库）
+        await vm.send("新消息")            // 第 2 次成功
+
+        guard let failed = vm.entries.first(where: {
+            if case .sendFailed = $0.content { return true }
+            return false
+        }), case .sendFailed(let text, let image, let requestId, let bubbleEntryId) = failed.content else {
+            Issue.record("Expected sendFailed entry"); return
+        }
+
+        await vm.retrySend(text: text, image: image, failedEntryId: failed.id,
+                           requestId: requestId, bubbleEntryId: bubbleEntryId)
+
+        // 旧气泡仍在原位，卡片紧跟在它后面（[sep, 旧气泡, 旧卡, 新气泡, 新卡]）
+        let oldBubbleIdx = vm.entries.firstIndex(where: {
+            if case .userBubble(let t, _, _, _) = $0.content { return t == "旧消息" }
+            return false
+        })
+        guard let idx = oldBubbleIdx else { Issue.record("Expected old bubble"); return }
+        guard idx + 1 < vm.entries.count,
+              case .aiCard = vm.entries[idx + 1].content else {
+            Issue.record("Expected card right after the old bubble"); return
+        }
+        // 组没有被挪到末尾：末尾仍是「新消息」的卡片
+        guard case .aiCard = vm.entries[vm.entries.count - 1].content else {
+            Issue.record("Expected newest card still at the end"); return
+        }
+        #expect(vm.entries.count == 5)
+        #expect(hasSendFailed(vm) == false)
+    }
+
+    // 重试再次失败：新 sendFailed 行继续携带原幂等键（下一次重试仍复用），气泡不重复
+    @Test func retryFailureKeepsRequestIdAndBubble() async {
+        let service = AlwaysFailRecordingMock()
+        let vm = TodayViewModel(service: service, isConsentGranted: { true })
+        await vm.send("今天会议推迟了")
+
+        guard let failed = vm.entries.first(where: {
+            if case .sendFailed = $0.content { return true }
+            return false
+        }), case .sendFailed(let text, let image, let requestId, let bubbleEntryId) = failed.content else {
+            Issue.record("Expected sendFailed entry"); return
+        }
+        let originalRequestId = requestId
+
+        await vm.retrySend(text: text, image: image, failedEntryId: failed.id,
+                           requestId: requestId, bubbleEntryId: bubbleEntryId)
+
+        #expect(service.requestIds == [originalRequestId, originalRequestId])
+        guard let retried = vm.entries.first(where: {
+            if case .sendFailed = $0.content { return true }
+            return false
+        }), case .sendFailed(_, _, let retriedRequestId, _) = retried.content else {
+            Issue.record("Expected sendFailed entry after retry"); return
+        }
+        #expect(retriedRequestId == originalRequestId)
+        let bubbleCount = vm.entries.filter {
+            if case .userBubble = $0.content { return true }
+            return false
+        }.count
+        #expect(bubbleCount == 1)   // 气泡不重复
+    }
+
+    // 防重入：生成进行中（isLoading）连点 Retry 只发起一次，失败行也不会被移除
+    @Test func retryWhileGeneratingIsIgnored() async {
+        let service = FailOnceRecordingMock()
+        let vm = TodayViewModel(service: service, isConsentGranted: { true })
+        let failedId = UUID()
+        vm.entries = [TimelineEntry(
+            id: failedId, createdAt: .now,
+            content: .sendFailed(text: "今天会议推迟了", image: nil, requestId: UUID(), bubbleEntryId: nil)
+        )]
+        vm.isLoading = true   // 模拟另一生成正在进行
+
+        await vm.retrySend(text: "今天会议推迟了", image: nil, failedEntryId: failedId,
+                           requestId: nil, bubbleEntryId: nil)
+
+        #expect(service.requestIds.isEmpty)   // 未发起第二次生成
+        #expect(vm.entries.count == 1)        // 失败行未被移除（仍可再点）
+        #expect(vm.isLoading == true)
     }
 
     @Test func sendIgnoresBlankInput() async {
@@ -953,6 +1173,21 @@ struct AIConsentGateTests {
         vm.entries.contains { if case .aiLoading = $0.content { return true }; return false }
     }
 
+    private func hasSendFailed(_ vm: TodayViewModel) -> Bool {
+        vm.entries.contains { if case .sendFailed = $0.content { return true }; return false }
+    }
+
+    /// 与 TodayViewModel.dayLabel 同逻辑的测试版副本：测试构造的日期标题
+    /// 必须与注入逻辑计算的标签一致（locale 无关）。
+    private func dayLabelInTest(for date: Date) -> String {
+        let cal = Calendar.current
+        if cal.isDateInToday(date) { return "Today" }
+        if cal.isDateInYesterday(date) { return "Yesterday" }
+        let f = DateFormatter()
+        f.dateFormat = "MMM d"
+        return f.string(from: date)
+    }
+
     private func makePendingRetryStore(suite: String) -> PendingRetryStore {
         let defaults = UserDefaults(suiteName: suite)!
         defaults.removePersistentDomain(forName: suite)
@@ -1037,6 +1272,300 @@ struct AIConsentGateTests {
         #expect(vm.entries.contains { if case .pendingRetry = $0.content { return true }; return false } == false)
         #expect(saver.lastRequestId == record.requestId)
     }
+
+    // MARK: - 统一 attempt 抽象（Tab1 失败行持久化）
+
+    // 文字发送失败：持久化一条 .tab1 记录——携带原文、幂等键与气泡写作时刻，
+    // 与失败行上的信息一致（重试与重启归位都靠它）。
+    @Test func sendFailurePersistsTab1TextAttempt() async throws {
+        let store = makePendingRetryStore(suite: "tab1-fail-persist-text")
+        let vm = TodayViewModel(service: FailingMock(), isConsentGranted: { true })
+        vm.pendingRetryStore = store
+
+        await vm.send("今天会议推迟了")
+
+        let records = store.load()
+        #expect(records.count == 1)
+        #expect(records[0].source == .tab1)
+        #expect(records[0].text == "今天会议推迟了")
+        #expect(records[0].photoFileName == nil)
+
+        let bubble = try #require(vm.entries.first {
+            if case .userBubble = $0.content { return true }
+            return false
+        })
+        #expect(records[0].createdAt == bubble.createdAt)   // 写作时刻，不是失败时刻
+
+        let failed = try #require(vm.entries.first {
+            if case .sendFailed = $0.content { return true }
+            return false
+        })
+        guard case .sendFailed(_, _, let rowRequestId, let rowBubbleId) = failed.content else {
+            Issue.record("Expected sendFailed entry"); return
+        }
+        #expect(rowRequestId == records[0].requestId)
+        #expect(rowBubbleId == bubble.id)
+    }
+
+    // 照片发送失败：JPEG 落盘 + 记录可回读（重启注入时气泡能拿到图片）。
+    @Test func sendFailurePersistsTab1PhotoAttempt() async throws {
+        let store = makePendingRetryStore(suite: "tab1-fail-persist-photo")
+        let vm = TodayViewModel(service: FailingMock(), isConsentGranted: { true })
+        vm.pendingRetryStore = store
+        vm.pendingImage = UIImage(systemName: "photo")!
+
+        await vm.send("")
+
+        let records = store.load()
+        #expect(records.count == 1)
+        #expect(records[0].text == nil)
+        #expect(records[0].photoFileName != nil)
+        #expect(store.photoImage(for: records[0]) != nil)
+    }
+
+    // 重试再次失败：同 requestId 幂等跳过——不产生第二条记录、写作时刻不被改写。
+    @Test func retryFailureKeepsSinglePersistedAttempt() async throws {
+        let store = makePendingRetryStore(suite: "tab1-fail-idempotent")
+        let service = AlwaysFailRecordingMock()
+        let vm = TodayViewModel(service: service, isConsentGranted: { true })
+        vm.pendingRetryStore = store
+
+        await vm.send("今天会议推迟了")
+        let first = try #require(store.load().first)
+        let originalCreatedAt = first.createdAt
+        let requestId = try #require(first.requestId)
+
+        let failed = try #require(vm.entries.first {
+            if case .sendFailed = $0.content { return true }
+            return false
+        })
+        guard case .sendFailed(let text, let image, let rowRequestId, let rowBubbleId) = failed.content else {
+            Issue.record("Expected sendFailed entry"); return
+        }
+        await vm.retrySend(text: text, image: image, failedEntryId: failed.id,
+                           requestId: rowRequestId, bubbleEntryId: rowBubbleId)
+
+        let after = store.load()
+        #expect(after.count == 1)                                // 幂等：无第二条记录
+        #expect(after[0].createdAt == originalCreatedAt)         // 写作时刻保持首次发送时的值
+        #expect(after[0].requestId == requestId)
+        #expect(service.requestIds == [requestId, requestId])    // 重试复用同一幂等键
+    }
+
+    // 重试成功：按 requestId 清除持久化记录——重启后从服务端回放，不再注入失败行。
+    @Test func retrySendSuccessRemovesPersistedTab1Attempt() async throws {
+        let store = makePendingRetryStore(suite: "tab1-retry-success")
+        let requestId = UUID()
+        try store.saveTab1(text: "今天会议推迟了", image: nil,
+                           requestId: requestId, createdAt: .now)
+        let record = try #require(store.load().first)
+
+        let vm = TodayViewModel(service: SuccessMock(), isConsentGranted: { true })
+        vm.pendingRetryStore = store
+        // 模拟重启后注入的状态：气泡 + 失败行
+        let bubbleId = UUID()
+        vm.entries = [
+            TimelineEntry(id: bubbleId, createdAt: record.createdAt,
+                          content: .userBubble(text: record.text, image: nil,
+                                               imageUrl: nil, imageStableKey: nil)),
+            TimelineEntry(id: UUID(), createdAt: record.createdAt,
+                          content: .sendFailed(text: record.text, image: nil,
+                                               requestId: requestId, bubbleEntryId: bubbleId))
+        ]
+        let failedEntryId = vm.entries[1].id
+
+        await vm.retrySend(text: record.text, image: nil, failedEntryId: failedEntryId,
+                           requestId: requestId, bubbleEntryId: bubbleId)
+
+        #expect(store.load().isEmpty)
+        #expect(hasCard(vm) == true)
+        #expect(hasSendFailed(vm) == false)
+    }
+
+    // 重启注入：Tab1 失败行按写作时刻归位——同一天已有标题时不重复补、
+    // 没有该日标题时补一个，失败对夹在更早与更晚的服务端记录之间。
+    @Test func restartInjectsTab1AttemptChronologically() async throws {
+        let store = makePendingRetryStore(suite: "tab1-restart-inject")
+        let base = Date(timeIntervalSince1970: 1_800_000_000)   // 固定日期，避免跨零点抖动
+        let day1 = base
+        let day2 = base.addingTimeInterval(86_400)
+
+        let requestIdDayBefore = UUID()
+        try store.saveTab1(text: "day before failed", image: nil,
+                           requestId: requestIdDayBefore,
+                           createdAt: day1.addingTimeInterval(3_600))
+        let requestIdDay2 = UUID()
+        try store.saveTab1(text: "day2 failed", image: nil,
+                           requestId: requestIdDay2,
+                           createdAt: day2.addingTimeInterval(3_600))
+
+        let vm = TodayViewModel(service: SuccessMock(), isConsentGranted: { true })
+        vm.pendingRetryStore = store
+        // 服务端历史：只有 day2 一条（带该日标题）
+        vm.entries = [
+            TimelineEntry(id: UUID(), createdAt: day2,
+                          content: .dateSeparator(dayLabelInTest(for: day2))),
+            TimelineEntry(id: UUID(), createdAt: day2,
+                          content: .userBubble(text: "server history", image: nil,
+                                               imageUrl: nil, imageStableKey: nil))
+        ]
+
+        vm.injectPendingRetry()
+
+        func kind(_ entry: TimelineEntry) -> String {
+            switch entry.content {
+            case .dateSeparator: return "sep"
+            case .userBubble: return "bubble"
+            case .sendFailed: return "failed"
+            default: return "other"
+            }
+        }
+        #expect(vm.entries.map(kind) == ["sep", "bubble", "failed", "sep", "bubble", "bubble", "failed"])
+        // day1 补了自己的标题；day2 复用已有标题（不重复）
+        if case .dateSeparator(let label) = vm.entries[0].content {
+            #expect(label == dayLabelInTest(for: day1))
+        } else {
+            Issue.record("Expected day1 separator"); return
+        }
+        if case .dateSeparator(let label) = vm.entries[3].content {
+            #expect(label == dayLabelInTest(for: day2))
+        } else {
+            Issue.record("Expected day2 separator"); return
+        }
+        // 失败对：气泡 + 失败行成对，requestId 与 bubbleEntryId 正确挂钩
+        guard case .userBubble(let textB, _, _, _) = vm.entries[1].content else {
+            Issue.record("Expected day1 bubble"); return
+        }
+        #expect(textB == "day before failed")
+        guard case .sendFailed(_, _, let rowRequestIdB, let rowBubbleIdB) = vm.entries[2].content else {
+            Issue.record("Expected day1 failed row"); return
+        }
+        #expect(rowRequestIdB == requestIdDayBefore)
+        #expect(rowBubbleIdB == vm.entries[1].id)
+        guard case .sendFailed(_, _, let rowRequestIdA, let rowBubbleIdA) = vm.entries[6].content else {
+            Issue.record("Expected day2 failed row"); return
+        }
+        #expect(rowRequestIdA == requestIdDay2)
+        #expect(rowBubbleIdA == vm.entries[5].id)
+    }
+
+    // 重启注入去重：幂等键已在服务端历史 → 本地记录清除、不注入失败行。
+    @Test func restartInjectionSkipsServerCommittedRequestIds() async throws {
+        let store = makePendingRetryStore(suite: "tab1-restart-dedup")
+        let requestId = UUID()
+        try store.saveTab1(text: "already on server", image: nil,
+                           requestId: requestId, createdAt: .now)
+
+        let vm = TodayViewModel(service: SuccessMock(), isConsentGranted: { true })
+        vm.pendingRetryStore = store
+        vm.entries = [TimelineEntry.userBubble(text: "server history", image: nil)]
+
+        vm.injectPendingRetry(serverRequestIds: [requestId])
+
+        #expect(store.load().isEmpty)            // 服务端有正本：本地副本清除
+        #expect(hasSendFailed(vm) == false)
+        #expect(vm.entries.count == 1)
+    }
+
+    // H1 修复：同一 requestId 的失败对已在时间线里（本会话二次 loadHistory，
+    // 如回前台刷新）→ 再次注入被跳过，不出现重复的气泡 + 失败行。
+    @Test func repeatedInjectionSkipsAlreadyInjectedTab1Pair() async throws {
+        let store = makePendingRetryStore(suite: "tab1-repeat-inject")
+        let base = Date(timeIntervalSince1970: 1_800_000_000)
+        let requestId = UUID()
+        try store.saveTab1(text: "failed once", image: nil,
+                           requestId: requestId, createdAt: base.addingTimeInterval(3_600))
+
+        let vm = TodayViewModel(service: SuccessMock(), isConsentGranted: { true })
+        vm.pendingRetryStore = store
+        let bubbleId = UUID()
+        // 首次注入后的形态：标题 + 气泡 + 失败行（失败行携带同一 requestId）
+        vm.entries = [
+            TimelineEntry(id: UUID(), createdAt: base,
+                          content: .dateSeparator(dayLabelInTest(for: base))),
+            TimelineEntry(id: bubbleId, createdAt: base.addingTimeInterval(3_600),
+                          content: .userBubble(text: "failed once", image: nil,
+                                               imageUrl: nil, imageStableKey: nil)),
+            TimelineEntry(id: UUID(), createdAt: base.addingTimeInterval(3_600),
+                          content: .sendFailed(text: "failed once", image: nil,
+                                               requestId: requestId, bubbleEntryId: bubbleId))
+        ]
+
+        vm.injectPendingRetry()
+
+        let failedRows = vm.entries.filter { entry in
+            if case .sendFailed = entry.content { return true }
+            return false
+        }
+        #expect(vm.entries.count == 3)     // 不重复注入：标题 + 气泡 + 失败行各一条
+        #expect(failedRows.count == 1)
+        #expect(store.load().count == 1)   // 记录仍在（重试成功才清除）
+    }
+
+    // D 同族竞态（onboarding）：照片响应迟到被误判失败 → 服务端其实已落库。
+    // 注入时按幂等键识别 → pendingRetry 行不注入、记录与本地照片文件清除，
+    // 避免与服务端回放的「气泡 + 卡片」重复。
+    @Test func restartInjectionRemovesStaleOnboardingPendingRecords() async throws {
+        let store = makePendingRetryStore(suite: "tab1-stale-onboarding")
+        try store.savePhoto(UIImage(systemName: "photo")!, requestId: UUID())
+        let record = try #require(store.load().first)
+        let requestId = try #require(record.requestId)
+
+        let vm = TodayViewModel(service: SuccessMock(), isConsentGranted: { true })
+        vm.pendingRetryStore = store
+        vm.entries = [TimelineEntry.userBubble(text: "server history", image: nil)]
+
+        vm.injectPendingRetry(serverRequestIds: [requestId])
+
+        #expect(store.load().isEmpty)
+        #expect(store.photoImage(for: record) == nil)   // 本地 JPEG 一并清除
+        #expect(vm.entries.count == 1)
+    }
+
+    // seed 去重决策（D）：幂等键在服务端 → 不注入；无键/无记录 → 照旧注入。
+    @Test func shouldInjectSeedDecision() {
+        let entry = TimelineEntry.userBubble(text: "Describe this image", image: nil)
+        let requestId = UUID()
+
+        #expect(TodayViewModel.shouldInjectSeed(
+            seedEntries: [], seedRequestId: requestId,
+            serverRequestIds: [requestId]) == false)
+        #expect(TodayViewModel.shouldInjectSeed(
+            seedEntries: [entry], seedRequestId: requestId,
+            serverRequestIds: [requestId]) == false)
+        #expect(TodayViewModel.shouldInjectSeed(
+            seedEntries: [entry], seedRequestId: UUID(),
+            serverRequestIds: [requestId]) == true)
+        #expect(TodayViewModel.shouldInjectSeed(
+            seedEntries: [entry], seedRequestId: nil,
+            serverRequestIds: [requestId]) == true)
+    }
+
+    // item 3：兜底找不到待重试行时，气泡 + 卡片追加到末尾——
+    // 待重试记录本就注入在最新端（视图停在底部），插 index 0 会让结果出现在历史最顶。
+    @Test func retryPendingFallbackAppendsAtEnd() async throws {
+        let store = makePendingRetryStore(suite: "retry-fallback-end")
+        try store.savePhoto(UIImage(systemName: "photo")!, requestId: UUID())
+        let record = try #require(store.load().first)
+
+        let vm = TodayViewModel(service: RecordingResponseMock(response: .matchingDurable),
+                                isConsentGranted: { true })
+        vm.pendingRetryStore = store
+        let serverEntry = TimelineEntry.userBubble(text: "server history", image: nil)
+        vm.entries = [serverEntry]   // 时间线已被刷新重建，找不到待重试行
+
+        await vm.retryPending(record: record)
+
+        #expect(vm.entries.count == 3)
+        #expect(vm.entries[0].id == serverEntry.id)   // 原有历史不动
+        guard case .userBubble = vm.entries[1].content else {
+            Issue.record("Expected appended userBubble"); return
+        }
+        guard case .aiCard = vm.entries[2].content else {
+            Issue.record("Expected appended aiCard"); return
+        }
+    }
+
     private func rejectedEntry(_ vm: TodayViewModel) -> (text: String?, wasImage: Bool)? {
         for e in vm.entries {
             if case .userRejected(let t, let w) = e.content { return (t, w) }
@@ -2190,6 +2719,53 @@ struct MessageRecordAssetPathTests {
         #expect(MessageRecord.assetImageName(fromPath: "materials/abc.jpg") == nil)
         #expect(MessageRecord.assetImageName(fromPath: "asset:") == nil)
         #expect(MessageRecord.assetImageName(fromPath: "asset") == nil)
+    }
+
+    // get-messages 契约新增 request_id（幂等键）：新行正常解码；
+    // 老行缺该字段 → nil，不得打断整组 [MessageRecord] 的解码。
+    @Test func requestIdDecodesWithNullFallback() throws {
+        // 与 TodayViewModel.decodeRecords 相同的日期策略（ISO8601 带小数秒）
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let str = try container.decode(String.self)
+            let fmt = ISO8601DateFormatter()
+            fmt.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            if let d = fmt.date(from: str) { return d }
+            fmt.formatOptions = [.withInternetDateTime]
+            if let d = fmt.date(from: str) { return d }
+            throw DecodingError.dataCorruptedError(
+                in: container, debugDescription: "Bad date: \(str)"
+            )
+        }
+
+        let base: [String: Any] = [
+            "id": "A9D7E4B2-7B4C-4E7A-A81D-9E122D101001",
+            "role": "user",
+            "input_type": "text",
+            "user_content": "今天会议推迟了",
+            "image_url": NSNull(),
+            "card_type": NSNull(),
+            "card_content": NSNull(),
+            "created_at": "2026-08-21T12:00:00.000Z"
+        ]
+
+        var withId = base
+        withId["request_id"] = "B8C6D3A1-6A3B-4D6A-B70C-8D011C202002"
+        let dataWithId = try JSONSerialization.data(withJSONObject: withId)
+        let recordWithId = try #require(
+            try decoder.decode(MessageRecord.self, from: dataWithId)
+        )
+        #expect(recordWithId.requestId == UUID(uuidString: "B8C6D3A1-6A3B-4D6A-B70C-8D011C202002"))
+
+        // 老行无 request_id：解码为 nil，且同批新行不受影响
+        var withoutId = base
+        withoutId["id"] = "C7B5C2D0-5B2A-4C5B-A60D-7C901B303003"
+        let mixed: [[String: Any]] = [withId, withoutId]
+        let dataMixed = try JSONSerialization.data(withJSONObject: mixed)
+        let records = try decoder.decode([MessageRecord].self, from: dataMixed)
+        #expect(records.count == 2)
+        #expect(records[1].requestId == nil)
     }
 }
 

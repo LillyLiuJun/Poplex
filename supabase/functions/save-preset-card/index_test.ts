@@ -141,6 +141,11 @@ Deno.test("save-preset-card commits via the atomic RPC and returns durable IDs",
   const userMessage = capturedBody!.p_user_message as Record<string, unknown>;
   assertEquals(userMessage.preset_card_id, "sample-card-1");
   assertEquals(userMessage.image_url, "asset:sample1");
+
+  // 时间线反序修复的契约:user 行不显式传 created_at(用数据库时钟),
+  // 排序行为完全由 SQL 迁移的 GREATEST(now(), user+1ms) 保证——
+  // Edge 时钟与 DB 时钟混排只会带来维护成本,迁移单独上线即闭环。
+  assertEquals(userMessage.created_at, undefined);
 });
 
 Deno.test("save-preset-card generates a request_id for old clients that omit one", async () => {

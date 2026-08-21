@@ -243,10 +243,13 @@ interface HandlerHarnessOptions {
   rpcAlreadyCommitted?: boolean;
   geminiConcept?: string;
   uploadFails?: boolean;
+  /** 固定「请求时刻」时钟（dependencies.now），缺省为一个确定的过去时刻。 */
+  nowIso?: string;
 }
 
 function createHandlerHarness(options: HandlerHarnessOptions = {}) {
   const calls = { auth: 0, gemini: 0, storage: 0, rpc: 0 };
+  const rpcPayloads: Array<Record<string, unknown>> = [];
   const committed = {
     request_id: requestId,
     user_message_id: "33333333-3333-4333-8333-333333333333",
@@ -336,6 +339,13 @@ function createHandlerHarness(options: HandlerHarnessOptions = {}) {
     }
     if (url.endsWith("/rest/v1/rpc/commit_generated_content")) {
       calls.rpc++;
+      if (typeof init?.body === "string") {
+        try {
+          rpcPayloads.push(JSON.parse(init.body));
+        } catch {
+          throw new Error("commit_generated_content body is not JSON");
+        }
+      }
       return Promise.resolve(jsonResponse(
         options.rpcStatus === 500 ? { message: "commit failed" } : committed,
         options.rpcStatus ?? 200,
@@ -368,9 +378,10 @@ function createHandlerHarness(options: HandlerHarnessOptions = {}) {
       if (options.waitUntilThrows) throw new Error("waitUntil sync failure");
     },
     randomUUID: () => requestId,
+    now: () => new Date(options.nowIso ?? "2026-08-21T12:00:00.000Z"),
   });
 
-  return { handler, calls };
+  return { handler, calls, rpcPayloads };
 }
 
 Deno.test("production access config keeps caller and privileged keys separate", () => {
@@ -385,13 +396,19 @@ Deno.test("production access config keeps caller and privileged keys separate", 
   });
 });
 
-function generationRequest(requestIdValue: unknown = requestId): Request {
+function generationRequest(
+  requestIdValue: unknown = requestId,
+  extra: Record<string, unknown> = {},
+): Request {
   const body: Record<string, unknown> = {
     image_base64: "aGVsbG8=",
     mime_type: "image/jpeg",
     source: "onboarding",
+    ...extra,
   };
-  if (requestIdValue !== undefined) body.request_id = requestIdValue;
+  if (requestIdValue !== undefined && !("request_id" in extra)) {
+    body.request_id = requestIdValue;
+  }
   return new Request("http://localhost/generate", {
     method: "POST",
     headers: {
@@ -462,6 +479,76 @@ Deno.test("generate returns a complete committed duplicate without Gemini or Sto
   assertEquals(body.material_id, "55555555-5555-4555-8555-555555555555");
   assertEquals(body.extracted_concept, "地铁很挤");
   assertEquals(calls, { auth: 1, gemini: 0, storage: 0, rpc: 0 });
+});
+
+// 方案丙（写作时刻语义）：重试请求携带 original_created_at 时，
+// user 行按写作时刻落库、assistant 行 = 写作时刻 + 1ms——客户端原位摆放
+// 与服务器时间线一致，刷新永不跳。
+Deno.test("generate commits a retry at the original write time", async () => {
+  const { handler, rpcPayloads } = createHandlerHarness({
+    nowIso: "2026-08-21T12:00:00.000Z",
+  });
+  const response = await handler(generationRequest(requestId, {
+    original_created_at: "2026-08-20T08:30:00.123Z",
+  }));
+
+  assertEquals(response.status, 200);
+  assertEquals(rpcPayloads.length, 1);
+  const payload = rpcPayloads[0];
+  const userMessage = payload.p_user_message as Record<string, unknown>;
+  const assistantMessage = payload.p_assistant_message as Record<string, unknown>;
+  assertEquals(userMessage.created_at, "2026-08-20T08:30:00.123Z");
+  assertEquals(assistantMessage.created_at, "2026-08-20T08:30:00.124Z");
+});
+
+// 正常发送不带 original_created_at：user 行 = 请求时刻锁定，
+// assistant 行不传 created_at（RPC 走 GREATEST(now(), user+1ms) 兜底），行为不变。
+Deno.test("generate without original_created_at keeps request-time semantics", async () => {
+  const { handler, rpcPayloads } = createHandlerHarness({
+    nowIso: "2026-08-21T12:00:00.000Z",
+  });
+  const response = await handler(generationRequest());
+
+  assertEquals(response.status, 200);
+  const payload = rpcPayloads[0];
+  const userMessage = payload.p_user_message as Record<string, unknown>;
+  const assistantMessage = payload.p_assistant_message as Record<string, unknown>;
+  assertEquals(userMessage.created_at, "2026-08-21T12:00:00.000Z");
+  assertEquals(assistantMessage.created_at, undefined);
+});
+
+// 不可解析的 original_created_at 静默回退到请求时刻，不影响正常流程。
+Deno.test("generate falls back to request time for an unparseable original_created_at", async () => {
+  const { handler, rpcPayloads } = createHandlerHarness({
+    nowIso: "2026-08-21T12:00:00.000Z",
+  });
+  const response = await handler(generationRequest(requestId, {
+    original_created_at: "not-a-date",
+  }));
+
+  assertEquals(response.status, 200);
+  const payload = rpcPayloads[0];
+  const userMessage = payload.p_user_message as Record<string, unknown>;
+  const assistantMessage = payload.p_assistant_message as Record<string, unknown>;
+  assertEquals(userMessage.created_at, "2026-08-21T12:00:00.000Z");
+  assertEquals(assistantMessage.created_at, undefined);
+});
+
+// 客户端时钟超前导致写作时刻在未来：截断到请求时刻，不写入未来时间戳。
+Deno.test("generate clamps a future original_created_at to the request time", async () => {
+  const { handler, rpcPayloads } = createHandlerHarness({
+    nowIso: "2026-08-21T12:00:00.000Z",
+  });
+  const response = await handler(generationRequest(requestId, {
+    original_created_at: "2026-09-01T00:00:00.000Z",
+  }));
+
+  assertEquals(response.status, 200);
+  const payload = rpcPayloads[0];
+  const userMessage = payload.p_user_message as Record<string, unknown>;
+  const assistantMessage = payload.p_assistant_message as Record<string, unknown>;
+  assertEquals(userMessage.created_at, "2026-08-21T12:00:00.000Z");
+  assertEquals(assistantMessage.created_at, "2026-08-21T12:00:00.001Z");
 });
 
 Deno.test("generate keeps content_blocked behavior and removes the rejected upload", async () => {

@@ -1,21 +1,27 @@
 import Foundation
 import UIKit
 
-/// 待重试记录的来源：断网未落库的预设卡 / 断网生成失败的照片。
+/// 待重试记录的来源：断网未落库的预设卡 / 断网生成失败的照片 / Tab1 生成失败的发送。
+/// 三类共用一个记录类型与一个 store（统一 attempt 抽象）：
+/// requestId 是唯一持久化的幂等键来源，跨启动不丢。
 enum PendingRetrySource: String, Codable {
     case presetCard
     case photo
+    case tab1   // Tab1 发送失败（文字或照片）：重启后以「气泡 + 失败行」按写作时刻归位
 }
 
-/// 带未成功内容离开 onboarding 时持久化的待重试记录（杀 app 不丢）。
+/// 待重试记录（杀 app 不丢）。三类来源共用一个类型。
 struct PendingRetryRecord: Codable, Identifiable {
     let id: UUID
     let source: PendingRetrySource
-    /// 同一张照片跨重试、跨启动复用的幂等键。optional 保持旧 JSON 可解码。
+    /// 本次尝试的幂等键，跨重试、跨启动复用。optional 保持旧 JSON 可解码。
     let requestId: UUID?
     let presetCardId: String?     // source == .presetCard
     let presetImageName: String?  // 内置 asset 图名（展示用）
-    let photoFileName: String?    // source == .photo（图片文件在 Documents 下）
+    let photoFileName: String?    // source == .photo / .tab1 照片（图片文件在 Documents 下）
+    let text: String?             // source == .tab1 文字发送的原文
+    /// source == .tab1 时 = 气泡的原始写作时刻（方案丙：重试按它落库，重启后原位稳定）；
+    /// 其余来源 = 记录写入时刻。
     let createdAt: Date
 }
 
@@ -62,7 +68,7 @@ final class PendingRetryStore {
             id: UUID(), source: .presetCard,
             requestId: requestId,
             presetCardId: cardId, presetImageName: imageName,
-            photoFileName: nil, createdAt: .now
+            photoFileName: nil, text: nil, createdAt: .now
         ))
         try? persist(records)
     }
@@ -80,7 +86,7 @@ final class PendingRetryStore {
             id: UUID(), source: .photo,
             requestId: requestId,
             presetCardId: nil, presetImageName: nil,
-            photoFileName: fileName, createdAt: .now
+            photoFileName: fileName, text: nil, createdAt: .now
         ))
         do {
             try persist(records)
@@ -88,6 +94,41 @@ final class PendingRetryStore {
             try? FileManager.default.removeItem(
                 at: documentsDir.appendingPathComponent(fileName)
             )
+            throw error
+        }
+    }
+
+    /// Tab1 发送失败：持久化本次尝试（文字或照片 + 写作时刻 + 幂等键）。
+    /// 同 requestId 已存在时直接跳过（重试再失败不产生第二条记录——幂等）。
+    /// 照片与 savePhoto 同一套落盘机制；失败抛错（调用方决定是否提示）。
+    func saveTab1(text: String?, image: UIImage?, requestId: UUID, createdAt: Date) throws {
+        var records = load()
+        guard !records.contains(where: { $0.source == .tab1 && $0.requestId == requestId }) else {
+            return
+        }
+        var fileName: String? = nil
+        if let image {
+            guard let jpeg = image.jpegData(compressionQuality: 0.7) else {
+                throw NSError(domain: "PendingRetryStore", code: 1,
+                              userInfo: [NSLocalizedDescriptionKey: "image encode failed"])
+            }
+            fileName = UUID().uuidString + ".jpg"
+            try jpeg.write(to: documentsDir.appendingPathComponent(fileName!))
+        }
+        records.append(PendingRetryRecord(
+            id: UUID(), source: .tab1,
+            requestId: requestId,
+            presetCardId: nil, presetImageName: nil,
+            photoFileName: fileName, text: text, createdAt: createdAt
+        ))
+        do {
+            try persist(records)
+        } catch {
+            if let fileName {
+                try? FileManager.default.removeItem(
+                    at: documentsDir.appendingPathComponent(fileName)
+                )
+            }
             throw error
         }
     }
@@ -124,6 +165,7 @@ final class PendingRetryStore {
             presetCardId: record.presetCardId,
             presetImageName: record.presetImageName,
             photoFileName: record.photoFileName,
+            text: record.text,
             createdAt: record.createdAt
         )
         records[index] = upgraded
@@ -134,6 +176,21 @@ final class PendingRetryStore {
     func remove(id: UUID) {
         var records = load()
         guard let idx = records.firstIndex(where: { $0.id == id }) else { return }
+        if let fileName = records[idx].photoFileName {
+            try? FileManager.default.removeItem(
+                at: documentsDir.appendingPathComponent(fileName)
+            )
+        }
+        records.remove(at: idx)
+        try? persist(records)
+    }
+
+    /// Tab1 重试成功后按幂等键清除持久化记录（含照片文件）。
+    /// 只清 .tab1 来源——onboarding 记录的移除由 retryPending 的按 id 移除负责。
+    func removeTab1ByRequestId(_ requestId: UUID) {
+        var records = load()
+        guard let idx = records.firstIndex(where: { $0.source == .tab1 && $0.requestId == requestId })
+        else { return }
         if let fileName = records[idx].photoFileName {
             try? FileManager.default.removeItem(
                 at: documentsDir.appendingPathComponent(fileName)

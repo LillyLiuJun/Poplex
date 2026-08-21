@@ -9,6 +9,7 @@ struct MessageRecord: Decodable, Identifiable {
     let userContent: String?
     let signedImageUrl: String?  // 1h 访问 URL，随 session 变化
     let imagePath: String?       // Storage 路径（稳定 key，用于磁盘缓存）
+    let requestId: UUID?         // 幂等键（老行可能为 NULL）；用于「持久化失败行 / seed」与服务端记录去重
     let card: AICard?
     let createdAt: Date
 
@@ -18,6 +19,7 @@ struct MessageRecord: Decodable, Identifiable {
         case userContent    = "user_content"
         case signedImageUrl = "signed_image_url"
         case imagePath      = "image_url"
+        case requestId      = "request_id"
         case cardType       = "card_type"
         case cardContent    = "card_content"
         case createdAt      = "created_at"
@@ -31,6 +33,7 @@ struct MessageRecord: Decodable, Identifiable {
         userContent    = try c.decodeIfPresent(String.self, forKey: .userContent)
         signedImageUrl = try c.decodeIfPresent(String.self, forKey: .signedImageUrl)
         imagePath      = try c.decodeIfPresent(String.self, forKey: .imagePath)
+        requestId      = try c.decodeIfPresent(UUID.self, forKey: .requestId)
         createdAt      = try c.decode(Date.self,   forKey: .createdAt)
 
         // s1–s6 与新写入的 "card" 统一解码为 .card；其余（含历史 chat）不渲染。

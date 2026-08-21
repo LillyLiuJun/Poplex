@@ -2,7 +2,7 @@ import Foundation
 import UIKit
 
 protocol AIServicing {
-    func generate(text: String?, image: UIImage?, context: ContextTurn?, presetCardId: String?, requestId: UUID?, source: String?) async throws -> AIEnvelope
+    func generate(text: String?, image: UIImage?, context: ContextTurn?, presetCardId: String?, requestId: UUID?, source: String?, originalCreatedAt: Date?) async throws -> AIEnvelope
 }
 
 enum AIServiceError: Error {
@@ -25,20 +25,21 @@ extension UIImage {
 }
 
 struct LiveAIService: AIServicing {
-    func generate(text: String?, image: UIImage?, context: ContextTurn?, presetCardId: String? = nil, requestId: UUID? = nil, source: String? = nil) async throws -> AIEnvelope {
+    func generate(text: String?, image: UIImage?, context: ContextTurn?, presetCardId: String? = nil, requestId: UUID? = nil, source: String? = nil, originalCreatedAt: Date? = nil) async throws -> AIEnvelope {
         let bodyData = try Self.requestBody(
             text: text,
             image: image,
             context: context,
             presetCardId: presetCardId,
             requestId: requestId,
-            source: source
+            source: source,
+            originalCreatedAt: originalCreatedAt
         )
         return try await call(body: bodyData)
     }
 
     /// 生成 HTTP 请求体的纯构造 seam，供契约测试验证传给 Edge Function 的 JSON。
-    static func requestBody(text: String?, image: UIImage?, context: ContextTurn?, presetCardId: String?, requestId: UUID?, source: String?) throws -> Data {
+    static func requestBody(text: String?, image: UIImage?, context: ContextTurn?, presetCardId: String?, requestId: UUID?, source: String?, originalCreatedAt: Date? = nil) throws -> Data {
         var body: [String: Any] = [:]
         if let text, !text.isEmpty {
             body["text"] = text
@@ -51,6 +52,13 @@ struct LiveAIService: AIServicing {
         }
         if let source {
             body["source"] = source
+        }
+        if let originalCreatedAt {
+            // 重试语义（方案丙）：把气泡的「写作时刻」一并发给服务器，服务端按该时刻
+            // 落库（user 行 = 写作时刻，assistant 行 = +1ms），原位摆放与服务器时间线一致。
+            let fmt = ISO8601DateFormatter()
+            fmt.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            body["original_created_at"] = fmt.string(from: originalCreatedAt)
         }
         if let image {
             let compressed = image.compressedForUpload()
@@ -121,7 +129,7 @@ struct LiveAIService: AIServicing {
 }
 
 struct MockAIService: AIServicing {
-    func generate(text: String?, image: UIImage?, context: ContextTurn?, presetCardId: String? = nil, requestId: UUID? = nil, source: String? = nil) async throws -> AIEnvelope {
+    func generate(text: String?, image: UIImage?, context: ContextTurn?, presetCardId: String? = nil, requestId: UUID? = nil, source: String? = nil, originalCreatedAt: Date? = nil) async throws -> AIEnvelope {
         try await mockResult()
     }
 

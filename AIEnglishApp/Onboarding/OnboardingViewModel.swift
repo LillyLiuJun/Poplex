@@ -193,7 +193,8 @@ final class OnboardingViewModel {
                     context: nil,
                     presetCardId: nil,
                     requestId: requestId,
-                    source: "onboarding"
+                    source: "onboarding",
+                    originalCreatedAt: nil
                 )
                 guard activeAttemptId == attemptId else { return }
                 guard currentRequestId == requestId,

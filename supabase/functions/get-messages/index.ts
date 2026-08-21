@@ -52,7 +52,7 @@ Deno.serve(async (req) => {
       const url = new URL(`${SUPABASE_URL}/rest/v1/messages`);
       url.searchParams.set(
         "select",
-        "id,role,input_type,user_content,card_type,card_content,created_at,image_url"
+        "id,role,input_type,user_content,card_type,card_content,created_at,image_url,request_id"
       );
       url.searchParams.set("user_id", `eq.${userId}`);
       url.searchParams.set("status", "eq.delivered");
