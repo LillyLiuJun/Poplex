@@ -152,11 +152,9 @@ struct RootTabContainer: View {
             TopTabSelector(selectedTab: $selectedTab, compact: selectedTab == .today && topBarCompact)
                 .padding(.trailing, AppTheme.Space.paddingPage)
         }
-        .padding(.vertical, AppTheme.Space.paddingS)
-        // Gemini 风格可变渐进式通透毛玻璃底托：背景向上贯穿状态栏/灵动岛，向下 24pt 平滑消隐进入内容区
+        .padding(.bottom, AppTheme.Space.paddingS)
         .background {
-            VariableBlurBackdrop(direction: .top, extraExtend: 24)
-                .ignoresSafeArea(.container, edges: .top)
+            TopBarProgressiveMask()
         }
         .background(
             GeometryReader { geo in

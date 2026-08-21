@@ -28,7 +28,7 @@ struct OnboardingScreen2View: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// 语音条声波的柱高（固定示意波形）。
-    private let waveHeights: [CGFloat] = [7, 14, 22, 11, 19, 9, 16, 23, 12, 8]
+    private let waveHeights: [CGFloat] = [7, 14, 22, 11, 19, 9, 16, 23, 12, 18, 15, 21, 10, 14, 20, 11, 17, 8]
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -84,18 +84,25 @@ struct OnboardingScreen2View: View {
         // 这里的 repeatForever 就已经在后台跑了。
         .onAppear {
             guard isActive else { return }
-            appeared = true
+            triggerEntrance()
             startAmbientMotion()
         }
         .onChange(of: isActive) { _, active in
             if active {
-                appeared = true
+                triggerEntrance()
                 startAmbientMotion()
             } else {
                 // 三页并排常驻挂载，离开这一页不会被卸载 —— 不主动停的话，
                 // 光标 + 10 根波形柱共 11 条 repeatForever 会在后台一直跑。
                 stopAmbientMotion()
             }
+        }
+    }
+
+    private func triggerEntrance() {
+        guard !appeared else { return }
+        DispatchQueue.main.async {
+            appeared = true
         }
     }
 
@@ -221,20 +228,24 @@ struct OnboardingScreen2View: View {
 
             // AI 看见这张照片时会说的话。放不下就在第二行截断带省略号——
             // 这里要的是「它读懂了」的观感，不是让人把整句读完。
-            Text("A woman in a simple linen top sits across a bright desk, laughing openly with joy")
-                .font(AppTheme.Font.onboardingCollageNote)
-                .foregroundStyle(AppTheme.Color.textSecondary)
-                .lineLimit(2)
-                .truncationMode(.tail)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(width: 224, alignment: .leading)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("A woman in a simple linen top")
+                    .font(AppTheme.Font.onboardingCollageNote)
+                    .foregroundStyle(AppTheme.Color.textSecondary)
 
-            // 三张卡统一带时间戳，且时刻连着走（8:02 → 8:09 → 8:14）。
-            // 这一页此前缺的就是这个：三张卡各说各的，读者看不出它们属于同一个早晨。
-            // 有了递进的时刻，拼贴才从「三种输入方式的图例」变成「一个人早上留下的三条记录」。
-            Text("Today · 8:02 AM")
-                .font(AppTheme.Font.pos)
-                .foregroundStyle(AppTheme.Color.textMuted)
+                HStack(alignment: .firstTextBaseline, spacing: 0) {
+                    Text("sits across...")
+                        .font(AppTheme.Font.onboardingCollageNote)
+                        .foregroundStyle(AppTheme.Color.textSecondary)
+
+                    Spacer(minLength: 8)
+
+                    Text("Today · 8:02 AM")
+                        .font(AppTheme.Font.pos)
+                        .foregroundStyle(AppTheme.Color.textMuted)
+                }
+            }
+            .frame(width: 224)
         }
         .padding(AppTheme.Space.paddingS)
         .background(AppTheme.Color.cardBg)
@@ -247,57 +258,43 @@ struct OnboardingScreen2View: View {
     // 现在：mic + 起伏波形 + 跑动的计时 + 正在转写的半句（与文字卡的光标同一种进行时语气）。
 
     private var voiceCard: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Space.paddingS) {
-            HStack(spacing: AppTheme.Space.paddingS) {
-                ZStack {
-                    Circle()
-                        .fill(AppTheme.Color.brandStrong)
-                        .frame(width: 30, height: 30)
-                    Image(systemName: "mic.fill")
-                        .font(.system(size: 12))
-                        .foregroundStyle(AppTheme.Color.textOnChip)
-                }
-
-                HStack(spacing: 3) {
-                    ForEach(Array(waveHeights.enumerated()), id: \.offset) { index, h in
-                        Capsule()
-                            .fill(AppTheme.Color.brandStrong)
-                            .frame(width: 3, height: h)
-                            // 三张卡里语音卡此前是唯一完全静止的，读起来像被禁用；
-                            // 但幅度也不能大到抢焦点——这是背景里的「还在录」，不是主角。
-                            // 满高↔0.78 / 0.9s，逐柱错相 0.05。
-                            .scaleEffect(y: wavePulsing ? 0.78 : 1.0, anchor: .center)
-                            .animation(
-                                reduceMotion ? nil :
-                                    .easeInOut(duration: 0.9)
-                                    .repeatForever(autoreverses: true)
-                                    .delay(Double(index) * 0.05),
-                                value: wavePulsing
-                            )
-                    }
-                }
-                .frame(height: 26)
-
-                // 等宽数字：读起来是正在跑的计时器，而不是一个时长标签。
-                // 时刻接在时长后面，与另两张卡的时间戳同一格式、同一族（见照片卡注释）。
-                Text("0:04 · 8:09 AM")
-                    .font(AppTheme.Font.pos)
-                    .monospacedDigit()
-                    .foregroundStyle(AppTheme.Color.textMuted)
+        HStack(spacing: AppTheme.Space.paddingS) {
+            ZStack {
+                Circle()
+                    .fill(AppTheme.Color.brandStrong)
+                    .frame(width: 30, height: 30)
+                Image(systemName: "mic.fill")
+                    .font(.system(size: 12))
+                    .foregroundStyle(AppTheme.Color.textOnChip)
             }
 
-            Text("I want more mornings like this…")
-                .font(AppTheme.Font.onboardingCollageNote)
-                .foregroundStyle(AppTheme.Color.textSecondary)
-                .lineLimit(1)
+            HStack(spacing: 3) {
+                ForEach(Array(waveHeights.enumerated()), id: \.offset) { index, h in
+                    Capsule()
+                        .fill(AppTheme.Color.brandStrong)
+                        .frame(width: 3, height: h)
+                        .scaleEffect(y: wavePulsing ? 0.78 : 1.0, anchor: .center)
+                        .animation(
+                            reduceMotion ? nil :
+                                .easeInOut(duration: 0.9)
+                                .repeatForever(autoreverses: true)
+                                .delay(Double(index) * 0.05),
+                            value: wavePulsing
+                        )
+                }
+            }
+            .frame(height: 26)
+
+            Spacer(minLength: 0)
+
+            Text("0:04 · 8:09 AM")
+                .font(AppTheme.Font.pos)
+                .monospacedDigit()
+                .foregroundStyle(AppTheme.Color.textMuted)
         }
-        // 内宽 200 → 232：卡越宽，同样的横向覆盖需要的 offset 越小。
-        // 语音卡此前 x=+52，是三张里摆得最远的一张（带中心偏右 50），而它的右沿
-        // 已经贴到内容区右边缘——说明它是被「顶」到那儿的。加宽后 offset 收到 +34，
-        // 右沿几乎不动，带中心却回收 18。顺带转写句不再截断。
-        .frame(width: 232, alignment: .leading)
         .padding(.horizontal, AppTheme.Space.paddingCard)
         .padding(.vertical, AppTheme.Space.paddingM)
+        .frame(width: 270)
         .background(AppTheme.Color.cardBg)
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
         .collageShadow()
@@ -316,14 +313,14 @@ struct OnboardingScreen2View: View {
     // 「Today · 时刻」既具体又不会过期。
 
     private var textCard: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Space.paddingXS) {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("Sunlight all over the kitchen table,")
+                .font(AppTheme.Font.onboardingCollageNote)
+                .foregroundStyle(AppTheme.Color.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+
             HStack(alignment: .firstTextBaseline, spacing: 3) {
-                // 句子加长不只是文案偏好：便签卡按内容定宽，它同时决定这张卡的体量。
-                // 修完宽度 bug 后三张卡的带宽是 240 / 264 / 239 —— 最窄的一张落在最底下，
-                // 底座比上面窄，整堆就显得下轻上重。加长到能撑起约 278 宽，
-                // 便签卡重新成为最宽的一张，也顺带解决了「264 宽却只有一行短句、空得慌」
-                // 那个老问题：当初嫌它长，嫌的是空，不是宽。
-                Text("Sunlight all over the kitchen table")
+                Text("warm and bright")
                     .font(AppTheme.Font.onboardingCollageNote)
                     .foregroundStyle(AppTheme.Color.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -336,11 +333,13 @@ struct OnboardingScreen2View: View {
                         reduceMotion ? nil : .easeInOut(duration: 0.55).repeatForever(autoreverses: true),
                         value: cursorVisible
                     )
-            }
 
-            Text("Today · 8:14 AM")
-                .font(AppTheme.Font.pos)
-                .foregroundStyle(AppTheme.Color.textMuted)
+                Spacer(minLength: 8)
+
+                Text("Today · 8:14 AM")
+                    .font(AppTheme.Font.pos)
+                    .foregroundStyle(AppTheme.Color.textMuted)
+            }
         }
         // 宽度按内容收缩。⚠️ 这里必须用 fixedSize 而不是 frame(maxWidth:)——
         // SwiftUI 的 maxWidth 语义是「最多可以撑到」，带 maxWidth 的 frame 会接受父级

@@ -24,7 +24,7 @@ struct TodayView: View {
             timeline
                 .task { await viewModel.loadHistory() }
 
-            // InputBar 独立悬浮在内容上方；背后垫 Gemini 风格可变渐进式通透模糊底托（向下贯穿底部安全区，向上 28pt 平滑消融进入内容区），
+            // InputBar 独立悬浮在内容上方；背后垫 Gemini 风格可变渐进式通透模糊底托（向下贯穿底部安全区，向上 16pt 平滑消融进入内容区），
             // 内容向下滚动穿过时自然失焦消融溶解进背景，保持极佳的通透感与景深
             InputBar(text: $inputText, image: $vm.pendingImage, isLoading: viewModel.isLoading) {
                 let toSend = inputText
@@ -32,7 +32,7 @@ struct TodayView: View {
                 Task { await viewModel.send(toSend) }
             }
             .background {
-                VariableBlurBackdrop(direction: .bottom, extraExtend: 28)
+                VariableBlurBackdrop(extraExtend: 16)
                     .ignoresSafeArea(.container, edges: .bottom)
             }
 

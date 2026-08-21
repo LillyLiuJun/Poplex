@@ -1,34 +1,25 @@
 import SwiftUI
 
-/// Gemini 风格可变渐进式通透毛玻璃底托（Translucent Variable Blur Backdrop）。
+/// ChatGPT / Gemini 风格可变渐进式通透毛玻璃底托（Translucent Variable Blur Backdrop）。
+/// 目前只服务 Tab1 底部 InputBar；顶栏遮罩见下方 `TopBarProgressiveMask`（两者视觉诉求不同，
+/// 顶栏不需要 extraExtend/底色融合这套底栏专属机制，曾经共用一个 direction 开关反而互相牵制）。
 ///
-/// 视觉设计准则（精确对齐 Gemini iOS 客户端）：
-/// 1. **高通透毛玻璃（High Translucency）**：保留底层 `.ultraThinMaterial` 真实高斯模糊，
-///    但将暖色基底透明度控制在极轻量级（~0.12），确保穿过的内容（文字/卡片）在 Bar 背后
-///    清晰保持流动感和模糊辨识度，呈现出绝佳的 Z 轴景深与通透感。
-/// 2. **自然消隐软边（Smooth Edge Mask）**：在朝向内容区的一侧施加 24~28pt 的平滑渐隐遮罩，
-///    无任何生硬的矩形切边或厚重遮挡墙。
-/// 3. **精准几何延伸**：
-///    - 顶栏：背景向上延伸穿过状态栏/灵动岛，向下柔和散开 24pt。
-///    - 底栏：背景向下延伸穿过底部安全区，向上柔和散开 28pt，内容自然穿过输入框流向底缘。
+/// 视觉设计准则：
+/// 1. **顶部极微弱羽化（Subtle Top Fade）**：朝向内容区的上边缘羽化极其轻微自然（对齐 ChatGPT），
+///    输入框上方的卡片和文字不会提前发灰发暗，保持内容区最高通透度。
+/// 2. **内部丝滑散焦（Smooth In-Pill Defocus）**：内容滑动进入输入框本体背后时，平滑且迅速地过渡散焦与实底融合。
+/// 3. **底部坚实沉稳（Solid Bottom Protection）**：输入框下沿与底部安全区（Home Bar）保持饱满的实底遮蔽（对齐初始版本），
+///    底色浑然一体（几乎不可见），绝不透底穿帮。
 struct VariableBlurBackdrop: View {
-    enum Direction {
-        case top    // 顶栏：上实下虚（向上覆盖状态栏，向下渐隐）
-        case bottom // 底栏：下实上虚（向下覆盖底安全区，向上渐隐）
-    }
-
-    var direction: Direction
     /// 渐隐过渡区高度（超出组件本体朝内容侧延伸的平滑消融区域）
     var extraExtend: CGFloat
     /// 渐变基色（默认绑定主题 pageBg）
     var baseColor: Color
 
     init(
-        direction: Direction,
-        extraExtend: CGFloat = 24,
+        extraExtend: CGFloat = 16,
         baseColor: Color = AppTheme.Color.pageBg
     ) {
-        self.direction = direction
         self.extraExtend = extraExtend
         self.baseColor = baseColor
     }
@@ -39,93 +30,92 @@ struct VariableBlurBackdrop: View {
             let fadeRatio = extraExtend / max(totalHeight, 1)
 
             ZStack {
-                // Layer 1: 真实硬件级高斯模糊材质（提供 Gemini 同款通透毛玻璃散焦）
+                // Layer 1: 真实硬件级高斯模糊材质（提供通透毛玻璃散焦）
                 Rectangle()
                     .fill(.ultraThinMaterial)
 
-                // Layer 2: 极轻量暖色融合（0.12 透明度：刚好中和冷灰，同时保持 100% 通透景深）
+                // Layer 2: 极轻量暖色融合（刚好中和冷灰）
                 Rectangle()
                     .fill(baseColor.opacity(0.12))
 
-                // Layer 3: 柔和环境光微渐变（提供极细腻的明暗过渡，不阻挡底层内容）
-                if direction == .top {
-                    LinearGradient(
-                        stops: [
-                            .init(color: baseColor.opacity(0.18), location: 0.0),
-                            .init(color: baseColor.opacity(0.06), location: max(0, 1.0 - fadeRatio)),
-                            .init(color: baseColor.opacity(0.00), location: 1.0)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                } else {
-                    LinearGradient(
-                        stops: [
-                            .init(color: baseColor.opacity(0.00), location: 0.0),
-                            .init(color: baseColor.opacity(0.06), location: min(1.0, fadeRatio)),
-                            .init(color: baseColor.opacity(0.18), location: 1.0)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                }
+                // Layer 3: 底部沉稳实底渐变（上部轻量通透，底部安全区高度实底，消除透底感）
+                LinearGradient(
+                    stops: [
+                        .init(color: baseColor.opacity(0.00), location: 0.0),
+                        .init(color: baseColor.opacity(0.02), location: min(1.0, fadeRatio)),
+                        .init(color: baseColor.opacity(0.25), location: min(1.0, fadeRatio + (1.0 - fadeRatio) * 0.25)),
+                        .init(color: baseColor.opacity(0.65), location: min(1.0, fadeRatio + (1.0 - fadeRatio) * 0.55)),
+                        .init(color: baseColor.opacity(0.85), location: 1.0)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
             }
-            // 核心：平滑贝塞尔 Alpha 遮罩，让模糊材质在边缘如空气般自然渐隐
+            // 核心：平滑非线性 Alpha 遮罩。ChatGPT 顶通透 + 原始底沉稳：
+            // 上沿极微弱羽化，内部平滑散焦，底部 100% 坚实遮罩
             .mask {
-                if direction == .top {
-                    LinearGradient(
-                        stops: [
-                            .init(color: .white, location: 0.0),
-                            .init(color: .white.opacity(0.92), location: max(0, 1.0 - fadeRatio)),
-                            .init(color: .white.opacity(0.65), location: max(0, 1.0 - fadeRatio * 0.65)),
-                            .init(color: .white.opacity(0.25), location: max(0, 1.0 - fadeRatio * 0.30)),
-                            .init(color: .clear, location: 1.0)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                } else {
-                    LinearGradient(
-                        stops: [
-                            .init(color: .clear, location: 0.0),
-                            .init(color: .white.opacity(0.25), location: min(1.0, fadeRatio * 0.30)),
-                            .init(color: .white.opacity(0.65), location: min(1.0, fadeRatio * 0.65)),
-                            .init(color: .white.opacity(0.92), location: min(1.0, fadeRatio)),
-                            .init(color: .white, location: 1.0)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                }
+                LinearGradient(
+                    stops: [
+                        .init(color: .clear, location: 0.0),                                       // 离开输入框顶部 16pt：0% 完全透明
+                        .init(color: .white.opacity(0.04), location: min(1.0, fadeRatio * 0.45)),  // 输入框上方预备区：4% 极微弱羽化
+                        .init(color: .white.opacity(0.24), location: min(1.0, fadeRatio)),         // 精确在输入框上沿：24% 通透起步
+                        .init(color: .white.opacity(0.75), location: min(1.0, fadeRatio + (1.0 - fadeRatio) * 0.18)), // 深入输入框上部：迅速提升遮蔽
+                        .init(color: .white.opacity(0.96), location: min(1.0, fadeRatio + (1.0 - fadeRatio) * 0.38)), // 输入框中段：高度遮蔽
+                        .init(color: .white, location: min(1.0, fadeRatio + (1.0 - fadeRatio) * 0.55)),                // 输入框下沿及以下：100% 满浓度保护
+                        .init(color: .white, location: 1.0)                                        // 底部安全区：满浓度实底，沉稳不透
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
             }
             .frame(height: totalHeight)
-            .offset(y: direction == .bottom ? -extraExtend : 0)
+            .offset(y: -extraExtend)
         }
         .allowsHitTesting(false)
+    }
+}
+
+// MARK: - Top bar mask
+
+/// Tab1 顶栏遮罩：ChatGPT 风格自然渐进式高质感遮罩——状态栏区域满浓度保护，
+/// 按钮区域丝滑衰减到高通透，下边缘极轻触底后完全消隐。
+/// 固定比例节点（相对于 `.ignoresSafeArea(.container, edges: .top)` 扩展后的整条遮罩高度），
+/// 已在 iPhone 17 / 16 Pro / 13 上真机验证；换更极端的安全区高度或 Dynamic Type 需要重新校准。
+struct TopBarProgressiveMask: View {
+    var body: some View {
+        Rectangle()
+            .fill(.ultraThinMaterial)
+            .mask {
+                LinearGradient(
+                    stops: [
+                        .init(color: .white, location: 0.0),                // 0~59pt 状态栏区域：100% 浓度，充分遮盖背景
+                        .init(color: .white, location: 0.38),               // 状态栏主体：保持稳定保护
+                        .init(color: .white.opacity(0.68), location: 0.54), // 按钮上边缘：柔和衰减起点
+                        .init(color: .white.opacity(0.32), location: 0.74), // 按钮中心：高通透，文字清晰可读
+                        .init(color: .white.opacity(0.08), location: 0.92), // 按钮下边缘：极轻微触底
+                        .init(color: .clear, location: 1.0)                 // 离开按钮区域：0% 完全透明
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            }
+            .ignoresSafeArea(.container, edges: .top)
     }
 }
 
 // MARK: - View Modifiers
 
 extension View {
-    /// 添加 Gemini 风格可变渐进式通透模糊底托
+    /// 添加 Tab1 底栏可变渐进式通透模糊底托
     /// - Parameters:
-    ///   - direction: .top（顶栏）或 .bottom（底栏）
-    ///   - extraExtend: 渐隐过渡区高度，默认 24pt
+    ///   - extraExtend: 渐隐过渡区高度，默认 16pt
     ///   - baseColor: 渐变底色，默认 AppTheme.Color.pageBg
     func variableBlurBackdrop(
-        direction: VariableBlurBackdrop.Direction,
-        extraExtend: CGFloat = 24,
+        extraExtend: CGFloat = 16,
         baseColor: Color = AppTheme.Color.pageBg
     ) -> some View {
         background(
-            VariableBlurBackdrop(direction: direction, extraExtend: extraExtend, baseColor: baseColor)
+            VariableBlurBackdrop(extraExtend: extraExtend, baseColor: baseColor)
         )
-    }
-
-    /// 向后兼容的暖色条修饰符
-    func warmGlassBar(softEdge: Edge.Set = []) -> some View {
-        let direction: VariableBlurBackdrop.Direction = softEdge.contains(.bottom) ? .top : .bottom
-        return variableBlurBackdrop(direction: direction, extraExtend: 24)
     }
 }

@@ -132,8 +132,8 @@ struct OnboardingCaptureView: View {
             }
         }
         // 三页并排渲染，onAppear 启动即触发——入场动画必须在页面真正可见时才播
-        .onAppear { if isActive { appeared = true } }
-        .onChange(of: isActive) { _, active in if active { appeared = true } }
+        .onAppear { if isActive { triggerEntrance() } }
+        .onChange(of: isActive) { _, active in if active { triggerEntrance() } }
         // 选择页与结果页共用同一个 scrollOffset（同一时刻只渲染其中一个）。切换的瞬间
         // 新页面的 ScrollView 还没上报，旧值会残留一帧、顶部渐隐闪一下——切换时清零。
         .onChange(of: isSelecting) { _, _ in scrollOffset = 0 }
@@ -184,6 +184,13 @@ struct OnboardingCaptureView: View {
                     + AppTheme.Size.inputBarMinHeight
                     + AppTheme.Space.paddingM)
             }
+        }
+    }
+
+    private func triggerEntrance() {
+        guard !appeared else { return }
+        DispatchQueue.main.async {
+            appeared = true
         }
     }
 
