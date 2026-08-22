@@ -244,7 +244,7 @@ private struct Tab2LockedView: View {
     }
 
     private var hintText: some View {
-        Text("Reach 20 pops in any topic to start practicing.")
+        Text("Reach 20 pops in any topic to start talking.")
             .font(AppTheme.Font.englishBody)
             .foregroundStyle(AppTheme.Color.textSecondary)
     }
@@ -273,11 +273,10 @@ private struct Tab2LockedView: View {
                     .tracking(AppTheme.Typography.trackingDisplay)
                     .foregroundStyle(AppTheme.Color.textPrimary)
 
-                Text("Capture a moment from your day.\nIt becomes English you can use.")
-                    .font(AppTheme.Font.englishBody)
+                Text("Start with a moment from your day.")
+                    .font(AppTheme.Font.englishPrimary)
                     .foregroundStyle(AppTheme.Color.textSecondary)
                     .lineSpacing(AppTheme.Typography.lineBody)
-                    .frame(maxWidth: AppTheme.Size.emptyStateBodyWidth, alignment: .leading)
                     .padding(.top, AppTheme.Space.paddingCard)
 
                 HStack(spacing: AppTheme.Space.paddingM) {
@@ -312,7 +311,7 @@ private struct Tab2LockedView: View {
                 .font(AppTheme.Font.sectionTitleSerif)
                 .foregroundStyle(AppTheme.Color.textPrimary)
                 .padding(.horizontal, AppTheme.Space.paddingPage)
-                .padding(.bottom, AppTheme.Space.titleToContent)
+                .padding(.bottom, AppTheme.Space.paddingM)
 
             let cats  = categoriesWithWords
             let topId = closestCategory?.id
@@ -544,18 +543,21 @@ private struct Tab2UnlockedView: View {
 
             ScrollViewReader { proxy in
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 24) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Talk about something")
+                    VStack(alignment: .leading, spacing: 0) {
+                        // 标题组：页面衬线大标题 + 衬线副标（与 Onboarding 各屏「标题→副标」
+                        // 同档 8pt，副标复用内容衬线 englishPrimary，与空状态副标同字同色）
+                        VStack(alignment: .leading, spacing: AppTheme.Space.paddingS) {
+                            Text("Talk about today")
                                 .font(AppTheme.Font.pageTitleSerif)
                                 .foregroundStyle(AppTheme.Color.textPrimary)
 
-                            Text("Scenarios built from your daily moments.")
-                                .font(AppTheme.Font.englishBody)
-                                .foregroundStyle(AppTheme.Color.textMuted)
+                            Text("Built from your daily moments.")
+                                .font(AppTheme.Font.englishPrimary)
+                                .foregroundStyle(AppTheme.Color.textSecondary)
                         }
                         .padding(.horizontal, AppTheme.Space.paddingPage)
                         .padding(.top, AppTheme.Space.paddingPage)
+                        .padding(.bottom, AppTheme.Space.titleToContent)
 
                         contentSections(proxy)
                     }
@@ -595,68 +597,78 @@ private struct Tab2UnlockedView: View {
             let otherUnlocked = data.categories.filter {
                 $0.unlocked && $0.id != heroId && !milestoneIDs.contains($0.id)
             }
-
-            // 已解锁分类：独立 Serif 标题 "Materials Yours" + 横向 Peek 轮播卡片
-            if hero != nil || !otherUnlocked.isEmpty {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Your materials")
-                        .font(AppTheme.Font.sectionTitleSerif)
-                        .foregroundStyle(AppTheme.Color.textPrimary)
-                        .padding(.horizontal, AppTheme.Space.paddingPage)
-
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(alignment: .top, spacing: 14) {
-                            if let hero {
-                                Tab2HeroCard(
-                                    category: hero,
-                                    isFirstUnlock: vm.isFirstUnlock,
-                                    onTalk: { onTalk(hero.sceneCategory) }
-                                )
-                                .frame(width: 350)
-                            }
-
-                            ForEach(otherUnlocked) { cat in
-                                Tab2HeroCard(
-                                    category: cat,
-                                    isFirstUnlock: false,
-                                    onTalk: { onTalk(cat.sceneCategory) }
-                                )
-                                .frame(width: 350)
-                            }
-                        }
-                        .padding(.horizontal, AppTheme.Space.paddingPage)
-                        .padding(.vertical, 16)   // 给玻璃卡阴影留出不裁切的空间
-                    }
-                }
-            }
-
-            // Topics in Progress——独立 Serif 标题 + 磨砂玻璃列表容器
             let stillFilling = data.categories.filter {
                 (!$0.unlocked && $0.wordCount >= 1) || milestoneIDs.contains($0.id)
             }
-            if !stillFilling.isEmpty {
-                VStack(alignment: .leading, spacing: AppTheme.Space.titleToContent) {
-                    Text("Topics in progress")
-                        .font(AppTheme.Font.sectionTitleSerif)
-                        .foregroundStyle(AppTheme.Color.textPrimary)
-                        .padding(.horizontal, AppTheme.Space.paddingPage)
 
-                    VStack(spacing: 0) {
-                        ForEach(Array(stillFilling.enumerated()), id: \.element.id) { index, cat in
-                            CategoryProgressRow(
-                                category: cat,
-                                isHighlighted: false,
-                                isExpanded: expandedCategoryId == cat.id,
-                                onToggle: { toggleExpand(cat.id, proxy) },
-                                loadWords: { await vm.loadCategoryWords(for: cat.sceneCategory) },
-                                milestonePresentations: milestonePresentations
-                            )
-                            .id(cat.id)
+            VStack(alignment: .leading, spacing: AppTheme.Space.paddingBetweenSections) {
+                // 已解锁分类：独立 Serif 标题 "Your topics" + 横向 Peek 轮播卡片
+                if hero != nil || !otherUnlocked.isEmpty {
+                    VStack(alignment: .leading, spacing: AppTheme.Space.paddingCard) {
+                        Text("Your topics")
+                            .font(AppTheme.Font.sectionTitleSerif)
+                            .foregroundStyle(AppTheme.Color.textPrimary)
+                            .padding(.horizontal, AppTheme.Space.paddingPage)
+
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(alignment: .top, spacing: 14) {
+                                if let hero {
+                                    Tab2HeroCard(
+                                        category: hero,
+                                        isFirstUnlock: vm.isFirstUnlock,
+                                        onTalk: { onTalk(hero.sceneCategory) }
+                                    )
+                                    .frame(width: 350)
+                                }
+
+                                ForEach(otherUnlocked) { cat in
+                                    Tab2HeroCard(
+                                        category: cat,
+                                        isFirstUnlock: false,
+                                        onTalk: { onTalk(cat.sceneCategory) }
+                                    )
+                                    .frame(width: 350)
+                                }
+                            }
+                            .padding(.horizontal, AppTheme.Space.paddingPage)
+                        }
+                        .scrollClipDisabled()
+                        .background {
+                            GeometryReader { geo in
+                                Color.clear.preference(
+                                    key: IgnoredTabSwipeFrameKey.self,
+                                    value: [geo.frame(in: .named(RootTabContainerLayout.space))]
+                                )
+                            }
                         }
                     }
-                    .padding(.vertical, AppTheme.Space.paddingS)
-                    .surfaceCard()
-                    .padding(.horizontal, AppTheme.Space.paddingPage)
+                }
+
+                // Topics in Progress——独立 Serif 标题 + 磨砂玻璃列表容器
+                if !stillFilling.isEmpty {
+                    VStack(alignment: .leading, spacing: AppTheme.Space.paddingCard) {
+                        Text("Topics in progress")
+                            .font(AppTheme.Font.sectionTitleSerif)
+                            .foregroundStyle(AppTheme.Color.textPrimary)
+                            .padding(.horizontal, AppTheme.Space.paddingPage)
+
+                        VStack(spacing: 0) {
+                            ForEach(Array(stillFilling.enumerated()), id: \.element.id) { index, cat in
+                                CategoryProgressRow(
+                                    category: cat,
+                                    isHighlighted: false,
+                                    isExpanded: expandedCategoryId == cat.id,
+                                    onToggle: { toggleExpand(cat.id, proxy) },
+                                    loadWords: { await vm.loadCategoryWords(for: cat.sceneCategory) },
+                                    milestonePresentations: milestonePresentations
+                                )
+                                .id(cat.id)
+                            }
+                        }
+                        .padding(.vertical, AppTheme.Space.paddingS)
+                        .surfaceCard()
+                        .padding(.horizontal, AppTheme.Space.paddingPage)
+                    }
                 }
             }
         }

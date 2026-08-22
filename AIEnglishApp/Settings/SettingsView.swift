@@ -219,7 +219,7 @@ struct SettingsView: View {
             Button("Delete", role: .destructive) { Task { await deleteAccount() } }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This permanently deletes your account and all your learning data. This can't be undone.")
+            Text("This will permanently delete your account, expressions, and progress. This action cannot be undone.")
         }
         .sheet(item: $safariItem) { item in
             SafariView(url: item.url)

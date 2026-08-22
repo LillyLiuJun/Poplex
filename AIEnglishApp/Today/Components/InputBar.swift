@@ -228,7 +228,7 @@ struct InputBar: View {
         TextField(
             "",
             text: $text,
-            prompt: Text("Your moment").foregroundStyle(AppTheme.Color.textMuted),
+            prompt: Text("Capture a moment…").foregroundStyle(AppTheme.Color.textMuted),
             axis: .vertical
         )
         .lineLimit(1...4)

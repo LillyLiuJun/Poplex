@@ -1,11 +1,27 @@
 import SwiftUI
 
+enum RootTabContainerLayout {
+    static let space = "RootTabContainerSpace"
+}
+
+struct IgnoredTabSwipeFrameKey: PreferenceKey {
+    static var defaultValue: [CGRect] = []
+    static func reduce(value: inout [CGRect], nextValue: () -> [CGRect]) {
+        value.append(contentsOf: nextValue())
+    }
+}
+
 /// 顶栏浮层的实测高度，向下传给 Mine 以在其独立 NavigationStack 内预留等高空位
 private struct TopBarHeightKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = max(value, nextValue())
     }
+}
+
+/// 避免 PreferenceKey 逐帧坐标上报触发 RootTabContainer 根视图高频重绘的引用容器
+private final class IgnoredFramesStore {
+    var frames: [CGRect] = []
 }
 
 struct RootTabContainer: View {
@@ -24,6 +40,7 @@ struct RootTabContainer: View {
     @State private var topBarCompact = false
     @State private var capturedSwipeOpen = false
     @State private var captureRecorded = false
+    @State private var ignoredFramesStore = IgnoredFramesStore()
 
     // Fullscreen image preview — lifted to root so it covers the top bar
     @State private var previewImage: UIImage?
@@ -107,8 +124,13 @@ struct RootTabContainer: View {
                 .opacity(selectedTab == .mine ? 1 : 0)
                 .allowsHitTesting(selectedTab == .mine)
         }
+        .contentShape(Rectangle())
+        .coordinateSpace(name: RootTabContainerLayout.space)
+        .onPreferenceChange(IgnoredTabSwipeFrameKey.self) { frames in
+            ignoredFramesStore.frames = frames
+        }
         .simultaneousGesture(
-            DragGesture(minimumDistance: 20, coordinateSpace: .local)
+            DragGesture(minimumDistance: 15, coordinateSpace: .named(RootTabContainerLayout.space))
                 .onChanged { value in
                     // Capture swipe state at gesture start, before List's onEnded can clear it
                     if !captureRecorded {
@@ -118,15 +140,33 @@ struct RootTabContainer: View {
                 }
                 .onEnded { value in
                     defer { captureRecorded = false }
+                    let start = value.startLocation
+                    // 忽略帧来自 Tab2 横向轮播区，只在 Tab2 可见时才有意义
+                    if selectedTab == .mine {
+                        guard !ignoredFramesStore.frames.contains(where: { $0.contains(start) }) else { return }
+                    }
+
                     let dx = value.translation.width
                     let dy = value.translation.height
+                    let predictedDx = value.predictedEndTranslation.width
+
+                    // 水平意图判断：水平位移必须严格大于垂直位移（45°，同系统侧滑返回标准）
                     guard abs(dx) > abs(dy) else { return }
-                    if dx < -60 && selectedTab == .today {
+
+                    // 50pt 实测位移 或 100pt 惯性轻扫预测（斜率已过才到这里，不单独绕过）
+                    let isLeftSwipe = dx < -50 || predictedDx < -100
+                    let isRightSwipe = dx > 50 || predictedDx > 100
+
+                    if isLeftSwipe && selectedTab == .today {
                         withAnimation(.easeInOut(duration: 0.2)) { selectedTab = .mine }
-                    } else if dx > 60 && selectedTab == .mine && capturedSwipeOpen {
-                        // Delete action was open — reset list state, don't switch tab
-                        mineListResetToken = UUID()
-                        mineSwipeActionOpen = false
+                    } else if isRightSwipe && selectedTab == .mine {
+                        if capturedSwipeOpen {
+                            // Delete action was open — reset list state, don't switch tab
+                            mineListResetToken = UUID()
+                            mineSwipeActionOpen = false
+                        } else if !mineDetailActive {
+                            withAnimation(.easeInOut(duration: 0.2)) { selectedTab = .today }
+                        }
                     }
                 }
         )

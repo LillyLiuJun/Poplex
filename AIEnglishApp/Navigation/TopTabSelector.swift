@@ -8,7 +8,7 @@ struct TopTabSelector: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            tabItem(.today, icon: "sun.max",        label: "Capture")
+            tabItem(.today, icon: "sun.max",        label: "Today")
             tabItem(.mine,  icon: "books.vertical", label: "Library")
         }
         .padding(.horizontal, AppTheme.Space.paddingXS)

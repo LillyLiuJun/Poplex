@@ -113,7 +113,7 @@ struct FeedbackView: View {
             fieldLabel("Details")
             ZStack(alignment: .topLeading) {
                 if body_.isEmpty {
-                    Text("Tell us what's on your mind…")
+                    Text("Describe what you experienced, or any feedback…")
                         .font(AppTheme.Font.englishBody)
                         .foregroundStyle(AppTheme.Color.textMuted)
                         .padding(.horizontal, AppTheme.Space.paddingCard + 5)

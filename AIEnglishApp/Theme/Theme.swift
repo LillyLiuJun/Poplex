@@ -23,6 +23,7 @@ private enum Primitive {
     static let space16: CGFloat = 16
     static let space20: CGFloat = 20
     static let space24: CGFloat = 24
+    static let space28: CGFloat = 28
     static let space32: CGFloat = 32
     static let space48: CGFloat = 48
     static let space56: CGFloat = 56
@@ -166,6 +167,8 @@ enum AppTheme {
         // 与 onboardingHeaderToContent 当前同值（24）但**用途不同、各自演化**，故不合并：
         // 合并会把两个没有设计因果关系的间距绑死——改 Tab2 的分区节奏时 onboarding 会跟着动。
         static let titleToContent: CGFloat      = Primitive.space24
+        // Tab2 解锁页分区之间的节奏（Your topics 底 → Topics in progress 顶）
+        static let paddingBetweenSections: CGFloat = Primitive.space28
         // 虚线空输入区的上下内边距。24 → 16：框内实测 276 高里有 98pt 是纯空，
         // 「标题组→虚线框」的距离感其实一半来自框内的空，压缩这里比拉外间距更对症。
         static let onboardingUploadCardVertical: CGFloat = Primitive.space16
@@ -445,7 +448,6 @@ enum AppTheme {
 
         // ── Tab2 空状态（视觉规范 §05）─────────────────────────────────────
         static let emptyStateContentTop: CGFloat            = 120 // 内容距屏幕顶部：与 Tab2 / Onboarding 左上轴对齐
-        static let emptyStateBodyWidth: CGFloat             = 290 // 说明文字阅读行宽，锁定两行节奏
         static let emptyStateBodyToGrowth: CGFloat          = 34  // 说明文字 → 成长状态间距
         static let emptyStatePopsDot: CGFloat               = 7   // 「0 pops so far」前的成长点
         static let emptyStateWatermarkHeight: CGFloat       = 290 // 品牌 P 水印字高（只露出右下背景层）

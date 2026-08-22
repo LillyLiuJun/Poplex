@@ -27,8 +27,8 @@ struct OnboardingScreen2View: View {
     @State private var ink = CollageInk.seed
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// 语音条声波的柱高（固定示意波形）。
-    private let waveHeights: [CGFloat] = [7, 14, 22, 11, 19, 9, 16, 23, 12, 18, 15, 21, 10, 14, 20, 11, 17, 8]
+    /// 语音条声波的柱高（固定示意波形，16 根流畅起伏波形，两端对称收尾）。
+    private let waveHeights: [CGFloat] = [7, 14, 22, 11, 19, 9, 16, 23, 12, 18, 14, 21, 10, 16, 11, 7]
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -258,7 +258,7 @@ struct OnboardingScreen2View: View {
     // 现在：mic + 起伏波形 + 跑动的计时 + 正在转写的半句（与文字卡的光标同一种进行时语气）。
 
     private var voiceCard: some View {
-        HStack(spacing: AppTheme.Space.paddingS) {
+        HStack(spacing: 0) {
             ZStack {
                 Circle()
                     .fill(AppTheme.Color.brandStrong)
@@ -267,6 +267,8 @@ struct OnboardingScreen2View: View {
                     .font(.system(size: 12))
                     .foregroundStyle(AppTheme.Color.textOnChip)
             }
+
+            Spacer(minLength: AppTheme.Space.paddingS)
 
             HStack(spacing: 3) {
                 ForEach(Array(waveHeights.enumerated()), id: \.offset) { index, h in
@@ -285,12 +287,13 @@ struct OnboardingScreen2View: View {
             }
             .frame(height: 26)
 
-            Spacer(minLength: 0)
+            Spacer(minLength: AppTheme.Space.paddingS)
 
             Text("0:04 · 8:09 AM")
                 .font(AppTheme.Font.pos)
                 .monospacedDigit()
                 .foregroundStyle(AppTheme.Color.textMuted)
+                .fixedSize(horizontal: true, vertical: false)
         }
         .padding(.horizontal, AppTheme.Space.paddingCard)
         .padding(.vertical, AppTheme.Space.paddingM)
@@ -314,13 +317,13 @@ struct OnboardingScreen2View: View {
 
     private var textCard: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text("Sunlight all over the kitchen table,")
+            Text("Let's align on the details before")
                 .font(AppTheme.Font.onboardingCollageNote)
                 .foregroundStyle(AppTheme.Color.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
 
             HStack(alignment: .firstTextBaseline, spacing: 3) {
-                Text("warm and bright")
+                Text("diving into")
                     .font(AppTheme.Font.onboardingCollageNote)
                     .foregroundStyle(AppTheme.Color.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)

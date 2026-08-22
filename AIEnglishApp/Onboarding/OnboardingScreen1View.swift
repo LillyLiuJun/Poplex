@@ -88,7 +88,7 @@ struct OnboardingScreen1View: View {
         // 标题→副标：与其余三页同档。光学间距的参照是行高——46pt 标题行高约 55、
         // 副标行高 22，8pt 的间隙在两个行盒之间读起来与 34pt 标题页一致，不需要单开一档。
         VStack(alignment: .leading, spacing: AppTheme.Space.onboardingTitleToLead) {
-            Text("Build your expression\nfrom work & life.")
+            Text("Build your language\nfrom work & life.")
                 .font(AppTheme.Font.onboardingHeroSerif)
                 .tracking(AppTheme.Typography.trackingDisplay)
                 .foregroundStyle(AppTheme.Color.textPrimary)

@@ -256,18 +256,17 @@ struct OnboardingCaptureView: View {
                                 photoPreviewArea
                                     .frame(minHeight: geo.size.height - AppTheme.Size.onboardingPhotoPreviewFixedOverhead)
                                     // 与空态的虚线卡同一个「标题组→内容」间距：两态切换时内容顶不跳。
-                                    .padding(.top, AppTheme.Space.onboardingHeaderToContent)
+                                    .padding(.top, AppTheme.Space.paddingCard)
                                     .transition(.opacity)
                             } else {
                                 actionCard(scrollProxy: scrollProxy)
-                                    .padding(.top, AppTheme.Space.onboardingHeaderToContent)
+                                    .padding(.top, AppTheme.Space.paddingCard)
                                     .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.25)
 
                                 Text("Or try a sample")
                                     .font(AppTheme.Font.compactSectionTitleSerif)
                                     .foregroundStyle(AppTheme.Color.textPrimary)
-                                    // 虚线卡与例图区是两个组：32
-                                    .padding(.top, AppTheme.Space.onboardingHeaderToContent)
+                                    .padding(.top, AppTheme.Space.paddingCard)
                                     .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.35)
 
                                 presetCarousel
@@ -322,7 +321,7 @@ struct OnboardingCaptureView: View {
                 .foregroundStyle(AppTheme.Color.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Text("Point at your desk, coffee, or view — no preparation needed.")
+            Text("Capture whatever inspires you today — no preparation needed.")
                 .font(AppTheme.Font.onboardingLeadSerif)
                 .foregroundStyle(AppTheme.Color.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -583,7 +582,7 @@ struct OnboardingCaptureView: View {
 
             // 副标颜色与前三页统一（此前是 textMuted #7C7773 4.4:1，浅了两档色阶，
             // 而它承载的是全流程最该被读到的那句点题话）。
-            Text("Your photo, now something you can say.")
+            Text("From what you see, to what you say.")
                 .font(AppTheme.Font.onboardingLeadSerif)
                 .foregroundStyle(AppTheme.Color.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -746,7 +745,7 @@ private struct OnboardingResultCard: View {
                 skeletonLine(widthFraction: 0.55, height: 14)
             }
 
-            Text("Turning your moment into English…")
+            Text("Transforming what you see into words…")
                 .font(AppTheme.Font.statusNote)
                 .foregroundStyle(AppTheme.Color.textMuted)
                 .padding(.top, 2)
