@@ -21,3 +21,9 @@ supabase/functions/.env.local
 
 # 本工作树内 xcodebuild 的派生数据（模拟器测试用）
 .build-test/
+
+# 外部工具克隆（独立 git 仓库，不随本仓库走）
+enable-chrome-ai/
+
+# Supabase CLI 误入函数目录的本地状态（linked-project / cli 缓存）
+supabase/functions/reconcile-orphan-images/supabase/
