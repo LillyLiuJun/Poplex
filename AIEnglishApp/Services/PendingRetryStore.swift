@@ -27,6 +27,9 @@ struct PendingRetryRecord: Codable, Identifiable {
 
 /// 待重试记录存储：记录 JSON 存 UserDefaults，照片 JPEG 写 Documents。
 /// 单例供 App 使用；init(defaults:documentsDir:) 供单测隔离。
+///
+/// 线程安全（审查发现 #4）：与 LocalSuccessStore 同一类 bug——所有「读-改-写」操作经
+/// NSLock 串行化，避免并发写回互相覆盖造成「记录凭空消失」。
 final class PendingRetryStore {
     static let shared = PendingRetryStore(
         defaults: .standard,
@@ -38,6 +41,9 @@ final class PendingRetryStore {
     private let defaults: UserDefaults
     private let documentsDir: URL
     private let metadataWriter: (Data) throws -> Void
+    /// 读改写互斥锁。注意：withLock 不可重入——锁内只调 readRecords/writeRecords
+    /// 与文件操作（不碰带锁的 load()）。
+    private let lock = NSLock()
 
     init(
         defaults: UserDefaults,
@@ -62,39 +68,43 @@ final class PendingRetryStore {
 
     /// 预设卡：只记元数据，图片用内置 asset（无需落盘）。requestId 是本次尝试的幂等键。
     func savePreset(cardId: String, imageName: String, requestId: UUID) {
-        var records = load()
-        records.removeAll { $0.source == .presetCard && $0.presetCardId == cardId }  // 幂等
-        records.append(PendingRetryRecord(
-            id: UUID(), source: .presetCard,
-            requestId: requestId,
-            presetCardId: cardId, presetImageName: imageName,
-            photoFileName: nil, text: nil, createdAt: .now
-        ))
-        try? persist(records)
+        lock.withLock {
+            var records = readRecords()
+            records.removeAll { $0.source == .presetCard && $0.presetCardId == cardId }  // 幂等
+            records.append(PendingRetryRecord(
+                id: UUID(), source: .presetCard,
+                requestId: requestId,
+                presetCardId: cardId, presetImageName: imageName,
+                photoFileName: nil, text: nil, createdAt: .now
+            ))
+            try? writeRecords(records)
+        }
     }
 
     /// 照片：JPEG 落盘 + 记元数据。失败抛错（调用方决定是否提示）。
     func savePhoto(_ image: UIImage, requestId: UUID) throws {
-        guard let jpeg = image.jpegData(compressionQuality: 0.7) else {
-            throw NSError(domain: "PendingRetryStore", code: 1,
-                          userInfo: [NSLocalizedDescriptionKey: "image encode failed"])
-        }
-        let fileName = UUID().uuidString + ".jpg"
-        try jpeg.write(to: documentsDir.appendingPathComponent(fileName))
-        var records = load()
-        records.append(PendingRetryRecord(
-            id: UUID(), source: .photo,
-            requestId: requestId,
-            presetCardId: nil, presetImageName: nil,
-            photoFileName: fileName, text: nil, createdAt: .now
-        ))
-        do {
-            try persist(records)
-        } catch {
-            try? FileManager.default.removeItem(
-                at: documentsDir.appendingPathComponent(fileName)
-            )
-            throw error
+        try lock.withLock {
+            guard let jpeg = image.jpegData(compressionQuality: 0.7) else {
+                throw NSError(domain: "PendingRetryStore", code: 1,
+                              userInfo: [NSLocalizedDescriptionKey: "image encode failed"])
+            }
+            let fileName = UUID().uuidString + ".jpg"
+            try jpeg.write(to: documentsDir.appendingPathComponent(fileName))
+            var records = readRecords()
+            records.append(PendingRetryRecord(
+                id: UUID(), source: .photo,
+                requestId: requestId,
+                presetCardId: nil, presetImageName: nil,
+                photoFileName: fileName, text: nil, createdAt: .now
+            ))
+            do {
+                try writeRecords(records)
+            } catch {
+                try? FileManager.default.removeItem(
+                    at: documentsDir.appendingPathComponent(fileName)
+                )
+                throw error
+            }
         }
     }
 
@@ -102,102 +112,121 @@ final class PendingRetryStore {
     /// 同 requestId 已存在时直接跳过（重试再失败不产生第二条记录——幂等）。
     /// 照片与 savePhoto 同一套落盘机制；失败抛错（调用方决定是否提示）。
     func saveTab1(text: String?, image: UIImage?, requestId: UUID, createdAt: Date) throws {
-        var records = load()
-        guard !records.contains(where: { $0.source == .tab1 && $0.requestId == requestId }) else {
-            return
-        }
-        var fileName: String? = nil
-        if let image {
-            guard let jpeg = image.jpegData(compressionQuality: 0.7) else {
-                throw NSError(domain: "PendingRetryStore", code: 1,
-                              userInfo: [NSLocalizedDescriptionKey: "image encode failed"])
+        try lock.withLock {
+            var records = readRecords()
+            guard !records.contains(where: { $0.source == .tab1 && $0.requestId == requestId }) else {
+                return
             }
-            fileName = UUID().uuidString + ".jpg"
-            try jpeg.write(to: documentsDir.appendingPathComponent(fileName!))
-        }
-        records.append(PendingRetryRecord(
-            id: UUID(), source: .tab1,
-            requestId: requestId,
-            presetCardId: nil, presetImageName: nil,
-            photoFileName: fileName, text: text, createdAt: createdAt
-        ))
-        do {
-            try persist(records)
-        } catch {
-            if let fileName {
-                try? FileManager.default.removeItem(
-                    at: documentsDir.appendingPathComponent(fileName)
-                )
+            var fileName: String? = nil
+            if let image {
+                guard let jpeg = image.jpegData(compressionQuality: 0.7) else {
+                    throw NSError(domain: "PendingRetryStore", code: 1,
+                                  userInfo: [NSLocalizedDescriptionKey: "image encode failed"])
+                }
+                fileName = UUID().uuidString + ".jpg"
+                try jpeg.write(to: documentsDir.appendingPathComponent(fileName!))
             }
-            throw error
+            records.append(PendingRetryRecord(
+                id: UUID(), source: .tab1,
+                requestId: requestId,
+                presetCardId: nil, presetImageName: nil,
+                photoFileName: fileName, text: text, createdAt: createdAt
+            ))
+            do {
+                try writeRecords(records)
+            } catch {
+                if let fileName {
+                    try? FileManager.default.removeItem(
+                        at: documentsDir.appendingPathComponent(fileName)
+                    )
+                }
+                throw error
+            }
         }
     }
 
     // MARK: - Load / Remove
 
     func load() -> [PendingRetryRecord] {
-        guard let data = defaults.data(forKey: Self.recordsKey),
-              let records = try? JSONDecoder().decode([PendingRetryRecord].self, from: data)
-        else { return [] }
-        return records
+        lock.withLock { readRecords() }
     }
 
     /// 为旧版 photo 记录补上稳定的幂等键。已有键时直接复用；新键持久化成功后才返回。
     /// 调用方必须在此方法成功后才能发起生成请求，避免未落盘的 ID 被服务端看见。
     func ensureRequestId(for recordId: UUID) throws -> PendingRetryRecord {
-        var records = load()
-        guard let index = records.firstIndex(where: { $0.id == recordId }) else {
-            throw NSError(
-                domain: "PendingRetryStore",
-                code: 3,
-                userInfo: [NSLocalizedDescriptionKey: "pending retry record not found"]
-            )
-        }
-        if records[index].requestId != nil {
-            return records[index]
-        }
+        try lock.withLock {
+            var records = readRecords()
+            guard let index = records.firstIndex(where: { $0.id == recordId }) else {
+                throw NSError(
+                    domain: "PendingRetryStore",
+                    code: 3,
+                    userInfo: [NSLocalizedDescriptionKey: "pending retry record not found"]
+                )
+            }
+            if records[index].requestId != nil {
+                return records[index]
+            }
 
-        let record = records[index]
-        let upgraded = PendingRetryRecord(
-            id: record.id,
-            source: record.source,
-            requestId: UUID(),
-            presetCardId: record.presetCardId,
-            presetImageName: record.presetImageName,
-            photoFileName: record.photoFileName,
-            text: record.text,
-            createdAt: record.createdAt
-        )
-        records[index] = upgraded
-        try persist(records)
-        return upgraded
+            let record = records[index]
+            let upgraded = PendingRetryRecord(
+                id: record.id,
+                source: record.source,
+                requestId: UUID(),
+                presetCardId: record.presetCardId,
+                presetImageName: record.presetImageName,
+                photoFileName: record.photoFileName,
+                text: record.text,
+                createdAt: record.createdAt
+            )
+            records[index] = upgraded
+            try writeRecords(records)
+            return upgraded
+        }
     }
 
+    /// 按 id 移除记录（含照片文件）。
+    /// 先持久化元数据、成功后才删照片文件（审查发现 #6b）：写不进去时保留文件——
+    /// 删错一边比「多一个孤儿文件」严重得多（照片仍在而记录没了 → 内容消失；
+    /// 记录仍在而照片没了 → 只是缺图）。
     func remove(id: UUID) {
-        var records = load()
-        guard let idx = records.firstIndex(where: { $0.id == id }) else { return }
-        if let fileName = records[idx].photoFileName {
-            try? FileManager.default.removeItem(
-                at: documentsDir.appendingPathComponent(fileName)
-            )
+        lock.withLock {
+            var records = readRecords()
+            guard let idx = records.firstIndex(where: { $0.id == id }) else { return }
+            let fileName = records[idx].photoFileName
+            records.remove(at: idx)
+            do {
+                try writeRecords(records)
+            } catch {
+                return   // 元数据没写成 → 文件不动，两边状态一致
+            }
+            if let fileName {
+                try? FileManager.default.removeItem(
+                    at: documentsDir.appendingPathComponent(fileName)
+                )
+            }
         }
-        records.remove(at: idx)
-        try? persist(records)
     }
 
     /// Tab1 重试成功后按幂等键清除持久化记录（含照片文件）。
     /// 只清 .tab1 来源——onboarding 记录的移除由 retryPending 的按 id 移除负责。
     func removeTab1ByRequestId(_ requestId: UUID) {
-        var records = load()
-        guard let idx = records.firstIndex(where: { $0.source == .tab1 && $0.requestId == requestId })
-        else { return }
-        if let fileName = records[idx].photoFileName {
-            try? FileManager.default.removeItem(
-                at: documentsDir.appendingPathComponent(fileName)
-            )
+        lock.withLock {
+            var records = readRecords()
+            guard let idx = records.firstIndex(where: { $0.source == .tab1 && $0.requestId == requestId })
+            else { return }
+            let fileName = records[idx].photoFileName
+            records.remove(at: idx)
+            do {
+                try writeRecords(records)
+            } catch {
+                return   // 元数据没写成 → 文件不动，两边状态一致
+            }
+            if let fileName {
+                try? FileManager.default.removeItem(
+                    at: documentsDir.appendingPathComponent(fileName)
+                )
+            }
         }
-        records.remove(at: idx)
-        try? persist(records)
     }
 
     /// 照片记录的本地图片；预设卡记录返回 asset 图（两者都供 UI 展示）。
@@ -211,7 +240,29 @@ final class PendingRetryStore {
         return nil
     }
 
-    private func persist(_ records: [PendingRetryRecord]) throws {
+    /// 逐条有损解码（审查发现 #6c）：任何一条记录损坏只丢那一条，不影响其他记录；
+    /// 抢救结果写回自愈。必须在锁内调用。
+    private func readRecords() -> [PendingRetryRecord] {
+        guard let data = defaults.data(forKey: Self.recordsKey) else { return [] }
+        // 整体解码成功 = 常态快路径
+        if let all = try? JSONDecoder().decode([PendingRetryRecord].self, from: data) {
+            return all
+        }
+        // 有损抢救：逐条解码，活一条留一条
+        guard let fragments = try? JSONSerialization.jsonObject(with: data) as? [Any] else { return [] }
+        var survivors: [PendingRetryRecord] = []
+        for fragment in fragments {
+            guard let elementData = try? JSONSerialization.data(withJSONObject: fragment),
+                  let record = try? JSONDecoder().decode(PendingRetryRecord.self, from: elementData)
+            else { continue }
+            survivors.append(record)
+        }
+        try? writeRecords(survivors)   // 自愈写回：下次启动不再走抢救路径
+        return survivors
+    }
+
+    /// 元数据落盘（锁内调用）。
+    private func writeRecords(_ records: [PendingRetryRecord]) throws {
         let data = try JSONEncoder().encode(records)
         try metadataWriter(data)
     }

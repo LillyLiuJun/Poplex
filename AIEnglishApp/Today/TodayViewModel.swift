@@ -1,7 +1,13 @@
 import Foundation
 import UIKit
+import CryptoKit
 
 @Observable
+/// @MainActor（审查发现 #5）：SwiftUI 只在主线程渲染 @Observable 状态，而 loadHistory /
+/// runGeneration 是非隔离 async——await 之后的续体默认跑在全局执行器上，后台线程改
+/// entries 会与渲染竞争（丢更新、闪帧、偶发崩溃）。标 @MainActor 后编译器强制所有
+/// 续体跳回主线程。纯静态函数（buildEntries 等）标 nonisolated，保持可随处调用。
+@MainActor
 final class TodayViewModel {
     var entries: [TimelineEntry] = []
     var isLoading = false
@@ -9,6 +15,9 @@ final class TodayViewModel {
     var pendingImage: UIImage?
     /// 待重试记录存储（可注入，便于单测）；loadHistory 时把记录注入时间线。
     var pendingRetryStore = PendingRetryStore.shared
+    /// 本地成功增量存储（可注入，便于单测）：生成成功的「气泡 + 卡片」底稿，
+    /// 冷启动先展示、网络全量对齐后按幂等键清除。
+    var successStore = LocalSuccessStore.shared
     /// 预设卡落库（可注入，便于单测 presetCard Retry 分支）。
     var presetCardSaver: PresetCardSaving = LivePresetCardSaver()
     /// 无网点 Retry 等场景的轻提示（视图挂 toast，自动消失）。
@@ -16,10 +25,29 @@ final class TodayViewModel {
     /// 视图滚动锚点：非空时视图滚到对应条目，且跳过「条目变化自动滚到最后一条」。
     /// 重试期间置为气泡 id（留在原地），成功后置为卡片 id；下次 send / 历史替换时清空。
     var scrollTargetId: UUID?
+    /// 常规发送的 loading 被最终卡片/失败行原位替换时，entries.count 与行 id 都不变，
+    /// 仅监听条目数量无法感知内容高度增长。这里显式发出一次“最终内容已落位”的底部
+    /// 滚动请求；视图收到后等待布局完成，再滚到该稳定行 id。
+    var bottomScrollTargetId: UUID?
+    /// 被动对齐中（loadHistory 内部对 entries 的任何改动：缓存首刷/正本替换/seed 与
+    /// 失败行注入）：视图不强制滚到底，只在用户已处于底部时跟随——进页面、下拉刷新、
+    /// 回前台时都不会把正在阅读的用户拽走。
+    /// 确定性约定（审查发现 #15）：只由三个动作写——loadHistory 入口置 true（被动）、
+    /// send / retryPending 置 false（主动）；不依赖任何时序复位。平时挂着 true 无害：
+    /// 被动分支只有用户已在底部才跟随，下次 loadHistory 重新置 true。
+    /// 视图在 onChange 里读取，不驱动渲染，故不参与观察。
+    @ObservationIgnored var isPassiveAlignment = false
+    /// 一次性标志：时间线首次从空到有内容（冷启动缓存首刷 / 无缓存首启的正本替换）时，
+    /// 请求视图无动画瞬间定位底部，避免「从顶部划到底部」的冷启动滑动。
+    @ObservationIgnored var instantJumpToBottomPending = false
     let session = ConversationSession()
 
     private let service: AIServicing
     private var hasLiveActivity = false   // 本次会话是否已产生实时对话（发过消息）
+    /// 本会话已展示成功增量的幂等键集合：生成成功时标记 + 注入时标记。
+    /// 注入前查重——卡片已在时间线里，再注入会重复（会话内回前台刷新时防重；
+    /// onboarding 记录没有服务端消息行 ID 可查，这个集合就是它们唯一的去重钥匙）。
+    private var displayedSuccessRequestIds: Set<UUID> = []
 
     /// AI 数据同意闸门。生产默认读 UserDefaults（AIConsentView 同意后写入的标记）；
     /// 抽成闭包是为了让 send() 的门控可在单元测试里注入，而不依赖全局 UserDefaults。
@@ -38,22 +66,33 @@ final class TodayViewModel {
     func loadHistory() async {
         guard !isLoadingHistory else { return }
         isLoadingHistory = true
-        // 解码出的服务端记录幂等键集合：供 seed 去重（D）与持久化失败行注入去重用。
+        // 本次函数内所有 entries 改动都是「被动对齐」：视图只在用户已处于底部时跟随，
+        // 不会把正在阅读（或刚进页面）的用户拽到底部。窗口不在此复位（见属性注释，
+        // 审查发现 #15）：send / retryPending 会置 false，下次 loadHistory 重新置 true。
+        isPassiveAlignment = true
+        // 解码出的服务端记录幂等键集合：供 seed 去重（D）与失败行/成功增量注入去重用。
         // defer 在函数任意出口执行，这里声明、成功解码后填充。
         var decodedRequestIds: Set<UUID> = []
+        // seed 一次性取走（保持 store 的一次性语义）；本次函数内可能注入两轮：
+        // 网络前先展示，网络对齐整列替换后由 defer 兜底重新评估。
+        let seed = OnboardingSeedStore.shared.entries
+        let seedRequestId = OnboardingSeedStore.shared.requestId
+        OnboardingSeedStore.shared.entries = []
+        OnboardingSeedStore.shared.requestId = nil
+        var seedAlreadyShown = false
         defer {
             isLoadingHistory = false
+            // 网络对齐若整列替换过时间线（entries = buildEntries），此前注入的本地内容
+            // 已被冲掉 → 按服务器幂等键去重后兜底重注入。
             // First launch after onboarding: inject seed entries if Tab1 is still empty.
             // Own-photo path: server already has the record, entries won't be empty.
-            // Preset-card path: server has nothing; seed = [userBubble + aiCard] fills the gap.
-            let seed = OnboardingSeedStore.shared.entries
-            let seedRequestId = OnboardingSeedStore.shared.requestId
-            OnboardingSeedStore.shared.entries = []
-            OnboardingSeedStore.shared.requestId = nil
-            // 弱网竞速去重（D）：seed 的幂等键已在服务端历史里 → 说明落库其实成功过
-            // （客户端 1.5s 超时误判失败），注入 seed 会让首屏同一张卡出现两次——
-            // 跳过注入，以服务端记录为准。
-            if Self.shouldInjectSeed(
+            // Preset-card path — only when the server save FAILED at onboarding (the seed
+            // is written solely in that case): server has nothing, so seed = [userBubble +
+            // aiCard] fills the gap. Save SUCCEEDED: the pair's message rows ARE in server
+            // history under this request_id; Tab1 shows them from the server and the S1
+            // record is stale-cleared on the first alignment — no seed involved.
+            if !seedAlreadyShown,
+               Self.shouldInjectSeed(
                 seedEntries: seed,
                 seedRequestId: seedRequestId,
                 serverRequestIds: decodedRequestIds
@@ -63,6 +102,11 @@ final class TodayViewModel {
             // 断网待重试记录 + Tab1 持久化失败行：本地「未成功内容」始终展示（杀 app 不丢）；
             // 幂等键已出现在服务端历史的记录跳过（重试成功但清理未跑完的竞态）。
             injectPendingRetry(serverRequestIds: decodedRequestIds)
+            // 本地成功增量：对齐已带回的清除；未被对齐冲掉的按幂等去重后不重复注入。
+            injectLocalSuccesses(serverRequestIds: decodedRequestIds)
+            // 被动窗口不在此复位（审查发现 #15）：复位 = 依赖「视图 flush 先于下一个
+            // 主队列块」的时序假设，SwiftUI 没有 API 保证。已改为确定性约定（见属性
+            // 注释）：loadHistory 入口置 true、send / retryPending 置 false，无需复位。
         }
 
         // 1) 先读本地缓存并立即渲染——仅当时间线还空着、且本次会话未产生实时对话。
@@ -70,13 +114,32 @@ final class TodayViewModel {
         if entries.isEmpty, !hasLiveActivity,
            let cached = await LocalCache.shared.load(key: .messages),
            let records = try? Self.decodeRecords(from: cached) {
+            instantJumpToBottomPending = true   // 时间线首次有内容：瞬间定位底部，无动画
             entries = Self.buildEntries(from: records)
             // 缓存同样填充幂等键集合：离线首启时也按「服务端正本」去重
             // （缓存即上次成功同步的服务端历史）。
             decodedRequestIds = Set(records.compactMap(\.requestId))
         }
 
-        // 2) 后台向服务器请求最新数据，对齐正本（查新增/删除）
+        // 2) S2 本地内容先拿出来：seed + 失败行 + 成功增量一律在缓存渲染后、
+        //    网络请求前注入——「手里有的立刻看，没有的才打电话」。
+        let wasEmptyBeforeLocalInject = entries.isEmpty
+        if Self.shouldInjectSeed(
+            seedEntries: seed,
+            seedRequestId: seedRequestId,
+            serverRequestIds: decodedRequestIds
+        ) {
+            entries = entries + seed
+            seedAlreadyShown = true
+        }
+        injectPendingRetry(serverRequestIds: decodedRequestIds)
+        injectLocalSuccesses(serverRequestIds: decodedRequestIds)
+        if wasEmptyBeforeLocalInject, !entries.isEmpty {
+            // 无缓存首启且本地内容即首次内容 → 同样瞬间定位底部，无动画
+            instantJumpToBottomPending = true
+        }
+
+        // 3) 后台向服务器请求最新数据，对齐正本（查新增/删除）
         let data: Data
         do {
             data = try await fetchMessageData()
@@ -94,27 +157,48 @@ final class TodayViewModel {
         await LocalCache.shared.save(data, key: .messages)
         decodedRequestIds = Set(records.compactMap(\.requestId))
 
-        // 用户已在本次会话产生实时对话 → 不用历史覆盖，避免打断
-        guard !isLoading, !hasLiveActivity else { return }
+        // 放行判定见 shouldReplaceHistory（审查发现 #12）：生成在途 / 本会话已有实时
+        // 对话 / 服务端快照缺了会话已展示的幂等键，三者任一命中都不整列替换。
+        guard Self.shouldReplaceHistory(
+            isLoading: isLoading,
+            hasLiveActivity: hasLiveActivity,
+            displayedSuccessRequestIds: displayedSuccessRequestIds,
+            serverRequestIds: decodedRequestIds
+        ) else { return }
         scrollTargetId = nil   // 历史重建后恢复默认的「自动滚到最后一条」
+        if entries.isEmpty {
+            // 无缓存、无本地内容的冷启动：网络正本就是时间线的首次内容 → 同样瞬间定位
+            instantJumpToBottomPending = true
+        }
         entries = Self.buildEntries(from: records)
+        seedAlreadyShown = false   // 整列替换过：defer 兜底需重新评估本地注入
 
         print("[TodayVM] loaded \(records.count) records → \(entries.count) entries")
         preloadRecentImages(records)
     }
 
-    /// 把历史记录重建为时间线（含按天插入日期分隔符）
-    private static func buildEntries(from records: [MessageRecord]) -> [TimelineEntry] {
+    /// 视图在 onChange 里调用：若挂着「瞬间定位底部」请求则消费并返回 true。
+    func takeInstantJumpFlag() -> Bool {
+        let flag = instantJumpToBottomPending
+        instantJumpToBottomPending = false
+        return flag
+    }
+
+    /// 把历史记录重建为时间线（含按天插入日期分隔符）。
+    /// 分组按含年份的 dayKey（跨年同 "MMM d" 文案不会误并成一组）；分隔符 ID 由
+    /// dayKey 确定性派生——缓存渲染与网络正本两次重建产出相同 ID，SwiftUI diff
+    /// 视其为同一节点，不再「删旧插新」引发整列重排抖动。
+    nonisolated static func buildEntries(from records: [MessageRecord]) -> [TimelineEntry] {
         var result: [TimelineEntry] = []
-        var lastDayLabel: String?
+        var lastDayKey: String?
         for record in records {
-            let dayLabel = dayLabel(for: record.createdAt)
-            if dayLabel != lastDayLabel {
+            let key = dayKey(for: record.createdAt)
+            if key != lastDayKey {
                 result.append(TimelineEntry(
-                    id: UUID(), createdAt: record.createdAt,
-                    content: .dateSeparator(dayLabel)
+                    id: deterministicSeparatorId(for: key), createdAt: record.createdAt,
+                    content: .dateSeparator(dayLabel(for: record.createdAt))
                 ))
-                lastDayLabel = dayLabel
+                lastDayKey = key
             }
             if let entry = record.asTimelineEntry() {
                 result.append(entry)
@@ -166,7 +250,13 @@ final class TodayViewModel {
 
         hasLiveActivity = true   // 本次会话已有实时对话，后台历史刷新不得覆盖
 
+        // 用户主动发送 = 主动变化（审查发现 #1）：清掉被动对齐窗口，气泡/loading/卡片
+        // 照旧自动滚到底。否则冷启动历史还在拉取时发送，新内容全落在屏幕外、用户
+        // 看不到任何反馈（main 上是无条件滚动的，这是相对 main 的回归）。
+        isPassiveAlignment = false
+
         scrollTargetId = nil   // 正常发送恢复默认滚动（追加到末尾 → 自动滚到底）
+        bottomScrollTargetId = nil
 
         let textToSend: String? = trimmed.isEmpty ? nil : trimmed
 
@@ -244,6 +334,19 @@ final class TodayViewModel {
     ///   插入点 = 第一条 created_at 晚于写作时刻的条目之前；正撞上同一天的日期标题
     ///   时插到标题之下；插入点前不是该日的标题则补一个，保持按天分组。
     func injectPendingRetry(serverRequestIds: Set<UUID> = []) {
+        // 审查发现 #13（失败行整会话残留）：服务端其实已落库（超时误判失败/他处重试
+        // 成功）时，hasLiveActivity 会挡住本会话的整列替换，屏幕上的失败行永不消失。
+        // 失败行携带 requestId：服务器历史里已有它 → 这条失败信息是错的，移除。
+        // 气泡保留——消息确实发出去了；卡片内容在下次冷启动随正本回放出现（会话内
+        // 点 Retry 依旧可原位换回卡片）。
+        if !serverRequestIds.isEmpty {
+            entries.removeAll { entry in
+                if case .sendFailed(_, _, let requestId, _) = entry.content {
+                    return requestId.map(serverRequestIds.contains) ?? false
+                }
+                return false
+            }
+        }
         let all = pendingRetryStore.load()
         let stale = all.filter { record in
             record.requestId.map(serverRequestIds.contains) ?? false
@@ -251,8 +354,13 @@ final class TodayViewModel {
         for record in stale {
             pendingRetryStore.remove(id: record.id)   // 服务端已有正本；本地副本（含照片文件）清除
         }
+        // 跨 store 去重（审查发现 #2）：同 requestId 已有本地成功记录 → 成功侧才是真相
+        // （重试成功与失败记录清除之间的杀进程窗口，两个 store 各留一条）。失败侧不注入，
+        // 记录保留在 store，下次联网后由 stale 检查自然清除（服务端历史已含该幂等键）。
+        let successRequestIds = Set(successStore.load().compactMap(\.requestId))
         let pending = all.filter { record in
             !stale.contains { $0.id == record.id }
+                && !(record.requestId.map(successRequestIds.contains) ?? false)
         }
         for record in pending where record.source != .tab1 && !entries.contains(where: {
             if case .pendingRetry(let r) = $0.content { return r.id == record.id }
@@ -260,6 +368,13 @@ final class TodayViewModel {
         }) {
             entries.append(TimelineEntry.pendingRetry(record))
         }
+        // 生成在途（isLoading）跳过 tab1 注入：重试已把失败行临时移除、由本次尝试
+        // 负责结局——此刻注入会凭空多出一对「气泡 + 失败行」幽灵（成功路径只清
+        // 本地记录、不清幽灵行，它会永远留在屏上）。跳过是安全的：本次尝试成功会
+        // 清除持久化记录，失败会自行重建失败行。
+        // 注意：非 tab1 的 pendingRetry 行在生成期间仍保留在时间线（幂等守卫按行 id
+        // 跳过），不受此窗口影响。
+        guard !isLoading else { return }
         // 幂等保护：entries 里已有同 requestId 的 sendFailed 行 → 这对「气泡 + 失败行」
         // 已注入过（本会话内二次 loadHistory，如回前台刷新；或发送失败当场生成的行）→
         // 跳过，避免同一失败消息重复展示、出现两个可点的 Retry 入口。
@@ -293,29 +408,88 @@ final class TodayViewModel {
                     requestId: record.requestId, bubbleEntryId: bubbleId
                 )
             )
-            let dayLabel = Self.dayLabel(for: record.createdAt)
-            var insertAt = entries.firstIndex(where: { $0.createdAt > record.createdAt }) ?? entries.count
-            if insertAt < entries.count,
-               case .dateSeparator(let label) = entries[insertAt].content,
-               label == dayLabel {
-                insertAt += 1
-            }
-            // 该日的标题已存在于插入点之前 → 不重复补；否则补一个（保持按天分组）。
-            // 日期标题按天唯一且按时间序排列，「前面是否存在」即等价于「这一天有没有标题」。
-            let hasDaySeparator = entries[..<insertAt].contains {
-                if case .dateSeparator(let label) = $0.content { return label == dayLabel }
-                return false
-            }
-            var toInsert: [TimelineEntry] = []
-            if !hasDaySeparator {
-                toInsert.append(TimelineEntry(
-                    id: UUID(), createdAt: record.createdAt,
-                    content: .dateSeparator(dayLabel)
-                ))
-            }
-            toInsert.append(contentsOf: [bubble, failed])
-            entries.insert(contentsOf: toInsert, at: insertAt)
+            insertChronologically(bubble: bubble, companion: failed, at: record.createdAt)
         }
+    }
+
+    /// 本地成功增量注入（S1 读侧）：与失败行同构的「气泡 + 卡片」对，按写作时刻归位。
+    /// 三重去重：
+    /// - 幂等键已在服务端历史 → 服务器正本已带回（或即将带回），本地副本清除；
+    /// - 气泡 id（=服务端消息行 id，Tab1 路径才有）已在时间线 → 已展示，跳过；
+    /// - requestId 在本会话已生成成功（displayedSuccessRequestIds）→ 卡片已在时间线，跳过。
+    func injectLocalSuccesses(serverRequestIds: Set<UUID> = []) {
+        let all = successStore.load()
+        let stale = all.filter { serverRequestIds.contains($0.requestId) }
+        for record in stale {
+            successStore.remove(id: record.id)
+        }
+        let records = all.filter { record in
+            !stale.contains { $0.id == record.id }
+        }
+        .sorted { $0.createdAt < $1.createdAt }
+        for record in records {
+            if let userMessageId = record.userMessageId,
+               entries.contains(where: { $0.id == userMessageId }) {
+                continue   // 服务端回放/本会话生成已在时间线
+            }
+            if displayedSuccessRequestIds.contains(record.requestId) {
+                continue   // 本会话刚生成成功，卡片已在时间线
+            }
+            guard let card = successStore.card(for: record) else {
+                // 坏记录（防御，审查发现 #7）：跳过注入但保留本地副本——服务端是正本，
+                // 联网对齐后由 stale 检查清除；删除则会不可逆地毁掉「服务端行缺失」
+                // 异常场景（如 App 升级 schema 变化）下用户唯一的本地底稿。
+                continue
+            }
+            // 注入即标记：无 userMessageId 的记录（onboarding 照片/预设卡）此前没有
+            // 去重钥匙——同一次 loadHistory 的「网络前注入 + defer 兜底」会注入两遍、
+            // 每次回前台再翻倍。标记后本会话内每条记录只注入一次（杀 app 重开集合清空，
+            // 未获服务端确认的记录下次启动照常注入一次，内容不丢）。
+            displayedSuccessRequestIds.insert(record.requestId)
+            let bubble = TimelineEntry(
+                id: record.userMessageId ?? UUID(), createdAt: record.createdAt,
+                content: .userBubble(
+                    text: record.text ?? "Describe this image",
+                    image: successStore.bubbleImage(for: record),
+                    imageUrl: nil, imageStableKey: record.presetImageName
+                )
+            )
+            let cardEntry = TimelineEntry(
+                id: record.assistantMessageId ?? UUID(), createdAt: record.createdAt,
+                content: .aiCard(card)
+            )
+            insertChronologically(bubble: bubble, companion: cardEntry, at: record.createdAt)
+        }
+    }
+
+    /// 把「气泡 + 伴生行」对按写作时刻插入时间线（失败行/成功卡共用）：
+    /// 插入点 = 第一条 createdAt 晚于写作时刻的条目之前；正撞上同一天的日期标题时
+    /// 插到标题之下；插入点前没有该日标题则补一个（确定性 ID），保持按天分组。
+    private func insertChronologically(bubble: TimelineEntry, companion: TimelineEntry, at date: Date) {
+        let key = Self.dayKey(for: date)
+        var insertAt = entries.firstIndex(where: { $0.createdAt > date }) ?? entries.count
+        if insertAt < entries.count,
+           case .dateSeparator = entries[insertAt].content,
+           Self.dayKey(for: entries[insertAt].createdAt) == key {
+            insertAt += 1
+        }
+        // 该日的标题已存在于插入点之前 → 不重复补；否则补一个（保持按天分组）。
+        // 日期标题按天唯一且按时间序排列，「前面是否存在」即等价于「这一天有没有标题」。
+        // 按 dayKey（含年份）判断：跨年同文案（"Aug 22"）不误判为同一天。
+        let hasDaySeparator = entries[..<insertAt].contains {
+            if case .dateSeparator = $0.content { return Self.dayKey(for: $0.createdAt) == key }
+            return false
+        }
+        var toInsert: [TimelineEntry] = []
+        if !hasDaySeparator {
+            // 与 buildEntries 同源的确定性 ID：下次刷新重建后是同一节点，无重排
+            toInsert.append(TimelineEntry(
+                id: Self.deterministicSeparatorId(for: key), createdAt: date,
+                content: .dateSeparator(Self.dayLabel(for: date))
+            ))
+        }
+        toInsert.append(contentsOf: [bubble, companion])
+        entries.insert(contentsOf: toInsert, at: insertAt)
     }
 
     /// 待重试记录 Retry：photo 走 AI 生成；presetCard 走静态卡 + 落库。
@@ -323,6 +497,8 @@ final class TodayViewModel {
     /// 「图片气泡 + 卡片」（与 Tab1 正常输入输出一致，图片不消失）；失败保留记录（用户可再试）。
     func retryPending(record: PendingRetryRecord) async {
         guard !isLoading else { return }
+        // 用户主动重试，同 send（审查发现 #1）：清被动窗口，结果变化自动滚到可见。
+        isPassiveAlignment = false
         switch record.source {
         case .tab1:
             return   // 构造上不可达：tab1 记录以「气泡 + 失败行」注入，重试走 retrySend
@@ -346,6 +522,8 @@ final class TodayViewModel {
                 requiredDurableRequestId: requestId
             )
             if let card {
+                // S1 成功增量由 runGeneration 统一写入（requestId 非空即写，本路径已带），
+                // 此处无需重复——与 presetCard 分支不同，后者不走 runGeneration 才需单独写。
                 pendingRetryStore.remove(id: record.id)
                 replacePendingRetryWithBubbleAndCard(record: record, image: image, card: card)
             }
@@ -365,6 +543,13 @@ final class TodayViewModel {
             isLoading = false
             if saved {
                 pendingRetryStore.remove(id: record.id)
+                // S1 生成即落本地：预设卡落库成功 → 成功增量（asset 图 + 静态卡），
+                // 冷启动无需等网络全量拉取。
+                successStore.saveOnboardingPreset(
+                    imageName: card.imageName, requestId: requestId,
+                    createdAt: record.createdAt, card: card.staticCard
+                )
+                displayedSuccessRequestIds.insert(requestId)
                 replacePendingRetryWithBubbleAndCard(record: record, image: UIImage(named: card.imageName), card: card.staticCard)
             }
         }
@@ -448,8 +633,23 @@ final class TodayViewModel {
             }
             if insertCard {
                 replace(loadingEntry.id, with: .aiCard(envelope.card))
+                bottomScrollTargetId = loadingEntry.id
             } else {
                 entries.removeAll { $0.id == loadingEntry.id }
+            }
+            // S1 生成即落本地：成功增量持久化（文字/照片 + 卡片 + 服务端消息行 ID），
+            // 冷启动在服务器全量拉回前即可展示。持久化失败静默——不打断成功体验。
+            if let requestId {
+                let bubbleCreatedAt = userBubbleEntryId.flatMap { id in
+                    entries.first(where: { $0.id == id })?.createdAt
+                } ?? originalCreatedAt ?? loadingEntry.createdAt
+                try? successStore.saveTab1(
+                    text: text, image: image, requestId: requestId,
+                    userMessageId: envelope.userMessageId,
+                    assistantMessageId: envelope.assistantMessageId,
+                    createdAt: bubbleCreatedAt, card: envelope.card
+                )
+                displayedSuccessRequestIds.insert(requestId)
             }
             let userContent = text ?? (image != nil ? "[photo]" : nil)
             if let userContent {
@@ -490,9 +690,12 @@ final class TodayViewModel {
                 // 杀 app 重启后以「气泡 + 失败行」按写作时刻归位——Tab1 与 onboarding 行为对齐。
                 // try? 静默：持久化失败不影响「失败行 + 可重试」的既有 UI 体验。
                 if let requestId {
+                    // 与成功路径同构的回退链（审查发现 #9）：当前两处调用方气泡必在时间线里、
+                    // 按 id 总能查到；未来若出现「无气泡条目的重试入口」（语音/批量补发），
+                    // originalCreatedAt 是写作时刻的最后防线。
                     let bubbleCreatedAt = userBubbleEntryId.flatMap { id in
                         entries.first(where: { $0.id == id })?.createdAt
-                    } ?? loadingEntry.createdAt
+                    } ?? originalCreatedAt ?? loadingEntry.createdAt
                     try? pendingRetryStore.saveTab1(
                         text: text, image: image,
                         requestId: requestId, createdAt: bubbleCreatedAt
@@ -501,6 +704,7 @@ final class TodayViewModel {
                 // 失败行携带本次尝试的幂等键与气泡引用：重试复用同一 requestId，
                 // 且成功后能按 bubbleEntryId 把卡片放回气泡原位。
                 replace(loadingEntry.id, with: .sendFailed(text: text, image: image, requestId: requestId, bubbleEntryId: userBubbleEntryId))
+                bottomScrollTargetId = loadingEntry.id
             case .silent:
                 entries.removeAll { $0.id == loadingEntry.id }
             }
@@ -518,15 +722,12 @@ final class TodayViewModel {
             if case .dateSeparator = $0.content { return true }
             return false
         })
-        let alreadyHasToday: Bool
-        if case .dateSeparator(let label) = lastSeparator?.content {
-            alreadyHasToday = (label == today)
-        } else {
-            alreadyHasToday = false
-        }
-        if !alreadyHasToday {
+        // 按 dayKey 判断而非展示文案（审查发现 #3）：跨零点后昨天的分隔符文案同样是
+        // "Today"，凭 label 相等会把今天的消息并进昨天的分组。
+        if !Self.hasTodaySeparator(lastSeparator: lastSeparator, todayKey: Self.dayKey(for: .now)) {
+            // 与 buildEntries 同源的确定性 ID：刷新重建后今天是同一节点，无重排
             entries.append(TimelineEntry(
-                id: UUID(), createdAt: .now,
+                id: Self.deterministicSeparatorId(for: Self.dayKey(for: .now)), createdAt: .now,
                 content: .dateSeparator(today)
             ))
         }
@@ -554,7 +755,7 @@ final class TodayViewModel {
     }
 
     /// 把原始字节解码成记录——网络回来的和缓存读出来的走完全相同的这条路径
-    private static func decodeRecords(from data: Data) throws -> [MessageRecord] {
+    private nonisolated static func decodeRecords(from data: Data) throws -> [MessageRecord] {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()
@@ -569,10 +770,26 @@ final class TodayViewModel {
         return try decoder.decode([MessageRecord].self, from: data)
     }
 
+    /// 历史整列替换的放行判定（纯函数便于单测，审查发现 #12）：三关全过才放行——
+    /// 生成在途不放（不打断本次生成）、本会话已有实时对话不放（不覆盖会话内容）、
+    /// 服务器快照缺了本会话已展示过的幂等键不放（服务端丢行/快照竞态时替换会把
+    /// 会话内已展示的内容冲掉）。注意：删除功能上线后「服务器合法删行」也会触发
+    /// 第三关——届时由删除切片统一处理（见 D1-2）。
+    nonisolated static func shouldReplaceHistory(
+        isLoading: Bool,
+        hasLiveActivity: Bool,
+        displayedSuccessRequestIds: Set<UUID>,
+        serverRequestIds: Set<UUID>
+    ) -> Bool {
+        !isLoading
+            && !hasLiveActivity
+            && displayedSuccessRequestIds.isSubset(of: serverRequestIds)
+    }
+
     /// D 去重决策（纯函数便于单测）：seed 的幂等键已出现在服务端历史
     /// → 说明落库其实成功过（1.5s 竞速误判失败），跳过注入避免首屏重复卡。
     /// 无幂等键（旧流程）时照旧注入——宁可重复一次也不吞掉内容。
-    static func shouldInjectSeed(
+    nonisolated static func shouldInjectSeed(
         seedEntries: [TimelineEntry],
         seedRequestId: UUID?,
         serverRequestIds: Set<UUID>
@@ -582,12 +799,40 @@ final class TodayViewModel {
         return !serverRequestIds.contains(seedRequestId)
     }
 
-    private static func dayLabel(for date: Date) -> String {
+    private nonisolated static func dayLabel(for date: Date) -> String {
         let cal = Calendar.current
         if cal.isDateInToday(date)     { return "Today" }
         if cal.isDateInYesterday(date) { return "Yesterday" }
         let f = DateFormatter()
         f.dateFormat = "MMM d"
         return f.string(from: date)
+    }
+
+    /// 含年份的日历日键（"yyyy-MM-dd"）：用于按天分组与日期分隔符的确定性 ID。
+    /// 与 dayLabel 分开：label 是无年份的展示文案（"Aug 22"），跨年会重名，
+    /// 不能拿来做分组比较或 ID 种子。
+    private nonisolated static func dayKey(for date: Date) -> String {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        return f.string(from: date)
+    }
+
+    /// 是否已含「今天」的分隔符：按 dayKey 判断而非展示文案（审查发现 #3）——
+    /// 跨零点后昨天的分隔符文案同样是 "Today"，凭 label 会把今天的消息并进昨天的
+    /// 分组。纯函数便于单测跨零点场景。
+    nonisolated static func hasTodaySeparator(lastSeparator: TimelineEntry?, todayKey: String) -> Bool {
+        guard let last = lastSeparator else { return false }
+        return dayKey(for: last.createdAt) == todayKey
+    }
+
+    /// 由 dayKey 确定性派生 UUID：同一日历日永远得到同一个 ID。
+    /// 缓存渲染与网络正本两次重建产出相同分隔符 ID，SwiftUI diff 视其为同一节点
+    /// （身份证不变），不再「删旧插新」引发整列重排；SHA256 截 16 字节 = 128 位，
+    /// 碰撞概率可忽略。
+    nonisolated static func deterministicSeparatorId(for dayKey: String) -> UUID {
+        let hash = SHA256.hash(data: Data("date_sep_\(dayKey)".utf8))
+        let b = Array(hash.prefix(16))
+        return UUID(uuid: (b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7],
+                           b[8], b[9], b[10], b[11], b[12], b[13], b[14], b[15]))
     }
 }

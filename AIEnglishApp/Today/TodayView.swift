@@ -1,8 +1,18 @@
 import SwiftUI
 
+/// 显式 @MainActor：TodayViewModel 已标 @MainActor（审查发现 #5），@State 默认值在
+/// view init 里求值，init 必须是主线程隔离才能调用它的隔离构造器。
+@MainActor
 struct TodayView: View {
     @State private var viewModel = TodayViewModel(service: LiveAIService())
     @State private var inputText = ""
+    /// 时间线末尾的 0 高锚点是否在视口内 → 用户是否处于（或接近）底部。
+    /// 被动对齐时只在底部跟随滚动；用户在阅读中部内容时不被拽走。
+    @State private var atBottomVisible = false
+    /// InputBar 外层的实时渲染高度（含胶囊、缩略图/多行增长与底部 padding）。
+    /// 首帧用单行基础态 52 + 8 = 60pt，实测回调随后接管；配合 32pt 内容净空，
+    /// 基础态停靠线仍是此前验收过的 92pt。
+    @State private var inputBarHeight = AppTheme.Size.inputBarMinHeight + AppTheme.Space.paddingS
     var onImagePreview: ((UIImage, UnitPoint) -> Void)?
     var topInset: CGFloat = 0
     /// Written by the scroll view; read by RootTabContainer to drive topBar compact mode
@@ -30,6 +40,13 @@ struct TodayView: View {
                 let toSend = inputText
                 inputText = ""
                 Task { await viewModel.send(toSend) }
+            }
+            .onGeometryChange(for: CGFloat.self) { proxy in
+                proxy.size.height
+            } action: { measuredHeight in
+                guard measuredHeight > 0,
+                      abs(measuredHeight - inputBarHeight) > 0.5 else { return }
+                inputBarHeight = measuredHeight
             }
             .background {
                 VariableBlurBackdrop(extraExtend: 16)
@@ -84,9 +101,22 @@ struct TodayView: View {
                         })
                         .id(entry.id)
                     }
+                    // 底部探针：出现在视口内 → 用户已处于（或接近）底部。
+                    // 0 高不占位、不影响布局；被动对齐的「底部跟随」判定全靠它。
+                    Color.clear
+                        .frame(height: 0)
+                        .onAppear { atBottomVisible = true }
+                        .onDisappear { atBottomVisible = false }
                 }
                 .padding(AppTheme.Space.paddingPage)
-                .padding(.bottom, 72)     // 为底部 InputBar 留出空间（胶囊 52 + 边距）
+            }
+            // InputBar 是 ZStack 中的悬浮兄弟视图。把它应占的高度声明为 ScrollView
+            // 的安全区域，才能让 scrollTo(last, .bottom) 与用户手动滚到底时的停靠线
+            // 一致；不再依赖屏外的透明目标视图（LazyVStack 下该目标会不可靠）。
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                // 实测 InputBar 高度 + 固定视觉净空。InputBar 的多行/缩略图状态或
+                // 后续重设计改变几何时，停靠线自动同步，不再依赖 92pt 经验常数。
+                Color.clear.frame(height: inputBarHeight + AppTheme.Space.paddingSection)
             }
             .refreshable {
                 // 下拉刷新：手动对齐服务器正本（断网启动后恢复网络时的主要恢复入口）
@@ -106,8 +136,46 @@ struct TodayView: View {
                 // 重试期间视图锚在原地（scrollTargetId 非空）：条目的原地增删
                 // 不触发「自动滚到最后一条」，否则用户会被拽离重试现场
                 guard viewModel.scrollTargetId == nil else { return }
-                if let last = viewModel.entries.last {
-                    withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                // 最后一条 entry 是新增时已实例化的稳定目标。底部的 safeAreaInset
+                // 已把 InputBar 遮住的区域从滚动视口扣除，故 bottom 锚点就是用户
+                // 手动滚到底时的停靠线。
+                guard let last = viewModel.entries.last else { return }
+                // ① 冷启动/首启：时间线首次有内容 → 无动画瞬间定位底部，
+                //    没有「从顶部划到底部」的滑动（不包 withAnimation 即瞬间定格）。
+                //    审查发现 #10：同步 scrollTo 可能赶在本次更新的布局落定之前执行
+                //    （目标新位置尚未计算），flag 已消费无法重试 → 用户停在顶部。
+                //    先同步尝试（布局已就位时立即生效），再延后一个 runloop tick
+                //    兜底一次。两次目标相同、无动画，视觉上幂等。
+                if viewModel.takeInstantJumpFlag() {
+                    proxy.scrollTo(last.id, anchor: .bottom)
+                    DispatchQueue.main.async {
+                        MainActor.assumeIsolated {
+                            proxy.scrollTo(last.id, anchor: .bottom)
+                        }
+                    }
+                    return
+                }
+                // ② 被动对齐（进页面/下拉刷新/回前台的 loadHistory 改动）：
+                //    只在用户已处于底部时跟随，正在阅读时不拽走；
+                //    用短促 easeOut（0.15s）跟随，新内容到达不拖沓
+                if viewModel.isPassiveAlignment {
+                    guard atBottomVisible else { return }
+                    withAnimation(AppTheme.Motion.timelinePassiveFollow) { proxy.scrollTo(last.id, anchor: .bottom) }
+                    return
+                }
+                // ③ 主动变化（发送消息、待重试记录重试成功等）：照旧动画跟随到底
+                withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+            }
+            .onChange(of: viewModel.bottomScrollTargetId) {
+                guard viewModel.scrollTargetId == nil,
+                      let target = viewModel.bottomScrollTargetId else { return }
+                // loading → 最终卡片是同 id、同 count 的原位替换，但高度会显著增长。
+                // 延后一个 runloop tick，等新卡片完成布局后再读取正确的底部位置；
+                // 否则 scrollTo 会按 loading 的旧高度计算，看起来像完全没有滚动。
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated {
+                        withAnimation { proxy.scrollTo(target, anchor: .bottom) }
+                    }
                 }
             }
             .onChange(of: viewModel.scrollTargetId) {
