@@ -18,9 +18,24 @@ private struct HorizontalClipRect: Shape {
 /// 远端同步仍沿用原来的 fire-and-forget；只有本地 pending 持久化是离开前硬门槛。
 struct OnboardingCompletionCoordinator {
     let pendingRetryStore: PendingRetryStore
+    let successStore: LocalSuccessStore
     let defaults: UserDefaults
     let setSyncPending: () -> Void
     let startRemoteSync: () -> Void
+
+    init(
+        pendingRetryStore: PendingRetryStore,
+        successStore: LocalSuccessStore = .shared,   // 默认共享实例；单测注入隔离实例
+        defaults: UserDefaults,
+        setSyncPending: @escaping () -> Void,
+        startRemoteSync: @escaping () -> Void
+    ) {
+        self.pendingRetryStore = pendingRetryStore
+        self.successStore = successStore
+        self.defaults = defaults
+        self.setSyncPending = setSyncPending
+        self.startRemoteSync = startRemoteSync
+    }
 
     @discardableResult
     func complete(viewModel: OnboardingViewModel, onComplete: () -> Void) -> Bool {
@@ -48,6 +63,25 @@ struct OnboardingCompletionCoordinator {
         }
 
         defaults.set(Date().timeIntervalSince1970, forKey: "onboarding_completed_at")
+
+        // S1 生成即落本地：生成/落库成功 → 成功增量（预设卡 asset 图 + 静态卡；
+        // 照片本地 JPEG + AI 卡）。Tab1 首启/冷启动无需等网络全量拉取，秒显。
+        if let requestId = viewModel.currentRequestId,
+           let result = viewModel.generationResult {
+            if viewModel.presetSavedToServer, let card = viewModel.selectedCard {
+                successStore.saveOnboardingPreset(
+                    imageName: card.imageName, requestId: requestId,
+                    createdAt: .now, card: result
+                )
+            } else if let image = viewModel.selectedImage {
+                try? successStore.saveOnboardingPhoto(
+                    image, requestId: requestId, createdAt: .now,
+                    userMessageId: viewModel.generationUserMessageId,
+                    assistantMessageId: viewModel.generationAssistantMessageId,
+                    card: result
+                )
+            }
+        }
 
         // Preset card: build [userBubble(asset image) + aiCard] so Tab1 shows image + description.
         // Own photo: server already has the record or is represented by pending retry metadata.
@@ -126,6 +160,7 @@ struct OnboardingView: View {
     private func completeOnboarding() {
         OnboardingCompletionCoordinator(
             pendingRetryStore: .shared,
+            successStore: .shared,
             defaults: .standard,
             setSyncPending: { ProfileService.setOnboardingSyncPending(true) },
             startRemoteSync: {

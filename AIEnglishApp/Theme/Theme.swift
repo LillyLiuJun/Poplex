@@ -552,6 +552,9 @@ enum AppTheme {
         static let tabSelection: Animation = .spring(response: 0.34, dampingFraction: 0.72)
         // 顶栏滚动紧凑/恢复：稍快，确保不拖延内容阅读
         static let topBarCompact: Animation = .spring(response: 0.30, dampingFraction: 0.82)
+        // 时间线被动对齐跟随（刷新带回新内容、用户已在底部时的小幅跟随）：
+        // 短促 easeOut——跟上新内容但不拖沓，也不抢走阅读注意力
+        static let timelinePassiveFollow: Animation = .easeOut(duration: 0.15)
         // 分类成长：toast 先出现 0.25s，再用 0.45s 补满；结果读完后移动分类。
         static let categoryProgressUpdate: Animation = .easeOut(duration: 0.4)
         static let categoryMilestone: Animation = .easeOut(duration: 0.45)

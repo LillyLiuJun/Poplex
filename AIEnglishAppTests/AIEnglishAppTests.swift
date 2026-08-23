@@ -700,6 +700,8 @@ private struct ContentBlockedMock: AIServicing {
 
 // MARK: - TodayViewModel tests
 
+// TodayViewModel 已标 @MainActor（审查发现 #5）：实例状态与方法的访问必须在主线程隔离。
+@MainActor
 struct TodayViewModelTests {
 
     @Test func sendAppendsUserBubbleAndAICard() async {
@@ -1161,6 +1163,7 @@ struct TodayViewModelTests {
 //
 // consent 通过注入闭包驱动（生产读 UserDefaults），因此无需触碰全局状态、可并行安全。
 
+@MainActor
 struct AIConsentGateTests {
 
     private func hasBubble(_ vm: TodayViewModel) -> Bool {
@@ -2138,6 +2141,9 @@ struct OnboardingViewModelTests {
         #expect(vm.generationResult != nil)
         #expect(vm.errorKind == nil)
         #expect(vm.hasUnconfirmedPhotoGeneration == false)
+        // #8：服务端消息行 ID 被 VM 捕获，随 S1 落库透传（coordinator 读取）。
+        #expect(vm.generationUserMessageId != nil)
+        #expect(vm.generationAssistantMessageId != nil)
     }
 
     @Test func mismatchedResponseRequestIdIsGenericFailureEvenWhenOffline() async {
@@ -2545,6 +2551,15 @@ struct OnboardingCompletionCoordinatorTests {
         return (PendingRetryStore(defaults: defaults, documentsDir: dir), dir, defaults)
     }
 
+    private func makeSuccessStore(suite: String) -> (LocalSuccessStore, UserDefaults) {
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("onboarding-success-\(suite)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return (LocalSuccessStore(defaults: defaults, documentsDir: dir), defaults)
+    }
+
     // pending 照片必须先落盘，之后才能写本地完成/同步标记并离开 onboarding。
     @Test func unconfirmedPhotoPersistsBeforeCompletionMarkersAndExit() async {
         let (store, _, defaults) = makeStore(suite: "completion-order")
@@ -2554,6 +2569,7 @@ struct OnboardingCompletionCoordinatorTests {
         var events: [String] = []
         let coordinator = OnboardingCompletionCoordinator(
             pendingRetryStore: store,
+            successStore: makeSuccessStore(suite: "completion-order").0,
             defaults: defaults,
             setSyncPending: {
                 #expect(store.load().first?.requestId == requestId)
@@ -2590,6 +2606,7 @@ struct OnboardingCompletionCoordinatorTests {
         var sideEffectCount = 0
         let coordinator = OnboardingCompletionCoordinator(
             pendingRetryStore: store,
+            successStore: makeSuccessStore(suite: "completion-jpeg-failure").0,
             defaults: defaults,
             setSyncPending: { sideEffectCount += 1 },
             startRemoteSync: { sideEffectCount += 1 }
@@ -2617,6 +2634,7 @@ struct OnboardingCompletionCoordinatorTests {
         var sideEffectCount = 0
         let coordinator = OnboardingCompletionCoordinator(
             pendingRetryStore: store,
+            successStore: makeSuccessStore(suite: "completion-metadata-failure").0,
             defaults: defaults,
             setSyncPending: { sideEffectCount += 1 },
             startRemoteSync: { sideEffectCount += 1 }
@@ -2646,6 +2664,7 @@ struct OnboardingCompletionCoordinatorTests {
         var events: [String] = []
         let coordinator = OnboardingCompletionCoordinator(
             pendingRetryStore: store,
+            successStore: makeSuccessStore(suite: "completion-preset-order").0,
             defaults: defaults,
             setSyncPending: {
                 #expect(store.load().first?.requestId == requestId)
@@ -2663,14 +2682,17 @@ struct OnboardingCompletionCoordinatorTests {
         #expect(store.load().first?.source == .presetCard)
     }
 
-    // 已由匹配 durable 响应确认的照片不需要 pending 副本。
+    // 已由匹配 durable 响应确认的照片不需要 pending 副本；
+    // S1：确认成功要写入本地成功增量（冷启动秒显的来源）。
     @Test func confirmedPhotoCompletesWithoutPendingRecord() async {
         let (store, _, defaults) = makeStore(suite: "completion-confirmed")
+        let successStore = makeSuccessStore(suite: "completion-confirmed").0
         let vm = OnboardingViewModel(service: RecordingResponseMock(response: .matchingDurable))
         await vm.startWithImage(UIImage(systemName: "photo")!)
         var didComplete = false
         let coordinator = OnboardingCompletionCoordinator(
             pendingRetryStore: store,
+            successStore: successStore,
             defaults: defaults,
             setSyncPending: {},
             startRemoteSync: {}
@@ -2681,6 +2703,7 @@ struct OnboardingCompletionCoordinatorTests {
         #expect(completed)
         #expect(didComplete)
         #expect(store.load().isEmpty)
+        #expect(successStore.load().count == 1)   // 成功增量已落本地
     }
 }
 
@@ -3840,4 +3863,693 @@ struct Tab2MilestoneLifecycleTests {
         #expect(vm.milestonePresentations.isEmpty)
     }
     #endif
+}
+
+// MARK: - Timeline stability tests（Tab1 加载跳动修复切片）
+//
+// 根因修复锁定：日期分隔符 ID 由 dayKey 确定性派生——缓存渲染与网络正本两次重建
+// 产出相同 ID 序列，SwiftUI diff 不再「删旧插新」引发整列重排；
+// 分组比较改用含年份的 dayKey，跨年同文案（"Aug 22"）不误并成一组。
+
+@MainActor
+struct TimelineStabilityTests {
+
+    // 与 TodayViewModel.decodeRecords 同策略的日期解码（ISO8601 带/不带小数秒）
+    private static let decoder: JSONDecoder = {
+        let d = JSONDecoder()
+        d.dateDecodingStrategy = .custom { decoder in
+            let c = try decoder.singleValueContainer()
+            let str = try c.decode(String.self)
+            let fmt = ISO8601DateFormatter()
+            fmt.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            if let d = fmt.date(from: str) { return d }
+            fmt.formatOptions = [.withInternetDateTime]
+            if let d = fmt.date(from: str) { return d }
+            throw DecodingError.dataCorruptedError(in: c, debugDescription: "Bad date: \(str)")
+        }
+        return d
+    }()
+
+    private func record(id: String, role: String, text: String, at isoDate: String) throws -> MessageRecord {
+        let json = """
+        {"id": "\(id)", "role": "\(role)", "user_content": "\(text)", "created_at": "\(isoDate)"}
+        """
+        return try Self.decoder.decode(MessageRecord.self, from: json.data(using: .utf8)!)
+    }
+
+    // 同一 dayKey 永远派生同一 UUID；不同 dayKey 派生不同 UUID（跨重建稳定）。
+    @Test func deterministicSeparatorIdIsStablePerDay() {
+        let a1 = TodayViewModel.deterministicSeparatorId(for: "2026-08-22")
+        let a2 = TodayViewModel.deterministicSeparatorId(for: "2026-08-22")
+        let b = TodayViewModel.deterministicSeparatorId(for: "2026-08-23")
+        #expect(a1 == a2)
+        #expect(a1 != b)
+    }
+
+    // 核心修复：同一批记录两次重建 → 整列 ID 序列逐位一致（含日期分隔符）。
+    // 缓存渲染与网络正本不再被判为「全新列表」，0 次无效重排。
+    @Test func rebuildProducesIdenticalEntryIds() throws {
+        let records = try [
+            record(id: "11111111-2222-3333-4444-555555555501", role: "user", text: "older", at: "2026-08-20T10:00:00Z"),
+            record(id: "11111111-2222-3333-4444-555555555502", role: "user", text: "newer", at: "2026-08-22T10:00:00Z")
+        ]
+        let first = TodayViewModel.buildEntries(from: records)
+        let second = TodayViewModel.buildEntries(from: records)
+        #expect(first.count == 4)   // 两天 → 两个分隔符 + 两条气泡
+        #expect(first.map(\.id) == second.map(\.id))
+    }
+
+    // 跨年同文案（"Mar 15"）但不同日历日：必须分成两组，各带自己的分隔符与 ID。
+    @Test func crossYearSameLabelDoesNotMerge() throws {
+        let records = try [
+            record(id: "11111111-2222-3333-4444-555555555511", role: "user", text: "last year", at: "2024-03-15T10:00:00Z"),
+            record(id: "11111111-2222-3333-4444-555555555512", role: "user", text: "this year", at: "2025-03-15T10:00:00Z")
+        ]
+        let entries = TodayViewModel.buildEntries(from: records)
+        let separators = entries.filter {
+            if case .dateSeparator = $0.content { return true }
+            return false
+        }
+        #expect(separators.count == 2)
+        #expect(separators[0].id != separators[1].id)
+    }
+
+    // 同一天的多条记录共享一个分隔符（按 dayKey 分组，不是按小时）
+    @Test func sameDayRecordsShareOneSeparator() throws {
+        let records = try [
+            record(id: "11111111-2222-3333-4444-555555555521", role: "user", text: "morning", at: "2026-08-22T09:00:00Z"),
+            record(id: "11111111-2222-3333-4444-555555555522", role: "user", text: "evening", at: "2026-08-22T21:00:00Z")
+        ]
+        let entries = TodayViewModel.buildEntries(from: records)
+        let separators = entries.filter {
+            if case .dateSeparator = $0.content { return true }
+            return false
+        }
+        #expect(separators.count == 1)
+    }
+
+    // 瞬间定位标志是一次性的：消费一次后即复位，后续条目变化走正常滚动规则。
+    @Test func instantJumpFlagConsumedOnce() {
+        let vm = TodayViewModel(service: SuccessMock(), isConsentGranted: { true })
+        vm.instantJumpToBottomPending = true
+        #expect(vm.takeInstantJumpFlag() == true)
+        #expect(vm.takeInstantJumpFlag() == false)
+    }
+
+    // loading → 最终卡片是同 count、同 id 的原位替换；必须另发明确的底部滚动请求，
+    // 否则只监听 entries.count 的视图永远感知不到最终卡片高度增长。
+    @Test func finalCardRequestsBottomScrollWithoutCountChange() async {
+        let service = ControllableGenerationMock()
+        let vm = TodayViewModel(service: service, isConsentGranted: { true })
+        let defaults = UserDefaults(suiteName: "diagnostic-scroll-trigger")!
+        defaults.removePersistentDomain(forName: "diagnostic-scroll-trigger")
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("diagnostic-scroll-trigger", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        vm.successStore = LocalSuccessStore(defaults: defaults, documentsDir: dir)
+        vm.pendingRetryStore = PendingRetryStore(defaults: defaults, documentsDir: dir)
+
+        let sendTask = Task { await vm.send("hi") }
+        let requestId = await service.waitForStartedRequests(1)[0]
+        let loadingCount = vm.entries.count
+        let loadingId = vm.entries.last?.id
+
+        await service.succeed(requestId)
+        await sendTask.value
+
+        #expect(vm.entries.count == loadingCount)
+        #expect(vm.entries.last?.id == loadingId)
+        #expect(vm.bottomScrollTargetId == loadingId)
+    }
+}
+
+// MARK: - LocalSuccessStore tests（S1 生成即落本地）
+
+struct LocalSuccessStoreTests {
+
+    private func makeStore(suite: String) -> (LocalSuccessStore, URL, UserDefaults) {
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("local-success-\(suite)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return (LocalSuccessStore(defaults: defaults, documentsDir: dir), dir, defaults)
+    }
+
+    private func sampleCard(_ target: String = "Today's meeting got postponed.") -> AICard {
+        .card(CardContent(
+            granularity: "sentence", direction: "express",
+            targetExpression: target, nativeMeaning: "今天会议推迟了。"
+        ))
+    }
+
+    // 文字成功记录：写入 → 新实例读取（杀 app 语义）→ 字段与卡片内容完整往返
+    @Test func textRecordSurvivesReloadWithCard() throws {
+        let (store, dir, defaults) = makeStore(suite: "success-text")
+        let requestId = UUID()
+        let userMessageId = UUID()
+        let assistantMessageId = UUID()
+        let createdAt = Date(timeIntervalSince1970: 1_800_000_000)
+        try store.saveTab1(
+            text: "今天会议推迟了", image: nil, requestId: requestId,
+            userMessageId: userMessageId, assistantMessageId: assistantMessageId,
+            createdAt: createdAt, card: sampleCard()
+        )
+
+        let reloaded = LocalSuccessStore(defaults: defaults, documentsDir: dir)
+        let records = reloaded.load()
+        #expect(records.count == 1)
+        #expect(records[0].requestId == requestId)
+        #expect(records[0].userMessageId == userMessageId)
+        #expect(records[0].assistantMessageId == assistantMessageId)
+        #expect(records[0].createdAt == createdAt)
+        #expect(records[0].text == "今天会议推迟了")
+        // 卡片 JSON 往返解码，内容一致
+        guard let restored = reloaded.card(for: records[0]),
+              case .card(let content) = restored else {
+            Issue.record("Expected card content round-trip"); return
+        }
+        #expect(content.displayTarget == "Today's meeting got postponed.")
+        #expect(content.nativeMeaning == "今天会议推迟了。")
+    }
+
+    // 照片成功记录：JPEG 落盘 → 新实例读回图片（气泡图来源）
+    @Test func photoRecordSurvivesReloadWithImage() throws {
+        let (store, dir, defaults) = makeStore(suite: "success-photo")
+        try store.saveTab1(
+            text: nil, image: UIImage(systemName: "photo")!, requestId: UUID(),
+            userMessageId: nil, assistantMessageId: nil,
+            createdAt: .now, card: sampleCard()
+        )
+
+        let reloaded = LocalSuccessStore(defaults: defaults, documentsDir: dir)
+        let record = reloaded.load()[0]
+        #expect(record.photoFileName != nil)
+        #expect(reloaded.bubbleImage(for: record) != nil)
+    }
+
+    // 预设卡成功记录：asset 图名往返 + 气泡图来自内置素材
+    @Test func presetRecordRoundTrips() {
+        let (store, dir, defaults) = makeStore(suite: "success-preset")
+        store.saveOnboardingPreset(
+            imageName: "card_scene_1", requestId: UUID(),
+            createdAt: .now, card: sampleCard()
+        )
+
+        let reloaded = LocalSuccessStore(defaults: defaults, documentsDir: dir)
+        let record = reloaded.load()[0]
+        #expect(record.presetImageName == "card_scene_1")
+        #expect(record.photoFileName == nil)
+        #expect(reloaded.bubbleImage(for: record) != nil)
+    }
+
+    // 幂等：同 requestId 重复保存（重试复用幂等键）只留一条
+    @Test func sameRequestIdIsIdempotent() throws {
+        let (store, _, _) = makeStore(suite: "success-idempotent")
+        let requestId = UUID()
+        try store.saveTab1(text: "hi", image: nil, requestId: requestId,
+                           userMessageId: nil, assistantMessageId: nil,
+                           createdAt: .now, card: sampleCard())
+        try store.saveTab1(text: "hi", image: nil, requestId: requestId,
+                           userMessageId: nil, assistantMessageId: nil,
+                           createdAt: .now, card: sampleCard())
+        #expect(store.load().count == 1)
+    }
+
+    // error 卡不是耐久内容：编码直接拒绝，不落本地
+    @Test func errorCardIsRejected() throws {
+        let json = #"{"card_type":"error","card_content":{"error_type":"unsafe"}}"#
+            .data(using: .utf8)!
+        let envelope = try JSONDecoder().decode(AIEnvelope.self, from: json)
+        #expect(throws: (any Error).self) {
+            try LocalSuccessStore.encodeCard(envelope.card)
+        }
+    }
+}
+
+// MARK: - S1/S2 注入时序 tests
+
+@MainActor
+struct LocalSuccessInjectionTests {
+
+    private func makeStore(suite: String) -> (LocalSuccessStore, URL, UserDefaults) {
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("local-success-inject-\(suite)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return (LocalSuccessStore(defaults: defaults, documentsDir: dir), dir, defaults)
+    }
+
+    private func makePendingStore(suite: String) -> PendingRetryStore {
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("pending-inject-\(suite)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return PendingRetryStore(defaults: defaults, documentsDir: dir)
+    }
+
+    private func dayLabelInTest(for date: Date) -> String {
+        let cal = Calendar.current
+        if cal.isDateInToday(date) { return "Today" }
+        if cal.isDateInYesterday(date) { return "Yesterday" }
+        let f = DateFormatter()
+        f.dateFormat = "MMM d"
+        return f.string(from: date)
+    }
+
+    // 发送成功 → 成功增量落本地；同会话再注入被幂等跳过（不出现重复气泡+卡片）
+    @Test func sendSuccessPersistsAndDoesNotDuplicateOnInjection() async throws {
+        let store = makeStore(suite: "inject-send-success").0
+        let vm = TodayViewModel(service: SuccessMock(), isConsentGranted: { true })
+        vm.successStore = store
+        vm.pendingRetryStore = makePendingStore(suite: "inject-send-success-pending")
+
+        await vm.send("今天会议推迟了")
+        let records = store.load()
+        #expect(records.count == 1)
+        #expect(records[0].text == "今天会议推迟了")
+        #expect(records[0].userMessageId != nil)   // Tab1 路径携带服务端消息行 ID
+        #expect(records[0].assistantMessageId != nil)
+
+        let countBefore = vm.entries.count
+        vm.injectLocalSuccesses()   // 模拟同会话回前台刷新：displayed 集合挡住重复注入
+        #expect(vm.entries.count == countBefore)
+    }
+
+    // 注入按写作时刻归位：day1 的成功对插进 day2 历史之前，且 day1 补自己的标题
+    @Test func injectionPlacesPairChronologically() throws {
+        let store = makeStore(suite: "inject-chronological").0
+        let base = Date(timeIntervalSince1970: 1_800_000_000)   // 固定日期，避免跨零点抖动
+        let day1 = base.addingTimeInterval(3_600)
+        let day2 = base.addingTimeInterval(86_400)
+        let userMessageId = UUID()
+        let assistantMessageId = UUID()
+        try store.saveTab1(
+            text: "day before", image: nil, requestId: UUID(),
+            userMessageId: userMessageId, assistantMessageId: assistantMessageId,
+            createdAt: day1,
+            card: .card(CardContent(granularity: "sentence", direction: "express",
+                                    targetExpression: "Yesterday's note."))
+        )
+
+        let vm = TodayViewModel(service: SuccessMock(), isConsentGranted: { true })
+        vm.successStore = store
+        vm.pendingRetryStore = makePendingStore(suite: "inject-chronological-pending")
+        // 服务端历史：只有 day2 一条（带该日标题）
+        vm.entries = [
+            TimelineEntry(id: UUID(), createdAt: day2,
+                          content: .dateSeparator(dayLabelInTest(for: day2))),
+            TimelineEntry(id: UUID(), createdAt: day2,
+                          content: .userBubble(text: "server history", image: nil,
+                                               imageUrl: nil, imageStableKey: nil))
+        ]
+
+        vm.injectLocalSuccesses()
+
+        func kind(_ entry: TimelineEntry) -> String {
+            switch entry.content {
+            case .dateSeparator: return "sep"
+            case .userBubble: return "bubble"
+            case .aiCard: return "card"
+            default: return "other"
+            }
+        }
+        #expect(vm.entries.map(kind) == ["sep", "bubble", "card", "sep", "bubble"])
+        // 气泡 id 用服务端消息行 ID：对齐回放时同 ID，零重排
+        #expect(vm.entries[1].id == userMessageId)
+        #expect(vm.entries[2].id == assistantMessageId)
+    }
+
+    // 幂等键已在服务端历史 → 本地副本清除、不注入（对齐已带回正本）
+    @Test func injectionSkipsServerCommittedRequestIds() throws {
+        let store = makeStore(suite: "inject-committed").0
+        let requestId = UUID()
+        try store.saveTab1(text: "already on server", image: nil, requestId: requestId,
+                           userMessageId: nil, assistantMessageId: nil,
+                           createdAt: .now,
+                           card: .card(CardContent(targetExpression: "On server.")))
+
+        let vm = TodayViewModel(service: SuccessMock(), isConsentGranted: { true })
+        vm.successStore = store
+        vm.pendingRetryStore = makePendingStore(suite: "inject-committed-pending")
+        vm.entries = [TimelineEntry.userBubble(text: "server history", image: nil)]
+
+        vm.injectLocalSuccesses(serverRequestIds: [requestId])
+
+        #expect(store.load().isEmpty)            // 服务器有正本：本地副本清除
+        #expect(vm.entries.count == 1)           // 不注入
+    }
+
+    // 气泡 id（服务端消息行 id）已在时间线 → 跳过注入（不重复）
+    @Test func injectionSkipsAlreadyDisplayedUserMessageId() throws {
+        let store = makeStore(suite: "inject-displayed").0
+        let userMessageId = UUID()
+        try store.saveTab1(text: "hi", image: nil, requestId: UUID(),
+                           userMessageId: userMessageId, assistantMessageId: UUID(),
+                           createdAt: .now,
+                           card: .card(CardContent(targetExpression: "Hi.")))
+
+        let vm = TodayViewModel(service: SuccessMock(), isConsentGranted: { true })
+        vm.successStore = store
+        vm.pendingRetryStore = makePendingStore(suite: "inject-displayed-pending")
+        vm.entries = [
+            TimelineEntry(id: userMessageId, createdAt: .now,
+                          content: .userBubble(text: "hi", image: nil,
+                                               imageUrl: nil, imageStableKey: nil))
+        ]
+
+        vm.injectLocalSuccesses()
+
+        #expect(vm.entries.count == 1)   // 已在时间线，不注入
+        #expect(store.load().count == 1) // 记录保留（尚未被服务端确认）
+    }
+
+    // 重试成功：失败行清掉、成功增量落本地（冷启动秒显的来源），不重复
+    @Test func retrySuccessWritesLocalSuccessAndClearsPending() async throws {
+        let store = makeStore(suite: "retry-success-writes").0
+        let pending = makePendingStore(suite: "retry-success-writes-pending")
+        let service = FailOnceMock()
+        let vm = TodayViewModel(service: service, isConsentGranted: { true })
+        vm.successStore = store
+        vm.pendingRetryStore = pending
+
+        await vm.send("今天会议推迟了")   // 第一次失败 → pending 记录
+
+        guard let failed = vm.entries.first(where: {
+            if case .sendFailed = $0.content { return true }
+            return false
+        }), case .sendFailed(let text, let image, let requestId, let bubbleEntryId) = failed.content else {
+            Issue.record("Expected sendFailed entry"); return
+        }
+        await vm.retrySend(text: text, image: image, failedEntryId: failed.id,
+                           requestId: requestId, bubbleEntryId: bubbleEntryId)
+
+        #expect(pending.load().isEmpty)        // 失败行已清
+        #expect(store.load().count == 1)       // 成功增量已落
+        #expect(store.load()[0].requestId == requestId)   // 复用原幂等键
+    }
+
+    // 幽灵对回归锁定：生成在途（重试已临时移除失败行、loading 在场）时，
+    // 注入必须跳过——否则时间线上会凭空多出一对「气泡 + 失败行」（成功也清不掉）。
+    // 真机复现路径：断网发送 → 点重试 → 重试在途时回前台/下拉刷新触发 loadHistory。
+    @Test func tab1InjectionSkippedWhileGenerationInFlight() async throws {
+        let pending = makePendingStore(suite: "inject-inflight-pending")
+        let requestId = UUID()
+        try pending.saveTab1(text: "inflight", image: nil, requestId: requestId, createdAt: .now)
+
+        let vm = TodayViewModel(service: SuccessMock(), isConsentGranted: { true })
+        vm.pendingRetryStore = pending
+        vm.successStore = makeStore(suite: "inject-inflight-success").0
+        // 模拟重试在途：失败行已移除、loading 在场、isLoading = true
+        vm.entries = [
+            TimelineEntry.userBubble(text: "inflight", image: nil),
+            TimelineEntry.aiLoading()
+        ]
+        vm.isLoading = true
+
+        vm.injectPendingRetry()
+
+        #expect(vm.entries.count == 2)          // 无幽灵对
+        #expect(pending.load().count == 1)      // 记录保留（本次尝试未结局，成败由它负责）
+    }
+
+    // ① 回归锁定：无服务端消息行 ID 的记录（onboarding 照片/预设卡路径）本会话只注入一次。
+    // 真机复现：onboarding 后首次进 Tab1 恰逢断网——同一次 loadHistory 网络前注入一遍、
+    // 拉取失败后 defer 兜底再注入一遍、每次回前台再翻倍，屏上卡片成对累积。
+    @Test func onboardingRecordInjectedOnlyOncePerSession() {
+        let store = makeStore(suite: "inject-onboarding-once").0
+        let requestId = UUID()
+        store.saveOnboardingPreset(
+            imageName: "card_scene_1", requestId: requestId,
+            createdAt: .now,
+            card: .card(CardContent(granularity: "sentence", direction: "express",
+                                    targetExpression: "A preset scene."))
+        )
+
+        let vm = TodayViewModel(service: SuccessMock(), isConsentGranted: { true })
+        vm.successStore = store
+        vm.pendingRetryStore = makePendingStore(suite: "inject-onboarding-once-pending")
+
+        vm.injectLocalSuccesses()   // 第一次：loadHistory 网络前注入
+        #expect(vm.entries.count == 3)   // 日期标题 + 气泡 + 卡片，恰好一对
+        vm.injectLocalSuccesses()   // 第二次：fetch 失败后 defer 兜底 / 下次回前台
+        #expect(vm.entries.count == 3)   // 不翻倍
+        #expect(store.load().count == 1) // 记录保留：未获服务端确认，杀 app 重启仍会注入一次
+    }
+
+    // 回归锁定：onboarding 照片待重试行重试成功 → 失败记录清除 + 成功增量落本地
+    // （冷启动秒显的来源）。该写入由 runGeneration 的 S1 统一分支负责（requestId 非空
+    // 即写，照片重试路径已带）——锁定它，防止未来改动把这条路径的 S1 覆盖弄丢。
+    @Test func photoRetrySuccessWritesLocalSuccess() async throws {
+        let store = makeStore(suite: "photo-retry-success").0
+        let pending = makePendingStore(suite: "photo-retry-success-pending")
+        try pending.savePhoto(UIImage(systemName: "photo")!, requestId: UUID())
+        guard let record = pending.load().first else {
+            Issue.record("Expected pending photo record"); return
+        }
+
+        let vm = TodayViewModel(service: SuccessMock(), isConsentGranted: { true })
+        vm.successStore = store
+        vm.pendingRetryStore = pending
+
+        await vm.retryPending(record: record)
+
+        #expect(pending.load().isEmpty)                    // 失败记录已清
+        #expect(store.load().count == 1)                   // 成功增量已落
+        #expect(store.load()[0].requestId == record.requestId)   // 复用原幂等键
+    }
+
+    // MARK: - 代码审查修复回归测试（2026-08-23）
+
+    // #1：主动发送清掉被动对齐窗口——冷启动历史在途时发送，新内容也要自动滚到底
+    @Test func sendClearsPassiveAlignment() async throws {
+        let vm = TodayViewModel(service: SuccessMock(), isConsentGranted: { true })
+        vm.successStore = makeStore(suite: "passive-clear").0
+        vm.pendingRetryStore = makePendingStore(suite: "passive-clear-pending")
+        vm.isPassiveAlignment = true   // 模拟 loadHistory 网络在途的被动窗口
+
+        await vm.send("hi")
+
+        #expect(!vm.isPassiveAlignment)   // 发送是主动动作：窗口清除，视图恢复自动滚动
+    }
+
+    // #2：同 requestId 的失败记录与成功记录并存（杀进程窗口）→ 失败侧不注入，成功侧照常
+    @Test func pendingRecordWithSuccessTwinIsNotInjected() throws {
+        let requestId = UUID()
+        let userMessageId = UUID()
+        let assistantMessageId = UUID()
+        let pendingStore = makePendingStore(suite: "twin-pending")
+        let successStore = makeStore(suite: "twin-success").0
+        let createdAt = Date(timeIntervalSince1970: 1_800_000_000)
+        try pendingStore.saveTab1(text: "hi", image: nil, requestId: requestId, createdAt: createdAt)
+        try successStore.saveTab1(
+            text: "hi", image: nil, requestId: requestId,
+            userMessageId: userMessageId, assistantMessageId: assistantMessageId,
+            createdAt: createdAt, card: .card(CardContent(targetExpression: "Hi."))
+        )
+
+        let vm = TodayViewModel(service: SuccessMock(), isConsentGranted: { true })
+        vm.successStore = successStore
+        vm.pendingRetryStore = pendingStore
+
+        vm.injectPendingRetry()
+        // 失败侧不注入：不出现「气泡 + 失败行」幽灵对
+        #expect(vm.entries.isEmpty)
+        // 记录保留在 store（下次联网后由 stale 检查自然清除）
+        #expect(pendingStore.load().count == 1)
+
+        vm.injectLocalSuccesses()
+        // 成功侧注入「日期分隔符 + 气泡 + 卡片」，气泡用服务端消息行 ID
+        #expect(vm.entries.count == 3)
+        #expect(vm.entries[1].id == userMessageId)
+        #expect(vm.entries[2].id == assistantMessageId)
+    }
+
+    // #3：跨零点——昨天的分隔符文案同为 "Today"，dayKey 判定不误并
+    @Test func hasTodaySeparatorUsesDayKeyNotLabel() throws {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd HH:mm"
+        formatter.timeZone = TimeZone.current
+
+        // 昨天的 23:59：文案与今天同为 "Today"（跨零点后的昨天分组）
+        let yesterdayLate = try #require(formatter.date(from: "2026-01-01 23:59"))
+        let yesterdaySeparator = TimelineEntry(
+            id: UUID(), createdAt: yesterdayLate,
+            content: .dateSeparator("Today")
+        )
+        #expect(!TodayViewModel.hasTodaySeparator(
+            lastSeparator: yesterdaySeparator, todayKey: "2026-01-02"))
+
+        let today = try #require(formatter.date(from: "2026-01-02 08:00"))
+        let todaySeparator = TimelineEntry(
+            id: UUID(), createdAt: today,
+            content: .dateSeparator("Today")
+        )
+        #expect(TodayViewModel.hasTodaySeparator(lastSeparator: todaySeparator, todayKey: "2026-01-02"))
+        #expect(!TodayViewModel.hasTodaySeparator(lastSeparator: nil, todayKey: "2026-01-02"))
+    }
+
+    // #6c：一条记录损坏只丢那一条，其余记录存活且自愈写回
+    @Test func corruptRecordDoesNotWipeSurvivingRecords() throws {
+        let (store, _, defaults) = makeStore(suite: "corrupt-one")
+        let goodRequestId = UUID()
+        let badRequestId = UUID()
+        let base = Date(timeIntervalSince1970: 1_800_000_000)
+        try store.saveTab1(
+            text: "good", image: nil, requestId: goodRequestId,
+            userMessageId: nil, assistantMessageId: nil, createdAt: base,
+            card: .card(CardContent(targetExpression: "Good."))
+        )
+        try store.saveTab1(
+            text: "bad", image: nil, requestId: badRequestId,
+            userMessageId: nil, assistantMessageId: nil, createdAt: base,
+            card: .card(CardContent(targetExpression: "Bad."))
+        )
+
+        // 把其中一条的 requestId 换成非法 UUID 字符串 → 该条解码失败 → 整体数组解码失败
+        let key = "local_success_records"
+        let raw = try #require(defaults.data(forKey: key))
+        var text = try #require(String(data: raw, encoding: .utf8))
+        text = text.replacingOccurrences(of: badRequestId.uuidString, with: "not-a-uuid")
+        defaults.set(Data(text.utf8), forKey: key)
+
+        let records = store.load()
+        #expect(records.count == 1)                    // 好记录存活
+        #expect(records[0].requestId == goodRequestId)
+        #expect(store.load().count == 1)               // 自愈写回：再次读取整体解码成功
+    }
+
+    // #7：cardData 解不出卡片（如升级后 schema 变化）→ 跳过注入但保留本地副本
+    @Test func badCardRecordIsSkippedButRetained() throws {
+        let (store, _, defaults) = makeStore(suite: "bad-card")
+        let requestId = UUID()
+        try store.saveTab1(
+            text: "hi", image: nil, requestId: requestId,
+            userMessageId: nil, assistantMessageId: nil, createdAt: .now,
+            card: .card(CardContent(targetExpression: "Hi."))
+        )
+
+        // 把 cardData 换成「合法 base64 但解不出卡片」的内容：记录本身仍可解码，
+        // 只有 card(for:) 会失败
+        let record = store.load()[0]
+        let originalBase64 = record.cardData.base64EncodedString()
+        let key = "local_success_records"
+        let raw = try #require(defaults.data(forKey: key))
+        var text = try #require(String(data: raw, encoding: .utf8))
+        text = text.replacingOccurrences(
+            of: originalBase64,
+            with: Data("corrupted card json".utf8).base64EncodedString()
+        )
+        defaults.set(Data(text.utf8), forKey: key)
+
+        let vm = TodayViewModel(service: SuccessMock(), isConsentGranted: { true })
+        vm.successStore = store
+        vm.pendingRetryStore = makePendingStore(suite: "bad-card-pending")
+
+        vm.injectLocalSuccesses()
+        #expect(vm.entries.isEmpty)                    // 坏记录不注入
+        #expect(store.load().count == 1)               // 本地副本保留（服务端正本兜底前不毁底稿）
+
+        vm.injectLocalSuccesses()                      // 再跑一次：行为一致，不反复失败也不删
+        #expect(vm.entries.isEmpty)
+        #expect(store.load().count == 1)
+    }
+
+    // #8：onboarding 照片的服务器消息行 ID 透传进 S1 记录，注入时用作条目身份证
+    @Test func onboardingPhotoCarriesServerIdsIntoInjection() throws {
+        let (store, _, _) = makeStore(suite: "onboarding-ids")
+        let requestId = UUID()
+        let userMessageId = UUID()
+        let assistantMessageId = UUID()
+        let image = try #require(UIImage(systemName: "camera"))
+        try store.saveOnboardingPhoto(
+            image, requestId: requestId, createdAt: .now,
+            userMessageId: userMessageId, assistantMessageId: assistantMessageId,
+            card: .card(CardContent(targetExpression: "My desk."))
+        )
+
+        let vm = TodayViewModel(service: SuccessMock(), isConsentGranted: { true })
+        vm.successStore = store
+        vm.pendingRetryStore = makePendingStore(suite: "onboarding-ids-pending")
+        vm.injectLocalSuccesses()
+
+        #expect(vm.entries.count == 3)   // 日期分隔符 + 气泡 + 卡片
+        #expect(vm.entries[1].id == userMessageId)     // 气泡用服务端消息行 ID：对齐零重排
+        #expect(vm.entries[2].id == assistantMessageId)
+    }
+
+    // #12：整列替换放行判定——生成在途 / 会话已有实时对话 / 快照缺会话已展示键，任一命中不放行
+    @Test func shouldReplaceHistoryGatesAllThreeConditions() {
+        let sessionIds: Set<UUID> = [UUID(), UUID()]
+        let serverIds: Set<UUID> = [UUID()]
+        let unionIds = sessionIds.union(serverIds)
+
+        // 三关全过 → 放行
+        #expect(TodayViewModel.shouldReplaceHistory(
+            isLoading: false, hasLiveActivity: false,
+            displayedSuccessRequestIds: sessionIds, serverRequestIds: unionIds))
+
+        // 生成在途 → 不放行
+        #expect(!TodayViewModel.shouldReplaceHistory(
+            isLoading: true, hasLiveActivity: false,
+            displayedSuccessRequestIds: sessionIds, serverRequestIds: unionIds))
+
+        // 本会话已有实时对话 → 不放行
+        #expect(!TodayViewModel.shouldReplaceHistory(
+            isLoading: false, hasLiveActivity: true,
+            displayedSuccessRequestIds: sessionIds, serverRequestIds: unionIds))
+
+        // 服务端快照缺了会话已展示的幂等键 → 不放行（会话内容被替换会冲掉）
+        #expect(!TodayViewModel.shouldReplaceHistory(
+            isLoading: false, hasLiveActivity: false,
+            displayedSuccessRequestIds: sessionIds, serverRequestIds: serverIds))
+
+        // 边界：无会话键（冷启动纯历史对齐）→ 放行
+        #expect(TodayViewModel.shouldReplaceHistory(
+            isLoading: false, hasLiveActivity: false,
+            displayedSuccessRequestIds: [], serverRequestIds: []))
+    }
+
+    // #13：失败行整会话残留——服务端历史已有该幂等键（超时误判失败/他处重试成功）时，
+    // 注入对账顺带移除屏上的错误失败行；气泡保留（消息确实发出去了）
+    @Test func staleFailedRowIsRemovedButBubbleStays() throws {
+        let requestId = UUID()
+        let bubbleId = UUID()
+        let failedId = UUID()
+
+        let vm = TodayViewModel(service: SuccessMock(), isConsentGranted: { true })
+        vm.successStore = makeStore(suite: "stale-row").0
+        vm.pendingRetryStore = makePendingStore(suite: "stale-row-pending")
+        vm.entries = [
+            TimelineEntry(
+                id: bubbleId, createdAt: .now,
+                content: .userBubble(text: "hi", image: nil, imageUrl: nil, imageStableKey: nil)
+            ),
+            TimelineEntry(
+                id: failedId, createdAt: .now,
+                content: .sendFailed(text: "hi", image: nil, requestId: requestId, bubbleEntryId: bubbleId)
+            )
+        ]
+
+        vm.injectPendingRetry(serverRequestIds: [requestId])
+
+        #expect(vm.entries.count == 1)          // 失败行移除
+        #expect(vm.entries[0].id == bubbleId)   // 气泡保留
+
+        // 反向：服务端没有该幂等键 → 失败行不动（仍是合法的待重试状态）
+        vm.entries = [
+            TimelineEntry(
+                id: bubbleId, createdAt: .now,
+                content: .userBubble(text: "hi", image: nil, imageUrl: nil, imageStableKey: nil)
+            ),
+            TimelineEntry(
+                id: failedId, createdAt: .now,
+                content: .sendFailed(text: "hi", image: nil, requestId: requestId, bubbleEntryId: bubbleId)
+            )
+        ]
+        vm.injectPendingRetry(serverRequestIds: [])
+        #expect(vm.entries.count == 2)          // 气泡 + 失败行都在
+    }
 }

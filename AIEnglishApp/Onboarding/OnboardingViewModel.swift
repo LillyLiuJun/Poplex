@@ -51,6 +51,11 @@ final class OnboardingViewModel {
     var errorKind: OnboardingErrorKind?
     /// 当前所选素材（照片或预设卡）的稳定幂等键：换素材新建，Retry 复用，reset/reject 清除。
     private(set) var currentRequestId: UUID?
+    /// 照片路径生成的服务器消息行 ID（审查发现 #8）：S1 落本地时透传给成功记录，
+    /// 注入 Tab1 时气泡/卡片用服务器 ID 当条目身份证 → 与回放对齐零重排。
+    /// 与 generationResult 同生命周期：reset/reject/重新 generate 时清除。
+    private(set) var generationUserMessageId: UUID?
+    private(set) var generationAssistantMessageId: UUID?
     /// 只由「当前仍选着照片 + 尚无确认结果」表达，不依赖某一种错误分类。
     var hasUnconfirmedPhotoGeneration: Bool {
         selectedImage != nil && generationResult == nil
@@ -112,6 +117,8 @@ final class OnboardingViewModel {
         selectedImage = nil
         currentRequestId = nil
         generationResult = nil
+        generationUserMessageId = nil
+        generationAssistantMessageId = nil
         isLoading = false
         errorKind = nil
         offlineFailureOccurred = false
@@ -126,6 +133,8 @@ final class OnboardingViewModel {
         selectedImage = nil
         currentRequestId = nil
         generationResult = nil
+        generationUserMessageId = nil
+        generationAssistantMessageId = nil
         isLoading = false
         presetSavedToServer = false
     }
@@ -138,6 +147,8 @@ final class OnboardingViewModel {
         isLoading = true
         errorKind = nil
         generationResult = nil
+        generationUserMessageId = nil
+        generationAssistantMessageId = nil
         presetSavedToServer = false
         defer {
             // 旧 attempt 完成时绝不能收掉新 attempt 的 loading。
@@ -205,6 +216,10 @@ final class OnboardingViewModel {
                     throw OnboardingGenerationValidationError.invalidDurableIdentity
                 }
                 generationResult = envelope.card
+                // 透传服务器消息行 ID（审查发现 #8）：与 Tab1 路径一致，S1 落库时随卡保存，
+                // Tab1 注入时气泡/卡片用同一 ID，网络对齐后零重排。
+                generationUserMessageId = envelope.userMessageId
+                generationAssistantMessageId = envelope.assistantMessageId
             } else {
                 return
             }
