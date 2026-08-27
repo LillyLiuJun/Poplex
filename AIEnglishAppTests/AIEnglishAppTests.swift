@@ -1847,6 +1847,38 @@ struct PendingRetryStoreTests {
         return (PendingRetryStore(defaults: defaults, documentsDir: dir), dir, defaults)
     }
 
+    // 删号 / 注销后：记录与其照片文件都必须消失，不能只清索引留下孤儿图片
+    @Test func clearAllRemovesRecordsAndTheirPhotoFiles() throws {
+        let (store, dir, defaults) = makeStore(suite: "pending-retry-clear-all")
+        // 1×1 图即可：这里验的是「文件被连带删除」，不是图片内容
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 1, height: 1)).image { ctx in
+            UIColor.orange.setFill()
+            ctx.fill(CGRect(x: 0, y: 0, width: 1, height: 1))
+        }
+        try store.saveTab1(text: "hello", image: image, requestId: UUID(), createdAt: Date())
+        store.savePreset(cardId: "2", imageName: "card_scene_2", requestId: UUID())
+        #expect(store.load().count == 2)
+
+        let filesBefore = (try? FileManager.default.contentsOfDirectory(atPath: dir.path))?.count ?? 0
+        #expect(filesBefore > 0)   // 确认确实落了照片文件，否则这个断言没意义
+
+        store.clearAll()
+
+        #expect(store.load().isEmpty)
+        // 新实例读取（杀 app 语义）：确认清除是持久化的，不只是内存态
+        #expect(PendingRetryStore(defaults: defaults, documentsDir: dir).load().isEmpty)
+        // 照片文件必须一起走，否则 Documents 里会留下永不被引用的孤儿文件
+        let filesAfter = (try? FileManager.default.contentsOfDirectory(atPath: dir.path))?.count ?? 0
+        #expect(filesAfter == 0)
+    }
+
+    @Test func clearAllOnEmptyStoreIsSafe() {
+        // 删号时大概率一条记录都没有——不能因此崩或抛
+        let (store, _, _) = makeStore(suite: "pending-retry-clear-empty")
+        store.clearAll()
+        #expect(store.load().isEmpty)
+    }
+
     // 预设卡记录：写入 → 新实例读取（杀 app 语义）→ 字段完整
     @Test func presetRecordSurvivesReload() {
         let (store, dir, defaults) = makeStore(suite: "pending-retry-preset")
@@ -3692,6 +3724,236 @@ struct CategoryMilestoneTrackerTests {
     }
 }
 
+struct LocalUserDataTests {
+
+    private func makeDefaults(_ suite: String) -> UserDefaults {
+        let d = UserDefaults(suiteName: suite)!
+        d.removePersistentDomain(forName: suite)
+        return d
+    }
+
+    // 本条锁的是踩过的坑：路由标志位若用 removeObject，磁盘确实清了，
+    // 但 @AppStorage 接不到「键被移除」，界面不会切回 onboarding——
+    // 表现为「账号删了、页面没变化」。必须显式归 0，产生一次明确的值变化。
+    @Test func routingFlagsAreZeroedNotRemoved() async {
+        let defaults = makeDefaults("local-user-data-routing")
+        defaults.set(1_787_000_000.0, forKey: "onboarding_completed_at")
+        defaults.set(1_787_000_000.0, forKey: "ai_consent_accepted_at")
+
+        await LocalUserData.clearDefaults(defaults)
+
+        for key in ["onboarding_completed_at", "ai_consent_accepted_at"] {
+            // 键必须还在，且值为 0——RootView 判的是 `> 0`，0 即「未完成引导」
+            #expect(defaults.object(forKey: key) != nil, "\(key) 不该被移除，移除后 @AppStorage 接不到变化")
+            #expect(defaults.double(forKey: key) == 0)
+        }
+    }
+
+    @Test func otherAccountKeysAreRemoved() async {
+        let defaults = makeDefaults("local-user-data-other")
+        defaults.set(true, forKey: Tab2Defaults.permanentlyUnlocked)
+        defaults.set(true, forKey: Tab2Defaults.firstUnlockShown)
+        defaults.set(42, forKey: "mine_last_scene_count")
+        // 2026-08-27 review 发现的遗漏：引导完成待同步标记也是账号级状态
+        defaults.set(true, forKey: ProfileService.onboardingSyncPendingKey)
+
+        await LocalUserData.clearDefaults(defaults)
+
+        // 这三个没有视图直接观察，移除即可，不必留占位值
+        #expect(defaults.object(forKey: Tab2Defaults.permanentlyUnlocked) == nil)
+        #expect(defaults.object(forKey: Tab2Defaults.firstUnlockShown) == nil)
+        #expect(defaults.object(forKey: "mine_last_scene_count") == nil)
+        #expect(defaults.object(forKey: ProfileService.onboardingSyncPendingKey) == nil)
+    }
+
+    // 这条锁的是 re-review 发现的 false success：
+    // 两个 store 的 remove(id:) 先写元数据、再 try? 删 JPEG。删文件失败时
+    // 记录已消失、文件还在，而 load().count 返回 0 —— clearAll 会谎报「已清空」。
+    // 文件级残留必须靠扫目录才发现得了。
+    @Test func sweepFindsOrphanPhotosThatIndexNoLongerKnowsAbout() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("sweep-orphans-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        // 没有任何索引指向它们——模拟「删文件失败」或「索引损坏」留下的孤儿
+        try Data([0xFF]).write(to: dir.appendingPathComponent("\(UUID().uuidString).jpg"))
+        try Data([0xFF]).write(to: dir.appendingPathComponent("\(UUID().uuidString).jpg"))
+        // 非 jpg 不得误伤
+        try Data([0x00]).write(to: dir.appendingPathComponent("keep.json"))
+
+        let remaining = LocalUserData.sweepOrphanPhotos(in: dir)
+
+        #expect(remaining == 0)
+        let left = try FileManager.default.contentsOfDirectory(atPath: dir.path)
+        #expect(left == ["keep.json"], "只清 .jpg，其它文件必须留着：\(left)")
+    }
+
+    // 索引写入被中断会留下坏掉的 JSON。此时 store 解不出记录、clearAll 报 0 残留，
+    // 而照片文件其实还在 —— 只靠回读索引永远发现不了，必须靠扫目录兜底。
+    @Test func corruptIndexStillLetsSweepFindTheFiles() throws {
+        let suite = "corrupt-index-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(suite, isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        // 索引坏掉，但照片文件还在
+        defaults.set(Data("{ not valid json".utf8), forKey: "pending_retry_records")
+        try Data([0xFF]).write(to: dir.appendingPathComponent("\(UUID().uuidString).jpg"))
+
+        let store = PendingRetryStore(defaults: defaults, documentsDir: dir)
+        // 不该崩；索引解不出来 → 它认为「没有记录」，报 0 残留
+        #expect(store.clearAll() == 0)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: dir.path).count == 1,
+                "索引层清不掉文件——这正是需要 sweep 兜底的原因")
+
+        // 兜底扫描必须把它清掉
+        #expect(LocalUserData.sweepOrphanPhotos(in: dir) == 0)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: dir.path).isEmpty)
+    }
+
+    @Test func sweepOnMissingDirectoryIsSafe() {
+        let missing = FileManager.default.temporaryDirectory
+            .appendingPathComponent("definitely-not-there-\(UUID().uuidString)")
+        // 目录不存在 = 已是目标状态，不该报残留
+        #expect(LocalUserData.sweepOrphanPhotos(in: missing) == 0)
+    }
+
+    // 图片缓存里存的是用户自己上传的照片。删号后不清 = 一边留着用户照片、
+    // 一边宣称「全部数据已删除」。这条锁的是「清完必须真的没了，且能自报残留」。
+    @Test func imageCacheClearAllRemovesEverythingAndReportsLeftovers() {
+        let cache = ImageCache.shared
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 1, height: 1)).image { ctx in
+            UIColor.orange.setFill()
+            ctx.fill(CGRect(x: 0, y: 0, width: 1, height: 1))
+        }
+        cache.set(image, forKey: "bucket/user/clear-all-test.jpg")
+        #expect(cache.get("bucket/user/clear-all-test.jpg") != nil)
+
+        let leftovers = cache.clearAll()
+
+        #expect(leftovers == 0, "清理应报告 0 残留，否则 UI 不该宣称已清空")
+        #expect(cache.get("bucket/user/clear-all-test.jpg") == nil, "内存与磁盘两层都必须清掉")
+    }
+
+    @Test func milestoneProgressIsClearedAcrossAllUserIDs() async {
+        let defaults = makeDefaults("local-user-data-milestones")
+        // 里程碑按 userID 分键；删号后这些键永不再读，必须按前缀全清，否则无限累积
+        defaults.set(["food": 20], forKey: "tab2_category_milestones_v1.USER-A.counts")
+        defaults.set(["food"], forKey: "tab2_category_milestones_v1.USER-A.achieved")
+        defaults.set(["work": 5], forKey: "tab2_category_milestones_v1.USER-B.counts")
+        defaults.set("keep-me", forKey: "unrelated_key")
+
+        await LocalUserData.clearDefaults(defaults)
+
+        let leftovers = defaults.dictionaryRepresentation().keys
+            .filter { $0.hasPrefix("tab2_category_milestones_v1") }
+        #expect(leftovers.isEmpty)
+        // 只清账号相关的，别误伤其它键
+        #expect(defaults.string(forKey: "unrelated_key") == "keep-me")
+    }
+}
+
+struct AccountDeletionAndSessionTests {
+
+    // MARK: - SessionAction（取会话走哪条路）
+
+    @Test func expiredSessionMustRefreshInsteadOfBeingReused() {
+        // 这条锁的就是那个 bug：有会话但已过期时，绝不能 .reuse。
+        // 复用过期 JWT → Edge Function 验签失败返回 401 → 调用方静默吞掉，
+        // 表现为「转圈一下什么都没发生」，且无从排查。
+        #expect(SessionAction.decide(hasSession: true, isExpired: true) == .refresh)
+    }
+
+    @Test func validSessionIsReusedWithoutNetworkCall() {
+        // 未过期必须直接复用：每次请求都去刷新会白白增加一次往返。
+        #expect(SessionAction.decide(hasSession: true, isExpired: false) == .reuse)
+    }
+
+    @Test func missingSessionSignsInAnonymously() {
+        // 新装 / Keychain 被清：没有 refresh token 可用，只能重新匿名注册。
+        // isExpired 此时无意义，两种取值都必须落到 .signIn。
+        #expect(SessionAction.decide(hasSession: false, isExpired: false) == .signIn)
+        #expect(SessionAction.decide(hasSession: false, isExpired: true) == .signIn)
+    }
+
+    // MARK: - 服务端 storage 清理回报
+
+    @Test func missingStorageFieldIsTreatedAsCleared() {
+        // 老版本 Edge Function 不返回该字段。解不出来就吓唬用户是错的——
+        // 兼容缺失 = 视为已清空。
+        #expect(SettingsView.storageCleared(from: Data(#"{"success":true}"#.utf8)))
+        #expect(SettingsView.storageCleared(from: Data()))
+        #expect(SettingsView.storageCleared(from: Data("not json".utf8)))
+    }
+
+    @Test func storageClearedFalseIsDecoded() {
+        let data = Data(#"{"success":true,"storage_cleared":false,"storage_leftover":3}"#.utf8)
+        #expect(SettingsView.storageCleared(from: data) == false)
+    }
+
+    @Test func partialCleanupWarningNeverClaimsEverythingWasDeleted() {
+        // 关键不变量：只要有残留，文案里就不能出现「全部数据已删除」的断言。
+        for (local, server) in [(false, false), (false, true), (true, false)] {
+            let msg = SettingsView.partialCleanupWarning(localCleared: local, serverCleared: server)
+            #expect(!msg.lowercased().contains("all "), "残留时不得断言 all data deleted：\(msg)")
+            #expect(msg.contains("deleted"))
+        }
+    }
+
+    @Test func warningDistinguishesDeviceFromServerLeftovers() {
+        // 本地残留 → 告诉用户重装可清；服务端残留 → 用户做不了什么，
+        // 硬让他「重装试试」只会白折腾。两种措辞必须不同。
+        let deviceOnly = SettingsView.partialCleanupWarning(localCleared: false, serverCleared: true)
+        let serverOnly = SettingsView.partialCleanupWarning(localCleared: true, serverCleared: false)
+        #expect(deviceOnly.contains("reinstalling"))
+        #expect(!serverOnly.contains("reinstalling"))
+        #expect(deviceOnly != serverOnly)
+    }
+
+    // MARK: - 删号失败文案（失败必须可见且可执行）
+
+    @Test func unauthorizedStatusTellsUserToReopenTheApp() {
+        // 401 = 会话过期的典型码，重开 App 即可恢复，值得单独给话术。
+        let message = SettingsView.deleteErrorMessage(status: 401)
+        #expect(message.contains("session expired"))
+        #expect(message != SettingsView.genericDeleteError)
+    }
+
+    @Test func otherStatusCodesFallBackToGenericMessageWithoutLeakingNumbers() {
+        for status in [400, 403, 404, 500, 503] {
+            #expect(SettingsView.deleteErrorMessage(status: status) == SettingsView.genericDeleteError)
+        }
+        // 连 HTTPURLResponse 都没拿到（status 为 nil）也要有兜底文案。
+        #expect(SettingsView.deleteErrorMessage(status: nil) == SettingsView.genericDeleteError)
+    }
+
+    @Test func offlineErrorsAreDistinguishedFromGenericFailure() {
+        for code in [URLError.Code.notConnectedToInternet, .networkConnectionLost, .dataNotAllowed] {
+            let message = SettingsView.deleteErrorMessage(error: URLError(code))
+            #expect(message.contains("offline"))
+        }
+    }
+
+    @Test func timeoutWarnsThatDeletionMayHaveSucceeded() {
+        // 服务端不会因客户端超时而停止：不提示「可能已删成功」，
+        // 用户会反复重试一件其实已经完成的事。
+        let message = SettingsView.deleteErrorMessage(error: URLError(.timedOut))
+        #expect(message.contains("already deleted"))
+        #expect(message != SettingsView.genericDeleteError)
+    }
+
+    @Test func unknownErrorsStillProduceAVisibleMessage() {
+        // 关键不变量：任何失败路径都必须产出非空文案——绝不能再有静默失败。
+        let message = SettingsView.deleteErrorMessage(error: NSError(domain: "test", code: 1))
+        #expect(!message.isEmpty)
+        #expect(message == SettingsView.genericDeleteError)
+    }
+}
+
 struct Tab2MilestoneLifecycleTests {
 
     @Test func milestoneEmphasisScalesOnlyDuringStandardMotionPresentation() {
@@ -3710,6 +3972,69 @@ struct Tab2MilestoneLifecycleTests {
             isEmphasized: true,
             reduceMotion: false
         ) == 1.0)
+    }
+
+    // MARK: - CategoryProgressRow.isHot（分类行「点亮」判定）
+
+    @Test func unlockedCategoryStaysHotEvenBelowTarget() {
+        // 已解锁的分类常驻点亮：即便 wordCount 因口径调整回落到 target 以下，
+        // 也不该退回未点亮的样子（feat/page-visual-polish 有意引入的行为）。
+        #expect(CategoryProgressRow.isHot(
+            isPresentingMilestone: false,
+            milestoneRevealed: false,
+            unlocked: true,
+            wordCount: 3,
+            targetCount: 20,
+            isHighlighted: false
+        ))
+    }
+
+    @Test func lockedCategoryIsHotOnlyAtOrAboveTarget() {
+        func hot(_ count: Int) -> Bool {
+            CategoryProgressRow.isHot(
+                isPresentingMilestone: false,
+                milestoneRevealed: false,
+                unlocked: false,
+                wordCount: count,
+                targetCount: 20,
+                isHighlighted: false
+            )
+        }
+        #expect(hot(19) == false)
+        #expect(hot(20))          // 边界：达标即点亮
+        #expect(hot(21))
+    }
+
+    @Test func highlightForcesHotOnLockedBelowTargetCategory() {
+        #expect(CategoryProgressRow.isHot(
+            isPresentingMilestone: false,
+            milestoneRevealed: false,
+            unlocked: false,
+            wordCount: 1,
+            targetCount: 20,
+            isHighlighted: true
+        ))
+    }
+
+    @Test func milestonePresentationOverridesAllOtherHotSources() {
+        // 演出期间只听揭示节拍：即使已解锁且远超达标线，未揭示前也必须保持未点亮，
+        // 否则数字还没跑完就抢先点亮，里程碑动效失去意义。
+        #expect(CategoryProgressRow.isHot(
+            isPresentingMilestone: true,
+            milestoneRevealed: false,
+            unlocked: true,
+            wordCount: 99,
+            targetCount: 20,
+            isHighlighted: true
+        ) == false)
+        #expect(CategoryProgressRow.isHot(
+            isPresentingMilestone: true,
+            milestoneRevealed: true,
+            unlocked: false,
+            wordCount: 0,
+            targetCount: 20,
+            isHighlighted: false
+        ))
     }
 
     @Test func milestoneToastLifetimeIsShorterThanReadingToastLifetime() {

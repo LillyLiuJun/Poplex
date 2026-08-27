@@ -179,6 +179,12 @@ struct SettingsView: View {
     @State private var showFeedback = false
     @State private var showDeleteAlert = false
     @State private var isDeleting = false
+    /// 删号失败原因。非 nil 即弹错误 alert。
+    /// 早先这里是空 catch（注释写「静默失败：按钮重新可点，用户可重试」）——
+    /// 结果是删号挂了近三周没人发现：用户只看到转圈然后回到原样，无从报告，
+    /// 开发也无从定位，最后靠一次完整的后端排查才找到根因。
+    /// 失败必须可见，这也是 CLAUDE.md「每个页面必须定义 error 状态」的要求。
+    @State private var deleteErrorMessage: String?
     @State private var safariItem: IdentifiableURL?
 
     private let privacyURL = URL(string: "https://poplex-legal.vercel.app/privacy.html")!
@@ -220,6 +226,11 @@ struct SettingsView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This will permanently delete your account, expressions, and progress. This action cannot be undone.")
+        }
+        .alert("Couldn't delete account", isPresented: deleteErrorPresented) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(deleteErrorMessage ?? "Something went wrong. Please try again.")
         }
         .sheet(item: $safariItem) { item in
             SafariView(url: item.url)
@@ -307,8 +318,11 @@ struct SettingsView: View {
         settingsCard("Developer") {
             settingsRow(icon: .reset, label: "Reset Library unlock",
                         showsChevron: false) {
-                UserDefaults.standard.removeObject(forKey: "tab2_permanently_unlocked")
-                UserDefaults.standard.removeObject(forKey: "tab2_first_unlock_shown")
+                UserDefaults.standard.removeObject(forKey: Tab2Defaults.permanentlyUnlocked)
+                UserDefaults.standard.removeObject(forKey: Tab2Defaults.firstUnlockShown)
+                // 清理历史旧版本可能残留的 debug 脏数据
+                let legacyKeys = ["debug_keep_ready_mock", "debug_force_tab2_empty", "debug_trigger_ready_state", "debug_trigger_milestone_demo"]
+                legacyKeys.forEach { UserDefaults.standard.removeObject(forKey: $0) }
             }
         }
     }
@@ -378,30 +392,117 @@ struct SettingsView: View {
 
     // MARK: - Delete account
 
+    private var deleteErrorPresented: Binding<Bool> {
+        Binding(
+            get: { deleteErrorMessage != nil },
+            set: { if !$0 { deleteErrorMessage = nil } }
+        )
+    }
+
     private func deleteAccount() async {
         isDeleting = true
+        deleteErrorMessage = nil
         defer { isDeleting = false }
 
         do {
             var request = URLRequest(url: SupabaseConfig.deleteAccountFunctionURL)
             request.httpMethod = "POST"
-            request.timeoutInterval = 30
+            // 后端要串行删 7 张表 + Storage 对象 + auth 用户，空账号实测已近 10s，
+            // 有素材的账号更久。30s 对这条链路太紧，超时会被误当成「删不掉」。
+            request.timeoutInterval = 90
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             try await SupabaseManager.setAuthHeaders(on: &request)
 
-            let (_, response) = try await URLSession.shared.data(for: request)
-            guard let http = response as? HTTPURLResponse,
-                  (200..<300).contains(http.statusCode) else { return }
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let status = (response as? HTTPURLResponse)?.statusCode
+            guard let status, (200..<300).contains(status) else {
+                deleteErrorMessage = Self.deleteErrorMessage(status: status)
+                return
+            }
 
             try? await SupabaseManager.signOut()
-            let keys = ["onboarding_completed_at", "ai_consent_accepted_at",
-                        "tab2_permanently_unlocked", "tab2_first_unlock_shown",
-                        "mine_last_scene_count"]
-            keys.forEach { UserDefaults.standard.removeObject(forKey: $0) }
+            // 服务器数据没了，本地镜像也必须一起清——App 随后会静默注册一个新匿名账号，
+            // 残留的缓存/记录会被新账号读到，表现为「账号删了、内容还在」。
+            // 完整清单在 LocalUserData，新增本地存储时只需在那里补一行。
+            let localFullyCleared = await LocalUserData.clearAll()
+            // 服务端会如实回报 Storage 是否确认清空。字段缺失时按「已清空」处理：
+            // 老版本函数不返回该字段，不能因为解不出来就吓唬用户。
+            let serverFullyCleared = Self.storageCleared(from: data)
 
+            // 有残留时如实告知——不能一边留着用户的照片、一边宣称「全部数据已删除」。
+            // 提示写到**根一级**：clearAll() 已把 onboarding 标记归 0，
+            // RootView 马上会切到 OnboardingView，本页连同 sheet 一起销毁，
+            // 挂在这里的 alert 不会有宿主（见 AccountDeletionNotice）。
+            if !localFullyCleared || !serverFullyCleared {
+                AccountDeletionNotice.shared.message = Self.partialCleanupWarning(
+                    localCleared: localFullyCleared,
+                    serverCleared: serverFullyCleared
+                )
+            }
             dismiss()
         } catch {
-            // 静默失败：按钮重新可点，用户可重试
+            deleteErrorMessage = Self.deleteErrorMessage(error: error)
+        }
+    }
+
+    static let genericDeleteError =
+        "We couldn't delete your account. Please try again."
+
+    /// 服务端 `storage_cleared` 解码。字段缺失 → 视为已清空（老版本函数兼容）。
+    static func storageCleared(from data: Data) -> Bool {
+        guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            // 2xx 却给不出 JSON body 属异常信号。但告诉用户没有意义——
+            // 他对此做不了任何事，弹窗只会制造焦虑。记日志便于排查，
+            // 行为上仍按「已清空」处理（与字段缺失一致）。
+            if !data.isEmpty {
+                print("[delete-account] 2xx response with non-JSON body, assuming storage cleared")
+            }
+            return true
+        }
+        // 字段缺失 = 老版本 Edge Function，正常情况，不记日志也不警告用户。
+        guard let cleared = obj["storage_cleared"] as? Bool else { return true }
+        return cleared
+    }
+
+    /// 账号确实删掉了、但有东西没擦干净时的文案。
+    /// 刻意不含「全部数据已删除」这类断言——那正是残留时不成立的部分。
+    /// 本地与服务端分开措辞：前者用户重装即可清除，后者用户做不了什么，
+    /// 硬让他「重装试试」只会白折腾。
+    static func partialCleanupWarning(localCleared: Bool, serverCleared: Bool) -> String {
+        let head = "Your account was deleted."
+        switch (localCleared, serverCleared) {
+        case (false, false):
+            return "\(head) Some files couldn't be removed: a few uploaded images remain on our servers, and some files remain on this device — reinstalling the app clears the device ones."
+        case (false, true):
+            return "\(head) Some files couldn't be removed from this device — reinstalling the app will clear them."
+        case (true, false):
+            return "\(head) A few uploaded images couldn't be removed from our servers."
+        case (true, true):
+            return head
+        }
+    }
+
+    /// HTTP 状态码 → 用户可见文案。
+    /// 401 单独给话术：这是会话过期的典型码，重开 App 就能拿到新会话
+    /// （历史上正是「过期 JWT → 401 → 静默吞掉」让删号挂了近三周没人发现）。
+    /// 其余码不向用户暴露数字，只给可执行的下一步。
+    static func deleteErrorMessage(status: Int?) -> String {
+        status == 401
+            ? "Your session expired. Please reopen the app and try again."
+            : genericDeleteError
+    }
+
+    /// 抛出的错误 → 用户可见文案。
+    /// 断网与超时必须分开说：前者用户能自己解决；后者要提醒「可能已经删成功了」——
+    /// 服务端不会因为客户端超时而停止，不提示这一点，用户会反复重试一件已完成的事。
+    static func deleteErrorMessage(error: Error) -> String {
+        switch (error as? URLError)?.code {
+        case .notConnectedToInternet, .networkConnectionLost, .dataNotAllowed:
+            return "You're offline. Check your connection and try again."
+        case .timedOut:
+            return "This is taking longer than expected. Reopen the app to check whether your account was already deleted."
+        default:
+            return genericDeleteError
         }
     }
 }

@@ -82,6 +82,34 @@ final class ImageCache: @unchecked Sendable {
 
     func clearMemoryForTesting() { memory.removeAllObjects() }
 
+    /// 清空内存与磁盘两层——仅用于注销 / 删除账号。
+    ///
+    /// 这里存的是**用户自己上传的照片**。删号后若不清，照片仍留在设备上，
+    /// 而 UI 已经告诉用户「全部数据已删除」——那不是清理不彻底，是承诺没兑现。
+    ///
+    /// 逐个删文件而不是删整个目录：目录被 App 持有（init 里创建过），
+    /// 删掉后同一进程内的后续写入会静默失败。
+    /// - Returns: 未能删除的文件数。调用方据此判断能否宣称「已清空」。
+    @discardableResult
+    func clearAll() -> Int {
+        memory.removeAllObjects()
+        let fm = FileManager.default
+        guard let files = try? fm.contentsOfDirectory(
+            at: diskDir, includingPropertiesForKeys: nil
+        ) else {
+            // 目录读不出来 → 无法确认是否已空，按「有残留」上报
+            return fm.fileExists(atPath: diskDir.path) ? 1 : 0
+        }
+        var failed = 0
+        for file in files {
+            do { try fm.removeItem(at: file) } catch { failed += 1 }
+        }
+        // 目录可能已被系统回收（Caches 会被自动清理），或刚被上面删空。
+        // 不重建的话，同一进程内后续 set() 会静默写不进磁盘，只剩内存缓存。
+        try? fm.createDirectory(at: diskDir, withIntermediateDirectories: true)
+        return failed
+    }
+
     private func diskPath(for key: String) -> URL {
         // key 通常是 "bucket/userId/uuid.jpg"，取最后两段作为文件名避免冲突
         let safe = key.replacingOccurrences(of: "/", with: "_")

@@ -1,7 +1,17 @@
 import Foundation
 
-private let kUnlockedKey         = "tab2_permanently_unlocked"
-private let kFirstUnlockShownKey = "tab2_first_unlock_shown"
+/// Tab2 解锁状态的 UserDefaults 键名——单一真源。
+///
+/// 键名散落成字面量时，改名只会有一处被改到，其余静默失效
+/// （清不掉 = 用户以为重置了、其实没有），故收在这里。
+/// 注：Settings 页已退回 main 基线，那边仍是字面量；两处保持同名即可。
+enum Tab2Defaults {
+    static let permanentlyUnlocked = "tab2_permanently_unlocked"
+    static let firstUnlockShown    = "tab2_first_unlock_shown"
+}
+
+private let kUnlockedKey         = Tab2Defaults.permanentlyUnlocked
+private let kFirstUnlockShownKey = Tab2Defaults.firstUnlockShown
 
 @Observable
 final class Tab2HomeViewModel {

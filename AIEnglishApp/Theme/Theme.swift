@@ -47,6 +47,13 @@ private enum Primitive {
     // 深色模式数值尚未导出，先只做浅色，勿自行补深色值。
 
     // Primary — 品牌橙（种子 FF7622，浅色阶为其朝白渐变）
+    //
+    // 这是一条**完整色阶（palette），不是待消费的 token 列表**。
+    // 11 档里当前只有 50/100/200/950 有 semantic 消费者，其余 7 档为零引用——
+    // 这是色阶的正常形态，不是「孤儿 token」：色阶要连续可选，semantic 层才从中取值。
+    // 删掉中间某一档会在编号序列里留下断档（如 700→900），比闲置更难维护。
+    // 「删除无消费者的 token」这条规则针对的是 **semantic 层**——那里一个 token
+    // 就是一条活的设计决策，没人用即意味着决策已废止；palette 不适用该规则。
     static let primary50  = Color(hex: 0xFFF8F4)
     static let primary100 = Color(hex: 0xFFF3EB)
     static let primary200 = Color(hex: 0xFFEADE)
@@ -163,6 +170,7 @@ enum AppTheme {
         static let paddingHero: CGFloat         = Primitive.space48
         static let paddingScreenBottom: CGFloat = Primitive.space56
 
+
         // 区标题→内容（Topics / Materials 分区标题到其卡片的呼吸距离，统一散落字面值）
         // 与 onboardingHeaderToContent 当前同值（24）但**用途不同、各自演化**，故不合并：
         // 合并会把两个没有设计因果关系的间距绑死——改 Tab2 的分区节奏时 onboarding 会跟着动。
@@ -233,13 +241,11 @@ enum AppTheme {
         // 橙按「做什么」分档，不按「好不好看」调透明度：
         //   brandInk   — 橙做文字的唯一出口（5.09:1）：≤24pt 文字
         //   brandStrong — 满饱和图形（FF7622）：≤24pt 图标、点、满格进度。永不做文字。
-        //   brandMid   — 中档填充：24–120pt 进度条、chip、下划线
         //   brandTint  — 大面积浅底：>120pt 达标胶囊、横幅、水印
         //   brandWash  — 整块区域的最淡橙底（比 brandTint 再浅一档）
         // 任何尺寸均禁止半透明橙：橙 50% 叠暖纸底会得到脏粉，不橙不灰。
         static let brandInk    = Primitive.primaryDeep   // 橙做文字（≤24pt 文字场景）
         static let brandStrong = Primitive.primary950    // 满饱和图形（≤24pt，=种子橙 FF7622）
-        static let brandMid    = Primitive.primary800    // 中档填充（24–120pt）
         static let brandTint   = Primitive.primary200    // 大面积浅底（>120pt）
         static let brandWash   = Primitive.primary100    // 整块区域的最淡橙底
         static let brandWashLight = Primitive.primary50  // 比 brandWash 再浅一档（插画天空渐变顶）
@@ -258,6 +264,9 @@ enum AppTheme {
 
         // 描边 / 分割
         static let border       = Primitive.neutral200
+        // Tab2 空状态插画内部结构线：对应 Onboarding 相机的暖石墨描边，
+        // 只服务非阅读性的小型图形，不承担正文对比度职责。
+        static let emptyStateIllustrationOutline = Primitive.neutral700.opacity(0.72)
         // 虚线框是页面上的弱分组提示；降低不透明度，避免在暖纸背景上抢视觉重量。
         static let borderDashed = Primitive.neutral200.opacity(0.65)
         static let onboardingUploadActionBorder = Primitive.neutral200.opacity(0.75)
@@ -287,10 +296,11 @@ enum AppTheme {
         // 基色复用 warmWhite / white，透明度本身是玻璃配方的一部分。
         static let glassCardSurface = Primitive.warmWhite.opacity(0.44)
         static let glassCardEdge    = SwiftUI.Color.white.opacity(0.72)
-        // 暖橙薄纱卡（warmGlassCard · Topics 列表容器 + Hero 卡）：单层暖纸白底 +
-        // 整卡极淡橙薄纱 + 右上角品牌橙柔光，去描边。透明度是配方的一部分，在 modifier 内施加。
+        // 暖纸卡（warmGlassCard · Topics 列表容器 + Hero 卡）：单层不透明暖纸白底，
+        // 无描边、无橙薄纱、无柔光——分层职责全部交给阴影（见 Shadow.warmCard*）。
+        // 名字里的 "glass" 是历史遗留：早期配方确实叠过橙薄纱与右上柔光，
+        // 后因整卡发脏、削弱内容对比度而移除，只保留调用点名不改，避免大面积改名。
         static let warmGlassSurface = Primitive.warmWhite   // 暖纸白底（不透明单层）
-        static let warmGlassGlow    = Primitive.primary950  // 品牌橙柔光基色（=种子橙）
         // 半轻灰胶囊底（计数 + chevron 合并单元）：暖近黑极低透明，中性、不引入橙
         static let pillNeutralBg    = Primitive.neutral900.opacity(0.06)
 
@@ -391,6 +401,27 @@ enum AppTheme {
         static let lineCJK: CGFloat = 6
     }
 
+    /// 不透明度语义层。
+    ///
+    /// 不透明度既不是尺寸也不是颜色，独立成层：写 `Size.xxxOpacity` 会让
+    /// 「按 category-purpose-level 命名」的约定失效，也让 Size 层不再是纯几何量。
+    /// 只收「同一个颜色 token 在不同语境下的减弱程度」，颜色本身仍归 Color。
+    enum Opacity {
+        /// 装饰性图形的内部结构描边：在暖纸底上压到既可见又不抢正文重量。
+        static let illustrationHairline: CGFloat = 0.55
+    }
+
+    /// 静态几何旋转角（度）。
+    ///
+    /// 与 Motion 区分：Motion 描述「随时间变化」，这里是排版上钉死的倾角，
+    /// 不参与动画、不随状态改变。
+    enum Rotation {
+        /// 空态叠纸：底片逆时针躺开，露出奶油橙边。
+        static let emptyStateCardBack: CGFloat  = -7
+        /// 空态叠纸：前卡几乎摆正，只留一点手放的随意感。
+        static let emptyStateCardFront: CGFloat = 1.5
+    }
+
     enum Radius {
         static let small: CGFloat          = Primitive.radius8   // tag / 小元素
         static let medium: CGFloat         = Primitive.radius16  // 卡片 / 气泡
@@ -417,6 +448,12 @@ enum AppTheme {
         static let paperLayerRadius: CGFloat = 4
         static let paperLayerX: CGFloat = 0
         static let paperLayerY: CGFloat = 4
+
+        // 空状态插画前卡：比底片多一圈柔和扩散，让暖白表层成为承重主体。
+        static let emptyStateFrontColor: SwiftUI.Color = Primitive.neutral900.opacity(0.065)
+        static let emptyStateFrontRadius: CGFloat = 8
+        static let emptyStateFrontX: CGFloat = 0
+        static let emptyStateFrontY: CGFloat = 5
     }
 
     enum Size {
@@ -446,14 +483,30 @@ enum AppTheme {
         static let wordEntrySpacing: CGFloat     = 2     // 词条行词 + 释义纵向间距
         static let wordListLoadingVPad: CGFloat  = 14    // 词列表加载态垂直内边距
 
-        // ── Tab2 空状态（视觉规范 §05）─────────────────────────────────────
-        static let emptyStateContentTop: CGFloat            = 120 // 内容距屏幕顶部：与 Tab2 / Onboarding 左上轴对齐
-        static let emptyStateBodyToGrowth: CGFloat          = 34  // 说明文字 → 成长状态间距
-        static let emptyStatePopsDot: CGFloat               = 7   // 「0 pops so far」前的成长点
-        static let emptyStateWatermarkHeight: CGFloat       = 290 // 品牌 P 水印字高（只露出右下背景层）
-        static let emptyStateWatermarkTrailingOffset: CGFloat = 30 // P 水印右侧出血，避免变成居中主图
-        static let emptyStateWatermarkBottom: CGFloat       = 130 // P 水印距底，避开 CTA
+        // ── Tab2 空状态 ──────────────────────────────────────────────────
         static let emptyStateCaptureIconGlyph: CGFloat      = 19  // 空态 CTA 描边相机图标
+
+        // 空态插画方案 B：奶油橙底片 + 暖白词条卡，内部以暖灰线和品牌点形成焦点。
+        static let emptyStateIllustrationWidth: CGFloat     = 124
+        static let emptyStateIllustrationHeight: CGFloat    = 96
+        static let emptyStateCardWidth: CGFloat             = 96
+        static let emptyStateCardHeight: CGFloat            = 68
+        static let emptyStateCardBackOffsetX: CGFloat       = -8
+        static let emptyStateCardBackOffsetY: CGFloat       = 3
+        static let emptyStateCardFrontOffsetX: CGFloat      = 5
+        static let emptyStateCardFrontOffsetY: CGFloat      = 8
+        static let emptyStateCardHairlineWidth: CGFloat     = 1
+        static let emptyStateGlyphLineHeight: CGFloat       = 1.5
+        static let emptyStateGlyphLineSpacing: CGFloat      = 8
+        static let emptyStateGlyphTopLineWidth: CGFloat     = 30
+        static let emptyStateGlyphTopLineOffsetX: CGFloat   = 6
+        static let emptyStateGlyphBottomLineWidth: CGFloat  = 22
+        static let emptyStateGlyphBottomLineOffsetX: CGFloat = -6
+        static let emptyStateGlyphFocusLeftLineWidth: CGFloat = 10
+        static let emptyStateGlyphFocusRightLineWidth: CGFloat = 20
+        static let emptyStateGlyphFocusGap: CGFloat         = 3
+        static let emptyStateGlyphFocusDot: CGFloat         = 13
+        static let emptyStateGlyphFocusCore: CGFloat        = 5
 
         // ── Onboarding 顶部节奏（N-1）────────────────────────────────────
         // 标题位置与返回按钮位置各自单一真源，互不通过占位块耦合——
@@ -782,7 +835,7 @@ private struct GlassCapsuleModifier: ViewModifier {
 }
 
 // MARK: - Surface card modifier (内容容器)
-// 单层暖纸底、无描边、带极淡品牌橙薄纱与右上柔光；不使用玻璃，避免内容卡发灰。
+// 单层暖纸底、无描边、不叠任何橙色层；不使用玻璃，避免内容卡发灰。
 // 内容容器统一走此配方与 28pt 容器圆角，靠阴影而不是描边建立层级。
 private struct SurfaceCardModifier: ViewModifier {
     let cornerRadius: CGFloat
@@ -791,21 +844,7 @@ private struct SurfaceCardModifier: ViewModifier {
         let shape = RoundedRectangle(cornerRadius: cornerRadius)
         content
             .background {
-                ZStack {
-                    shape.fill(AppTheme.Color.warmGlassSurface)                 // 暖纸白底
-                    shape.fill(AppTheme.Color.warmGlassGlow.opacity(0.035))     // 整卡极淡橙薄纱
-                    shape.fill(                                                 // 右上角品牌橙柔光
-                        RadialGradient(
-                            colors: [
-                                AppTheme.Color.warmGlassGlow.opacity(0.13),
-                                AppTheme.Color.warmGlassGlow.opacity(0)
-                            ],
-                            center: UnitPoint(x: 0.9, y: -0.1),
-                            startRadius: 0,
-                            endRadius: 220
-                        )
-                    )
-                }
+                shape.fill(AppTheme.Color.warmGlassSurface) // 纯净暖白纸底，去橙薄纱
             }
             .shadow(
                 color: AppTheme.Shadow.warmCardColor,

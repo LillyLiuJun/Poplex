@@ -173,11 +173,12 @@ private struct Tab2LockedView: View {
     // 单开手风琴：同时只展开一个主题；切回 Mine（listResetToken 变化）时回收起。
     @State private var expandedCategoryId: String?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         ZStack {
             AppTheme.Color.pageBg.ignoresSafeArea()
-            CanvasBackground().ignoresSafeArea()
+            CanvasBackground(showTopAura: false).ignoresSafeArea()
 
             if categoriesWithWords.isEmpty {
                 // 无数据空状态（方案A · 极简居中）：整页垂直居中，CTA 沉底
@@ -192,18 +193,17 @@ private struct Tab2LockedView: View {
                             VStack(spacing: AppTheme.Space.paddingPage) {
                                 topicsCard(proxy)
                             }
-                            // 不再压缩/下沉当前页——解锁重点是"呈现新内容"，旧页保持不动、随整页转场离场
 
                             captureButton()
                         }
                         .padding(.top, AppTheme.Space.paddingSection)     // 顶部呼吸
                         .padding(.bottom, AppTheme.Space.paddingPage)
-                        // 锁回屏宽、左对齐
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .contentMargins(.top, topInset, for: .scrollContent)
                 }
             }
+
 
             // 释放时暖橙"洗版"：从按钮位置(底部)向上的渐变，下浓上淡——能量从按钮升腾、呈现新内容
             Rectangle()
@@ -221,6 +221,7 @@ private struct Tab2LockedView: View {
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
                 .animation(.easeIn(duration: 0.4), value: unlockState)
+
         }
         .onChange(of: listResetToken) { _, _ in
             expandedCategoryId = nil   // 切回 Mine：回到初始收起
@@ -229,9 +230,10 @@ private struct Tab2LockedView: View {
 
     // ── 待解锁 header ────────────────────────────────────────────────────
     private var headerSection: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Space.paddingS) {
+        VStack(alignment: .leading, spacing: AppTheme.Space.onboardingTitleToLead) {
             Text("Not open yet")
                 .font(AppTheme.Font.pageTitleSerif)
+                .tracking(AppTheme.Typography.trackingDisplay)
                 .foregroundStyle(AppTheme.Color.textPrimary)
             
             hintText
@@ -247,59 +249,22 @@ private struct Tab2LockedView: View {
         Text("Reach 20 pops in any topic to start talking.")
             .font(AppTheme.Font.englishBody)
             .foregroundStyle(AppTheme.Color.textSecondary)
+            .lineSpacing(AppTheme.Typography.lineBody)
     }
 
-    // ── 无数据空状态（视觉规范 §05）──────────────────────────────────────
-    // 品牌 P 只作为大面积的浅色背景层；前景沿 Tab2 / Onboarding 共用的左上对齐轴排布。
-    // CTA 仍复用解锁前的行为，只在空状态前置描边相机，说明「从拍一张开始」。
+    // ── 无数据空状态（Warm Minimalism 减法设计）───────────────────────────
+    // 采用通用 EmptyStateView，以抽象胶囊插画 + 优雅 Typography 构建舒展居中负空间。
+    // 底部 CTA 沉底作为唯一操作焦点。
     private var emptyStateView: some View {
-        ZStack(alignment: .topLeading) {
-            PoplexPShape()
-                .fill(AppTheme.Color.brandTint, style: FillStyle(eoFill: true))
-                .frame(
-                    width: AppTheme.Size.emptyStateWatermarkHeight * PoplexPShape.aspect,
-                    height: AppTheme.Size.emptyStateWatermarkHeight
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-                .offset(
-                    x: AppTheme.Size.emptyStateWatermarkTrailingOffset,
-                    y: -AppTheme.Size.emptyStateWatermarkBottom
-                )
-                .accessibilityHidden(true)
+        // CTA 必须与文案同处一个 VStack、真正参与布局，不能用 overlay 浮在上面。
+        // overlay 不占布局位置：CTA 一旦因大字号换行长高，就会直接压住正文
+        // （实测 AX5 下「your day.」被盖掉）。EmptyStateView 自身吃满剩余高度，
+        // CTA 自然沉底，两者从此互相知道对方多高。
+        VStack(spacing: 0) {
+            EmptyStateView()
 
-            VStack(alignment: .leading, spacing: 0) {
-                Text("Nothing here yet.")
-                    .font(AppTheme.Font.pageTitleSerif)
-                    .tracking(AppTheme.Typography.trackingDisplay)
-                    .foregroundStyle(AppTheme.Color.textPrimary)
-
-                Text("Start with a moment from your day.")
-                    .font(AppTheme.Font.englishPrimary)
-                    .foregroundStyle(AppTheme.Color.textSecondary)
-                    .lineSpacing(AppTheme.Typography.lineBody)
-                    .padding(.top, AppTheme.Space.paddingCard)
-
-                HStack(spacing: AppTheme.Space.paddingM) {
-                    Circle()
-                        .fill(AppTheme.Color.brandStrong)
-                        .frame(
-                            width: AppTheme.Size.emptyStatePopsDot,
-                            height: AppTheme.Size.emptyStatePopsDot
-                        )
-
-                    Text("0 pops so far")
-                        .font(AppTheme.Font.growthStatus)
-                        .foregroundStyle(AppTheme.Color.brandInk)
-                }
-                .padding(.top, AppTheme.Size.emptyStateBodyToGrowth)
-            }
-            .padding(.horizontal, AppTheme.Space.paddingPage)
-            .padding(.top, AppTheme.Size.emptyStateContentTop)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        // CTA 沉底，不参与内容区定位，确保左上对齐的正文不会被按钮挤动。
-        .overlay(alignment: .bottom) {
             captureButton(showsCaptureIcon: true)
+                .padding(.horizontal, AppTheme.Space.paddingPage)
                 .padding(.bottom, AppTheme.Space.paddingSection)
         }
     }
@@ -371,10 +336,10 @@ private struct Tab2LockedView: View {
                     }
 
                     Task {
-                        // 延长蓄力停顿到 450ms - 增强蓄势凝结感
+                        // 1. 蓄力停顿 450ms - 增强蓄势凝结感
                         try? await Task.sleep(nanoseconds: 450_000_000)
 
-                        // 2. 舒张全屏释放阶段 (Heavy Impact + 能量波扫过全屏)
+                        // 2. 舒张全屏释放阶段 (Heavy Impact + 晨曦流光升腾)
                         UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
                         withAnimation(.spring(response: 0.55, dampingFraction: 0.55)) {
                             unlockState = .releasing
@@ -392,26 +357,37 @@ private struct Tab2LockedView: View {
             }
         } label: {
             HStack(spacing: AppTheme.Space.paddingS) {
-                if isReady {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 16, weight: .bold))
-                        .scaleEffect(sparkleScale)
-                        .rotationEffect(.degrees(sparkleRotation))
-                } else if showsCaptureIcon {
-                    Image(systemName: "camera")
-                        .font(.system(size: AppTheme.Size.emptyStateCaptureIconGlyph, weight: .regular))
+                // 无障碍字号下**隐藏图标**，把宽度整个让给文字。
+                // 只允许换行是不够的：`something` 这种单个长词本身就可能比
+                // 「胶囊宽度 − 图标 − 间距」还宽，换行救不了单词内部，
+                // 结果是字画到胶囊外面去（AX5 实测）。图标是装饰性的，
+                // 让位给唯一的操作指引是划算的。
+                if !dynamicTypeSize.isAccessibilitySize {
+                    if isReady {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 16, weight: .bold))
+                            .scaleEffect(sparkleScale)
+                            .rotationEffect(.degrees(sparkleRotation))
+                    } else if showsCaptureIcon {
+                        Image(systemName: "camera")
+                            .font(.system(size: AppTheme.Size.emptyStateCaptureIconGlyph, weight: .regular))
+                    }
                 }
                 Text(isReady ? "You're all set" : "Capture something")
+                    .multilineTextAlignment(.center)
+                    // 让出图标后仍可能有更长的本地化文案或更大的屏幕缩放，
+                    // 留一档缩放兜底——宁可小一点，也不能画到按钮外面。
+                    .minimumScaleFactor(0.75)
             }
             .font(AppTheme.Font.ctaLabel)
             .foregroundStyle(AppTheme.Color.cardBg)
             .frame(maxWidth: .infinity)
-            .frame(height: 52)    // 与 Tab1 InputBar 胶囊同高
+            // 与 Tab1 InputBar 胶囊同高。用 minHeight 而非固定 height：
+            // 固定高度会把放大后的文字锁死在 52pt 里，只能截断。
+            .padding(.vertical, AppTheme.Space.paddingS)
+            .frame(minHeight: AppTheme.Size.inputBarMinHeight)
             .background(AppTheme.Color.interactive)   // 保持染色黑（点击变橙显得怪，去掉）
             .clipShape(Capsule())
-            // 光晕层挂为 pill 的 background：尺寸跟随胶囊、不参与布局。
-            // 原来作为 ZStack 兄弟节点的贪婪 Capsule 会把 button 撑满整个可用高度
-            // （在底部 overlay 里可见胶囊因此被顶到屏幕正中）
             .background {
                 ZStack {
                     // 蓄力光晕层：charging 时橙光在 0.45s 内 easeIn 由弱到强、由小到大地"攒劲"，
@@ -501,8 +477,13 @@ private struct Tab2LockedView: View {
     // ── Helpers ───────────────────────────────────────────────────────────
     private var categoriesWithWords: [Tab2CategoryData] {
         #if DEBUG
-        // 临时走查钩子：TAB2_EMPTY=1 强制空状态（验证完即删，勿提交）
-        if ProcessInfo.processInfo.environment["TAB2_EMPTY"] == "1" { return [] }
+        // 长期保留的走查开关：`TAB2_EMPTY=1` 强制空状态。
+        // 空状态在真实账号里几乎不可复现（有数据就再也回不去），没有它就只能靠清库来看一眼。
+        // 只读环境变量、不写任何持久化状态——进程退出即失效，不会像早先那批
+        // `debug_*` UserDefaults 键那样把设备锁死在假数据上。
+        if ProcessInfo.processInfo.environment["TAB2_EMPTY"] == "1" {
+            return []
+        }
         #endif
         return (vm.data?.categories ?? []).filter { $0.wordCount >= 1 }
     }
@@ -526,6 +507,7 @@ private struct Tab2LockedView: View {
 
 // MARK: - Unlocked view
 
+
 private struct Tab2UnlockedView: View {
     let vm: Tab2HomeViewModel
     var topInset: CGFloat = 0
@@ -539,7 +521,7 @@ private struct Tab2UnlockedView: View {
     var body: some View {
         ZStack {
             AppTheme.Color.pageBg.ignoresSafeArea()
-            CanvasBackground().ignoresSafeArea()
+            CanvasBackground(showTopAura: false).ignoresSafeArea()
 
             ScrollViewReader { proxy in
                 ScrollView {

@@ -16,7 +16,7 @@ actor LocalCache {
     static let shared = LocalCache()
 
     /// 缓存条目 key —— 每个来源一个文件
-    enum Key: String {
+    enum Key: String, CaseIterable {
         case messages   // Tab1 历史对话（get-messages）
         case scenes     // Tab2 场景素材（已被 tab2Home 取代，保留兼容）
         case vocabs     // Tab2 生词（已被 tab2Home 取代，保留兼容）
@@ -51,6 +51,31 @@ actor LocalCache {
     /// 清除单个缓存（预留：素材被删除等场景）
     func remove(key: Key) {
         try? FileManager.default.removeItem(at: fileURL(for: key))
+    }
+
+    /// 清空全部缓存与墓碑——**仅用于「当前账号不再存在」**（注销 / 删除账号）。
+    ///
+    /// 缓存文件按 Key 命名、**不按 user_id 隔离**：删号后 App 会静默注册一个新匿名账号，
+    /// 若不清，新账号会直接读到上一个账号的 Tab1 历史与 Tab2 数据——
+    /// 用户看到的是「账号删了，内容还在」。
+    /// 不做 user_id 分目录是有意的：那会把「换账号」变成常态路径，
+    /// 而本产品只有匿名单账号，清空比隔离简单且不留残留文件。
+    /// - Returns: 未能删除的缓存文件数。调用方据此判断能否宣称「已清空」。
+    @discardableResult
+    func removeAll() -> Int {
+        var failed = 0
+        for key in Key.allCases {
+            let url = fileURL(for: key)
+            do {
+                try FileManager.default.removeItem(at: url)
+            } catch CocoaError.fileNoSuchFile {
+                // 本来就没有 = 已是目标状态，不算失败
+            } catch {
+                failed += 1
+            }
+            UserDefaults.standard.removeObject(forKey: tombstoneKey(for: key))
+        }
+        return failed
     }
 
     // MARK: - Tombstones（软删除同步：防止缓存里的旧条目在服务器删除后重新出现）

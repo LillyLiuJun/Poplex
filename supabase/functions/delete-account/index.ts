@@ -6,6 +6,8 @@ const SUPABASE_URL     = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SVC_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const STORAGE_BUCKET   = "material_images";
 
+import { deleteStorageObjects } from "./storage.ts";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -37,36 +39,6 @@ async function dbDelete(table: string, uid: string): Promise<void> {
   }
 }
 
-async function deleteStorageObjects(uid: string): Promise<void> {
-  // List all objects for this user in the material_images bucket
-  const listRes = await fetch(
-    `${SUPABASE_URL}/storage/v1/object/list/${STORAGE_BUCKET}`,
-    {
-      method: "POST",
-      headers: svcHeaders,
-      body: JSON.stringify({ prefix: `${uid}/`, limit: 1000, offset: 0 }),
-    }
-  );
-  if (!listRes.ok) {
-    console.warn("[delete-account] storage list failed, skipping cleanup");
-    return;
-  }
-  const objects: { name: string }[] = await listRes.json();
-  if (!Array.isArray(objects) || objects.length === 0) return;
-
-  const paths = objects.map((o) => `${uid}/${o.name}`);
-  const delRes = await fetch(
-    `${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}`,
-    {
-      method: "DELETE",
-      headers: svcHeaders,
-      body: JSON.stringify({ prefixes: paths }),
-    }
-  );
-  if (!delRes.ok) {
-    console.warn("[delete-account] storage delete failed:", await delRes.text());
-  }
-}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -91,8 +63,14 @@ Deno.serve(async (req) => {
 
     console.log(`[delete-account] starting deletion for uid=${uid}`);
 
-    // 2. 删除 Storage 对象（不影响 DB 删除，失败只告警）
-    await deleteStorageObjects(uid);
+    // 2. 删除 Storage 对象。失败**不阻断**账号删除——账号必须删掉，
+    //    不能因为图片没清干净就留下一个半删除的账号。但结果要如实带回给客户端。
+    const storage = await deleteStorageObjects(uid, {
+      fetch,
+      baseUrl: SUPABASE_URL,
+      headers: svcHeaders,
+      bucket: STORAGE_BUCKET,
+    });
 
     // 3. 按外键依赖顺序逐表删除（RESTRICT 约束决定顺序）
     // learning_events → (dialogue_sessions, lexicon_entries) 均为 RESTRICT
@@ -122,8 +100,18 @@ Deno.serve(async (req) => {
       throw new Error(`auth.admin.deleteUser failed: ${deleteUserRes.status} ${body}`);
     }
 
-    console.log(`[delete-account] completed for uid=${uid}`);
-    return json({ success: true });
+    console.log(
+      `[delete-account] completed for uid=${uid}`,
+      `storage removed=${storage.removed} failed=${storage.failed}`
+    );
+    // 账号与数据库数据已确定删除；storage_cleared 单独如实上报，
+    // 让客户端能区分「全清干净」与「账号删了但有图片没清掉」，
+    // 而不是无条件宣称「全部数据已删除」。
+    return json({
+      success: true,
+      storage_cleared: storage.complete,
+      storage_leftover: storage.failed,
+    });
   } catch (e) {
     console.error("[delete-account] error:", e);
     return json({ error: "internal_error", message: String(e) }, 500);

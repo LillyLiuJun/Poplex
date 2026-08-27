@@ -66,6 +66,8 @@ struct RootView: View {
 
     /// 开屏动画是否播完。
     @State private var splashAnimationDone = false
+    /// 删号后的一次性提示（需活过根路由切换，故不放在 Settings 里）。
+    private let deletionNotice = AccountDeletionNotice.shared
     /// 后台「是否已完成引导」的确认是否已出结果（或已封顶放行）。
     @State private var startupResolved = false
 
@@ -96,10 +98,25 @@ struct RootView: View {
                 }
             }
         }
+        // 删号后的「有残留」提示挂在**根一级**：删号会把上面的分支从 ContentView
+        // 切到 OnboardingView，挂在 Settings 上的 alert 会随子树一起销毁、显示不出来。
+        // RootView 是路由本身，不会被这次切换销毁。
+        .alert("Account deleted", isPresented: accountNoticePresented) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(deletionNotice.message ?? "")
+        }
         .task {
             await resolveStartup()
             retryPendingOnboardingSyncIfNeeded()
         }
+    }
+
+    private var accountNoticePresented: Binding<Bool> {
+        Binding(
+            get: { deletionNotice.message != nil },
+            set: { if !$0 { deletionNotice.message = nil } }
+        )
     }
 
     /// 断网走完 onboarding 的用户：启动时补发打标（机制见 ProfileService 待办注释）。

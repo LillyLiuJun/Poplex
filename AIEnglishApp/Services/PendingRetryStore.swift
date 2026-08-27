@@ -188,6 +188,21 @@ final class PendingRetryStore {
     /// 先持久化元数据、成功后才删照片文件（审查发现 #6b）：写不进去时保留文件——
     /// 删错一边比「多一个孤儿文件」严重得多（照片仍在而记录没了 → 内容消失；
     /// 记录仍在而照片没了 → 只是缺图）。
+    /// 清空所有待重试记录及其照片文件——仅用于注销 / 删除账号。
+    /// 逐条走 `remove(id:)` 而不是直接清 UserDefaults：记录关联的 JPEG 落在
+    /// Documents 里，只清索引会留下永远不会被引用的孤儿文件。
+    /// - Returns: 清理后仍残留的**记录**数。
+    ///
+    /// 只对自己的索引负责。`remove(id:)` 先写元数据、再 `try?` 删照片文件，
+    /// 所以「记录没了但 JPEG 还在」是可能的——**照片文件级的残留由
+    /// `LocalUserData` 统一扫 Documents 目录兜底**，不在这里重复实现
+    /// （两个 store 共用同一个 Documents 根目录，各扫各的会互删对方的文件）。
+    @discardableResult
+    func clearAll() -> Int {
+        for record in load() { remove(id: record.id) }
+        return load().count
+    }
+
     func remove(id: UUID) {
         lock.withLock {
             var records = readRecords()

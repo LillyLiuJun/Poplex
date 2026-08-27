@@ -58,8 +58,40 @@ struct CategoryProgressRow: View {
     }
 
     private var isHot: Bool {
+        Self.isHot(
+            isPresentingMilestone: isPresentingMilestone,
+            milestoneRevealed: milestoneRevealed,
+            unlocked: category.unlocked,
+            wordCount: category.wordCount,
+            targetCount: targetCount,
+            isHighlighted: isHighlighted
+        )
+    }
+
+    /// 分类行是否处于「点亮」态（品牌橙徽标 / 满格进度 / 橙色计数）。
+    ///
+    /// **点亮 ≠ 已达标。** 三个独立来源都会点亮，注意别把它读成「达标指示器」：
+    /// - `unlocked` —— 已解锁的分类常驻点亮。即使 `wordCount` 因口径调整回落到
+    ///   `targetCount` 以下也不回退：已解锁不该「变回没解锁的样子」。
+    /// - `wordCount >= targetCount` —— 达标。
+    /// - `isHighlighted` —— 调用方指定的「最接近解锁」那一行
+    ///   （`MineView` 传 `cat.id == closestCategory?.id`），**尚未达标也会橙**，
+    ///   用意是把注意力引到「差一点就能开」的那条上。
+    ///
+    /// 里程碑演出期间**只**听动画的揭示节拍，压过上述全部条件——
+    /// 否则一个已达标的分类会在数字还没跑完时就抢先点亮，动效失去意义。
+    ///
+    /// 抽成静态纯函数是为了可测：条件顺序错一次就会在动画途中提前点亮。
+    static func isHot(
+        isPresentingMilestone: Bool,
+        milestoneRevealed: Bool,
+        unlocked: Bool,
+        wordCount: Int,
+        targetCount: Int,
+        isHighlighted: Bool
+    ) -> Bool {
         if isPresentingMilestone { return milestoneRevealed }
-        return isHighlighted || category.wordCount >= targetCount
+        return unlocked || wordCount >= targetCount || isHighlighted
     }
 
     var body: some View {
@@ -150,7 +182,7 @@ struct CategoryProgressRow: View {
     private var categoryBadge: some View {
         Image(systemName: SceneCategory.from(category.sceneCategory).iconName)
             .font(.system(size: AppTheme.Size.categoryIconGlyph))
-            .foregroundStyle(isHot ? AppTheme.Color.brandInk : AppTheme.Color.textMuted)
+            .foregroundStyle(isHot ? AppTheme.Color.brandStrong : AppTheme.Color.textMuted)
             .frame(width: AppTheme.Size.categoryBadge, height: AppTheme.Size.categoryBadge)
             .scaleEffect(milestoneScale)
     }
@@ -159,14 +191,16 @@ struct CategoryProgressRow: View {
 
     private var progressBar: some View {
         let progress = min(CGFloat(displayedCount) / CGFloat(targetCount), 1.0)
-        // 进度全部走橙：进度 = 成长线，用档位区分状态，禁止半透明橙（压暖纸会得到脏粉）。
-        // hot（细线≤24pt 例外）走满饱和 brandStrong；非 hot 降一档走 brandMid。
+        // hot（细线≤24pt 例外）走满饱和 brandStrong；非 hot 改用中性 progressFill。
+        // 注意 hot 不等于达标——已解锁、达标、或被调用方标为「最接近解锁」都算
+        // （见 isHot 文档）。中性色表达的是「这一行现在不需要你注意」，
+        // 把橙留给真正要引导视线的少数几行，橙才还有对比度。
         return Capsule()
             .fill(AppTheme.Color.progressTrack)
             .frame(height: AppTheme.Size.progressBarHeight)
             .overlay(alignment: .leading) {
                 Capsule()
-                    .fill(isHot ? AppTheme.Color.brandStrong : AppTheme.Color.brandMid)
+                    .fill(isHot ? AppTheme.Color.brandStrong : AppTheme.Color.progressFill)
                     .scaleEffect(x: displayedCount > 0 ? max(progress, 0.02) : 0, anchor: .leading)
                     .animation(
                         isPresentingMilestone ? nil : AppTheme.Motion.categoryProgressUpdate,
@@ -237,7 +271,7 @@ private struct PopsPill: View {
                 .font(AppTheme.Font.popsCount)
                 .monospacedDigit()
                 .contentTransition(reduceMotion ? .identity : .numericText())
-                .foregroundStyle(isHot ? AppTheme.Color.brandInk : AppTheme.Color.textMuted)
+                .foregroundStyle(isHot ? AppTheme.Color.brandStrong : AppTheme.Color.textMuted)
 
             // 展开三角（arrowtriangle.down.fill）：随展开旋转 180°
             Image(systemName: "arrowtriangle.down.fill")
