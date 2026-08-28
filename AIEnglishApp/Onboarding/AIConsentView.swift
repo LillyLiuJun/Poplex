@@ -1,13 +1,4 @@
 import SwiftUI
-import SafariServices
-
-private struct SafariView: UIViewControllerRepresentable {
-    let url: URL
-    func makeUIViewController(context: Context) -> SFSafariViewController {
-        SFSafariViewController(url: url)
-    }
-    func updateUIViewController(_ vc: SFSafariViewController, context: Context) {}
-}
 
 /// AI 数据同意门：首次调用 generate 前弹出，符合 App Review 5.1.2(i) 第三方 AI 披露要求。
 struct AIConsentView: View {
@@ -40,8 +31,11 @@ struct AIConsentView: View {
                     } label: {
                         Text("Learn more in our Privacy Policy")
                             .font(AppTheme.Font.buddy)
-                            .foregroundStyle(AppTheme.Color.brandStrong)
+                            // brandInk 是橙做文字的唯一合规出口（5.09:1）；
+                            // brandStrong（种子橙）对暖纸底约 2.9:1，不达 WCAG AA。
+                            .foregroundStyle(AppTheme.Color.brandInk)
                     }
+                    .buttonStyle(.iconControl)
                 }
             }
             // 理想高度声明为 0：弹窗协商高度时不会把「文案完整高度」算进去，
@@ -87,7 +81,7 @@ struct AIConsentView: View {
         .padding(.bottom, AppTheme.Space.paddingScreenBottom)
         .background(AppTheme.Color.pageBg.ignoresSafeArea())
         .sheet(isPresented: $showPrivacy) {
-            SafariView(url: URL(string: "https://poplex-legal.vercel.app/privacy.html")!)
+            SafariView(url: LegalLinks.privacy)
                 .ignoresSafeArea()
         }
     }

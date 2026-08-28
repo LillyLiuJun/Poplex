@@ -11,7 +11,7 @@ struct Tab2LoadErrorView: View {
     var body: some View {
         ZStack {
             AppTheme.Color.pageBg.ignoresSafeArea()
-            CanvasBackground(showTopAura: false, showBottomAura: false)
+            CanvasBackground(showBottomAura: false)
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
@@ -108,7 +108,7 @@ private struct UnavailableContentIllustration: View {
                     .offset(x: width * 0.16, y: height * 0.31)
             }
         }
-        .frame(width: AppTheme.Size.brandMark, height: AppTheme.Size.brandMark)
+        .frame(width: AppTheme.Size.feedbackIllustrationSize, height: AppTheme.Size.feedbackIllustrationSize)
     }
 }
 

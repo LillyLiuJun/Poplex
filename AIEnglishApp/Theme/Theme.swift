@@ -83,7 +83,18 @@ private enum Primitive {
     static let neutral700 = Color(hex: 0x4B4640)  // 次要文字（secondary）
     static let neutral800 = Color(hex: 0x2E2820)
     static let neutral900 = Color(hex: 0x211811)  // 主文字 · 品牌染色近黑
-    static let neutral950 = Color(hex: 0x17120C)  // interactive / CTA 近黑
+    // interactive / CTA 近黑。
+    //
+    // ⚠️ **这个值在仓库里存了两份**：这里，以及
+    // `Assets.xcassets/AccentColor.colorset/Contents.json`（全局 tint）。
+    // 资产目录读不到 Swift 常量，这份重复消除不掉——改这里必须同步改那边，
+    // 否则 App 自绘元素与系统组件（alert 按钮、内置 Safari 工具栏）会变成两个色。
+    //
+    // 为什么全局 tint 用近黑而不是品牌橙：tint 的主场是删号确认框里的 `Cancel`，
+    // 它旁边站着红色的 `Delete`。Cancel 要显得安全，而 brandInk(#C2410C) 离
+    // danger(#B0392A) 只有 11° 色相，会让两个按钮一起像在报警；
+    // brandStrong(#FF7622) 分得开但白底仅 2.6:1。近黑两头都不占，是 PM 拍板的取舍。
+    static let neutral950 = Color(hex: 0x17120C)
 
     // Warning — 金黄（黄色系物理上做不出高对比度深色，只作浅底 + 深色文字用）
     static let warning50  = Color(hex: 0xFAF8EC)
@@ -350,6 +361,11 @@ enum AppTheme {
         static let keyPhrase      = SwiftUI.Font.system(.subheadline, weight: .bold)  // 核心词组（=参考稿 kp-word 15/700 加黑）
         static let phonetic       = SwiftUI.Font.system(.footnote, design: .monospaced) // IPA 音标（等宽）
         static let pos            = SwiftUI.Font.system(.caption2)                    // 词性 / 卡片 Meta（=参考稿 ~11-12px）
+        // 静态事实 / 计数小字：版本号、字数计数、字段脚注。
+        // 与 pos 当前同值（.caption2）但**语义不同、各自演化**，故不合并：
+        // pos 的语义是「学习内容的词性标注」，跟着内容卡走；这一档跟着功能页的
+        // 辅助信息走。此前这三处都挪用了 pos，改版权衡时会互相牵制。
+        static let metaNote       = SwiftUI.Font.system(.caption2)
         static let popsCount      = SwiftUI.Font.system(.caption, weight: .medium)    // Topics 进度行 pops 计数（配 .monospacedDigit()）
         static let iconBadgeLetter = SwiftUI.Font.system(.subheadline, design: .serif, weight: .semibold) // 词条类型徽章里的衬线字母（句中单词 A）
         static let cardMeta       = SwiftUI.Font.system(.footnote, weight: .medium)   // 卡片右上角 meta（Hero 卡 pops 数等）
@@ -369,7 +385,8 @@ enum AppTheme {
         static let onboardingLeadSerif = englishPrimary  // Onboarding 各屏副标题（标题下的价值/说明句）：复用内容衬线（现 New York→将来 Newsreader），与 onboardingHeroSerif 成对；别名而非重声明，避免与例句内容耦合、也不重复定义同值。
         static let sectionTitleSerif = SwiftUI.Font.system(.title2, design: .serif, weight: .semibold)  // 分区衬线小标题（Topics in progress / Materials Yours），比页面大标题小一档
         static let compactSectionTitleSerif = SwiftUI.Font.system(.title3, design: .serif, weight: .semibold) // 紧凑页面内的小分区标题（如 Onboarding 样例区）
-        static let groupLabel        = SwiftUI.Font.system(.footnote, weight: .semibold)                  // 分组列表 section header（iOS 标准）：配大写 + 字距 + 弱色，退后作辅助标签
+        static let settingsSectionTitleSerif = SwiftUI.Font.system(.subheadline, design: .serif, weight: .medium) // Settings 卡外分组标题：保留衬线编辑感，但退到辅助层
+        static let settingsVersion = SwiftUI.Font.system(.caption2, design: .serif) // Settings 页脚版本号：小号衬线注脚
         static let ctaLabel       = SwiftUI.Font.system(.body, weight: .semibold)     // 主按钮文字（Continue / Get Started）
         static let tabLabel       = SwiftUI.Font.system(.subheadline, weight: .semibold) // 顶部 Tab 名称
         static let cardSentence   = SwiftUI.Font.system(.body, design: .serif, weight: .semibold) // 时刻卡英文主句（衬线 + 半粗，Dynamic Type 安全）
@@ -403,8 +420,6 @@ enum AppTheme {
     enum Typography {
         /// 展示型大标题的字距（略负，让大字更「整」）。
         static let trackingDisplay: CGFloat = -0.5
-        /// 小标签字距（正，配合大写做编辑体系感）。
-        static let trackingLabel: CGFloat = 0.8
         /// 英文正文 / 段落的额外行距。
         static let lineBody: CGFloat = 3
         /// 中文 / 多语言正文的额外行距（CJK 更需要放开）。
@@ -471,14 +486,20 @@ enum AppTheme {
         static let iconBadge: CGFloat  = Primitive.size44  // 图标徽章容器边长（圆形浅底托图标）
         static let rowIcon: CGFloat    = Primitive.size28  // 列表行前导图标框 / 小圆控件（设置行、关闭键）
         static let categoryBadge: CGFloat = Primitive.size36  // Topics 类别圆形徽章边长（浅橘底托类别图标）
-        static let brandMark: CGFloat  = Primitive.size84  // 圆形 app-icon 报头容器直径
+        // brandMark（84pt 圆形 app-icon 报头直径）已随 Settings 删除品牌报头一并移除。
+        // brandGlyph 在此之前就已无消费者，属既有债务，留待 token 体检时统一清理。
         static let brandGlyph: CGFloat = Primitive.size36  // 报头里 PoplexPShape 的字高
 
         // ── Settings 行矢量图标（对应视觉规范 §04 的 24×24 描边资产）──────────
         static let settingsRowIconGlyph: CGFloat = 20  // 行前导图标绘制尺寸
         static let settingsIconStroke: CGFloat    = 1.8 // 行前导图标在 24×24 资产坐标内的描边
         static let settingsChevronGlyph: CGFloat = 13  // 行尾 chevron 绘制尺寸
-        static let settingsChevronStroke: CGFloat = 3.2 // chevron 在 24×24 资产坐标内的描边
+        // chevron 在 24×24 资产坐标内的描边。3.2 → 2.8 的依据是**换算到屏幕后与行图标同重**：
+        //   行图标  1.8 × (20/24) = 1.50pt
+        //   chevron 3.2 × (13/24) = 1.73pt  ← 比行图标粗 15%，同一行里两种笔画不同族
+        //           2.8 × (13/24) = 1.52pt  ← 齐平
+        // 两个 glyph 尺寸不同（20 vs 13），所以资产坐标里的数字必须不同才能画出同样粗的线。
+        static let settingsChevronStroke: CGFloat = 2.8
 
         // ── CategoryProgressRow 控件度量（不落在 4pt 间距刻度上的内量，不要凑整）──
         static let progressBarHeight: CGFloat    = 2.5   // 进度条轨道高度（超轻细线）
@@ -495,6 +516,13 @@ enum AppTheme {
 
         // ── Tab2 空状态 ──────────────────────────────────────────────────
         static let emptyStateCaptureIconGlyph: CGFloat      = 19  // 空态 CTA 描边相机图标
+
+        // Tab2 加载失败插画（合页书本）的方形边长。
+        // #44 原先借用 `brandMark`（语义=圆形 app-icon 报头容器直径），
+        // 而报头已在 Settings 改造里删除、该 token 随之移除。按本文件既有约定
+        // ——每个插画有自己按用途命名的尺寸 token（emptyStateIllustration* /
+        // onboardingUploadIllustration* …）——改用与它的配色 token 同族的名字。
+        static let feedbackIllustrationSize: CGFloat        = Primitive.size84
 
         // 空态插画方案 B：奶油橙底片 + 暖白词条卡，内部以暖灰线和品牌点形成焦点。
         static let emptyStateIllustrationWidth: CGFloat     = 124

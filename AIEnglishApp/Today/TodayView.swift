@@ -61,7 +61,7 @@ struct TodayView: View {
             .padding(.bottom, AppTheme.Space.paddingHero)
         }
             // 首页画布装饰（网格点 + 底部橘色光晕），透明叠在 pageBg 之上、内容之下
-            .background(CanvasBackground(showTopAura: false).ignoresSafeArea())
+            .background(CanvasBackground().ignoresSafeArea())
             .sheet(isPresented: $viewModel.showAIConsent) {
                 AIConsentView { viewModel.onConsentAgreed() }
                     .presentationDetents([.medium, .large])

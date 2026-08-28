@@ -1,14 +1,23 @@
 import SwiftUI
 
 /// 首页画布装饰层（温润极简）：暖灰网格点底纹 + 底部品牌橘光晕。
+///
+/// 曾有一个 `showTopAura` 开关控制的上部暖光，2026-08-28 随 Settings 改造删除：
+/// 当时全部生产调用点都传 false（唯一走默认值的是 EmptyStateView 的 #Preview），
+/// 即它在产品里从未显示过；留着只会让下一个人写 `CanvasBackground()` 时
+/// 莫名带上一层没人要的光晕。要恢复请查 git。
+///
+/// **与 PR #44 合并时的处理**：#44 在同一位置新增了 `showBottomAura`（错误态关掉
+/// 品牌橘，避免被误读为错误色），并在 `Tab2LoadErrorView` 里写了
+/// `CanvasBackground(showTopAura: false, showBottomAura: false)`。
+/// 顶光晕既已不存在，那半个参数无意义，调用点改为只传 `showBottomAura: false`，
+/// #44 的意图（错误态不出现任何光晕）完全保留。
 /// 纯装饰、不拦截交互、对无障碍隐藏；透明（不填底色，叠在 pageBg 之上）；颜色一律走 token。
 struct CanvasBackground: View {
     /// 网格点间距（pt）
     private let gridSpacing: CGFloat = 18
     /// 网格点半径（pt）
     private let dotRadius: CGFloat = 0.6
-    /// 是否显示上部那缕暖光（Tab2 保留；Tab1 传 false 只留底部光晕）
-    var showTopAura: Bool = true
     /// 是否显示底部品牌橘光。错误等中性状态可关闭，避免品牌色被误读为错误色。
     var showBottomAura: Bool = true
 
@@ -48,23 +57,6 @@ struct CanvasBackground: View {
                     .frame(width: 460, height: 260)
                     .blur(radius: 44)
                     .offset(y: 150)
-            }
-        }
-        // 上部一缕更淡的暖光（偏右、避开顶栏），与底部呼应；Tab1 关闭
-        .overlay(alignment: .top) {
-            if showTopAura {
-                Ellipse()
-                    .fill(
-                        RadialGradient(
-                            colors: [AppTheme.Color.canvasAura.opacity(0.14), .clear],
-                            center: .center,
-                            startRadius: 0,
-                            endRadius: 200
-                        )
-                    )
-                    .frame(width: 380, height: 260)
-                    .blur(radius: 55)
-                    .offset(x: 60, y: 90)
             }
         }
         .allowsHitTesting(false)

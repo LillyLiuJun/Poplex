@@ -216,7 +216,7 @@ private struct Tab2LockedView: View {
     var body: some View {
         ZStack {
             AppTheme.Color.pageBg.ignoresSafeArea()
-            CanvasBackground(showTopAura: false).ignoresSafeArea()
+            CanvasBackground().ignoresSafeArea()
 
             if categoriesWithWords.isEmpty {
                 GeometryReader { geo in
@@ -591,7 +591,7 @@ private struct Tab2UnlockedView: View {
     var body: some View {
         ZStack {
             AppTheme.Color.pageBg.ignoresSafeArea()
-            CanvasBackground(showTopAura: false).ignoresSafeArea()
+            CanvasBackground().ignoresSafeArea()
 
             ScrollViewReader { proxy in
                 ScrollView {

@@ -2404,6 +2404,15 @@ struct PendingRetryStoreTests {
 
 // MARK: - ImageCache tests
 
+/// **必须串行**：这些测试共用 `ImageCache.shared` 这一个全局单例（同一个磁盘目录）。
+/// Swift Testing 默认并行，于是「写入并读回」与「全部清空并断言残留为 0」会互相破坏：
+/// 清空方因对方刚写入而报残留，写入方因文件被清空而读不到。两个方向都会红，
+/// 而且是间歇性的——2026-08-28 全量跑里真的红过一次，单独跑却过。
+///
+/// `clearAll()` 那条原本住在 `LocalUserDataTests`（语义上属删号链路），但
+/// `.serialized` 只在**同一个 Suite 内**生效，跨 Suite 仍并行。把所有碰
+/// `ImageCache.shared` 的测试收进同一个串行 Suite，是改动最小的根治办法。
+@Suite(.serialized)
 struct ImageCacheTests {
 
     @Test func getUnknownKeyReturnsNil() {
@@ -2424,6 +2433,25 @@ struct ImageCacheTests {
         ImageCache.shared.clearMemoryForTesting()
         // 内存已清，必须从磁盘读
         #expect(ImageCache.shared.get(key) != nil)
+    }
+
+    // 图片缓存里存的是用户自己上传的照片。删号后不清 = 一边留着用户照片、
+    // 一边宣称「全部数据已删除」。这条锁的是「清完必须真的没了，且能自报残留」。
+    // 归属上它是删号链路的一环（原在 LocalUserDataTests），放这里纯粹是为了
+    // 和其它碰 ImageCache.shared 的测试共享同一个串行 Suite——见上方说明。
+    @Test func clearAllRemovesEverythingAndReportsLeftovers() {
+        let cache = ImageCache.shared
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 1, height: 1)).image { ctx in
+            UIColor.orange.setFill()
+            ctx.fill(CGRect(x: 0, y: 0, width: 1, height: 1))
+        }
+        cache.set(image, forKey: "bucket/user/clear-all-test.jpg")
+        #expect(cache.get("bucket/user/clear-all-test.jpg") != nil)
+
+        let leftovers = cache.clearAll()
+
+        #expect(leftovers == 0, "清理应报告 0 残留，否则 UI 不该宣称已清空")
+        #expect(cache.get("bucket/user/clear-all-test.jpg") == nil, "内存与磁盘两层都必须清掉")
     }
 }
 
@@ -4376,23 +4404,6 @@ struct LocalUserDataTests {
         #expect(LocalUserData.sweepOrphanPhotos(in: missing) == 0)
     }
 
-    // 图片缓存里存的是用户自己上传的照片。删号后不清 = 一边留着用户照片、
-    // 一边宣称「全部数据已删除」。这条锁的是「清完必须真的没了，且能自报残留」。
-    @Test func imageCacheClearAllRemovesEverythingAndReportsLeftovers() {
-        let cache = ImageCache.shared
-        let image = UIGraphicsImageRenderer(size: CGSize(width: 1, height: 1)).image { ctx in
-            UIColor.orange.setFill()
-            ctx.fill(CGRect(x: 0, y: 0, width: 1, height: 1))
-        }
-        cache.set(image, forKey: "bucket/user/clear-all-test.jpg")
-        #expect(cache.get("bucket/user/clear-all-test.jpg") != nil)
-
-        let leftovers = cache.clearAll()
-
-        #expect(leftovers == 0, "清理应报告 0 残留，否则 UI 不该宣称已清空")
-        #expect(cache.get("bucket/user/clear-all-test.jpg") == nil, "内存与磁盘两层都必须清掉")
-    }
-
     @Test func milestoneProgressIsClearedAcrossAllUserIDs() async {
         let defaults = makeDefaults("local-user-data-milestones")
         // 里程碑按 userID 分键；删号后这些键永不再读，必须按前缀全清，否则无限累积
@@ -5430,5 +5441,33 @@ struct LocalSuccessInjectionTests {
         ]
         vm.injectPendingRetry(serverRequestIds: [])
         #expect(vm.entries.count == 2)          // 气泡 + 失败行都在
+    }
+}
+
+// MARK: - Settings 页的两处单一真源
+//
+// 这一刀绝大部分是视图改动，没有可测的新逻辑。唯一值得钉住的是「把两份重复的
+// 字面量合并成一份」这个动作本身——合并时写错一个 URL 是最可能、也最难发现的失误：
+// 隐私政策打开旧地址不会崩、不会报错，只会在 App Review 5.1.2 那关被拒。
+
+@Suite("Settings single sources of truth")
+struct SettingsSingleSourceTests {
+
+    @Test func legalLinksAreDistinctHTTPSURLs() {
+        #expect(LegalLinks.privacy != LegalLinks.terms)
+        for url in [LegalLinks.privacy, LegalLinks.terms] {
+            #expect(url.scheme == "https")
+            #expect(url.host?.isEmpty == false)
+        }
+        // 各自指向自己那份文档，不是两个名字指同一个地址
+        #expect(LegalLinks.privacy.lastPathComponent == "privacy.html")
+        #expect(LegalLinks.terms.lastPathComponent == "terms.html")
+    }
+
+    @Test func learningLanguagesAreDistinctAndNonEmpty() {
+        #expect(!LearningLanguages.target.isEmpty)
+        #expect(!LearningLanguages.native.isEmpty)
+        // 目标语言与母语写串是这两个常量唯一可能出的错
+        #expect(LearningLanguages.target != LearningLanguages.native)
     }
 }
