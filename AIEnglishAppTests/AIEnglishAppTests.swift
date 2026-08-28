@@ -3,6 +3,66 @@ import Foundation
 import UIKit
 @testable import AIEnglishApp
 
+private actor Tab2RefreshGate {
+    private var continuation: CheckedContinuation<Result<Data, any Error>, Never>?
+    private var pendingResult: Result<Data, any Error>?
+
+    func wait() async throws -> Data {
+        if let pendingResult {
+            self.pendingResult = nil
+            return try pendingResult.get()
+        }
+        let result = await withCheckedContinuation { continuation in
+            self.continuation = continuation
+        }
+        return try result.get()
+    }
+
+    func resolve(_ result: Result<Data, any Error>) {
+        if let continuation {
+            self.continuation = nil
+            continuation.resume(returning: result)
+        } else {
+            pendingResult = result
+        }
+    }
+}
+
+private actor AsyncCompletionFlag {
+    private(set) var isComplete = false
+    func markComplete() { isComplete = true }
+}
+
+private actor Tab2CacheGate {
+    private var continuation: CheckedContinuation<Data?, Never>?
+    private var pendingResolution: (resolved: Bool, data: Data?) = (false, nil)
+
+    func wait() async -> Data? {
+        if pendingResolution.resolved {
+            let data = pendingResolution.data
+            pendingResolution = (false, nil)
+            return data
+        }
+        return await withCheckedContinuation { continuation in
+            self.continuation = continuation
+        }
+    }
+
+    func resolve(_ data: Data? = nil) {
+        continuation?.resume(returning: data)
+        if continuation == nil {
+            pendingResolution = (true, data)
+        } else {
+            continuation = nil
+        }
+    }
+}
+
+private actor AsyncCallCounter {
+    private(set) var count = 0
+    func increment() { count += 1 }
+}
+
 // MARK: - AppTab navigation state tests
 
 struct AppTabTests {
@@ -28,6 +88,258 @@ struct AppTabTests {
         let isVisible: (AppTab) -> Bool = { $0 == .today }
         #expect(isVisible(.today) == true)
         #expect(isVisible(.mine) == false)
+    }
+}
+
+// MARK: - Tab2 refresh lifecycle tests
+
+@MainActor
+struct Tab2RefreshLifecycleTests {
+    private let payload = """
+    {
+        "unlocked": false,
+        "input_count": 4,
+        "categories": []
+    }
+    """.data(using: .utf8)!
+
+    @Test func successfulRefreshUpdatesDataAndClearsFailureState() async {
+        let payload = self.payload
+        let vm = Tab2HomeViewModel(
+            homeDataLoader: { payload },
+            homeLoadTimeout: .seconds(1),
+            isConnected: { true }
+        )
+        vm.errorMessage = "old error"
+        vm.toastMessage = "old toast"
+
+        await vm.load(showFailureHint: true)
+
+        #expect(vm.data?.inputCount == 4)
+        #expect(vm.errorMessage == nil)
+        #expect(vm.toastMessage == nil)
+        #expect(vm.isLoading == false)
+        #expect(vm.categoryWordsRevision == 1)
+    }
+
+    @Test func manualRefreshJoinsInFlightLoadAndPromotesFailureFeedback() async {
+        let gate = Tab2RefreshGate()
+        let completion = AsyncCompletionFlag()
+        let vm = Tab2HomeViewModel(
+            homeDataLoader: { try await gate.wait() },
+            homeLoadTimeout: .seconds(1),
+            isConnected: { true }
+        )
+        vm.data = Tab2HomeData(unlocked: false, inputCount: 2, categories: [])
+
+        let automaticLoad = Task { await vm.load() }
+        await waitUntil { vm.isLoading }
+        vm.toastMessage = "Previous failure"
+
+        let manualRefresh = Task {
+            await vm.load(showFailureHint: true)
+            await completion.markComplete()
+        }
+        await Task.yield()
+
+        let completedEarly = await completion.isComplete
+        #expect(vm.toastMessage == nil)
+        #expect(completedEarly == false)
+
+        await gate.resolve(.failure(URLError(.timedOut)))
+        await automaticLoad.value
+        await manualRefresh.value
+
+        let completedAfterLoad = await completion.isComplete
+        #expect(completedAfterLoad)
+        #expect(vm.toastMessage == "Unable to sync right now. Pull to try again.")
+        #expect(vm.isLoading == false)
+    }
+
+    @Test func manualRefreshDuringCacheReadJoinsBeforeNetworkRequestStarts() async {
+        let payload = self.payload
+        let cacheGate = Tab2CacheGate()
+        let networkCalls = AsyncCallCounter()
+        let manualCompletion = AsyncCompletionFlag()
+        let vm = Tab2HomeViewModel(
+            homeDataLoader: {
+                await networkCalls.increment()
+                return payload
+            },
+            homeCacheLoader: { await cacheGate.wait() },
+            homeLoadTimeout: .seconds(1),
+            isConnected: { true }
+        )
+
+        let automaticLoad = Task { await vm.load() }
+        await waitUntil { vm.isLoading }
+
+        let manualRefresh = Task {
+            await vm.load(showFailureHint: true)
+            await manualCompletion.markComplete()
+        }
+        await Task.yield()
+
+        #expect(await manualCompletion.isComplete == false)
+        #expect(await networkCalls.count == 0)
+
+        await cacheGate.resolve()
+        await automaticLoad.value
+        await manualRefresh.value
+
+        #expect(await manualCompletion.isComplete)
+        #expect(await networkCalls.count == 1)
+        #expect(vm.data?.inputCount == 4)
+        #expect(vm.isLoading == false)
+    }
+
+    @Test func timedOutManualRefreshKeepsDataAndShowsRetryHint() async {
+        let vm = Tab2HomeViewModel(
+            homeDataLoader: {
+                try await Task.sleep(for: .seconds(1))
+                return Data()
+            },
+            homeLoadTimeout: .milliseconds(10),
+            isConnected: { true }
+        )
+        vm.data = Tab2HomeData(unlocked: false, inputCount: 2, categories: [])
+
+        await vm.load(showFailureHint: true)
+
+        #expect(vm.data?.inputCount == 2)
+        #expect(vm.toastMessage == "Unable to sync right now. Pull to try again.")
+        #expect(vm.errorMessage == nil)
+        #expect(vm.isLoading == false)
+        #expect(vm.categoryWordsRevision == 0)
+    }
+
+    @Test func backgroundRefreshFailureKeepsCacheWithoutToast() async {
+        let vm = Tab2HomeViewModel(
+            homeDataLoader: { throw URLError(.badServerResponse) },
+            isConnected: { true }
+        )
+        vm.data = Tab2HomeData(unlocked: false, inputCount: 2, categories: [])
+        vm.toastMessage = "Previous failure"
+
+        await vm.load()
+
+        #expect(vm.data?.inputCount == 2)
+        #expect(vm.toastMessage == nil)
+        #expect(vm.errorMessage == nil)
+    }
+
+    @Test func cancelledManualRefreshKeepsDataWithoutFailureToast() async {
+        let vm = Tab2HomeViewModel(
+            homeDataLoader: { throw CancellationError() },
+            isConnected: { true }
+        )
+        vm.data = Tab2HomeData(unlocked: false, inputCount: 2, categories: [])
+
+        await vm.load(showFailureHint: true)
+
+        #expect(vm.data?.inputCount == 2)
+        #expect(vm.toastMessage == nil)
+        #expect(vm.errorMessage == nil)
+        #expect(vm.isLoading == false)
+    }
+
+    @Test func offlineManualRefreshReturnsImmediateOfflineHintWithoutReplacingData() async {
+        let payload = self.payload
+        let vm = Tab2HomeViewModel(
+            homeDataLoader: { payload },
+            isConnected: { false }
+        )
+        vm.data = Tab2HomeData(unlocked: false, inputCount: 2, categories: [])
+
+        await vm.load(showFailureHint: true)
+
+        #expect(vm.data?.inputCount == 2)
+        #expect(vm.toastMessage == "You're offline. Check your connection and try again.")
+        #expect(vm.errorMessage == nil)
+        #expect(vm.isLoading == false)
+    }
+
+    @Test func offlineInitialRetryKeepsErrorPageAndShowsFeedback() async {
+        let vm = Tab2HomeViewModel(
+            homeDataLoader: { Data() },
+            homeCacheLoader: { nil },
+            isConnected: { false }
+        )
+        vm.errorMessage = "Failed to load"
+
+        await vm.retryInitialLoad()
+
+        #expect(vm.data == nil)
+        #expect(vm.errorMessage == "Failed to load")
+        #expect(vm.toastMessage == "You're offline. Check your connection and try again.")
+        #expect(vm.isLoading == false)
+    }
+
+    @Test func connectedInitialRetryFailureKeepsErrorPageAndShowsFeedback() async {
+        let vm = Tab2HomeViewModel(
+            homeDataLoader: { throw URLError(.badServerResponse) },
+            homeCacheLoader: { nil },
+            isConnected: { true }
+        )
+        vm.errorMessage = "Failed to load"
+
+        await vm.retryInitialLoad()
+
+        #expect(vm.data == nil)
+        #expect(vm.errorMessage == "Failed to load")
+        #expect(vm.toastMessage == "Unable to sync right now. Try again in a moment.")
+        #expect(vm.isLoading == false)
+    }
+
+    @Test func successfulInitialRetryKeepsRecoveryVisibleUntilContentArrives() async {
+        let payload = self.payload
+        let gate = Tab2RefreshGate()
+        let completion = AsyncCompletionFlag()
+        let vm = Tab2HomeViewModel(
+            homeDataLoader: { try await gate.wait() },
+            homeCacheLoader: { nil },
+            homeLoadTimeout: .seconds(1),
+            isConnected: { true }
+        )
+        vm.errorMessage = "Failed to load"
+
+        let retry = Task {
+            await vm.retryInitialLoad()
+            await completion.markComplete()
+        }
+        await waitUntil { vm.isLoading }
+
+        #expect(vm.errorMessage == "Failed to load")
+        #expect(await completion.isComplete == false)
+
+        await gate.resolve(.success(payload))
+        await retry.value
+
+        #expect(await completion.isComplete)
+        #expect(vm.data?.inputCount == 4)
+        #expect(vm.errorMessage == nil)
+        #expect(vm.toastMessage == nil)
+        #expect(vm.isLoading == false)
+    }
+
+    private func waitUntil(_ condition: @escaping @MainActor () -> Bool) async {
+        for _ in 0..<100 {
+            if condition() { return }
+            try? await Task.sleep(for: .milliseconds(2))
+        }
+        Issue.record("Timed out waiting for Tab2 refresh state")
+    }
+}
+
+// MARK: - Root tab swipe intent tests
+
+struct RootTabSwipeIntentTests {
+    @Test func verticalPullDoesNotBecomeTabSwipe() {
+        #expect(RootTabSwipeIntent.isHorizontal(CGSize(width: 3, height: 60)) == false)
+    }
+
+    @Test func horizontalDragBecomesTabSwipe() {
+        #expect(RootTabSwipeIntent.isHorizontal(CGSize(width: 60, height: 3)) == true)
     }
 }
 
@@ -703,6 +1015,150 @@ private struct ContentBlockedMock: AIServicing {
 // TodayViewModel 已标 @MainActor（审查发现 #5）：实例状态与方法的访问必须在主线程隔离。
 @MainActor
 struct TodayViewModelTests {
+
+    @Test func startingNewHistoryLoadClearsPreviousFailureHint() async {
+        let vm = TodayViewModel(
+            service: SuccessMock(),
+            historyDataLoader: { Data() },
+            isConsentGranted: { true }
+        )
+        vm.offlineHint = "Previous failure"
+
+        await vm.loadHistory()
+
+        #expect(vm.offlineHint == nil)
+    }
+
+    @Test func manualHistoryRefreshJoinsInFlightLoadAndPromotesFailureFeedback() async {
+        let gate = Tab2RefreshGate()
+        let completion = AsyncCompletionFlag()
+        let vm = TodayViewModel(
+            service: SuccessMock(),
+            historyDataLoader: { try await gate.wait() },
+            historyTimeout: .seconds(1),
+            isConnected: { true },
+            isConsentGranted: { true }
+        )
+
+        let automaticLoad = Task { await vm.loadHistory() }
+        await waitUntil { vm.isLoadingHistory }
+        vm.offlineHint = "Previous failure"
+
+        let manualRefresh = Task {
+            await vm.loadHistory(showFailureHint: true)
+            await completion.markComplete()
+        }
+        await Task.yield()
+
+        #expect(vm.offlineHint == nil)
+        #expect(await completion.isComplete == false)
+
+        await gate.resolve(.failure(URLError(.timedOut)))
+        await automaticLoad.value
+        await manualRefresh.value
+
+        #expect(await completion.isComplete)
+        #expect(vm.offlineHint == "Unable to sync right now. Pull to try again.")
+        #expect(vm.isLoadingHistory == false)
+    }
+
+    @Test func cancelledManualHistoryRefreshRemainsSilent() async {
+        let vm = TodayViewModel(
+            service: SuccessMock(),
+            historyDataLoader: { throw CancellationError() },
+            isConnected: { true },
+            isConsentGranted: { true }
+        )
+
+        await vm.loadHistory(showFailureHint: true)
+
+        #expect(vm.offlineHint == nil)
+        #expect(vm.isLoadingHistory == false)
+    }
+
+    @Test func manualHistoryRefreshUsesOfflineMessageWhenConnectionDrops() async {
+        let vm = TodayViewModel(
+            service: SuccessMock(),
+            historyDataLoader: { throw URLError(.networkConnectionLost) },
+            isConnected: { false },
+            isConsentGranted: { true }
+        )
+
+        await vm.loadHistory(showFailureHint: true)
+
+        #expect(vm.offlineHint == "You're offline. Check your connection and try again.")
+    }
+
+    @Test func manualHistoryRefreshUsesGenericMessageForConnectedFailure() async {
+        let vm = TodayViewModel(
+            service: SuccessMock(),
+            historyDataLoader: { throw URLError(.timedOut) },
+            isConnected: { true },
+            isConsentGranted: { true }
+        )
+
+        await vm.loadHistory(showFailureHint: true)
+
+        #expect(vm.offlineHint == "Unable to sync right now. Pull to try again.")
+    }
+
+    @Test func invalidManualHistoryResponseShowsGenericFailure() async {
+        let vm = TodayViewModel(
+            service: SuccessMock(),
+            historyDataLoader: { Data("not-json".utf8) },
+            isConnected: { true },
+            isConsentGranted: { true }
+        )
+
+        await vm.loadHistory(showFailureHint: true)
+
+        #expect(vm.offlineHint == "Unable to sync right now. Pull to try again.")
+    }
+
+    @Test func invalidBackgroundHistoryResponseRemainsSilent() async {
+        let vm = TodayViewModel(
+            service: SuccessMock(),
+            historyDataLoader: { Data("not-json".utf8) },
+            isConnected: { true },
+            isConsentGranted: { true }
+        )
+
+        await vm.loadHistory()
+
+        #expect(vm.offlineHint == nil)
+    }
+
+    @Test func historyTimeoutReturnsCompletedOperation() async throws {
+        let expected = Data([0x50, 0x4F, 0x50])
+
+        let result = try await TodayViewModel.withTimeout(.seconds(1)) {
+            expected
+        }
+
+        #expect(result == expected)
+    }
+
+    @Test func historyTimeoutCancelsSlowOperation() async {
+        do {
+            _ = try await TodayViewModel.withTimeout(.milliseconds(20)) {
+                try await Task.sleep(for: .seconds(1))
+                return Data()
+            }
+            Issue.record("Expected history refresh to time out")
+        } catch let error as TodayViewModel.HistoryLoadError {
+            #expect(error == .timedOut)
+        } catch {
+            Issue.record("Expected timedOut, got \(error)")
+        }
+    }
+
+    private func waitUntil(_ condition: @escaping @MainActor () -> Bool) async {
+        for _ in 0..<100 {
+            if condition() { return }
+            try? await Task.sleep(for: .milliseconds(2))
+        }
+        Issue.record("Timed out waiting for Tab1 history refresh state")
+    }
 
     @Test func sendAppendsUserBubbleAndAICard() async {
         let vm = TodayViewModel(service: SuccessMock(), isConsentGranted: { true })
@@ -1789,19 +2245,19 @@ struct LocalCacheTombstoneTests {
     @Test func clearTombstonesEmptiesAll() async {
         let id1 = UUID()
         let id2 = UUID()
-        await LocalCache.shared.addTombstone(id1, key: .vocabs)
-        await LocalCache.shared.addTombstone(id2, key: .vocabs)
-        await LocalCache.shared.clearTombstones(for: .vocabs)
-        let tombstones = await LocalCache.shared.tombstones(for: .vocabs)
+        await LocalCache.shared.addTombstone(id1, key: .scenes)
+        await LocalCache.shared.addTombstone(id2, key: .scenes)
+        await LocalCache.shared.clearTombstones(for: .scenes)
+        let tombstones = await LocalCache.shared.tombstones(for: .scenes)
         #expect(tombstones.isEmpty)
     }
 
-    // scenes 和 vocabs 各自独立（不互相污染）
+    // 不同缓存 key 各自独立（不互相污染）
     @Test func tombstonesAreScopedPerKey() async {
         let id = UUID()
         await LocalCache.shared.addTombstone(id, key: .scenes)
-        let vocabTombstones = await LocalCache.shared.tombstones(for: .vocabs)
-        #expect(vocabTombstones.contains(id.uuidString) == false)
+        let tab2Tombstones = await LocalCache.shared.tombstones(for: .tab2Home)
+        #expect(tab2Tombstones.contains(id.uuidString) == false)
         await LocalCache.shared.removeTombstone(id, key: .scenes)
     }
 }
@@ -1812,10 +2268,10 @@ struct LocalCacheTests {
 
     @Test func saveThenLoadRoundTrips() async {
         let payload = #"[{"hello":"world"}]"#.data(using: .utf8)!
-        await LocalCache.shared.save(payload, key: .vocabs)
-        let loaded = await LocalCache.shared.load(key: .vocabs)
+        await LocalCache.shared.save(payload, key: .tab2Home)
+        let loaded = await LocalCache.shared.load(key: .tab2Home)
         #expect(loaded == payload)
-        await LocalCache.shared.remove(key: .vocabs)   // 清理，避免污染其它用例
+        await LocalCache.shared.remove(key: .tab2Home)   // 清理，避免污染其它用例
     }
 
     @Test func removeThenLoadReturnsNil() async {
@@ -3721,6 +4177,104 @@ struct CategoryMilestoneTrackerTests {
 
     private func clear(_ defaults: UserDefaults) {
         defaults.dictionaryRepresentation().keys.forEach(defaults.removeObject(forKey:))
+    }
+}
+
+struct CategoryWordsLoadingStateTests {
+
+    @Test func offlineAndGenericFailuresUseDistinctSingleLineCopy() {
+        #expect(CategoryWordsLoadFailure.offline.message == "You're offline.")
+        #expect(CategoryWordsLoadFailure.unavailable.message == "Couldn't load these words.")
+    }
+
+    @Test func offlineNetworkErrorsAreClassifiedAsOffline() {
+        #expect(CategoryWordsLoadFailure.classify(
+            error: URLError(.notConnectedToInternet),
+            isConnected: true
+        ) == .offline)
+        #expect(CategoryWordsLoadFailure.classify(
+            error: URLError(.timedOut),
+            isConnected: false
+        ) == .offline)
+    }
+
+    @Test func otherErrorsRemainGenericWhenConnected() {
+        #expect(CategoryWordsLoadFailure.classify(
+            error: URLError(.timedOut),
+            isConnected: true
+        ) == .unavailable)
+    }
+
+    @MainActor
+    @Test func collapsingCancelsLoadingWithoutCreatingFailure() async {
+        let loader = CategoryWordsLoader()
+        loader.synchronize(isExpanded: true, revision: 0) {
+            try await Task.sleep(for: .seconds(5))
+            return [Self.word("late")]
+        }
+        #expect(loader.isLoading)
+
+        loader.synchronize(isExpanded: false, revision: 0) { [] }
+        await Task.yield()
+
+        #expect(loader.isLoading == false)
+        #expect(loader.failure == nil)
+        #expect(loader.words.isEmpty)
+    }
+
+    @MainActor
+    @Test func newRevisionReplacesLoadedWordsEvenWhenRowRemainsExpanded() async {
+        let loader = CategoryWordsLoader()
+        loader.synchronize(isExpanded: true, revision: 0) {
+            [Self.word("old")]
+        }
+        await waitUntil { loader.words.first?.lemma == "old" }
+
+        loader.synchronize(isExpanded: true, revision: 1) {
+            [Self.word("fresh")]
+        }
+        await waitUntil { loader.words.first?.lemma == "fresh" }
+
+        #expect(loader.words.map(\.lemma) == ["fresh"])
+        #expect(loader.failure == nil)
+    }
+
+    @MainActor
+    @Test func cancelledOldRequestCannotOverwriteNewRevision() async {
+        let loader = CategoryWordsLoader()
+        loader.synchronize(isExpanded: true, revision: 0) {
+            // 模拟不配合取消的依赖：吞掉 sleep 的 CancellationError 后仍返回旧结果。
+            try? await Task.sleep(for: .milliseconds(30))
+            return [Self.word("stale")]
+        }
+
+        loader.synchronize(isExpanded: true, revision: 1) {
+            [Self.word("current")]
+        }
+        await waitUntil { loader.words.first?.lemma == "current" }
+        try? await Task.sleep(for: .milliseconds(50))
+
+        #expect(loader.words.map(\.lemma) == ["current"])
+        #expect(loader.failure == nil)
+    }
+
+    private static func word(_ lemma: String) -> Tab2WordEntry {
+        Tab2WordEntry(
+            lemma: lemma,
+            entryKind: "word",
+            granularity: "word"
+        )
+    }
+
+    @MainActor
+    private func waitUntil(
+        _ condition: @escaping @MainActor () -> Bool
+    ) async {
+        for _ in 0..<100 {
+            if condition() { return }
+            try? await Task.sleep(for: .milliseconds(2))
+        }
+        Issue.record("Timed out waiting for category words state")
     }
 }
 

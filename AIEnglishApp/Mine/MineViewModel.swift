@@ -33,9 +33,6 @@ final class MineViewModel {
         return scenes.filter { $0.sceneCategory == cat }
     }
 
-    // Fetched separately by VocabBookView; stored here only for the capsule count badge.
-    var vocabCount: Int = 0
-
     // 切 Tab 时调用：超过 30 秒才真正刷新，避免频繁网络请求
     func loadScenesIfStale() async {
         // 首次加载交给 .task（loadScenes）负责——冷启动时 .task 与本方法（onAppear）
@@ -44,8 +41,7 @@ final class MineViewModel {
         guard lastLoadedAt != .distantPast else { return }
         guard Date().timeIntervalSince(lastLoadedAt) > 30 else { return }
         Analytics.track("tab2_opened", properties: [
-            "scene_count": scenes.count,
-            "vocab_count": vocabCount
+            "scene_count": scenes.count
         ])
         await loadScenes()
     }
@@ -62,10 +58,7 @@ final class MineViewModel {
         isLoading = true
         errorMessage = nil
         do {
-            async let dataResult  = fetchMaterialsData()
-            async let countResult = fetchVocabCount()
-            let data   = try await dataResult
-            vocabCount = (try? await countResult) ?? 0
+            let data = try await fetchMaterialsData()
 
             // 请求成功：落盘、清墓碑、更新列表
             await LocalCache.shared.save(data, key: .scenes)
@@ -82,15 +75,6 @@ final class MineViewModel {
             }
         }
         isLoading = false
-    }
-
-    private func fetchVocabCount() async throws -> Int {
-        var req = URLRequest(url: SupabaseConfig.getVocabsFunctionURL)
-        req.timeoutInterval = 10
-        try await SupabaseManager.setAuthHeaders(on: &req)
-        let (data, _) = try await URLSession.shared.data(for: req)
-        let array = try JSONSerialization.jsonObject(with: data) as? [Any]
-        return array?.count ?? 0
     }
 
     // 乐观删除：先从列表移除 + 立即写入墓碑（防幽灵素材），再调后端，4 秒撤销窗口

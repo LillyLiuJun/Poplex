@@ -9,6 +9,8 @@ struct CanvasBackground: View {
     private let dotRadius: CGFloat = 0.6
     /// 是否显示上部那缕暖光（Tab2 保留；Tab1 传 false 只留底部光晕）
     var showTopAura: Bool = true
+    /// 是否显示底部品牌橘光。错误等中性状态可关闭，避免品牌色被误读为错误色。
+    var showBottomAura: Bool = true
 
     var body: some View {
         // 网格点为主体（Canvas 填满建议尺寸、不撑宽）。橙光晕改用 .overlay：
@@ -33,18 +35,20 @@ struct CanvasBackground: View {
         }
         // 底部品牌橘暖光：贴着屏幕底部、藏在输入框后面的一缕暖意
         .overlay(alignment: .bottom) {
-            Ellipse()
-                .fill(
-                    RadialGradient(
-                        colors: [AppTheme.Color.canvasAura.opacity(0.24), .clear],
-                        center: .center,
-                        startRadius: 0,
-                        endRadius: 220
+            if showBottomAura {
+                Ellipse()
+                    .fill(
+                        RadialGradient(
+                            colors: [AppTheme.Color.canvasAura.opacity(0.24), .clear],
+                            center: .center,
+                            startRadius: 0,
+                            endRadius: 220
+                        )
                     )
-                )
-                .frame(width: 460, height: 260)
-                .blur(radius: 44)
-                .offset(y: 150)
+                    .frame(width: 460, height: 260)
+                    .blur(radius: 44)
+                    .offset(y: 150)
+            }
         }
         // 上部一缕更淡的暖光（偏右、避开顶栏），与底部呼应；Tab1 关闭
         .overlay(alignment: .top) {

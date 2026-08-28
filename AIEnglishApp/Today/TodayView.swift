@@ -81,6 +81,8 @@ struct TodayView: View {
     private var timeline: some View {
         ScrollViewReader { proxy in
             ScrollView {
+                WarmRefreshControlHelper()
+                    .frame(width: 0, height: 0)
                 LazyVStack(spacing: AppTheme.Space.paddingCard) {
                     ForEach(viewModel.entries) { entry in
                         TimelineRow(entry: entry, onImageTap: { img, frame in
@@ -118,9 +120,11 @@ struct TodayView: View {
                 // 后续重设计改变几何时，停靠线自动同步，不再依赖 92pt 经验常数。
                 Color.clear.frame(height: inputBarHeight + AppTheme.Space.paddingSection)
             }
+            .scrollBounceBehavior(.always, axes: .vertical)
             .refreshable {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 // 下拉刷新：手动对齐服务器正本（断网启动后恢复网络时的主要恢复入口）
-                await viewModel.loadHistory()
+                await viewModel.loadHistory(showFailureHint: true)
             }
             .contentMargins(.top, topInset, for: .scrollContent)  // 可滚动进入的顶部 margin
             .topEdgeFade()

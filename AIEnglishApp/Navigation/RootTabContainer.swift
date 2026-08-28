@@ -4,6 +4,12 @@ enum RootTabContainerLayout {
     static let space = "RootTabContainerSpace"
 }
 
+enum RootTabSwipeIntent {
+    static func isHorizontal(_ translation: CGSize) -> Bool {
+        abs(translation.width) > abs(translation.height)
+    }
+}
+
 struct IgnoredTabSwipeFrameKey: PreferenceKey {
     static var defaultValue: [CGRect] = []
     static func reduce(value: inout [CGRect], nextValue: () -> [CGRect]) {
@@ -132,14 +138,22 @@ struct RootTabContainer: View {
         .simultaneousGesture(
             DragGesture(minimumDistance: 15, coordinateSpace: .named(RootTabContainerLayout.space))
                 .onChanged { value in
-                    // Capture swipe state at gesture start, before List's onEnded can clear it
+                    // 下拉刷新同样是 DragGesture。只有已经显露出明确横向意图时才写根容器状态，
+                    // 避免垂直下拉触发 RootTabContainer 重算并取消 ScrollView.refreshable 任务。
+                    guard RootTabSwipeIntent.isHorizontal(value.translation) else { return }
+                    // 明确成为水平手势的第一帧捕获状态；垂直下拉阶段不写根容器状态。
                     if !captureRecorded {
                         captureRecorded = true
                         capturedSwipeOpen = mineSwipeActionOpen
                     }
                 }
                 .onEnded { value in
-                    defer { captureRecorded = false }
+                    let didCaptureHorizontalSwipe = captureRecorded
+                    defer {
+                        if didCaptureHorizontalSwipe {
+                            captureRecorded = false
+                        }
+                    }
                     let start = value.startLocation
                     // 忽略帧来自 Tab2 横向轮播区，只在 Tab2 可见时才有意义
                     if selectedTab == .mine {
@@ -151,7 +165,7 @@ struct RootTabContainer: View {
                     let predictedDx = value.predictedEndTranslation.width
 
                     // 水平意图判断：水平位移必须严格大于垂直位移（45°，同系统侧滑返回标准）
-                    guard abs(dx) > abs(dy) else { return }
+                    guard RootTabSwipeIntent.isHorizontal(value.translation) else { return }
 
                     // 50pt 实测位移 或 100pt 惯性轻扫预测（斜率已过才到这里，不单独绕过）
                     let isLeftSwipe = dx < -50 || predictedDx < -100

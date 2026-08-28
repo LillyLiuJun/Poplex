@@ -19,7 +19,6 @@ actor LocalCache {
     enum Key: String, CaseIterable {
         case messages   // Tab1 历史对话（get-messages）
         case scenes     // Tab2 场景素材（已被 tab2Home 取代，保留兼容）
-        case vocabs     // Tab2 生词（已被 tab2Home 取代，保留兼容）
         case tab2Home   // Tab2 首页数据（get-tab2-home，Slice B 起的主数据）
     }
 

@@ -17,13 +17,19 @@ struct MineView: View {
     @State private var path: [MineRoute] = []
     @State private var comingSoonToast: String? = nil
     @State private var milestoneToast: String? = nil
+    @State private var isRadiantAscentActive: Bool = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// 解锁揭幕转场：减弱动态时只淡入（不做从底部缩放生长）
+    /// 解锁揭幕转场：参考 main 基线从底部优雅生长舒展，配合温润微上浮与消融淡入
     private var unlockRevealTransition: AnyTransition {
         reduceMotion
             ? .opacity
-            : .opacity.combined(with: .scale(scale: 0.82, anchor: .bottom))
+            : .asymmetric(
+                insertion: .opacity
+                    .combined(with: .scale(scale: 0.84, anchor: .bottom))
+                    .combined(with: .offset(y: 16)),
+                removal: .opacity
+            )
     }
 
     init(
@@ -44,54 +50,61 @@ struct MineView: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            mainContent
-                .toolbar(.hidden, for: .navigationBar)
-                .task { await vm.load() }
-                .onChange(of: listResetToken) { _, _ in
-                    #if DEBUG
-                    if ProcessInfo.processInfo.environment["TAB2_MILESTONE_DEMO"] == "1" {
-                        vm.prepareDebugMilestoneDemoFromCurrentData()
-                    }
-                    #endif
-                    Task { await vm.load() }
+            ZStack {
+                mainContent
+
+                // 品牌色温润升腾柔光：跨越 Locked → Unlocked 转场全生命周期
+                if isRadiantAscentActive && !reduceMotion {
+                    BrandRadiantAscentOverlay()
                 }
-                .onChange(of: path) { _, newPath in
-                    detailActive = !newPath.isEmpty
+            }
+            .toolbar(.hidden, for: .navigationBar)
+            .task { await vm.load() }
+            .onChange(of: listResetToken) { _, _ in
+                #if DEBUG
+                if ProcessInfo.processInfo.environment["TAB2_MILESTONE_DEMO"] == "1" {
+                    vm.prepareDebugMilestoneDemoFromCurrentData()
                 }
-                .onChange(of: vm.isPermanentlyUnlocked) { _, newValue in
-                    if newValue {
-                        withAnimation(AppTheme.Motion.tabSelection) {}
-                    }
+                #endif
+                Task { await vm.load() }
+            }
+            .onChange(of: path) { _, newPath in
+                detailActive = !newPath.isEmpty
+            }
+            .onChange(of: vm.isPermanentlyUnlocked) { _, newValue in
+                if newValue {
+                    withAnimation(AppTheme.Motion.tabSelection) {}
                 }
-                .task(id: visibleMilestonePresentations) {
-                    let presentations = visibleMilestonePresentations
-                    guard !presentations.isEmpty else { return }
-                    milestoneToast = vm.milestoneToastMessage(for: presentations)
-                    let revealDuration = reduceMotion
-                        ? AppTheme.Motion.categoryMilestoneReducedReveal
-                        : AppTheme.Motion.categoryMilestoneReveal
-                    try? await Task.sleep(for: revealDuration)
-                    guard !Task.isCancelled, isActive else { return }
-                    try? await Task.sleep(for: AppTheme.Motion.categoryMilestoneResultHold)
-                    guard !Task.isCancelled, isActive else { return }
-                    vm.finishMilestonePresentations(presentations)
+            }
+            .task(id: visibleMilestonePresentations) {
+                let presentations = visibleMilestonePresentations
+                guard !presentations.isEmpty else { return }
+                milestoneToast = vm.milestoneToastMessage(for: presentations)
+                let revealDuration = reduceMotion
+                    ? AppTheme.Motion.categoryMilestoneReducedReveal
+                    : AppTheme.Motion.categoryMilestoneReveal
+                try? await Task.sleep(for: revealDuration)
+                guard !Task.isCancelled, isActive else { return }
+                try? await Task.sleep(for: AppTheme.Motion.categoryMilestoneResultHold)
+                guard !Task.isCancelled, isActive else { return }
+                vm.finishMilestonePresentations(presentations)
+            }
+            .toast(
+                message: Binding(get: { vm.toastMessage }, set: { vm.toastMessage = $0 }),
+                systemImage: "exclamationmark.triangle"
+            )
+            .toast(message: $comingSoonToast, systemImage: "clock")
+            .toast(
+                message: $milestoneToast,
+                systemImage: "sparkles",
+                lifetime: AppTheme.Motion.milestoneToastLifetime
+            )
+            .navigationDestination(for: MineRoute.self) { route in
+                switch route {
+                case .conversation(let cat):
+                    ConversationView(sceneCategory: cat, onDismiss: { path.removeLast() })
                 }
-                .toast(
-                    message: Binding(get: { vm.toastMessage }, set: { vm.toastMessage = $0 }),
-                    systemImage: "exclamationmark.triangle"
-                )
-                .toast(message: $comingSoonToast, systemImage: "clock")
-                .toast(
-                    message: $milestoneToast,
-                    systemImage: "sparkles",
-                    lifetime: AppTheme.Motion.milestoneToastLifetime
-                )
-                .navigationDestination(for: MineRoute.self) { route in
-                    switch route {
-                    case .conversation(let cat):
-                        ConversationView(sceneCategory: cat, onDismiss: { path.removeLast() })
-                    }
-                }
+            }
         }
     }
 
@@ -103,36 +116,60 @@ struct MineView: View {
 
     @ViewBuilder
     private var mainContent: some View {
-        if vm.isLoading && vm.data == nil {
-            skeletonView
-        } else if vm.errorMessage != nil && vm.data == nil {
-            ConnectionRetryView { Task { await vm.load() } }
-        } else if vm.isPermanentlyUnlocked {
-            Tab2UnlockedView(
-                vm: vm,
-                topInset: topInset,
-                listResetToken: listResetToken,
-                milestonePresentations: visibleMilestonePresentations,
-                onTalk: { cat in
-                    if FeatureFlags.conversationEnabled {
-                        path.append(.conversation(sceneCategory: cat))
-                    } else {
-                        comingSoonToast = "Coming soon"
-                    }
+        if vm.data == nil {
+            if vm.errorMessage != nil {
+                Tab2LoadErrorView(
+                    topInset: topInset,
+                    isRetrying: vm.isLoading
+                ) {
+                    await vm.retryInitialLoad()
                 }
-            )
-            // 从橙波原点（底部按钮处）向上"揭幕"生长浮现 + 淡入（减弱动态时只淡入）
-            .transition(unlockRevealTransition)
+            } else {
+                // 首载任务真正启动前、缓存读取期间或生命周期取消后，都不能
+                // 落入一个没有 loading / error / content 的空白页面。
+                skeletonView
+            }
+        } else if vm.isPermanentlyUnlocked {
+            unlockedView
+                .transition(unlockRevealTransition)
         } else {
-            Tab2LockedView(
-                vm: vm,
-                topInset: topInset,
-                listResetToken: listResetToken,
-                milestonePresentations: visibleMilestonePresentations,
-                onCapture: { onSwitchToToday?() }
-            )
-            // 锁定页（含全屏橙波）淡出，露出下面的解锁页
-            .transition(.opacity)
+            lockedView
+                .transition(.opacity)
+        }
+    }
+
+    private var unlockedView: some View {
+        Tab2UnlockedView(
+            vm: vm,
+            topInset: topInset,
+            listResetToken: listResetToken,
+            milestonePresentations: visibleMilestonePresentations,
+            onTalk: { cat in
+                if FeatureFlags.conversationEnabled {
+                    path.append(.conversation(sceneCategory: cat))
+                } else {
+                    comingSoonToast = "Coming soon"
+                }
+            }
+        )
+    }
+
+    private var lockedView: some View {
+        Tab2LockedView(
+            vm: vm,
+            topInset: topInset,
+            listResetToken: listResetToken,
+            milestonePresentations: visibleMilestonePresentations,
+            onCapture: { onSwitchToToday?() },
+            onStartAscent: { triggerRadiantAscent() }
+        )
+    }
+
+    private func triggerRadiantAscent() {
+        isRadiantAscentActive = true
+        Task {
+            try? await Task.sleep(for: AppTheme.Motion.radiantAscentLifetime)
+            isRadiantAscentActive = false
         }
     }
 
@@ -166,6 +203,7 @@ private struct Tab2LockedView: View {
     var listResetToken: UUID = UUID()
     var milestonePresentations: [CategoryMilestonePresentation] = []
     let onCapture: () -> Void
+    var onStartAscent: (() -> Void)? = nil
 
     private let wordTarget  = 20
 
@@ -181,12 +219,33 @@ private struct Tab2LockedView: View {
             CanvasBackground(showTopAura: false).ignoresSafeArea()
 
             if categoriesWithWords.isEmpty {
-                // 无数据空状态（方案A · 极简居中）：整页垂直居中，CTA 沉底
-                emptyStateView
+                GeometryReader { geo in
+                    let reservedTop = max(topInset, 56)
+
+                    ScrollView {
+                        WarmRefreshControlHelper()
+                            .frame(width: 0, height: 0)
+                        emptyStateView
+                            // safeAreaInset 会从实际滚动视口中扣除 reservedTop。
+                            // 内容高度也必须按同一个视口计算，否则空状态会比视口高一截，
+                            // 导致首次布局与刷新回弹落在不同的滚动锚点。
+                            .frame(minHeight: max(geo.size.height - reservedTop, 400))
+                    }
+                    .safeAreaInset(edge: .top, spacing: 0) {
+                        Color.clear.frame(height: reservedTop)
+                    }
+                    .scrollBounceBehavior(.always, axes: .vertical)
+                    .refreshable {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        await vm.load(showFailureHint: true)
+                    }
+                }
             } else {
                 // 1. 待解锁页面内容（固定顶栏空间，卡片与 Header 独立协同避让）
                 ScrollViewReader { proxy in
                     ScrollView {
+                        WarmRefreshControlHelper()
+                            .frame(width: 0, height: 0)
                         VStack(alignment: .leading, spacing: AppTheme.Space.paddingSection) {
                             headerSection
 
@@ -200,29 +259,38 @@ private struct Tab2LockedView: View {
                         .padding(.bottom, AppTheme.Space.paddingPage)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .contentMargins(.top, topInset, for: .scrollContent)
+                    .safeAreaInset(edge: .top, spacing: 0) {
+                        Color.clear.frame(height: max(topInset, 56))
+                    }
+                    .scrollBounceBehavior(.always, axes: .vertical)
+                    .refreshable {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        await vm.load(showFailureHint: true)
+                    }
                 }
             }
 
-
-            // 释放时暖橙"洗版"：从按钮位置(底部)向上的渐变，下浓上淡——能量从按钮升腾、呈现新内容
-            Rectangle()
-                .fill(
-                    LinearGradient(
-                        stops: [
-                            .init(color: AppTheme.Color.brandStrong, location: 0.0),
-                            .init(color: AppTheme.Color.brandStrong.opacity(0), location: 0.78)
-                        ],
-                        startPoint: .bottom,
-                        endPoint: .top
-                    )
-                )
-                .opacity(unlockState == .releasing ? 0.9 : 0.0)
-                .ignoresSafeArea()
-                .allowsHitTesting(false)
-                .animation(.easeIn(duration: 0.4), value: unlockState)
-
+            // 释放时温润晨曦升腾：从底部向上如暖雾轻烟般舒展弥散
+            LinearGradient(
+                stops: [
+                    .init(color: AppTheme.Color.brandTint.opacity(0.14), location: 0.0),
+                    .init(color: AppTheme.Color.brandStrong.opacity(0.08), location: 0.5),
+                    .init(color: .clear, location: 0.95)
+                ],
+                startPoint: .bottom,
+                endPoint: .top
+            )
+            .blur(radius: 40)
+            .opacity(unlockState == .releasing ? 1.0 : 0.0)
+            .offset(y: unlockState == .releasing ? -60 : 0)
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+            .animation(AppTheme.Motion.unlockDissolve, value: unlockState)
         }
+        .blur(radius: unlockState == .releasing ? 8 : 0)
+        .opacity(unlockState == .releasing ? 0 : 1)
+        .scaleEffect(unlockState == .releasing ? 0.98 : 1.0)
+        .animation(AppTheme.Motion.unlockDissolve, value: unlockState)
         .onChange(of: listResetToken) { _, _ in
             expandedCategoryId = nil   // 切回 Mine：回到初始收起
         }
@@ -241,8 +309,6 @@ private struct Tab2LockedView: View {
         }
         .padding(.horizontal, AppTheme.Space.paddingPage)
         .padding(.bottom, AppTheme.Space.paddingS)
-        // 顶部 Header 动效处理：蓄力时平稳贴合(y:+3)，释放时向上顺畅离场(y:-28, opacity:0)
-        // header 不随蓄力下压/变暗，保持不动——解锁重点是呈现新内容，不是压旧页
     }
 
     private var hintText: some View {
@@ -253,7 +319,7 @@ private struct Tab2LockedView: View {
     }
 
     // ── 无数据空状态（Warm Minimalism 减法设计）───────────────────────────
-    // 采用通用 EmptyStateView，以抽象胶囊插画 + 优雅 Typography 构建舒展居中负空间。
+    // 采用通用 EmptyStateView，以叠纸插画 + 优雅 Typography 构建舒展居中负空间。
     // 底部 CTA 沉底作为唯一操作焦点。
     private var emptyStateView: some View {
         // CTA 必须与文案同处一个 VStack、真正参与布局，不能用 overlay 浮在上面。
@@ -295,7 +361,8 @@ private struct Tab2LockedView: View {
                             isHighlighted: cat.id == topId,
                             isExpanded: expandedCategoryId == cat.id,
                             onToggle: { toggleExpand(cat.id, proxy) },
-                            loadWords: { await vm.loadCategoryWords(for: cat.sceneCategory) },
+                            loadWords: { try await vm.loadCategoryWords(for: cat.sceneCategory) },
+                            wordsRevision: vm.categoryWordsRevision,
                             milestonePresentations: milestonePresentations
                         )
                         .id(cat.id)
@@ -311,7 +378,8 @@ private struct Tab2LockedView: View {
     // 单开手风琴 + 滚动锚定：展开时把点开的行滚到顶部对齐，收起上一个，视线始终锁在这一行。
     private func toggleExpand(_ id: String, _ proxy: ScrollViewProxy) {
         let willExpand = expandedCategoryId != id
-        withAnimation(.easeInOut(duration: 0.28)) {
+        let animation = reduceMotion ? AppTheme.Motion.accordionReducedToggle : AppTheme.Motion.accordionToggle
+        withAnimation(animation) {
             expandedCategoryId = willExpand ? id : nil
             if willExpand { proxy.scrollTo(id, anchor: .top) }
         }
@@ -323,31 +391,32 @@ private struct Tab2LockedView: View {
         return Button {
             if isReady {
                 if reduceMotion {
-                    // 减弱动态：跳过蓄力/爆发/全屏橙波，单次轻震动 + 简单淡入切换
+                    // 减弱动态：跳过蓄力/升腾，单次轻震动 + 纯净淡入切换
                     UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                    withAnimation(.easeInOut(duration: 0.3)) {
+                    withAnimation(AppTheme.Motion.unlockReducedFade) {
                         vm.confirmUnlock()
                     }
                 } else {
-                    // 1. 蓄力阶段 (Heavy Impact + 深入压实下沉)
-                    UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    // 1. 原点蓄力阶段 (Soft Medium Impact + 温润微下沉)
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                    withAnimation(AppTheme.Motion.unlockCharging) {
                         unlockState = .charging
                     }
 
                     Task {
-                        // 1. 蓄力停顿 450ms - 增强蓄势凝结感
-                        try? await Task.sleep(nanoseconds: 450_000_000)
+                        // 蓄力停顿 360ms - 凝聚能量
+                        try? await Task.sleep(nanoseconds: 360_000_000)
 
-                        // 2. 舒张全屏释放阶段 (Heavy Impact + 晨曦流光升腾)
-                        UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
-                        withAnimation(.spring(response: 0.55, dampingFraction: 0.55)) {
+                        // 2. 从蓄力原点升腾释放 (Medium Impact + 品牌柔光升腾与旧页消融)
+                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                        onStartAscent?()
+                        withAnimation(AppTheme.Motion.unlockDissolve) {
                             unlockState = .releasing
                         }
 
-                        // 3. 能量波覆盖全屏后，橙波淡出、解锁页揭幕淡入（用 withAnimation 驱动分支转场）
-                        try? await Task.sleep(nanoseconds: 480_000_000)
-                        withAnimation(.spring(response: 0.58, dampingFraction: 0.8)) {
+                        // 3. 顺势在晨曦中揭开新世界
+                        try? await Task.sleep(nanoseconds: 300_000_000)
+                        withAnimation(AppTheme.Motion.unlockReveal) {
                             vm.confirmUnlock()
                         }
                     }
@@ -390,21 +459,21 @@ private struct Tab2LockedView: View {
             .clipShape(Capsule())
             .background {
                 ZStack {
-                    // 蓄力光晕层：charging 时橙光在 0.45s 内 easeIn 由弱到强、由小到大地"攒劲"，
-                    // 把这半秒的等待变成看得见的"正在充能"，再爆发（releasing 时交给 bloom/shockwave）
+                    // 蓄力光晕层：charging 时在按钮周围轻柔收拢凝聚
                     Capsule()
                         .fill(AppTheme.Color.brandStrong)
-                        .blur(radius: 16)
-                        .scaleEffect(unlockState == .charging ? 1.22 : 0.85)
-                        .opacity(unlockState == .charging ? 0.5 : 0.0)
-                        .animation(.easeIn(duration: 0.45), value: unlockState)
+                        .blur(radius: 14)
+                        .scaleEffect(unlockState == .charging ? 1.10 : 0.9)
+                        .opacity(unlockState == .charging ? 0.24 : 0.0)
+                        .animation(AppTheme.Motion.unlockCharging, value: unlockState)
 
-                    // 舒张发光的背影光晕层 (Bloom Glow Layer)——释放时铺得更大更软，橙色散开
+                    // 释放时光晕温和漫散
                     Capsule()
                         .fill(AppTheme.Color.brandStrong)
-                        .blur(radius: unlockState == .releasing ? 56 : 0)
-                        .scaleEffect(unlockState == .releasing ? 4.5 : 0.8)
-                        .opacity(unlockState == .releasing ? 0.72 : 0.0)
+                        .blur(radius: unlockState == .releasing ? 24 : 8)
+                        .scaleEffect(unlockState == .releasing ? 1.25 : 0.9)
+                        .opacity(unlockState == .releasing ? 0.14 : 0.0)
+                        .animation(.easeOut(duration: 0.3), value: unlockState)
                 }
             }
             .shadow(
@@ -415,7 +484,7 @@ private struct Tab2LockedView: View {
             )
             .scaleEffect(buttonScale)
             .opacity(buttonOpacity)      // 释放时溶解：淡出
-            .blur(radius: buttonBlur)     // + 虚化，溶进能量爆发
+            .blur(radius: buttonBlur)     // + 虚化，溶入升腾光晕
         }
         .buttonStyle(.plain)
         .padding(.horizontal, AppTheme.Space.paddingPage)
@@ -425,52 +494,52 @@ private struct Tab2LockedView: View {
     private var buttonScale: CGFloat {
         switch unlockState {
         case .idle: return 1.0
-        case .charging: return 0.84   // 蓄力压实下沉
-        case .releasing: return 1.0   // 不放大——纯淡出+虚化原地消散
+        case .charging: return 0.95   // 温润微下沉
+        case .releasing: return 0.98   // 原地温润消融
         }
     }
 
-    // 释放时按钮"溶解"：原地淡出 + 虚化，安静化掉（散开交给橙色 bloom）
+    // 释放时按钮原地淡出 + 柔和虚化
     private var buttonOpacity: Double { unlockState == .releasing ? 0 : 1 }
-    private var buttonBlur: CGFloat { unlockState == .releasing ? 16 : 0 }
+    private var buttonBlur: CGFloat { unlockState == .releasing ? 8 : 0 }
 
     private var shadowRadius: CGFloat {
         switch unlockState {
         case .idle: return 10
-        case .charging: return 2
-        case .releasing: return 24
+        case .charging: return 4
+        case .releasing: return 12
         }
     }
 
     private var shadowY: CGFloat {
         switch unlockState {
         case .idle: return 4
-        case .charging: return 1
-        case .releasing: return 10
+        case .charging: return 2
+        case .releasing: return 5
         }
     }
 
     private var shadowOpacity: Double {
         switch unlockState {
         case .idle: return 0.3
-        case .charging: return 0.1
-        case .releasing: return 0.6
+        case .charging: return 0.15
+        case .releasing: return 0.20
         }
     }
 
     private var sparkleScale: CGFloat {
         switch unlockState {
         case .idle: return 1.0
-        case .charging: return 0.7
-        case .releasing: return 1.6
+        case .charging: return 0.9
+        case .releasing: return 1.15
         }
     }
 
     private var sparkleRotation: Double {
         switch unlockState {
         case .idle: return 0
-        case .charging: return -30
-        case .releasing: return 60
+        case .charging: return -12
+        case .releasing: return 20
         }
     }
 
@@ -517,6 +586,7 @@ private struct Tab2UnlockedView: View {
 
     // 单开手风琴：同时只展开一个 Topics-in-Progress 主题；切回 Mine 时回收起。
     @State private var expandedCategoryId: String?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {
@@ -525,6 +595,8 @@ private struct Tab2UnlockedView: View {
 
             ScrollViewReader { proxy in
                 ScrollView {
+                    WarmRefreshControlHelper()
+                        .frame(width: 0, height: 0)
                     VStack(alignment: .leading, spacing: 0) {
                         // 标题组：页面衬线大标题 + 衬线副标（与 Onboarding 各屏「标题→副标」
                         // 同档 8pt，副标复用内容衬线 englishPrimary，与空状态副标同字同色）
@@ -543,9 +615,15 @@ private struct Tab2UnlockedView: View {
 
                         contentSections(proxy)
                     }
-                    .padding(.bottom, AppTheme.Space.paddingPage * 2)
                 }
-                .contentMargins(.top, topInset, for: .scrollContent)
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    Color.clear.frame(height: max(topInset, 56))
+                }
+                .scrollBounceBehavior(.always, axes: .vertical)
+                .refreshable {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    await vm.load(showFailureHint: true)
+                }
             }
         }
         .onAppear {
@@ -564,7 +642,8 @@ private struct Tab2UnlockedView: View {
     // 单开手风琴 + 滚动锚定（同 Tab2LockedView）
     private func toggleExpand(_ id: String, _ proxy: ScrollViewProxy) {
         let willExpand = expandedCategoryId != id
-        withAnimation(.easeInOut(duration: 0.28)) {
+        let animation = reduceMotion ? AppTheme.Motion.accordionReducedToggle : AppTheme.Motion.accordionToggle
+        withAnimation(animation) {
             expandedCategoryId = willExpand ? id : nil
             if willExpand { proxy.scrollTo(id, anchor: .top) }
         }
@@ -641,7 +720,8 @@ private struct Tab2UnlockedView: View {
                                     isHighlighted: false,
                                     isExpanded: expandedCategoryId == cat.id,
                                     onToggle: { toggleExpand(cat.id, proxy) },
-                                    loadWords: { await vm.loadCategoryWords(for: cat.sceneCategory) },
+                                    loadWords: { try await vm.loadCategoryWords(for: cat.sceneCategory) },
+                                    wordsRevision: vm.categoryWordsRevision,
                                     milestonePresentations: milestonePresentations
                                 )
                                 .id(cat.id)
@@ -718,8 +798,127 @@ private struct ConversationStubView: View {
     }
 }
 
+// MARK: - 品牌色温润升腾柔光层 (Brand Radiant Ascent Overlay)
+// 跨越从待解锁页(消融)到已解锁页(揭开)的全生命周期，提供轻柔通透、袅袅升腾的晨曦微光
+
+private struct BrandRadiantAscentOverlay: View {
+    @State private var ascentOffsetY: CGFloat = 40
+    @State private var ascentScaleX: CGFloat = 0.95
+    @State private var ascentScaleY: CGFloat = 0.90
+    @State private var ascentOpacity: Double = 0.0
+
+    var body: some View {
+        GeometryReader { geo in
+            let w = geo.size.width
+            let h = geo.size.height
+
+            ZStack(alignment: .bottom) {
+                // 1. 轻柔升腾暖幕（自底部向上舒展漫散、轻盈通透的品牌晨光）
+                LinearGradient(
+                    stops: [
+                        .init(color: .clear, location: 0.0),
+                        .init(color: AppTheme.Color.brandTint.opacity(0.16), location: 0.30),
+                        .init(color: AppTheme.Color.brandStrong.opacity(0.12), location: 0.60),
+                        .init(color: AppTheme.Color.brandStrong.opacity(0.15), location: 0.85),
+                        .init(color: AppTheme.Color.brandTint.opacity(0.07), location: 1.0)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(width: w * 1.5, height: h * 0.82)
+                .blur(radius: 52)
+                .offset(y: ascentOffsetY)
+                .scaleEffect(x: ascentScaleX, y: ascentScaleY, anchor: .bottom)
+                .opacity(ascentOpacity)
+
+                // 2. 底部原点发光核心（伴随按钮消融升腾的轻柔微光核）
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [
+                                AppTheme.Color.brandStrong.opacity(0.18),
+                                AppTheme.Color.brandTint.opacity(0.10),
+                                .clear
+                            ],
+                            center: .center,
+                            startRadius: 10,
+                            endRadius: 200
+                        )
+                    )
+                    .frame(width: 380, height: 380)
+                    .blur(radius: 40)
+                    .offset(y: ascentOffsetY * 0.75)
+                    .opacity(ascentOpacity)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+        .onAppear {
+            ascentOffsetY = 40
+            ascentScaleX = 0.95
+            ascentScaleY = 0.90
+            ascentOpacity = 0.0
+
+            // 1. 轻柔淡入
+            withAnimation(.easeIn(duration: 0.20)) {
+                ascentOpacity = 1.0
+            }
+            // 2. 向上升腾舒展（垂直方向自然拉伸向上拔起）
+            withAnimation(.easeOut(duration: 0.82)) {
+                ascentOffsetY = -300
+                ascentScaleX = 1.18
+                ascentScaleY = 1.45
+            }
+            // 3. 伴随新页面展开温润消融进背景
+            Task {
+                try? await Task.sleep(nanoseconds: 480_000_000)
+                withAnimation(.easeOut(duration: 0.38)) {
+                    ascentOpacity = 0.0
+                }
+            }
+        }
+    }
+}
+
 #Preview("Tab2 Empty State") {
     Tab2LockedView(vm: Tab2HomeViewModel(), onCapture: {})
+        .environment(\.colorScheme, .light)
+}
+
+#Preview("Tab2 Load Error") {
+    Tab2LoadErrorView { }
+}
+
+#Preview("Unlock Radiant Ascent · Replay") {
+    ZStack {
+        AppTheme.Color.pageBg.ignoresSafeArea()
+        BrandRadiantAscentOverlay()
+    }
+}
+
+#Preview("Tab2 Unlocked") {
+    let vm = Tab2HomeViewModel()
+    vm.data = Tab2HomeData(
+        unlocked: true,
+        inputCount: 24,
+        categories: [
+            Tab2CategoryData(
+                sceneCategory: "工作与学业",
+                wordCount: 24,
+                unlocked: true,
+                momentCount: 5
+            ),
+            Tab2CategoryData(
+                sceneCategory: "饮食",
+                wordCount: 12,
+                unlocked: false,
+                previewWords: ["comfort food", "grab a bite"],
+                momentCount: 3
+            )
+        ]
+    )
+    return Tab2UnlockedView(vm: vm, onTalk: { _ in })
         .environment(\.colorScheme, .light)
 }
 

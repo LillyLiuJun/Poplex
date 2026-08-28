@@ -274,6 +274,11 @@ enum AppTheme {
 
         // 语义状态（承载文字，取加深档以保可读性：error950 仅 3.57:1 不达 AA；errorDeep 5.96:1 合规）
         static let danger = Primitive.errorDeep
+        // 轻量错误插画：与品牌橙解耦，用低饱和暖陶土建立纸页层次；仅作非文字装饰。
+        static let feedbackIllustrationBase = Primitive.error200.opacity(0.68)
+        static let feedbackIllustrationPage = Primitive.error50.opacity(0.72)
+        static let feedbackIllustrationTopPage = Primitive.warmWhite.opacity(0.76)
+        static let feedbackIllustrationAccent = Primitive.error600.opacity(0.62)
 
         // 模态遮罩：加载 / 删除时压暗背景。用暖近黑（neutral950）而非纯黑，与暖色系一致
         static let scrimOverlay = Primitive.neutral950.opacity(0.25)
@@ -303,6 +308,9 @@ enum AppTheme {
         static let warmGlassSurface = Primitive.warmWhite   // 暖纸白底（不透明单层）
         // 半轻灰胶囊底（计数 + chevron 合并单元）：暖近黑极低透明，中性、不引入橙
         static let pillNeutralBg    = Primitive.neutral900.opacity(0.06)
+
+        // 下拉刷新 / 弱加载指示器（极淡浅暖灰，轻盈温润、不抢视觉重心）
+        static let refreshIndicator = Primitive.neutral300
 
         // 玻璃卡内的轻量元素：进度条轨道/填充、行间隔线——暖近黑低透明，
         // 跟着底色走，不再是实心灰。hairline 与 progressTrack 同值是有意共享：
@@ -347,6 +355,7 @@ enum AppTheme {
         static let cardMeta       = SwiftUI.Font.system(.footnote, weight: .medium)   // 卡片右上角 meta（Hero 卡 pops 数等）
         static let sectionLabel   = SwiftUI.Font.system(.caption2, weight: .semibold) // 区块小标（例句 / 说明，11/600）
         static let statusNote     = SwiftUI.Font.system(.footnote)                     // 加载态 / 空态 / 系统提示性短句
+        static let statusNoteSerif = SwiftUI.Font.system(.footnote, design: .serif)     // 衬线小字状态提示（如手风琴展开 loading "Gathering words…"）
         static let growthStatus   = SwiftUI.Font.system(.footnote, weight: .semibold)  // 成长线状态（如「0 pops so far」）
         static let actionNote     = SwiftUI.Font.system(.footnote)                     // 操作项的补充说明（如拍照入口副文案）
         static let compactActionLabel = SwiftUI.Font.system(.subheadline, weight: .medium) // 上传胶囊动作（Camera / Gallery）：无图标时用中等字重建立操作重量
@@ -364,6 +373,7 @@ enum AppTheme {
         static let ctaLabel       = SwiftUI.Font.system(.body, weight: .semibold)     // 主按钮文字（Continue / Get Started）
         static let tabLabel       = SwiftUI.Font.system(.subheadline, weight: .semibold) // 顶部 Tab 名称
         static let cardSentence   = SwiftUI.Font.system(.body, design: .serif, weight: .semibold) // 时刻卡英文主句（衬线 + 半粗，Dynamic Type 安全）
+        static let feedbackTitleSerif = cardSentence // 轻量错误/恢复提示标题：沿用内容衬线，但保持 body 层级，不冒充页面标题
         static let onboardingUploadTitle = SwiftUI.Font.system(.body, design: .serif, weight: .medium) // 上传卡标题：比内容主句更轻一级
         // 开屏字标「oplex」：与 App 内容字同族（design: .serif = New York，
         // 和 pageTitleSerif / wordTitle 是同一套），再加 italic 呼应 PoplexPShape 的 -6° 斜切。
@@ -619,6 +629,27 @@ enum AppTheme {
         static let categoryMilestoneReveal: Duration = .milliseconds(700)
         static let categoryMilestoneReducedReveal: Duration = .milliseconds(450)
         static let categoryMilestoneResultHold: Duration = .milliseconds(800)
+        // 全屏解锁温润消融与升腾揭幕动效：
+        // 1. 蓄力凝聚：温润微下沉
+        static let unlockCharging: Animation = .spring(response: 0.35, dampingFraction: 0.85)
+        // 2. 温润晨曦升腾与旧页消融
+        static let unlockDissolve: Animation = .easeInOut(duration: 0.48)
+        // 3. 新内容如画卷揭开展开（参考 main 基线灵性承接）
+        static let unlockReveal: Animation = .spring(response: 0.58, dampingFraction: 0.80)
+        // 4. 减弱动态降级淡入
+        static let unlockReducedFade: Animation = .easeInOut(duration: 0.25)
+        // 光晕自身在 0.86s 完成淡出，额外保留 90ms 后再移出视图树。
+        static let radiantAscentLifetime: Duration = .milliseconds(950)
+
+        // 词条骨架屏悠扬晨曦流光：2.2s 灵动舒缓往复，温润从容
+        static let shimmerSkeletonCycle: Animation = .easeInOut(duration: 2.2).repeatForever(autoreverses: true)
+        static let categoryWordsReveal: Animation = .easeInOut(duration: 0.32)
+        static let categoryWordsFailure: Animation = .easeInOut(duration: 0.24)
+
+        // Topics 手风琴展开与收起动效：0.36s 弹韧轻阻尼弹簧，舒展从容
+        static let accordionToggle: Animation = .spring(response: 0.36, dampingFraction: 0.82)
+        static let accordionReducedToggle: Animation = .easeInOut(duration: 0.25)
+
         // 普通 toast 为整句阅读预留 4s；Onboarding 图片校验 3s；里程碑短句 2.2s。
         static let toastLifetime: Duration = .seconds(4)
         static let onboardingPhotoToastLifetime: Duration = .seconds(3)

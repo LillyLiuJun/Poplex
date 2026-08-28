@@ -9,6 +9,10 @@ import CryptoKit
 /// 续体跳回主线程。纯静态函数（buildEntries 等）标 nonisolated，保持可随处调用。
 @MainActor
 final class TodayViewModel {
+    enum HistoryLoadError: Error, Equatable {
+        case timedOut
+    }
+
     var entries: [TimelineEntry] = []
     var isLoading = false
     var isLoadingHistory = false
@@ -43,6 +47,11 @@ final class TodayViewModel {
     let session = ConversationSession()
 
     private let service: AIServicing
+    private let historyDataLoader: (@Sendable () async throws -> Data)?
+    private let historyTimeout: Duration
+    private let isConnected: () -> Bool
+    private var historyLoadCompletionWaiters: [CheckedContinuation<Void, Never>] = []
+    private var inFlightHistoryShowsFailureHint = false
     private var hasLiveActivity = false   // 本次会话是否已产生实时对话（发过消息）
     /// 本会话已展示成功增量的幂等键集合：生成成功时标记 + 注入时标记。
     /// 注入前查重——卡片已在时间线里，再注入会重复（会话内回前台刷新时防重；
@@ -54,18 +63,37 @@ final class TodayViewModel {
     private let isConsentGranted: () -> Bool
 
     init(service: AIServicing = LiveAIService(),
+         historyDataLoader: (@Sendable () async throws -> Data)? = nil,
+         historyTimeout: Duration = .seconds(8),
+         isConnected: @escaping () -> Bool = { NetworkMonitor.shared.isConnected },
          isConsentGranted: @escaping () -> Bool = {
              UserDefaults.standard.double(forKey: "ai_consent_accepted_at") > 0
          }) {
         self.service = service
+        self.historyDataLoader = historyDataLoader
+        self.historyTimeout = historyTimeout
+        self.isConnected = isConnected
         self.isConsentGranted = isConsentGranted
     }
 
     // MARK: - History
 
-    func loadHistory() async {
-        guard !isLoadingHistory else { return }
+    func loadHistory(showFailureHint: Bool = false) async {
+        // 新一轮加载已经开始，上一轮失败提示不再代表当前状态。
+        // 若本次仍失败，后续分支会写入本次对应的新提示。
+        offlineHint = nil
+
+        if isLoadingHistory {
+            guard showFailureHint else { return }
+            // 手动刷新加入当前历史请求：不重复发请求，但等待同一结果，并将失败反馈
+            // 提升为手动刷新语义，避免刷新控件立即收起却什么都没发生。
+            inFlightHistoryShowsFailureHint = true
+            await waitForCurrentHistoryLoad()
+            return
+        }
+
         isLoadingHistory = true
+        inFlightHistoryShowsFailureHint = showFailureHint
         // 本次函数内所有 entries 改动都是「被动对齐」：视图只在用户已处于底部时跟随，
         // 不会把正在阅读（或刚进页面）的用户拽到底部。窗口不在此复位（见属性注释，
         // 审查发现 #15）：send / retryPending 会置 false，下次 loadHistory 重新置 true。
@@ -81,7 +109,6 @@ final class TodayViewModel {
         OnboardingSeedStore.shared.requestId = nil
         var seedAlreadyShown = false
         defer {
-            isLoadingHistory = false
             // 网络对齐若整列替换过时间线（entries = buildEntries），此前注入的本地内容
             // 已被冲掉 → 按服务器幂等键去重后兜底重注入。
             // First launch after onboarding: inject seed entries if Tab1 is still empty.
@@ -107,6 +134,7 @@ final class TodayViewModel {
             // 被动窗口不在此复位（审查发现 #15）：复位 = 依赖「视图 flush 先于下一个
             // 主队列块」的时序假设，SwiftUI 没有 API 保证。已改为确定性约定（见属性
             // 注释）：loadHistory 入口置 true、send / retryPending 置 false，无需复位。
+            finishCurrentHistoryLoad()
         }
 
         // 1) 先读本地缓存并立即渲染——仅当时间线还空着、且本次会话未产生实时对话。
@@ -140,18 +168,45 @@ final class TodayViewModel {
         }
 
         // 3) 后台向服务器请求最新数据，对齐正本（查新增/删除）
+        if inFlightHistoryShowsFailureHint && !isConnected() {
+            offlineHint = Self.historyRefreshFailureMessage(isConnected: false)
+            return
+        }
+
         let data: Data
         do {
-            data = try await fetchMessageData()
+            let loader = historyDataLoader
+            let timeout = historyTimeout
+            data = try await Self.withTimeout(timeout) {
+                if let loader {
+                    return try await loader()
+                }
+                return try await Self.fetchMessageData()
+            }
+        } catch is CancellationError {
+            // 生命周期取消（例如视图重建）不是请求失败，不向用户展示错误。
+            return
         } catch {
             // 静默降级：拉历史失败就继续显示本地缓存，不弹任何提示。
             // 是否「离线」由 NetworkMonitor 的真实网络状态决定，不再把「这一次请求失败」
             // 误判成离线——后端报错 / 超时时用户网络可能完全正常（例如刚成功生成过内容）。
             print("[TodayVM] loadHistory error (keeping cache):", error)
+            if inFlightHistoryShowsFailureHint {
+                offlineHint = Self.historyRefreshFailureMessage(isConnected: isConnected())
+            }
             return
         }
 
-        guard let records = try? Self.decodeRecords(from: data) else { return }
+        let records: [MessageRecord]
+        do {
+            records = try Self.decodeRecords(from: data)
+        } catch {
+            // 手动刷新拿到无法解析的数据，也属于本次刷新失败；后台加载仍保持静默。
+            if inFlightHistoryShowsFailureHint {
+                offlineHint = Self.historyRefreshFailureMessage(isConnected: isConnected())
+            }
+            return
+        }
 
         // 解码成功才更新缓存——防止服务器偶发坏数据污染本地缓存导致下次启动空屏
         await LocalCache.shared.save(data, key: .messages)
@@ -175,6 +230,24 @@ final class TodayViewModel {
 
         print("[TodayVM] loaded \(records.count) records → \(entries.count) entries")
         preloadRecentImages(records)
+    }
+
+    private func waitForCurrentHistoryLoad() async {
+        await withCheckedContinuation { continuation in
+            guard isLoadingHistory else {
+                continuation.resume()
+                return
+            }
+            historyLoadCompletionWaiters.append(continuation)
+        }
+    }
+
+    private func finishCurrentHistoryLoad() {
+        isLoadingHistory = false
+        inFlightHistoryShowsFailureHint = false
+        let waiters = historyLoadCompletionWaiters
+        historyLoadCompletionWaiters.removeAll()
+        waiters.forEach { $0.resume() }
     }
 
     /// 视图在 onChange 里调用：若挂着「瞬间定位底部」请求则消费并返回 true。
@@ -739,10 +812,29 @@ final class TodayViewModel {
     }
 
     /// 只取原始响应字节——成功后既用于解码、也用于落盘缓存（两者同一份 Data）
-    private func fetchMessageData() async throws -> Data {
+    nonisolated static func withTimeout<T: Sendable>(
+        _ duration: Duration,
+        operation: @Sendable @escaping () async throws -> T
+    ) async throws -> T {
+        try await withThrowingTaskGroup(of: T.self) { group in
+            group.addTask { try await operation() }
+            group.addTask {
+                try await Task.sleep(for: duration)
+                throw HistoryLoadError.timedOut
+            }
+
+            guard let first = try await group.next() else {
+                throw CancellationError()
+            }
+            group.cancelAll()
+            return first
+        }
+    }
+
+    private nonisolated static func fetchMessageData() async throws -> Data {
         var request = URLRequest(url: SupabaseConfig.messagesFunctionURL)
         request.httpMethod = "GET"
-        request.timeoutInterval = 10
+        request.timeoutInterval = 8.0
         try await SupabaseManager.setAuthHeaders(on: &request)
 
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -755,6 +847,12 @@ final class TodayViewModel {
     }
 
     /// 把原始字节解码成记录——网络回来的和缓存读出来的走完全相同的这条路径
+    nonisolated static func historyRefreshFailureMessage(isConnected: Bool) -> String {
+        isConnected
+            ? "Unable to sync right now. Pull to try again."
+            : "You're offline. Check your connection and try again."
+    }
+
     private nonisolated static func decodeRecords(from data: Data) throws -> [MessageRecord] {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .custom { decoder in
