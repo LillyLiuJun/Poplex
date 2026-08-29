@@ -24,27 +24,17 @@ struct SettingsView: View {
     @State private var debugToast: String?
     #endif
 
-    /// 页面标题与第一个分组、最后一张卡与版本号之间的距离。
+    /// 最后一张卡与版本号之间的距离，比分组之间的 paddingSection(32) 再远一档。
     ///
-    /// 外壳（SettingsScreen）对所有子元素统一给 paddingSection(32)，那是**分组之间**
-    /// 的节奏。但页面标题和版本号都不是分组：标题高一级、版本号是页脚，各自属于
-    /// 另一个层级，却拿着分组的间距——结果是一页上「Settings」和「Legal」在纵向
-    /// 节奏里地位相同，只靠字号证明自己是页面标题。这里补到 paddingHero(48)。
-    ///
-    /// 写成减法而不是直接写 16：意图是「总距 = paddingHero 这一档」。直接写 16 的话，
-    /// 哪天 paddingSection 从 32 调成 24，总距会悄悄变成 40 且无人察觉。
+    /// 版本号是页脚，不是分组：拿着分组的间距会让它看起来像最后一个分组的一部分。
+    /// 写成加法而不是直接写某个数：意图是「总距 = paddingHero 这一档」，
+    /// 直接写死的话，哪天 paddingSection 从 32 调成 24，总距会悄悄变化且无人察觉。
     private static let sectionToPageLevel =
         AppTheme.Space.paddingHero - AppTheme.Space.paddingSection
 
     var body: some View {
         NavigationStack {
-            // 顶部留白与遮罩带高（60）的关系是刻意的：留白必须 ≥ 带高，
-            // 否则大标题的上半截会坐在模糊里。48 < 60 意味着标题顶部仍有一点
-            // 被罩住——PM 实测后接受这个观感，把它换成了「上滑时标题被
-            // 干净吸收」（一路试下来，这两件事在本结构里无法兼得）。
-            SettingsScreen(topPadding: AppTheme.Space.paddingHero,
-                           scrollToTopToken: scrollToTopToken) {
-                pageTitle
+            SettingsScreen(pinnedTitle: "Settings", scrollToTopToken: scrollToTopToken) {
                 languageCard
                 legalCard
                 supportCard
@@ -130,19 +120,9 @@ struct SettingsView: View {
     /// 页面大标题。与 AI 披露页、反馈页同为 largeTitle 衬线，三页顶部同款。
     /// 此前这里是 84pt 圆形 app-icon 报头——一个设置页不需要再自我介绍一次品牌，
     /// 用户是从 App 内部进来的，页面该先回答「这是哪儿」。
-    private var pageTitle: some View {
-        Text("Settings")
-            .font(AppTheme.Font.pageTitleSerif)
-            .foregroundStyle(AppTheme.Color.textPrimary)
-            .fixedSize(horizontal: false, vertical: true)
-            .settingsPageTitleSemantics()
-            .padding(.horizontal, AppTheme.Space.paddingPage)
-            .padding(.bottom, Self.sectionToPageLevel)
-    }
-
     // MARK: - Section cards
 
-    /// 语言：只读两行，紧跟页面标题。
+    /// 语言：只读两行，页面第一个分组（标题固定在顶栏，不在滚动内容里）。
     /// 图标是地球（目标语言）+ 人（母语）——语言中立，不含 A/文/国旗，
     /// 详见 SettingsRowIcon 的注释。
     private var languageCard: some View {

@@ -26,6 +26,11 @@ final class TodayViewModel {
     var presetCardSaver: PresetCardSaving = LivePresetCardSaver()
     /// 无网点 Retry 等场景的轻提示（视图挂 toast，自动消失）。
     var offlineHint: String?
+    /// 最近一次 loadHistory 是否以失败告终（离线/超时/解码失败）。
+    /// 只在 entries 仍为空时被视图读取：冷启动无缓存又断网时，时间线会永远空着，
+    /// 用户既看不到内容也没有任何重试入口（审查发现）。成功（哪怕解出 0 条记录，
+    /// 那是真实的「新账号还没内容」，不是失败）会清掉这个标记。
+    var historyLoadFailed = false
     /// 视图滚动锚点：非空时视图滚到对应条目，且跳过「条目变化自动滚到最后一条」。
     /// 重试期间置为气泡 id（留在原地），成功后置为卡片 id；下次 send / 历史替换时清空。
     var scrollTargetId: UUID?
@@ -168,8 +173,11 @@ final class TodayViewModel {
         }
 
         // 3) 后台向服务器请求最新数据，对齐正本（查新增/删除）
-        if inFlightHistoryShowsFailureHint && !isConnected() {
-            offlineHint = Self.historyRefreshFailureMessage(isConnected: false)
+        if !isConnected() {
+            historyLoadFailed = true
+            if inFlightHistoryShowsFailureHint {
+                offlineHint = Self.historyRefreshFailureMessage(isConnected: false)
+            }
             return
         }
 
@@ -191,6 +199,7 @@ final class TodayViewModel {
             // 是否「离线」由 NetworkMonitor 的真实网络状态决定，不再把「这一次请求失败」
             // 误判成离线——后端报错 / 超时时用户网络可能完全正常（例如刚成功生成过内容）。
             print("[TodayVM] loadHistory error (keeping cache):", error)
+            historyLoadFailed = true
             if inFlightHistoryShowsFailureHint {
                 offlineHint = Self.historyRefreshFailureMessage(isConnected: isConnected())
             }
@@ -202,15 +211,24 @@ final class TodayViewModel {
             records = try Self.decodeRecords(from: data)
         } catch {
             // 手动刷新拿到无法解析的数据，也属于本次刷新失败；后台加载仍保持静默。
+            historyLoadFailed = true
             if inFlightHistoryShowsFailureHint {
                 offlineHint = Self.historyRefreshFailureMessage(isConnected: isConnected())
             }
             return
         }
 
+        // 解码成功——哪怕这批是 0 条记录，那也是「新账号还没内容」的真实状态，不是失败。
+        historyLoadFailed = false
+
         // 解码成功才更新缓存——防止服务器偶发坏数据污染本地缓存导致下次启动空屏
         await LocalCache.shared.save(data, key: .messages)
         decodedRequestIds = Set(records.compactMap(\.requestId))
+
+        // 本地成功副本会在下方历史确认时清理（含 Documents 中的原图），而服务器回放
+        // 只有远程签名 URL。先按服务器的稳定 Storage 路径把本地原图交接给图片缓存，
+        // 历史替换后 CachedRemoteImage 会在首帧命中它，不出现「照片 → 加载块 → 照片」。
+        promoteConfirmedLocalPhotosToImageCache(records)
 
         // 放行判定见 shouldReplaceHistory（审查发现 #12）：生成在途 / 本会话已有实时
         // 对话 / 服务端快照缺了会话已展示的幂等键，三者任一命中都不整列替换。
@@ -295,6 +313,25 @@ final class TodayViewModel {
                 else { continue }
                 ImageCache.shared.set(img, forKey: path)
             }
+        }
+    }
+
+    /// 将刚生成成功的本地照片移交给稳定图片缓存。服务端的 storage path 是跨重签 URL
+    /// 不变的身份；以它为键后，后续历史回放、下拉刷新和冷启动均可复用同一张本地图。
+    private func promoteConfirmedLocalPhotosToImageCache(_ records: [MessageRecord]) {
+        let localRecords = successStore.load()
+        for message in records {
+            guard message.role == "user",
+                  let stableKey = message.imagePath,
+                  !stableKey.isEmpty,
+                  let localRecord = localRecords.first(where: { local in
+                      local.userMessageId == message.id
+                          || (message.requestId != nil && local.requestId == message.requestId)
+                  }),
+                  let image = successStore.bubbleImage(for: localRecord)
+            else { continue }
+
+            ImageCache.shared.set(image, forKey: stableKey)
         }
     }
 

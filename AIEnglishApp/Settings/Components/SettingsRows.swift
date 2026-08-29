@@ -232,7 +232,8 @@ struct SettingsCard<Content: View>: View {
             // 与 Feedback 的输入框（原 16）对不上。20 是既有 token，
             // 一张多行列表卡和一个输入框都撑得住，是设置区唯一的圆角值。
             // 默认值保持 28 不动 —— Tab2 的内容卡在用，不在本次范围内。
-            .surfaceCard(cornerRadius: AppTheme.Radius.large)
+            .surfaceCard(cornerRadius: AppTheme.Radius.large,
+                         fillColor: AppTheme.Color.settingsCardSurface)
             .padding(.horizontal, AppTheme.Space.paddingPage)
         }
     }

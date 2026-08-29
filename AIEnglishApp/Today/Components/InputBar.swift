@@ -33,6 +33,10 @@ struct InputBar: View {
     @State private var showCameraPermissionAlert = false
     @State private var stagedImage: UIImage?
     @State private var showAttachmentMenu = false
+    // Drives press feedback on the thumbnail's delete icon — it can't be a
+    // `Button` (see thumbnailRow), so there's no ButtonStyle to supply
+    // isPressed for free; this stands in for it.
+    @State private var isDeleteIconPressed = false
 
     // Layout measurement state
     @State private var rowWidth: CGFloat = 0
@@ -41,12 +45,15 @@ struct InputBar: View {
     @State private var wasKeyboardOpen = false
 
     // Total horizontal space consumed by fixed elements in single-line row:
-    // leading-padding + plus-button + right-button + right-button-padding (×2 sides)
+    // leading-padding + plus-button + right-button + right-button's own
+    // leading/trailing padding (asymmetric — pulled a bit further off the
+    // trailing edge than off the text field, see rightCircleButton's padding).
     private let buttonAreaWidth: CGFloat =
         AppTheme.Space.paddingS +
         AppTheme.Size.barControl +
-        AppTheme.Size.barControl +
-        AppTheme.Space.paddingXS * 2
+        AppTheme.Size.inputBarActionControl +
+        AppTheme.Space.paddingXS +
+        AppTheme.Space.paddingS
 
     private var availableInlineWidth: CGFloat {
         max(0, rowWidth - buttonAreaWidth)
@@ -174,7 +181,9 @@ struct InputBar: View {
             plusButton
             textField
             rightCircleButton
-                .padding(AppTheme.Space.paddingXS)
+                .padding(.vertical, AppTheme.Space.paddingXS)
+                .padding(.leading, AppTheme.Space.paddingXS)
+                .padding(.trailing, AppTheme.Space.paddingS)
         }
         .padding(.leading, AppTheme.Space.paddingS)
     }
@@ -260,7 +269,7 @@ struct InputBar: View {
             ZStack {
                 Circle()
                     .fill(AppTheme.Color.interactive)
-                    .frame(width: AppTheme.Size.barControl, height: AppTheme.Size.barControl)
+                    .frame(width: AppTheme.Size.inputBarActionControl, height: AppTheme.Size.inputBarActionControl)
                     // 染色近黑送出键（Warm Editorial：CTA 走 interactive，橙留作稀有强调）+ 中性柔影
                     .shadow(color: AppTheme.Color.interactive.opacity(0.22), radius: 10, x: 0, y: 4)
                 rightButtonIcon
@@ -278,15 +287,15 @@ struct InputBar: View {
             ProgressView()
                 .progressViewStyle(.circular)
                 .tint(.white)
-                .scaleEffect(0.85)
+                .scaleEffect(0.77)
         case .send:
             Image(systemName: "arrow.up")
-                .font(.system(size: 20, weight: .semibold))
+                .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(.white)
                 .transition(.scale(scale: 0.5).combined(with: .opacity))
         case .camera:
             Image(systemName: "camera.fill")
-                .font(.system(size: 18))
+                .font(.system(size: 16))
                 .foregroundStyle(.white)
                 .transition(.scale(scale: 0.5).combined(with: .opacity))
         }
@@ -341,15 +350,50 @@ struct InputBar: View {
                     .frame(width: 56, height: 56)
                     .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.small))
                     .allowsHitTesting(false)
-                Button {
-                    withAnimation(.easeOut(duration: 0.2)) { image = nil }
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 18))
-                        .foregroundStyle(.white, Color(uiColor: .systemGray3))
-                }
-                .frame(width: 32, height: 32)
-                .contentShape(Rectangle())
+                // Plain tappable icon, not a Button: on iOS 18.7.x a SwiftUI
+                // `Button` nested inside a small `.clipShape`'d container renders
+                // scrambled/stale content on some real devices (confirmed via
+                // on-device repro harness — see git history on this file). The
+                // clipped photo alone, and this same icon driven by
+                // `.onTapGesture` instead of `Button`, both stayed clean.
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 18))
+                    .foregroundStyle(.white, Color(uiColor: .systemGray3))
+                    // Not a Button, so there's no ButtonStyle to give this
+                    // press feedback for free — mirrors PressableButtonStyle's
+                    // constants by hand via the drag gesture's press state below.
+                    .scaleEffect(isDeleteIconPressed ? 0.92 : 1)
+                    .opacity(isDeleteIconPressed ? 0.6 : 1)
+                    .frame(width: 32, height: 32)
+                    .contentShape(Rectangle())
+                    // The 32×32 tap target centers the 18pt glyph within itself,
+                    // which visually reads as inset from the true corner once the
+                    // tap target is corner-aligned. Nudge the whole tappable unit
+                    // toward the corner so the glyph sits flush against it.
+                    .offset(x: 8, y: -8)
+                    .gesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { _ in
+                                guard !isDeleteIconPressed else { return }
+                                withAnimation(.easeInOut(duration: 0.1)) { isDeleteIconPressed = true }
+                            }
+                            .onEnded { value in
+                                // Only counts as a tap if the finger didn't drag away —
+                                // matches Button's own cancel-on-drag-outside behavior.
+                                guard abs(value.translation.width) + abs(value.translation.height) < 10 else {
+                                    withAnimation(.easeInOut(duration: 0.1)) { isDeleteIconPressed = false }
+                                    return
+                                }
+                                // Deleting: the icon is about to leave with the row's own
+                                // removal transition. Snap the press state back instantly
+                                // (no competing animation) instead of letting the 0.1s
+                                // press-release spring fight the row's 0.2s scale/opacity
+                                // exit — running both at once reads as a slight ghosting/
+                                // double-motion flicker.
+                                isDeleteIconPressed = false
+                                withAnimation(.easeOut(duration: 0.2)) { image = nil }
+                            }
+                    )
             }
             Spacer(minLength: 0)
         }
@@ -381,4 +425,30 @@ struct InputBar: View {
             showCameraPermissionAlert = true
         }
     }
+}
+
+// MARK: - Xcode Canvas
+
+/// The right circle button's three states side by side — camera (empty
+/// composer), send (has text), loading — for a quick visual check of its size
+/// after `inputBarActionControl` shrank it from `barControl` (44pt) to 40pt.
+private struct InputBarButtonStatesPreview: View {
+    @State private var cameraText = ""
+    @State private var sendText = "Hello"
+    @State private var loadingText = "Hello"
+    @State private var image: UIImage?
+
+    var body: some View {
+        VStack(spacing: AppTheme.Space.paddingSection) {
+            InputBar(text: $cameraText, image: $image, isLoading: false, onSend: {})
+            InputBar(text: $sendText, image: $image, isLoading: false, onSend: {})
+            InputBar(text: $loadingText, image: $image, isLoading: true, onSend: {})
+        }
+        .padding(AppTheme.Space.paddingPage)
+        .background(AppTheme.Color.pageBg)
+    }
+}
+
+#Preview("Right button: camera / send / loading", traits: .sizeThatFitsLayout) {
+    InputBarButtonStatesPreview()
 }

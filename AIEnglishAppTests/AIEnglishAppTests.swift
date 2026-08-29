@@ -1016,6 +1016,31 @@ private struct ContentBlockedMock: AIServicing {
 @MainActor
 struct TodayViewModelTests {
 
+    /// Fresh, isolated pendingRetryStore/successStore for a test — `loadHistory()`
+    /// unconditionally injects from both in its `defer` block (even on the early
+    /// offline-return path), and both default to real `.shared` singletons.
+    /// Without this, any state left over from a real app run on the same
+    /// simulator/host (or another test) leaks into `entries`, making
+    /// `entries.isEmpty` assertions flaky.
+    private func isolatedStores(suite: String) -> (PendingRetryStore, LocalSuccessStore) {
+        let pendingDefaults = UserDefaults(suiteName: "\(suite)-pending")!
+        pendingDefaults.removePersistentDomain(forName: "\(suite)-pending")
+        let pendingDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("today-vm-tests-pending-\(suite)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: pendingDir, withIntermediateDirectories: true)
+
+        let successDefaults = UserDefaults(suiteName: "\(suite)-success")!
+        successDefaults.removePersistentDomain(forName: "\(suite)-success")
+        let successDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("today-vm-tests-success-\(suite)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: successDir, withIntermediateDirectories: true)
+
+        return (
+            PendingRetryStore(defaults: pendingDefaults, documentsDir: pendingDir),
+            LocalSuccessStore(defaults: successDefaults, documentsDir: successDir)
+        )
+    }
+
     @Test func startingNewHistoryLoadClearsPreviousFailureHint() async {
         let vm = TodayViewModel(
             service: SuccessMock(),
@@ -1126,6 +1151,88 @@ struct TodayViewModelTests {
         await vm.loadHistory()
 
         #expect(vm.offlineHint == nil)
+    }
+
+    // 冷启动无缓存又断网时，entries 会一直空着：这四条锁定 historyLoadFailed，
+    // 视图靠它在「真的没内容」和「加载失败没内容」之间选空态还是错误重试态
+    // （审查发现——此前两者对视图来说无法区分，用户永远看不到重试入口）。
+
+    @Test func offlineColdStartWithNoCacheMarksHistoryLoadFailed() async {
+        let (pending, success) = isolatedStores(suite: "history-failed-offline-cold-start")
+        let vm = TodayViewModel(
+            service: SuccessMock(),
+            historyDataLoader: { throw URLError(.networkConnectionLost) },
+            isConnected: { false },
+            isConsentGranted: { true }
+        )
+        vm.pendingRetryStore = pending
+        vm.successStore = success
+
+        await vm.loadHistory()
+
+        #expect(vm.entries.isEmpty)
+        #expect(vm.historyLoadFailed == true)
+        // 冷启动（非手动刷新）不弹 toast——静默降级是既有约定，这条只锁 historyLoadFailed。
+        #expect(vm.offlineHint == nil)
+    }
+
+    @Test func successfulLoadClearsHistoryLoadFailed() async {
+        let (pending, success) = isolatedStores(suite: "history-failed-successful-load")
+        let vm = TodayViewModel(
+            service: SuccessMock(),
+            historyDataLoader: { Data("[]".utf8) },
+            isConnected: { true },
+            isConsentGranted: { true }
+        )
+        vm.pendingRetryStore = pending
+        vm.successStore = success
+        vm.historyLoadFailed = true
+
+        await vm.loadHistory()
+
+        // 0 条记录是「新账号还没内容」的真实状态，不是失败——historyLoadFailed 照样清零。
+        #expect(vm.entries.isEmpty)
+        #expect(vm.historyLoadFailed == false)
+    }
+
+    @Test func decodeFailureMarksHistoryLoadFailed() async {
+        let (pending, success) = isolatedStores(suite: "history-failed-decode-failure")
+        let vm = TodayViewModel(
+            service: SuccessMock(),
+            historyDataLoader: { Data("not-json".utf8) },
+            isConnected: { true },
+            isConsentGranted: { true }
+        )
+        vm.pendingRetryStore = pending
+        vm.successStore = success
+
+        await vm.loadHistory()
+
+        #expect(vm.entries.isEmpty)
+        #expect(vm.historyLoadFailed == true)
+    }
+
+    @Test func retrySucceedingAfterFailureClearsHistoryLoadFailed() async {
+        let (pending, success) = isolatedStores(suite: "history-failed-retry-succeeds")
+        var shouldFail = true
+        let vm = TodayViewModel(
+            service: SuccessMock(),
+            historyDataLoader: {
+                if shouldFail { throw URLError(.networkConnectionLost) }
+                return Data("[]".utf8)
+            },
+            isConnected: { true },
+            isConsentGranted: { true }
+        )
+        vm.pendingRetryStore = pending
+        vm.successStore = success
+
+        await vm.loadHistory()
+        #expect(vm.historyLoadFailed == true)
+
+        shouldFail = false
+        await vm.loadHistory(showFailureHint: true)
+        #expect(vm.historyLoadFailed == false)
     }
 
     @Test func historyTimeoutReturnsCompletedOperation() async throws {
@@ -2452,6 +2559,41 @@ struct ImageCacheTests {
 
         #expect(leftovers == 0, "清理应报告 0 残留，否则 UI 不该宣称已清空")
         #expect(cache.get("bucket/user/clear-all-test.jpg") == nil, "内存与磁盘两层都必须清掉")
+    }
+
+    // 锁住的是 setIfCurrent 这条「check-then-write 必须原子」的契约本身，而不是
+    // 真的起并发线程去撞——generation 不匹配的判断逻辑用单线程就能验证到位；
+    // 真正的原子性由 setIfCurrent/clearAll 共用同一把锁保证，这里测的是行为。
+    @Test func setIfCurrentRejectsWriteAfterGenerationMoved() {
+        let cache = ImageCache.shared
+        let key = "bucket/user/set-if-current-\(UUID().uuidString).jpg"
+        let staleGeneration = cache.generation
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 1, height: 1)).image { ctx in
+            UIColor.blue.setFill()
+            ctx.fill(CGRect(x: 0, y: 0, width: 1, height: 1))
+        }
+
+        cache.clearAll()  // 模拟删号：中途发生的一次清空
+
+        let wrote = cache.setIfCurrent(image, forKey: key, expectedGeneration: staleGeneration)
+
+        #expect(wrote == false, "generation 已变化，不该再写入——否则就是把清完的照片又写回去")
+        #expect(cache.get(key) == nil, "被拒绝的写入不能留下任何痕迹")
+    }
+
+    @Test func setIfCurrentWritesWhenGenerationStillMatches() {
+        let cache = ImageCache.shared
+        let key = "bucket/user/set-if-current-\(UUID().uuidString).jpg"
+        let currentGeneration = cache.generation
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 1, height: 1)).image { ctx in
+            UIColor.green.setFill()
+            ctx.fill(CGRect(x: 0, y: 0, width: 1, height: 1))
+        }
+
+        let wrote = cache.setIfCurrent(image, forKey: key, expectedGeneration: currentGeneration)
+
+        #expect(wrote == true)
+        #expect(cache.get(key) != nil, "generation 未变，应正常写入")
     }
 }
 
@@ -5007,6 +5149,45 @@ struct LocalSuccessInjectionTests {
         let f = DateFormatter()
         f.dateFormat = "MMM d"
         return f.string(from: date)
+    }
+
+    // 冷启动对齐：服务器已确认的照片会清除 LocalSuccess 副本。清除前必须把原图
+    // 移交给 imagePath 的稳定缓存键，否则历史气泡会从已显示照片退回加载占位。
+    @Test func confirmedPhotoIsPromotedToStableImageCacheBeforeLocalCopyIsRemoved() async throws {
+        let (store, _, _) = makeStore(suite: "promote-confirmed-photo")
+        let requestId = UUID()
+        let userMessageId = UUID()
+        let stableKey = "user_images/test/\(UUID().uuidString).jpg"
+        let image = UIImage(systemName: "photo")!
+        try store.saveTab1(
+            text: nil, image: image, requestId: requestId,
+            userMessageId: userMessageId, assistantMessageId: UUID(),
+            createdAt: .now, card: .card(CardContent(targetExpression: "A photo."))
+        )
+
+        let response = Data("""
+        [{
+          "id": "\(userMessageId.uuidString)",
+          "role": "user",
+          "input_type": "image",
+          "user_content": "[photo]",
+          "signed_image_url": "https://example.com/signed-photo?token=<REDACTED>",
+          "image_url": "\(stableKey)",
+          "request_id": "\(requestId.uuidString)",
+          "created_at": "2026-08-28T12:00:00.000Z"
+        }]
+        """.utf8)
+        let vm = TodayViewModel(
+            service: SuccessMock(), historyDataLoader: { response },
+            isConsentGranted: { true }
+        )
+        vm.successStore = store
+        vm.pendingRetryStore = makePendingStore(suite: "promote-confirmed-photo-pending")
+
+        await vm.loadHistory()
+
+        #expect(store.load().isEmpty)                 // 服务器正本接管后，临时 Documents 副本可清
+        #expect(ImageCache.shared.get(stableKey) != nil) // 但历史远图首帧仍能命中同一张图
     }
 
     // 发送成功 → 成功增量落本地；同会话再注入被幂等跳过（不出现重复气泡+卡片）

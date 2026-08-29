@@ -296,6 +296,11 @@ enum AppTheme {
 
         // 图片加载占位底
         static let imagePlaceholderBg = Primitive.neutral100
+        // 远图首次加载：以品牌暖灰半透明叠在 Tab1 纸灰画布上。
+        // 约等效 #F3F0EB：能辨认出图片位置，但不回到通用占位的实心深灰。
+        static let imageLoadingPlaceholderBg = Primitive.neutral100.opacity(0.5)
+        // 细环只传达「图片正在取得」，用品牌浅灰而非文字灰，退到照片缺席时的背景层。
+        static let imageLoadingIndicator = Primitive.neutral300
         // 图片暖纸薄蒙：叠在缩略图上，压低对比、融进暖色系（不是文字色，opacity 在此处合规）
         static let imageWarmOverlay   = Primitive.neutral50.opacity(0.15)
 
@@ -317,6 +322,11 @@ enum AppTheme {
         // 名字里的 "glass" 是历史遗留：早期配方确实叠过橙薄纱与右上柔光，
         // 后因整卡发脏、削弱内容对比度而移除，只保留调用点名不改，避免大面积改名。
         static let warmGlassSurface = Primitive.warmWhite   // 暖纸白底（不透明单层）
+        // Settings 家族卡片（Settings / About AI / Feedback）专用：warmGlassSurface
+        // 100% 不透明在暖米色页面（pageBg neutral50）上对比过强、显"太亮"；
+        // 加透明度让页面底色透一点上来，与 warmGlassSurface 共用的 Tab2 卡片
+        // （MineView / CategoryProgressRow）不受影响——那两处仍用默认值。
+        static let settingsCardSurface = Primitive.warmWhite.opacity(0.85)
         // 半轻灰胶囊底（计数 + chevron 合并单元）：暖近黑极低透明，中性、不引入橙
         static let pillNeutralBg    = Primitive.neutral900.opacity(0.06)
 
@@ -386,6 +396,7 @@ enum AppTheme {
         static let sectionTitleSerif = SwiftUI.Font.system(.title2, design: .serif, weight: .semibold)  // 分区衬线小标题（Topics in progress / Materials Yours），比页面大标题小一档
         static let compactSectionTitleSerif = SwiftUI.Font.system(.title3, design: .serif, weight: .semibold) // 紧凑页面内的小分区标题（如 Onboarding 样例区）
         static let settingsSectionTitleSerif = SwiftUI.Font.system(.subheadline, design: .serif, weight: .medium) // Settings 卡外分组标题：保留衬线编辑感，但退到辅助层
+        static let settingsPinnedTitleSerif = SwiftUI.Font.system(.title3, design: .serif, weight: .semibold) // Settings 家族固定顶栏标题：比系统导航栏字号大一档，仍在 60pt 顶栏内不挤，保留品牌衬线
         static let settingsVersion = SwiftUI.Font.system(.caption2, design: .serif) // Settings 页脚版本号：小号衬线注脚
         static let ctaLabel       = SwiftUI.Font.system(.body, weight: .semibold)     // 主按钮文字（Continue / Get Started）
         static let tabLabel       = SwiftUI.Font.system(.subheadline, weight: .semibold) // 顶部 Tab 名称
@@ -483,8 +494,15 @@ enum AppTheme {
 
     enum Size {
         static let barControl: CGFloat = Primitive.size44  // 顶栏/工具栏可点控件标准边长
+        // InputBar 右侧发送/拍照/加载圆键：比 barControl（44）小，黑底圆键太满、
+        // 视觉偏重；但比色阶上现成的 36 那一档 PM 又觉得偏小——是介于两档中间
+        // 的手动微调值，component-private 例外（只这一个控件用，不进色阶，
+        // 独立于 barControl——后者仍是 + 键与顶栏控件的标准边长）。
+        static let inputBarActionControl: CGFloat = 40
         static let iconBadge: CGFloat  = Primitive.size44  // 图标徽章容器边长（圆形浅底托图标）
         static let rowIcon: CGFloat    = Primitive.size28  // 列表行前导图标框 / 小圆控件（设置行、关闭键）
+        static let imageLoadingIndicatorDiameter: CGFloat = 24
+        static let imageLoadingIndicatorStroke: CGFloat = 2
         static let categoryBadge: CGFloat = Primitive.size36  // Topics 类别圆形徽章边长（浅橘底托类别图标）
         // brandMark（84pt 圆形 app-icon 报头直径）已随 Settings 删除品牌报头一并移除。
         // brandGlyph 在此之前就已无消费者，属既有债务，留待 token 体检时统一清理。
@@ -646,6 +664,9 @@ enum AppTheme {
         // 时间线被动对齐跟随（刷新带回新内容、用户已在底部时的小幅跟随）：
         // 短促 easeOut——跟上新内容但不拖沓，也不抢走阅读注意力
         static let timelinePassiveFollow: Animation = .easeOut(duration: 0.15)
+        // 图片首次取得：连续、克制的细环；仅在本机没有可显示图片时启用。
+        // 1.15 秒一圈：可感知正在加载，但不制造催促感。
+        static let imageLoadingRotation: Animation = .linear(duration: 1.15).repeatForever(autoreverses: false)
         // 分类成长：toast 先出现 0.25s，再用 0.45s 补满；结果读完后移动分类。
         static let categoryProgressUpdate: Animation = .easeOut(duration: 0.4)
         static let categoryMilestone: Animation = .easeOut(duration: 0.45)
@@ -898,12 +919,13 @@ private struct GlassCapsuleModifier: ViewModifier {
 // 内容容器统一走此配方与 28pt 容器圆角，靠阴影而不是描边建立层级。
 private struct SurfaceCardModifier: ViewModifier {
     let cornerRadius: CGFloat
+    var fillColor: Color = AppTheme.Color.warmGlassSurface
 
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius)
         content
             .background {
-                shape.fill(AppTheme.Color.warmGlassSurface) // 纯净暖白纸底，去橙薄纱
+                shape.fill(fillColor)
             }
             .shadow(
                 color: AppTheme.Shadow.warmCardColor,
@@ -915,9 +937,12 @@ private struct SurfaceCardModifier: ViewModifier {
 }
 
 extension View {
-    /// 内容容器：暖纸卡配方，默认 28pt 容器圆角。
-    func surfaceCard(cornerRadius: CGFloat = AppTheme.Radius.glassContainer) -> some View {
-        modifier(SurfaceCardModifier(cornerRadius: cornerRadius))
+    /// 内容容器：暖纸卡配方，默认 28pt 容器圆角、`warmGlassSurface` 底色。
+    /// `fillColor` 留给需要更柔和底色的调用点（如 Settings 家族）单独覆盖，
+    /// 默认值不变则其余调用点（Tab2 等）行为完全不受影响。
+    func surfaceCard(cornerRadius: CGFloat = AppTheme.Radius.glassContainer,
+                      fillColor: Color = AppTheme.Color.warmGlassSurface) -> some View {
+        modifier(SurfaceCardModifier(cornerRadius: cornerRadius, fillColor: fillColor))
     }
 
     /// 浮动工具：玻璃配方。默认使用 28pt 容器圆角；圆形 / 胶囊请传入对应形状。

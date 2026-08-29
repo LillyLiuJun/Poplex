@@ -78,7 +78,37 @@ struct TodayView: View {
             }
     }
 
+    /// 空时间线和已有历史的时间线必须是两个独立的首次布局。
+    ///
+    /// 冷启动时若先创建一个空 ScrollView、再把历史行异步插进去，SwiftUI 会在某些
+    /// 帧里先采用「空内容的顶部偏移」，随后才计算真实内容高度。此前再用 proxy 补一次
+    /// scrollTo，便会形成用户看到的「先显示、再定位」；若补定位恰好错过布局，还可能
+    /// 留在空白位置。这里先保留一个无内容的画布，等 entries 到位后才创建真正的
+    /// ScrollView——它首次出现时内容已经就位，`.onAppear` 里补的 `scrollTo` 因而是
+    /// 该次布局落定后的第一件事，不会有「先显示、再定位」的可见跳动。
+    ///
+    /// 这里刻意不用 `.defaultScrollAnchor(.bottom)`：那是布局层面的容器锚点，内容不足
+    /// 一屏时它会把内容整体推到底部（顶上空出一大截），而不是让内容像其他消息一样自然
+    /// 贴顶——历史行数少的会话会看到顶部一大块空白（审查发现）。`scrollTo(id:anchor:)`
+    /// 只移动滚动位置：内容超过一屏时定位到底部，内容不足一屏时是无操作，天然贴顶。
+    @ViewBuilder
     private var timeline: some View {
+        if !viewModel.entries.isEmpty {
+            historyTimeline
+        } else if viewModel.historyLoadFailed {
+            // 冷启动无缓存又断网时，entries 会一直空着：没有这一支，用户看到的是
+            // 一个既无内容也无法重试的空白页（审查发现）。isRetrying 让重试点击后
+            // 这块视图留在原地播 spinner，而不是先塌成 Color.clear 再弹回来。
+            Tab2LoadErrorView(topInset: topInset, isRetrying: viewModel.isLoadingHistory) {
+                await viewModel.loadHistory(showFailureHint: true)
+            }
+        } else {
+            Color.clear
+                .accessibilityHidden(true)
+        }
+    }
+
+    private var historyTimeline: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 WarmRefreshControlHelper()
@@ -136,6 +166,20 @@ struct TodayView: View {
             .simultaneousGesture(TapGesture().onEnded {
                 UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
             })
+            .onAppear {
+                // 冷启动/时间线首次有内容 → 无动画瞬间定位底部。entries 已经就位
+                // （由上方两段式挂载保证），先同步尝试，再延后一个 runloop tick 兜底一次，
+                // 防止这一帧的布局还没吃到最新内容；两次目标相同、无动画，视觉上幂等。
+                // 内容不足一屏时 scrollTo 是无操作，天然贴顶——不复用 defaultScrollAnchor
+                // 是因为它会把不足一屏的内容整体推到底部（顶部空出一大截，审查发现）。
+                guard viewModel.takeInstantJumpFlag(), let last = viewModel.entries.last else { return }
+                proxy.scrollTo(last.id, anchor: .bottom)
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated {
+                        proxy.scrollTo(last.id, anchor: .bottom)
+                    }
+                }
+            }
             .onChange(of: viewModel.entries.count) {
                 // 重试期间视图锚在原地（scrollTargetId 非空）：条目的原地增删
                 // 不触发「自动滚到最后一条」，否则用户会被拽离重试现场
@@ -232,4 +276,40 @@ private struct ScrollCompactDetector: ViewModifier {
 
 #Preview {
     TodayView()
+}
+
+// MARK: - Xcode Canvas
+
+/// Offline-cold-start-with-no-cache state (`Tab2LoadErrorView` shown in `timeline`
+/// when `entries.isEmpty && historyLoadFailed`), rendered in the real Tab1 canvas +
+/// input bar chrome. Doesn't create a `TodayViewModel` or hit the network — the
+/// default `TodayView()` preview above always tries a real `loadHistory()`, which
+/// can't be steered into this state from a preview.
+private struct Tab1HistoryLoadErrorContextPreview: View {
+    var isRetrying = false
+    @State private var inputText = ""
+    @State private var pendingImage: UIImage?
+
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            AppTheme.Color.pageBg.ignoresSafeArea()
+            CanvasBackground().ignoresSafeArea()
+
+            Tab2LoadErrorView(isRetrying: isRetrying) { }
+
+            InputBar(text: $inputText, image: $pendingImage, isLoading: false, onSend: {})
+                .background {
+                    VariableBlurBackdrop(extraExtend: 16)
+                        .ignoresSafeArea(.container, edges: .bottom)
+                }
+        }
+    }
+}
+
+#Preview("Tab1 · History load failed", traits: .fixedLayout(width: 393, height: 852)) {
+    Tab1HistoryLoadErrorContextPreview()
+}
+
+#Preview("Tab1 · History load failed · Retrying", traits: .fixedLayout(width: 393, height: 852)) {
+    Tab1HistoryLoadErrorContextPreview(isRetrying: true)
 }

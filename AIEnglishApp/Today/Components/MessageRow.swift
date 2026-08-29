@@ -132,6 +132,8 @@ private struct UserBubble: View {
     let imageUrl: String?
     let imageStableKey: String?
     var onImageTap: ((UIImage, CGRect) -> Void)?
+    /// 仅供 Xcode Canvas：复用真实的图片气泡布局，但不触发远程请求。
+    var showsImageLoadingPlaceholder = false
 
     @State private var imageFrame: CGRect = .zero
     private let imageSize = UIScreen.main.bounds.width * 0.3
@@ -154,13 +156,13 @@ private struct UserBubble: View {
                         .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { imageFrame = $0 }
                         .onTapGesture { onImageTap?(img, imageFrame) }
                 }
+            } else if showsImageLoadingPlaceholder {
+                imageLoadingBubble
             } else if let urlStr = imageUrl {
                 HStack {
                     Spacer()
                     CachedRemoteImage(signedUrl: urlStr, stableKey: imageStableKey ?? urlStr) {
-                        RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
-                            .fill(AppTheme.Color.imagePlaceholderBg)
-                            .overlay(ProgressView().scaleEffect(0.7))
+                        ImageLoadingPlaceholder()
                     }
                     .frame(width: imageSize, height: imageSize)
                     .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
@@ -185,6 +187,15 @@ private struct UserBubble: View {
                         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
                 }
             }
+        }
+    }
+
+    private var imageLoadingBubble: some View {
+        HStack {
+            Spacer()
+            ImageLoadingPlaceholder()
+                .frame(width: imageSize, height: imageSize)
+                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
         }
     }
 }
@@ -265,4 +276,44 @@ private struct DateSeparatorView: View {
         }
         .padding(.vertical, AppTheme.Space.paddingS)
     }
+}
+
+// MARK: - Xcode Canvas
+
+/// 在真实 Tab1 画布、时间线内边距和底部输入条中观察图片加载态。
+/// 不创建 TodayViewModel，也不发起网络请求。
+private struct Tab1ImageLoadingContextPreview: View {
+    @State private var inputText = ""
+    @State private var pendingImage: UIImage?
+
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            AppTheme.Color.pageBg
+            CanvasBackground().ignoresSafeArea()
+
+            VStack(spacing: AppTheme.Space.paddingCard) {
+                DateSeparatorView(label: "Today")
+                Spacer()
+                UserBubble(
+                    text: "Describe this image",
+                    image: nil,
+                    imageUrl: nil,
+                    imageStableKey: nil,
+                    showsImageLoadingPlaceholder: true
+                )
+            }
+            .padding(AppTheme.Space.paddingPage)
+            .padding(.bottom, AppTheme.Size.inputBarMinHeight + AppTheme.Space.paddingSection)
+
+            InputBar(text: $inputText, image: $pendingImage, isLoading: false, onSend: {})
+                .background {
+                    VariableBlurBackdrop(extraExtend: 16)
+                        .ignoresSafeArea(.container, edges: .bottom)
+                }
+        }
+    }
+}
+
+#Preview("Tab 1 · Image loading in context", traits: .fixedLayout(width: 393, height: 852)) {
+    Tab1ImageLoadingContextPreview()
 }

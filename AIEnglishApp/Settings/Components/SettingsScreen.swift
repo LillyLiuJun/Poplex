@@ -6,8 +6,9 @@ private enum SettingsScreenAnchor {
 
 /// 设置区三个页面共用的外壳：暖纸底 + Canvas 装饰 + 固定顶栏 + 滚动内容。
 ///
-/// 三页此前各写了一遍同样的 ZStack/ScrollView/VStack 结构，差异只有三处：
-/// 顶部内边距、是否有返回键、是否随滚动收键盘。这三处作为参数暴露，其余共享。
+/// 三页此前各写了一遍同样的 ZStack/ScrollView/VStack 结构，差异只有四处：
+/// 顶部内边距、是否有返回键、固定标题文案、是否随滚动收键盘。这四处作为参数
+/// 暴露，其余共享。
 ///
 /// **不含 NavigationStack**：AboutAI / Feedback 是被 push 出来的目的地，
 /// 自带 NavigationStack 会套娃。Settings 作为 sheet 根页自己包一层。
@@ -23,8 +24,12 @@ private enum SettingsScreenAnchor {
 struct SettingsScreen<Content: View>: View {
     /// 返回键。传 nil 表示这一页不需要（Settings 用页外的悬浮关闭键）。
     var onBack: (() -> Void)?
-    /// 内容相对顶栏的额外留白。有返回键时会自动再加上一整条顶栏高度。
-    var topPadding: CGFloat = AppTheme.Space.paddingPage
+    /// 固定在顶栏、居中、不随内容滚动的页面标题。有值时（不论是否有返回键）
+    /// 都会在顶栏预留一整条 `barHeight`——三页现在都传，保留 nil 只是给
+    /// 未来某个不需要标题的调用点留的口子。
+    var pinnedTitle: String?
+    /// 内容相对顶栏的额外留白。有返回键或固定标题时会自动再加上一整条顶栏高度。
+    var topPadding: CGFloat = AppTheme.Space.paddingSection
     /// 仅 Feedback 需要——它有长文本输入框。
     var dismissesKeyboardOnScroll: Bool = false
     /// 值发生变化即把内容滚回顶部。调用方在**推入**二级页时自增，
@@ -48,7 +53,7 @@ struct SettingsScreen<Content: View>: View {
 
     /// 静止状态下内容之上的空白区高度。
     private var contentTopInset: CGFloat {
-        (onBack == nil ? 0 : barHeight) + topPadding
+        (onBack == nil && pinnedTitle == nil ? 0 : barHeight) + topPadding
     }
 
     var body: some View {
@@ -85,6 +90,21 @@ struct SettingsScreen<Content: View>: View {
         .overlay(alignment: .top) {
             SheetTopScrim()
                 .frame(height: barHeight)
+        }
+        // 固定标题：居中、系统导航栏字号量级的品牌衬线，遮罩之上、返回键之下
+        // （返回键在左侧，标题居中，短文案下两者不会重叠，见设计稿）。
+        // h1 语义从原本三页各自的滚动大标题搬过来——分组标题（SettingsCard）
+        // 是 h2，读屏用户靠这层级知道 "Legal" 从属于 "Settings"，见
+        // settingsPageTitleSemantics 的注释。
+        .overlay(alignment: .top) {
+            if let pinnedTitle {
+                Text(pinnedTitle)
+                    .font(AppTheme.Font.settingsPinnedTitleSerif)
+                    .foregroundStyle(AppTheme.Color.textPrimary)
+                    .frame(height: barHeight)
+                    .frame(maxWidth: .infinity)
+                    .settingsPageTitleSemantics()
+            }
         }
         // 返回键后画，稳稳压在遮罩之上。
         .overlay(alignment: .top) {

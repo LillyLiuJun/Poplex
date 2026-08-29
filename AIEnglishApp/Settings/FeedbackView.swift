@@ -79,15 +79,7 @@ struct FeedbackView: View {
     }
 
     var body: some View {
-        SettingsScreen(onBack: { dismiss() }, dismissesKeyboardOnScroll: true) {
-            Text("Send Feedback")
-                .font(AppTheme.Font.pageTitleSerif)
-                .foregroundStyle(AppTheme.Color.textPrimary)
-                // 与 Settings / AboutAI 两页标题同一处理：大字号下允许换行不截断。
-                .fixedSize(horizontal: false, vertical: true)
-                .settingsPageTitleSemantics()
-                .padding(.horizontal, AppTheme.Space.paddingPage)
-
+        SettingsScreen(onBack: { dismiss() }, pinnedTitle: "Feedback", dismissesKeyboardOnScroll: true) {
             categoryField
             detailField
             emailField
@@ -248,7 +240,8 @@ struct FeedbackView: View {
                     .accessibilityLabel("\(body_.count) of \(bodyLimit) characters")
             }
             .padding(AppTheme.Space.paddingCard)
-            .surfaceCard(cornerRadius: AppTheme.Radius.large)
+            .surfaceCard(cornerRadius: AppTheme.Radius.large,
+                         fillColor: AppTheme.Color.settingsCardSurface)
         }
     }
 
@@ -276,7 +269,8 @@ struct FeedbackView: View {
                     .focused($focus, equals: .email)
             }
             .padding(AppTheme.Space.paddingCard)
-            .surfaceCard(cornerRadius: AppTheme.Radius.large)
+            .surfaceCard(cornerRadius: AppTheme.Radius.large,
+                         fillColor: AppTheme.Color.settingsCardSurface)
         }
     }
 
@@ -338,7 +332,8 @@ struct FeedbackView: View {
                     .foregroundStyle(AppTheme.Color.textPrimary)
             }
             .padding(AppTheme.Space.paddingHero)
-            .surfaceCard(cornerRadius: AppTheme.Radius.large)
+            .surfaceCard(cornerRadius: AppTheme.Radius.large,
+                         fillColor: AppTheme.Color.settingsCardSurface)
             // 勾图标 + 文案合成一个元素：图标本身没有信息量，单独聚焦只会
             // 多念一次「图像」。合并后这一格就是那句话本身。
             .accessibilityElement(children: .combine)

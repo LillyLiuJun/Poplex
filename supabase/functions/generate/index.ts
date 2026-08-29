@@ -84,7 +84,6 @@ If the input is genuinely harmful, illegal, or disallowed (violence, NSFW, hate 
 If the input is empty, random symbols, or has no learnable content at all, STOP and return:
 {"card_type":"error","card_content":{"error_type":"meaningless","message":"好像没有接收到内容，再说一次？"},"extracted_concept":null}
 
-A greeting alone ("你好", "hi") counts as no learnable content → meaningless error.
 Questions about English learning as a topic ("would和could有什么区别") are NOT errors — carry them
 through the normal steps below, treating the quoted items as the object (STEP 1).
 `.trim();
