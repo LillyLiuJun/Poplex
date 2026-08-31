@@ -341,6 +341,33 @@ struct RootTabSwipeIntentTests {
     @Test func horizontalDragBecomesTabSwipe() {
         #expect(RootTabSwipeIntent.isHorizontal(CGSize(width: 60, height: 3)) == true)
     }
+
+    @Test func diagonalDragDoesNotBecomeTabSwipe() {
+        // 顶栏视觉调整不得放宽既有 45° 手势边界，避免垂直滚动被误判为切 Tab。
+        #expect(RootTabSwipeIntent.isHorizontal(CGSize(width: 50, height: 50)) == false)
+    }
+}
+
+// MARK: - Navigation chrome token tests
+
+struct NavigationChromeTokenTests {
+    // 最窄的在售 iPhone 点宽（SE / mini 系列），用作「顶栏在最紧屏幕上是否还装得下」的下限。
+    private let narrowestSupportedScreenWidth: CGFloat = 375
+
+    @Test func iconOnlyTabRowFitsNarrowestSupportedScreen() {
+        // 与 topBarSideClearance 的定义公式无关的独立校验：真的拿两个图标按钮的
+        // 最小占宽，去比对 clearance 让出的可用宽度——clearance 改坏时这里会真的红，
+        // 而不是像重复推导同一公式那样恒为真。
+        let iconOnlyRowWidth = AppTheme.Size.barControl * 2 + AppTheme.Space.paddingM
+        let availableWidth = narrowestSupportedScreenWidth - AppTheme.Size.topBarSideClearance * 2
+        #expect(iconOnlyRowWidth <= availableWidth)
+    }
+
+    @Test func topBarMenuIconStrokeMatchesDesignedWeight() {
+        // 锁定 Theme.swift 注释里记录的设计目标（1.8 描边换算到顶栏 20pt glyph = 1.5pt），
+        // 而不是重新复述换算公式本身——公式或输入值算错时，这个字面值才会暴露差异。
+        #expect(abs(AppTheme.Size.topBarMenuIconStroke - 1.5) < 0.0001)
+    }
 }
 
 // MARK: - AIEnvelope JSON decode tests

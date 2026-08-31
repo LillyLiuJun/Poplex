@@ -10,24 +10,12 @@ enum RootTabSwipeIntent {
     }
 }
 
-struct IgnoredTabSwipeFrameKey: PreferenceKey {
-    static var defaultValue: [CGRect] = []
-    static func reduce(value: inout [CGRect], nextValue: () -> [CGRect]) {
-        value.append(contentsOf: nextValue())
-    }
-}
-
 /// 顶栏浮层的实测高度，向下传给 Mine 以在其独立 NavigationStack 内预留等高空位
 private struct TopBarHeightKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = max(value, nextValue())
     }
-}
-
-/// 避免 PreferenceKey 逐帧坐标上报触发 RootTabContainer 根视图高频重绘的引用容器
-private final class IgnoredFramesStore {
-    var frames: [CGRect] = []
 }
 
 struct RootTabContainer: View {
@@ -43,11 +31,8 @@ struct RootTabContainer: View {
     @State private var mineSwipeActionOpen = false
     @State private var mineDetailActive = false
     @State private var topBarHeight: CGFloat = 0
-    @State private var topBarCompact = false
     @State private var capturedSwipeOpen = false
     @State private var captureRecorded = false
-    @State private var ignoredFramesStore = IgnoredFramesStore()
-
     // Fullscreen image preview — lifted to root so it covers the top bar
     @State private var previewImage: UIImage?
     @State private var previewAnchor: UnitPoint = .center
@@ -111,14 +96,12 @@ struct RootTabContainer: View {
             if newTab == .mine {
                 mineListResetToken = UUID()
             }
-            // Restore full topBar on tab switch so the new tab's header is always visible
-            withAnimation(AppTheme.Motion.topBarCompact) { topBarCompact = false }
         }
     }
 
     private var contentArea: some View {
         ZStack {
-            TodayView(topBarCompact: $topBarCompact, isActive: selectedTab == .today, onImagePreview: { img, anchor in
+            TodayView(onImagePreview: { img, anchor in
                 previewAnchor = anchor
                 withAnimation(.spring(duration: 0.35)) { previewImage = img }
             }, topInset: topBarHeight)
@@ -132,9 +115,6 @@ struct RootTabContainer: View {
         }
         .contentShape(Rectangle())
         .coordinateSpace(name: RootTabContainerLayout.space)
-        .onPreferenceChange(IgnoredTabSwipeFrameKey.self) { frames in
-            ignoredFramesStore.frames = frames
-        }
         .simultaneousGesture(
             DragGesture(minimumDistance: 15, coordinateSpace: .named(RootTabContainerLayout.space))
                 .onChanged { value in
@@ -154,14 +134,7 @@ struct RootTabContainer: View {
                             captureRecorded = false
                         }
                     }
-                    let start = value.startLocation
-                    // 忽略帧来自 Tab2 横向轮播区，只在 Tab2 可见时才有意义
-                    if selectedTab == .mine {
-                        guard !ignoredFramesStore.frames.contains(where: { $0.contains(start) }) else { return }
-                    }
-
                     let dx = value.translation.width
-                    let dy = value.translation.height
                     let predictedDx = value.predictedEndTranslation.width
 
                     // 水平意图判断：水平位移必须严格大于垂直位移（45°，同系统侧滑返回标准）
@@ -187,24 +160,20 @@ struct RootTabContainer: View {
     }
 
     private var topBar: some View {
-        HStack {
-            Button {
-                showSettings = true
-            } label: {
-                Image(systemName: "person.fill")
-                    .imageScale(.medium)
-                    .foregroundStyle(AppTheme.Color.textSecondary)
-                    .frame(width: AppTheme.Size.barControl, height: AppTheme.Size.barControl)
-                    .surfaceFloating(in: Circle())
-                    .contentShape(Circle())
+        ZStack {
+            TopTabSelector(selectedTab: $selectedTab)
+                .frame(maxWidth: .infinity)
+                // 为左右两侧各预留「页边距 + 标准顶栏控件」槽位：选择器仍以
+                // 屏幕绝对中心对齐，同时在较大 Dynamic Type 下不会侵入 Settings。
+                .padding(.horizontal, AppTheme.Size.topBarSideClearance)
+
+            HStack {
+                SettingsMenuButton { showSettings = true }
+                    // 由 topBarSideClearance 反推，而非另起一份 paddingPage 字面值：
+                    // 这样 clearance 改了，这条留白会跟着变，不会两边各改各的悄悄错开。
+                    .padding(.leading, AppTheme.Size.topBarSideClearance - AppTheme.Size.barControl)
+                Spacer()
             }
-            .buttonStyle(.plain)
-            .padding(.leading, AppTheme.Space.paddingPage)
-
-            Spacer()
-
-            TopTabSelector(selectedTab: $selectedTab, compact: selectedTab == .today && topBarCompact)
-                .padding(.trailing, AppTheme.Space.paddingPage)
         }
         .padding(.bottom, AppTheme.Space.paddingS)
         .background {

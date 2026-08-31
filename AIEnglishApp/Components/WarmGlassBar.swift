@@ -83,16 +83,22 @@ struct VariableBlurBackdrop: View {
 /// 已在 iPhone 17 / 16 Pro / 13 上真机验证；换更极端的安全区高度或 Dynamic Type 需要重新校准。
 struct TopBarProgressiveMask: View {
     var body: some View {
-        Rectangle()
-            .fill(.ultraThinMaterial)
+        ZStack {
+            Rectangle()
+                .fill(.ultraThinMaterial)
+            // 参考图的白雾不是冷白：以极轻暖纸融合提升承托感，
+            // 又不会像实色背景一样切出一条横带。
+            Rectangle()
+                .fill(AppTheme.Color.topBarMaskWarmTint)
+        }
             .mask {
                 LinearGradient(
                     stops: [
                         .init(color: .white, location: 0.0),                // 0~59pt 状态栏区域：100% 浓度，充分遮盖背景
                         .init(color: .white, location: 0.38),               // 状态栏主体：保持稳定保护
-                        .init(color: .white.opacity(0.68), location: 0.54), // 按钮上边缘：柔和衰减起点
-                        .init(color: .white.opacity(0.32), location: 0.74), // 按钮中心：高通透，文字清晰可读
-                        .init(color: .white.opacity(0.08), location: 0.92), // 按钮下边缘：极轻微触底
+                        .init(color: .white.opacity(AppTheme.Opacity.topBarMaskButtonTop), location: 0.54), // 按钮上边缘：保持厚实的柔雾承托
+                        .init(color: .white.opacity(AppTheme.Opacity.topBarMaskButtonCenter), location: 0.74), // 按钮中心：仍可读内容，但不提前透底
+                        .init(color: .white.opacity(AppTheme.Opacity.topBarMaskTail), location: 0.92), // 按钮下边缘：留出更长的羽化尾巴
                         .init(color: .clear, location: 1.0)                 // 离开按钮区域：0% 完全透明
                     ],
                     startPoint: .top,

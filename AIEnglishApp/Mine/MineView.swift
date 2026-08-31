@@ -598,22 +598,18 @@ private struct Tab2UnlockedView: View {
                     WarmRefreshControlHelper()
                         .frame(width: 0, height: 0)
                     VStack(alignment: .leading, spacing: 0) {
-                        // 标题组：页面衬线大标题 + 衬线副标（与 Onboarding 各屏「标题→副标」
-                        // 同档 8pt，副标复用内容衬线 englishPrimary，与空状态副标同字同色）
-                        VStack(alignment: .leading, spacing: AppTheme.Space.paddingS) {
-                            Text("Talk about today")
-                                .font(AppTheme.Font.pageTitleSerif)
-                                .foregroundStyle(AppTheme.Color.textPrimary)
-
-                            Text("Built from your daily moments.")
-                                .font(AppTheme.Font.englishPrimary)
-                                .foregroundStyle(AppTheme.Color.textSecondary)
-                        }
+                        Text("Talk about today")
+                            .font(AppTheme.Font.sectionTitleSerif)
+                            .foregroundStyle(AppTheme.Color.textPrimary)
                         .padding(.horizontal, AppTheme.Space.paddingPage)
                         .padding(.top, AppTheme.Space.paddingPage)
-                        .padding(.bottom, AppTheme.Space.titleToContent)
+                        // 与「Topics in progress → 卡片」保持同一标题到内容节奏。
+                        .padding(.bottom, AppTheme.Space.paddingCard)
 
+                        // 只作用于已解锁页面：最后一个可见卡片（Hero 或 Topics）
+                        // 与底部安全区之间保留明确的收尾空间。
                         contentSections(proxy)
+                            .padding(.bottom, AppTheme.Space.paddingScreenBottom)
                     }
                 }
                 .safeAreaInset(edge: .top, spacing: 0) {
@@ -663,46 +659,26 @@ private struct Tab2UnlockedView: View {
             }
 
             VStack(alignment: .leading, spacing: AppTheme.Space.paddingBetweenSections) {
-                // 已解锁分类：独立 Serif 标题 "Your topics" + 横向 Peek 轮播卡片
+                // 已解锁分类与页面共用纵向滚动，完整宽度卡片依次承接学习主题。
                 if hero != nil || !otherUnlocked.isEmpty {
                     VStack(alignment: .leading, spacing: AppTheme.Space.paddingCard) {
-                        Text("Your topics")
-                            .font(AppTheme.Font.sectionTitleSerif)
-                            .foregroundStyle(AppTheme.Color.textPrimary)
-                            .padding(.horizontal, AppTheme.Space.paddingPage)
-
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(alignment: .top, spacing: 14) {
-                                if let hero {
-                                    Tab2HeroCard(
-                                        category: hero,
-                                        isFirstUnlock: vm.isFirstUnlock,
-                                        onTalk: { onTalk(hero.sceneCategory) }
-                                    )
-                                    .frame(width: 350)
-                                }
-
-                                ForEach(otherUnlocked) { cat in
-                                    Tab2HeroCard(
-                                        category: cat,
-                                        isFirstUnlock: false,
-                                        onTalk: { onTalk(cat.sceneCategory) }
-                                    )
-                                    .frame(width: 350)
-                                }
-                            }
-                            .padding(.horizontal, AppTheme.Space.paddingPage)
+                        if let hero {
+                            Tab2HeroCard(
+                                category: hero,
+                                isFirstUnlock: vm.isFirstUnlock,
+                                onTalk: { onTalk(hero.sceneCategory) }
+                            )
                         }
-                        .scrollClipDisabled()
-                        .background {
-                            GeometryReader { geo in
-                                Color.clear.preference(
-                                    key: IgnoredTabSwipeFrameKey.self,
-                                    value: [geo.frame(in: .named(RootTabContainerLayout.space))]
-                                )
-                            }
+
+                        ForEach(otherUnlocked) { cat in
+                            Tab2HeroCard(
+                                category: cat,
+                                isFirstUnlock: false,
+                                onTalk: { onTalk(cat.sceneCategory) }
+                            )
                         }
                     }
+                    .padding(.horizontal, AppTheme.Space.paddingPage)
                 }
 
                 // Topics in Progress——独立 Serif 标题 + 磨砂玻璃列表容器

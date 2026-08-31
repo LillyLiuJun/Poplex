@@ -186,7 +186,7 @@ enum AppTheme {
         // 与 onboardingHeaderToContent 当前同值（24）但**用途不同、各自演化**，故不合并：
         // 合并会把两个没有设计因果关系的间距绑死——改 Tab2 的分区节奏时 onboarding 会跟着动。
         static let titleToContent: CGFloat      = Primitive.space24
-        // Tab2 解锁页分区之间的节奏（Your topics 底 → Topics in progress 顶）
+        // Tab2 解锁页分区之间的节奏（已解锁卡片区底 → Topics in progress 顶）
         static let paddingBetweenSections: CGFloat = Primitive.space28
         // 虚线空输入区的上下内边距。24 → 16：框内实测 276 高里有 98pt 是纯空，
         // 「标题组→虚线框」的距离感其实一半来自框内的空，压缩这里比拉外间距更对症。
@@ -226,6 +226,8 @@ enum AppTheme {
     enum Color {
         // 背景（暖米色页面 + 近白暖卡片，靠层次而非纯白飘白区分）
         static let pageBg   = Primitive.neutral50   // 暖米色页面（非纯白）
+        // 顶栏的超轻暖纸融合层：中和系统 material 偏冷的白雾，不形成实色横条。
+        static let topBarMaskWarmTint = Primitive.neutral50.opacity(0.18)
         static let cardBg   = Primitive.warmWhite   // 近白暖卡片，比页面浅一档
         static let inputBg  = Primitive.warmWhite
 
@@ -399,7 +401,9 @@ enum AppTheme {
         static let settingsPinnedTitleSerif = SwiftUI.Font.system(.title3, design: .serif, weight: .semibold) // Settings 家族固定顶栏标题：比系统导航栏字号大一档，仍在 60pt 顶栏内不挤，保留品牌衬线
         static let settingsVersion = SwiftUI.Font.system(.caption2, design: .serif) // Settings 页脚版本号：小号衬线注脚
         static let ctaLabel       = SwiftUI.Font.system(.body, weight: .semibold)     // 主按钮文字（Continue / Get Started）
-        static let tabLabel       = SwiftUI.Font.system(.subheadline, weight: .semibold) // 顶部 Tab 名称
+        // 顶部 Tab 名称：小字号导航用紧凑无衬线；Medium 保留克制的编辑感，
+        // 选中关系交给毛玻璃承托，而不是靠过重字形制造对比。
+        static let tabLabel       = SwiftUI.Font.system(.subheadline, weight: .medium)
         static let cardSentence   = SwiftUI.Font.system(.body, design: .serif, weight: .semibold) // 时刻卡英文主句（衬线 + 半粗，Dynamic Type 安全）
         static let feedbackTitleSerif = cardSentence // 轻量错误/恢复提示标题：沿用内容衬线，但保持 body 层级，不冒充页面标题
         static let onboardingUploadTitle = SwiftUI.Font.system(.body, design: .serif, weight: .medium) // 上传卡标题：比内容主句更轻一级
@@ -445,6 +449,10 @@ enum AppTheme {
     enum Opacity {
         /// 装饰性图形的内部结构描边：在暖纸底上压到既可见又不抢正文重量。
         static let illustrationHairline: CGFloat = 0.55
+        // 顶栏渐进遮罩：中下段保留更多雾化承托，避免导航按钮下过早透出内容。
+        static let topBarMaskButtonTop: CGFloat = 0.94
+        static let topBarMaskButtonCenter: CGFloat = 0.74
+        static let topBarMaskTail: CGFloat = 0.34
     }
 
     /// 静态几何旋转角（度）。
@@ -494,6 +502,10 @@ enum AppTheme {
 
     enum Size {
         static let barControl: CGFloat = Primitive.size44  // 顶栏/工具栏可点控件标准边长
+        // 屏幕居中的顶部 Tab 左右避让槽：页边距 + 44pt 侧边控件。
+        static let topBarSideClearance: CGFloat = AppTheme.Space.paddingPage + barControl
+        // 顶部文字导航的选中玻璃：视觉高度小于 44pt 触控区，避免读成厚重工具按钮。
+        static let topTabSelectionHeight: CGFloat = Primitive.space32
         // InputBar 右侧发送/拍照/加载圆键：比 barControl（44）小，黑底圆键太满、
         // 视觉偏重；但比色阶上现成的 36 那一档 PM 又觉得偏小——是介于两档中间
         // 的手动微调值，component-private 例外（只这一个控件用，不进色阶，
@@ -511,6 +523,10 @@ enum AppTheme {
         // ── Settings 行矢量图标（对应视觉规范 §04 的 24×24 描边资产）──────────
         static let settingsRowIconGlyph: CGFloat = 20  // 行前导图标绘制尺寸
         static let settingsIconStroke: CGFloat    = 1.8 // 行前导图标在 24×24 资产坐标内的描边
+        // 顶栏菜单与 Settings 图标保持同一视觉笔重，但它直接在屏幕点空间绘制，
+        // 因此先把 24×24 资产坐标的 1.8 换算到当前 20pt glyph（= 1.5pt）。
+        static let topBarMenuIconGlyph: CGFloat = settingsRowIconGlyph
+        static let topBarMenuIconStroke: CGFloat = settingsIconStroke * topBarMenuIconGlyph / Primitive.space24
         static let settingsChevronGlyph: CGFloat = 13  // 行尾 chevron 绘制尺寸
         // chevron 在 24×24 资产坐标内的描边。3.2 → 2.8 的依据是**换算到屏幕后与行图标同重**：
         //   行图标  1.8 × (20/24) = 1.50pt
@@ -659,8 +675,6 @@ enum AppTheme {
     enum Motion {
         // 顶部 Tab 选中滑块：贴近系统分段控件的弹性手感（有回弹、不过冲太多）
         static let tabSelection: Animation = .spring(response: 0.34, dampingFraction: 0.72)
-        // 顶栏滚动紧凑/恢复：稍快，确保不拖延内容阅读
-        static let topBarCompact: Animation = .spring(response: 0.30, dampingFraction: 0.82)
         // 时间线被动对齐跟随（刷新带回新内容、用户已在底部时的小幅跟随）：
         // 短促 easeOut——跟上新内容但不拖沓，也不抢走阅读注意力
         static let timelinePassiveFollow: Animation = .easeOut(duration: 0.15)
