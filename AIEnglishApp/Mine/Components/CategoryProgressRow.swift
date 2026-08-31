@@ -390,7 +390,11 @@ private struct CategoryAccordionPreview: View {
         sceneCategory: "工作与学业",
         wordCount: 12,
         unlocked: false,
-        previewWords: ["deadline", "catch up", "wrap up"]
+        previewWords: [
+            Tab2PreviewWord(lemma: "deadline"),
+            Tab2PreviewWord(lemma: "catch up"),
+            Tab2PreviewWord(lemma: "wrap up")
+        ]
     )
 
     private let words = [

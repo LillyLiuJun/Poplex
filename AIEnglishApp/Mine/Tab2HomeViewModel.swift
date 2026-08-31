@@ -8,6 +8,10 @@ import Foundation
 enum Tab2Defaults {
     static let permanentlyUnlocked = "tab2_permanently_unlocked"
     static let firstUnlockShown    = "tab2_first_unlock_shown"
+    static let spokenMoments       = "tab2_spoken_moments"
+    static let heroMaterialID      = "tab2_hero_material_id"
+    static let heroKnownMoments    = "tab2_hero_known_moments"
+    static let heroKnownSpokenMoments = "tab2_hero_known_spoken_moments"
 }
 
 private let kUnlockedKey         = Tab2Defaults.permanentlyUnlocked
@@ -40,6 +44,8 @@ final class Tab2HomeViewModel {
     private let homeCacheLoader: @Sendable () async -> Data?
     private let homeLoadTimeout: Duration
     private let isConnected: () -> Bool
+    private let defaults: UserDefaults
+    private let now: () -> Date
     private var inFlightShowsFailureHint = false
     private var loadCompletionWaiters: [CheckedContinuation<Void, Never>] = []
     #if DEBUG
@@ -53,14 +59,18 @@ final class Tab2HomeViewModel {
             LocalCache.shared.load(key: .tab2Home)
         },
         homeLoadTimeout: Duration = .seconds(8),
-        isConnected: @escaping () -> Bool = { NetworkMonitor.shared.isConnected }
+        isConnected: @escaping () -> Bool = { NetworkMonitor.shared.isConnected },
+        defaults: UserDefaults = .standard,
+        now: @escaping () -> Date = Date.init
     ) {
         self.milestoneTracker = milestoneTracker
         self.homeDataLoader = homeDataLoader
         self.homeCacheLoader = homeCacheLoader
         self.homeLoadTimeout = homeLoadTimeout
         self.isConnected = isConnected
-        isPermanentlyUnlocked = UserDefaults.standard.bool(forKey: kUnlockedKey)
+        self.defaults = defaults
+        self.now = now
+        isPermanentlyUnlocked = defaults.bool(forKey: kUnlockedKey)
     }
 
     // MARK: - Category milestone presentation
@@ -135,9 +145,7 @@ final class Tab2HomeViewModel {
 
     // MARK: - Hero 选取
 
-    /// 从 data.categories 里选出 hero 卡：
-    /// 优先「有 featured moment 且最近有新素材的已解锁分类」；
-    /// 次选「已解锁词数最多的分类」；未解锁时返回 nil。
+    /// 从已解锁分类里选出稳定的 hero；只依据 moment 层数据，不读取词条级 spoken_count。
     func heroCategory(excluding excludedCategoryIDs: Set<String> = []) -> Tab2CategoryData? {
         guard let cats = data?.categories else { return nil }
         let unlocked = cats.filter {
@@ -145,14 +153,93 @@ final class Tab2HomeViewModel {
         }
         guard !unlocked.isEmpty else { return nil }
 
-        // 优先：有 featured moment（有可展示的场景）+ 最近有素材，按 lastMaterialAt 降序
-        let preferred = unlocked
-            .filter { $0.featured != nil }
-            .sorted { ($0.lastMaterialAt ?? .distantPast) > ($1.lastMaterialAt ?? .distantPast) }
-        if let best = preferred.first { return best }
+        let spokenMoments = Set(defaults.stringArray(forKey: Tab2Defaults.spokenMoments) ?? [])
+        let currentMoments = Set(unlocked.flatMap { $0.subScenes.map(\.sceneDetail) })
+        let knownMoments = Set(defaults.stringArray(forKey: Tab2Defaults.heroKnownMoments) ?? [])
+        let hasNewMoment = !currentMoments.subtracting(knownMoments).isEmpty
+        let knownSpokenMoments = Set(
+            defaults.stringArray(forKey: Tab2Defaults.heroKnownSpokenMoments) ?? []
+        )
+        let hasNewlySpokenMoment = !spokenMoments.subtracting(knownSpokenMoments).isEmpty
+        let unspokenCandidates = unlocked.filter { category in
+            category.featured != nil
+                && unspokenMomentCount(in: category, spokenMoments: spokenMoments) > 0
+        }
 
-        // 降级：词数最多的
-        return unlocked.max(by: { $0.wordCount < $1.wordCount })
+        if !hasNewMoment, !hasNewlySpokenMoment,
+           let storedMaterialID = defaults.string(forKey: Tab2Defaults.heroMaterialID),
+           let stable = unlocked.first(where: { category in
+               category.featured?.materialId == storedMaterialID
+                   && (unspokenCandidates.isEmpty
+                       || unspokenMomentCount(in: category, spokenMoments: spokenMoments) > 0)
+           }) {
+            return stable
+        }
+
+        let selected: Tab2CategoryData?
+        if let best = ranked(
+            unspokenCandidates,
+            momentCount: { unspokenMomentCount(in: $0, spokenMoments: spokenMoments) }
+        ).first {
+            selected = best
+        } else if let best = ranked(unlocked.filter { $0.featured != nil }, momentCount: { $0.subScenes.count }).first {
+            selected = best
+        } else {
+            selected = unlocked.sorted {
+                if $0.wordCount != $1.wordCount { return $0.wordCount > $1.wordCount }
+                return $0.id < $1.id
+            }.first
+        }
+
+        if let materialID = selected?.featured?.materialId {
+            defaults.set(materialID, forKey: Tab2Defaults.heroMaterialID)
+        } else {
+            defaults.removeObject(forKey: Tab2Defaults.heroMaterialID)
+        }
+        defaults.set(Array(currentMoments).sorted(), forKey: Tab2Defaults.heroKnownMoments)
+        defaults.set(
+            Array(spokenMoments).sorted(),
+            forKey: Tab2Defaults.heroKnownSpokenMoments
+        )
+        return selected
+    }
+
+    /// 对话真正结束后由对话页调用；当前对话页尚未返回 moment，接线点见 MineView TODO。
+    func markMomentSpoken(sceneDetail: String) {
+        var moments = Set(defaults.stringArray(forKey: Tab2Defaults.spokenMoments) ?? [])
+        moments.insert(sceneDetail)
+        defaults.set(Array(moments).sorted(), forKey: Tab2Defaults.spokenMoments)
+    }
+
+    private func unspokenMomentCount(
+        in category: Tab2CategoryData,
+        spokenMoments: Set<String>
+    ) -> Int {
+        category.subScenes.reduce(into: 0) { count, subScene in
+            if !spokenMoments.contains(subScene.sceneDetail) { count += 1 }
+        }
+    }
+
+    private func ranked(
+        _ categories: [Tab2CategoryData],
+        momentCount: (Tab2CategoryData) -> Int
+    ) -> [Tab2CategoryData] {
+        let recentCutoff = now().addingTimeInterval(-7 * 24 * 60 * 60)
+        return categories.sorted { lhs, rhs in
+            let lhsRecent = (lhs.featured?.createdAt ?? .distantPast) >= recentCutoff
+            let rhsRecent = (rhs.featured?.createdAt ?? .distantPast) >= recentCutoff
+            if lhsRecent != rhsRecent { return lhsRecent }
+
+            let lhsCount = momentCount(lhs)
+            let rhsCount = momentCount(rhs)
+            if lhsCount != rhsCount { return lhsCount > rhsCount }
+
+            let lhsCreatedAt = lhs.featured?.createdAt ?? .distantPast
+            let rhsCreatedAt = rhs.featured?.createdAt ?? .distantPast
+            if lhsCreatedAt != rhsCreatedAt { return lhsCreatedAt > rhsCreatedAt }
+
+            return lhs.id < rhs.id
+        }
     }
 
     // MARK: - 解锁判定
@@ -167,15 +254,15 @@ final class Tab2HomeViewModel {
     func confirmUnlock() {
         guard isReadyToUnlock else { return }
         isPermanentlyUnlocked = true
-        UserDefaults.standard.set(true, forKey: kUnlockedKey)
-        if !UserDefaults.standard.bool(forKey: kFirstUnlockShownKey) {
+        defaults.set(true, forKey: kUnlockedKey)
+        if !defaults.bool(forKey: kFirstUnlockShownKey) {
             isFirstUnlock = true
         }
     }
 
     func markFirstUnlockShown() {
         isFirstUnlock = false
-        UserDefaults.standard.set(true, forKey: kFirstUnlockShownKey)
+        defaults.set(true, forKey: kFirstUnlockShownKey)
     }
 
     // MARK: - 数据加载
@@ -226,7 +313,7 @@ final class Tab2HomeViewModel {
         defer { finishCurrentLoad() }
 
         // 同步 UserDefaults → 支持 debug reset（清除 UserDefaults 后 load 能感知）
-        if !UserDefaults.standard.bool(forKey: kUnlockedKey) && isPermanentlyUnlocked {
+        if !defaults.bool(forKey: kUnlockedKey) && isPermanentlyUnlocked {
             isPermanentlyUnlocked = false
             isFirstUnlock = false
         }

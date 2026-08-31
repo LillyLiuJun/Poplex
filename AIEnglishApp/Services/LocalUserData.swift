@@ -33,6 +33,10 @@ enum LocalUserData {
     private static let accountScopedKeys = [
         Tab2Defaults.permanentlyUnlocked,
         Tab2Defaults.firstUnlockShown,
+        Tab2Defaults.spokenMoments,
+        Tab2Defaults.heroMaterialID,
+        Tab2Defaults.heroKnownMoments,
+        Tab2Defaults.heroKnownSpokenMoments,
         "mine_last_scene_count",       // Tab2「新增 N 条」的基线
         ProfileService.onboardingSyncPendingKey  // 引导完成待同步到服务器的标记
     ]

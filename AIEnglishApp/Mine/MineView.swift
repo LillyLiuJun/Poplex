@@ -102,6 +102,8 @@ struct MineView: View {
             .navigationDestination(for: MineRoute.self) { route in
                 switch route {
                 case .conversation(let cat):
+                    // TODO: 对话页返回实际完成的 scene_detail 后，在结束回调调用
+                    // vm.markMomentSpoken(sceneDetail:)；当前回调只有分类，不能可靠写入 moment。
                     ConversationView(sceneCategory: cat, onDismiss: { path.removeLast() })
                 }
             }
@@ -650,34 +652,16 @@ private struct Tab2UnlockedView: View {
         if let data = vm.data {
             let milestoneIDs = Set(milestonePresentations.map(\.categoryID))
             let hero   = vm.heroCategory(excluding: milestoneIDs)
-            let heroId = hero?.id
-            let otherUnlocked = data.categories.filter {
-                $0.unlocked && $0.id != heroId && !milestoneIDs.contains($0.id)
-            }
             let stillFilling = data.categories.filter {
                 (!$0.unlocked && $0.wordCount >= 1) || milestoneIDs.contains($0.id)
             }
 
             VStack(alignment: .leading, spacing: AppTheme.Space.paddingBetweenSections) {
-                // 已解锁分类与页面共用纵向滚动，完整宽度卡片依次承接学习主题。
-                if hero != nil || !otherUnlocked.isEmpty {
-                    VStack(alignment: .leading, spacing: AppTheme.Space.paddingCard) {
-                        if let hero {
-                            Tab2HeroCard(
-                                category: hero,
-                                isFirstUnlock: vm.isFirstUnlock,
-                                onTalk: { onTalk(hero.sceneCategory) }
-                            )
-                        }
-
-                        ForEach(otherUnlocked) { cat in
-                            Tab2HeroCard(
-                                category: cat,
-                                isFirstUnlock: false,
-                                onTalk: { onTalk(cat.sceneCategory) }
-                            )
-                        }
-                    }
+                if let hero {
+                    Tab2HeroCard(
+                        category: hero,
+                        onTalk: { onTalk(hero.sceneCategory) }
+                    )
                     .padding(.horizontal, AppTheme.Space.paddingPage)
                 }
 
@@ -889,7 +873,10 @@ private struct BrandRadiantAscentOverlay: View {
                 sceneCategory: "饮食",
                 wordCount: 12,
                 unlocked: false,
-                previewWords: ["comfort food", "grab a bite"],
+                previewWords: [
+                    Tab2PreviewWord(lemma: "comfort food"),
+                    Tab2PreviewWord(lemma: "grab a bite")
+                ],
                 momentCount: 3
             )
         ]

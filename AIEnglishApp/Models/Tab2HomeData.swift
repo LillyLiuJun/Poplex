@@ -26,7 +26,7 @@ struct Tab2CategoryData: Decodable, Identifiable {
     let unlocked: Bool
     let lastMaterialAt: Date?
     let subScenes: [Tab2SubScene]
-    let previewWords: [String]
+    let previewWords: [Tab2PreviewWord]
     // 第 2 刀新增字段（§9.2）；旧客户端收不到时退化为 nil/0
     let momentCount: Int
     let featured: Tab2FeaturedMoment?
@@ -57,7 +57,7 @@ struct Tab2CategoryData: Decodable, Identifiable {
         unlocked: Bool,
         lastMaterialAt: Date? = nil,
         subScenes: [Tab2SubScene] = [],
-        previewWords: [String] = [],
+        previewWords: [Tab2PreviewWord] = [],
         momentCount: Int = 0,
         featured: Tab2FeaturedMoment? = nil,
         heroPhotos: [Tab2HeroPhoto] = []
@@ -79,7 +79,13 @@ struct Tab2CategoryData: Decodable, Identifiable {
         wordCount      = try c.decode(Int.self,       forKey: .wordCount)
         unlocked       = try c.decode(Bool.self,      forKey: .unlocked)
         subScenes      = try c.decodeIfPresent([Tab2SubScene].self,      forKey: .subScenes)   ?? []
-        previewWords   = try c.decodeIfPresent([String].self,            forKey: .previewWords) ?? []
+        if let words = try? c.decode([Tab2PreviewWord].self, forKey: .previewWords) {
+            previewWords = words
+        } else if let legacyWords = try? c.decode([String].self, forKey: .previewWords) {
+            previewWords = legacyWords.map { Tab2PreviewWord(lemma: $0) }
+        } else {
+            previewWords = []
+        }
         momentCount    = try c.decodeIfPresent(Int.self,                 forKey: .momentCount)  ?? 0
         featured       = try c.decodeIfPresent(Tab2FeaturedMoment.self,  forKey: .featured)
         heroPhotos     = try c.decodeIfPresent([Tab2HeroPhoto].self,     forKey: .heroPhotos)   ?? []
@@ -93,6 +99,33 @@ struct Tab2CategoryData: Decodable, Identifiable {
         } else {
             lastMaterialAt = nil
         }
+    }
+}
+
+/// Hero 卡预览词——对应 get_tab2_home 的 preview_words 行。
+struct Tab2PreviewWord: Decodable {
+    let lemma: String
+    let displayForm: String?
+    let pos: String?
+    let nativeMeaning: String?
+
+    enum CodingKeys: String, CodingKey {
+        case lemma
+        case displayForm = "display_form"
+        case pos
+        case nativeMeaning = "native_meaning"
+    }
+
+    init(
+        lemma: String,
+        displayForm: String? = nil,
+        pos: String? = nil,
+        nativeMeaning: String? = nil
+    ) {
+        self.lemma = lemma
+        self.displayForm = displayForm
+        self.pos = pos
+        self.nativeMeaning = nativeMeaning
     }
 }
 
@@ -335,4 +368,3 @@ extension Tab2WordEntry {
         }
     }
 }
-

@@ -31,3 +31,6 @@ enable-chrome-ai/
 
 # Supabase CLI 误入函数目录的本地状态（linked-project / cli 缓存）
 supabase/functions/reconcile-orphan-images/supabase/
+
+# Supabase CLI 的本地分支快照产物
+supabase/.branches/

@@ -19,6 +19,7 @@ import {
   FetchLike,
   resolveCommittedRequest,
 } from "./reliableCommit.ts";
+import { validateSubScene } from "./subScene.ts";
 
 function environmentValue(name: string): string {
   try {
@@ -599,9 +600,17 @@ Note: watching sport/film/show → 休闲娱乐; playing/training sport yourself
 
 Scene: "${targetText}"${userOriginal ? `\nContext: "${userOriginal}"` : ""}
 
-JSON: {"category":"<from list above>","sub_scene":"<specific activity in English, never null>"}
+JSON: {"category":"<from list above>","sub_scene":"<recurring activity, never null>"}
 
-sub_scene: complete activity in English, strip qualifiers ("做晚饭"→"Cooking"). Anchors: 饮食→Cooking/Eating out; 休闲娱乐→Watching sports/Watching a show; 运动健康→Running/Playing sports; 出行交通→Commuting/Driving.`;
+sub_scene: the recurring activity this scene belongs to — a broad label that
+many similar scenes can share, not a description of this one occasion.
+Write it in the TARGET LANGUAGE only; never echo the native language, even
+when the Scene or Context above is written in it.
+Strip qualifiers and specifics: "Cooking", not "Cooking dinner tonight";
+"Fixing a device", not "Helping mum set up her new phone".
+Aim for this level of abstraction:
+Cooking / Eating out / Commuting / Driving / Running / Watching sports /
+Watching a show / Working / Studying / Shopping / Chores / Catching up`;
 
     const res = await fetch(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
       method: "POST",
@@ -650,10 +659,7 @@ sub_scene: complete activity in English, strip qualifiers ("做晚饭"→"Cookin
       (SCENE_CATEGORIES as readonly string[]).includes(parsed.category)
         ? parsed.category
         : "其他";
-    const subScene =
-      (typeof parsed.sub_scene === "string" && parsed.sub_scene.trim())
-        ? parsed.sub_scene.trim()
-        : null;
+    const subScene = validateSubScene(parsed.sub_scene);
     return { category, subScene };
   } catch (e) {
     console.error("[classifyScene] failed:", e);

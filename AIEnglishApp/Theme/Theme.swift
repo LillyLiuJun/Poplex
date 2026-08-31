@@ -155,6 +155,12 @@ private enum Primitive {
     //    靠"更亮 + 柔阴影"分层；不用纯白，避免冷白跳出整套暖色系 ──
     static let warmWhite = Color(hex: 0xFFFDF8)
 
+    // Tab2 Hero B1 预设图：这四个值来自视觉规格，语义层按用途消费。
+    static let tab2HeroPresetGradientMiddle = Color(hex: 0xFCF8F5)
+    static let tab2HeroPresetBloomSecondary = Color(hex: 0xFFEEE2)
+    static let tab2HeroPresetIcon = Color(hex: 0x965832)
+    static let tab2HeroPresetLabel = Color(hex: 0x8A4A20)
+
     // ── App 图标资产色 ────────────────────────────────────────────────────
     // 开屏动画的第 0 帧必须与 iOS 图标放大转场的最后一帧一致，否则启动会闪一下。
     // 故这两枚直接取 AppIcon.appiconset 母版里的实际色值，单列、不与 neutral50
@@ -329,6 +335,22 @@ enum AppTheme {
         // 加透明度让页面底色透一点上来，与 warmGlassSurface 共用的 Tab2 卡片
         // （MineView / CategoryProgressRow）不受影响——那两处仍用默认值。
         static let settingsCardSurface = Primitive.warmWhite.opacity(0.85)
+
+        // Tab2 Hero 顶部照片的统一调色与预设图（B1）专用色。组件只消费这些语义 token，
+        // 不直接引用 Primitive 或字面 Color，以便日后更换目标市场的视觉主题时集中调整。
+        static let tab2HeroPhotoToneWarm = Primitive.primary600
+        static let tab2HeroPhotoTonePaper = Primitive.primary100
+        static let tab2HeroPhotoTopScrim = Primitive.neutral900
+        static let tab2HeroPhotoOverlayText = Primitive.controlOnMedia
+        static let tab2HeroPhotoOverlayShadow = Primitive.mediaSurface
+        static let tab2HeroCTAOnColor = Primitive.controlOnMedia
+        static let tab2HeroPresetGradientTop = Primitive.neutral50
+        static let tab2HeroPresetGradientMiddle = Primitive.tab2HeroPresetGradientMiddle
+        static let tab2HeroPresetGradientBottom = Primitive.controlOnMedia
+        static let tab2HeroPresetBloomPrimary = Primitive.primary400
+        static let tab2HeroPresetBloomSecondary = Primitive.tab2HeroPresetBloomSecondary
+        static let tab2HeroPresetIcon = Primitive.tab2HeroPresetIcon
+        static let tab2HeroPresetLabel = Primitive.tab2HeroPresetLabel
         // 半轻灰胶囊底（计数 + chevron 合并单元）：暖近黑极低透明，中性、不引入橙
         static let pillNeutralBg    = Primitive.neutral900.opacity(0.06)
 
@@ -380,7 +402,6 @@ enum AppTheme {
         static let metaNote       = SwiftUI.Font.system(.caption2)
         static let popsCount      = SwiftUI.Font.system(.caption, weight: .medium)    // Topics 进度行 pops 计数（配 .monospacedDigit()）
         static let iconBadgeLetter = SwiftUI.Font.system(.subheadline, design: .serif, weight: .semibold) // 词条类型徽章里的衬线字母（句中单词 A）
-        static let cardMeta       = SwiftUI.Font.system(.footnote, weight: .medium)   // 卡片右上角 meta（Hero 卡 pops 数等）
         static let sectionLabel   = SwiftUI.Font.system(.caption2, weight: .semibold) // 区块小标（例句 / 说明，11/600）
         static let statusNote     = SwiftUI.Font.system(.footnote)                     // 加载态 / 空态 / 系统提示性短句
         static let statusNoteSerif = SwiftUI.Font.system(.footnote, design: .serif)     // 衬线小字状态提示（如手风琴展开 loading "Gathering words…"）
@@ -401,6 +422,13 @@ enum AppTheme {
         static let settingsPinnedTitleSerif = SwiftUI.Font.system(.title3, design: .serif, weight: .semibold) // Settings 家族固定顶栏标题：比系统导航栏字号大一档，仍在 60pt 顶栏内不挤，保留品牌衬线
         static let settingsVersion = SwiftUI.Font.system(.caption2, design: .serif) // Settings 页脚版本号：小号衬线注脚
         static let ctaLabel       = SwiftUI.Font.system(.body, weight: .semibold)     // 主按钮文字（Continue / Get Started）
+        static let tab2HeroCategoryLabel = SwiftUI.Font.system(.caption2, weight: .heavy)
+        static let tab2HeroPopsLabel = SwiftUI.Font.system(.caption2, weight: .semibold)
+        static let tab2HeroMeta = SwiftUI.Font.system(.caption, weight: .semibold)
+        static let tab2HeroWord = SwiftUI.Font.system(.subheadline, design: .serif, weight: .semibold)
+        static let tab2HeroWordPartOfSpeech = SwiftUI.Font.system(.caption2).italic()
+        static let tab2HeroWordMeaning = SwiftUI.Font.system(.footnote)
+        static let tab2HeroCTA = SwiftUI.Font.system(.subheadline, weight: .semibold)
         // 顶部 Tab 名称：小字号导航用紧凑无衬线；Medium 保留克制的编辑感，
         // 选中关系交给毛玻璃承托，而不是靠过重字形制造对比。
         static let tabLabel       = SwiftUI.Font.system(.subheadline, weight: .medium)
@@ -670,6 +698,76 @@ enum AppTheme {
         static let onboardingFallbackCardSize: CGFloat           = 66  // 前景纸卡边长
         static let onboardingFallbackBadge: CGFloat              = 30  // 橙色角标直径（小面积满饱和图形）
         static let onboardingFallbackBadgeGlyph: CGFloat         = 15  // 角标内白色描边字形
+    }
+
+    /// Tab2 Hero 卡的固定图像区与 B1 预设图度量。文字区本身保持由内容撑开，
+    /// 这里只有其最小高度，避免短句卡留下不受控的空白。
+    enum Tab2Hero {
+        enum Layout {
+            static let artHeight: CGFloat = 150
+            static let artTextOverlap: CGFloat = -14
+            static let textMinimumHeight: CGFloat = 138.5
+            static let collageGap: CGFloat = 3
+            static let collageFeaturedWidthRatio: CGFloat = 1.55
+            static let sceneDetailMaximumWidth: CGFloat = 175
+            static let ctaHeight: CGFloat = 42
+            static let ctaHorizontalInset: CGFloat = 22
+            static let ctaContentGap: CGFloat = 7
+            static let ctaCornerRadius: CGFloat = 21
+            static let cardShadowRadius: CGFloat = 8
+            static let cardShadowY: CGFloat = 2
+            static let photoTopScrimHeight: CGFloat = 54
+            static let photoOverlayShadowRadius: CGFloat = 6
+            static let photoOverlayShadowY: CGFloat = 1
+            static let presetBloomPrimaryWidth: CGFloat = 220
+            static let presetBloomPrimaryHeight: CGFloat = 165
+            static let presetBloomPrimaryLeading: CGFloat = 20
+            static let presetBloomPrimaryTop: CGFloat = -20
+            static let presetBloomSecondaryWidth: CGFloat = 180
+            static let presetBloomSecondaryHeight: CGFloat = 140
+            static let presetBloomSecondaryTrailing: CGFloat = -40
+            static let presetBloomSecondaryTop: CGFloat = 24
+            static let presetIconSize: CGFloat = 96
+            static let presetIconTrailing: CGFloat = 38
+            static let presetIconTop: CGFloat = 32
+            static let presetDotSize: CGFloat = 8
+            static let presetDotLeading: CGFloat = 46
+            static let presetDotTop: CGFloat = 74
+            static let presetIconStrokeWidth: CGFloat = 1.9
+            static let presetBloomBlur: CGFloat = 36
+            static let wordRowHeight: CGFloat = 26
+            static let wordRowGap: CGFloat = 9
+            static let metaContentGap: CGFloat = 5
+        }
+
+        enum Opacity {
+            static let transparent: CGFloat = 0
+            static let photoToneWarm: CGFloat = 0.20
+            static let photoTonePaper: CGFloat = 0.45
+            static let photoTopScrim: CGFloat = 0.30
+            static let photoPops: CGFloat = 0.82
+            static let photoTextShadow: CGFloat = 0.50
+            static let presetBloomPrimary: CGFloat = 0.55
+            static let presetBloomSecondary: CGFloat = 0.90
+            static let presetIcon: CGFloat = 0.19
+            static let presetPops: CGFloat = 0.60
+            static let presetDot: CGFloat = 0.90
+        }
+
+        enum ImageTreatment {
+            static let photoSaturation: Double = 0.70
+            static let bottomFadeOpaqueEnd: CGFloat = 0.58
+        }
+
+        enum Typography {
+            static let categoryTracking: CGFloat = 1.4
+        }
+
+        enum Motion {
+            static let pressedScale: CGFloat = 0.97
+            static let pressResponse: CGFloat = 0.25
+            static let pressDamping: CGFloat = 0.70
+        }
     }
 
     enum Motion {
