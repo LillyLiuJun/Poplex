@@ -92,9 +92,15 @@ select is(
   'a zeroed entry is left active, not excluded'
 );
 
+-- Fixture setup is not an Edge Function path. Keep it outside service_role so
+-- this test does not accidentally turn a test-only INSERT into a production
+-- table privilege requirement.
+set local role postgres;
 insert into public.materials (id, user_id, material_type, source, raw_content) values
   ('11110000-0000-0000-0000-000000000003'::uuid, 'a0000000-0000-0000-0000-00000000000a'::uuid,
    'scene', 'tab1', '{"user_original":"third"}'::jsonb);
+
+set local role service_role;
 
 select record_lexicon_material_units(
   'a0000000-0000-0000-0000-00000000000a'::uuid,
@@ -146,9 +152,12 @@ select is(
 -- ─────────────────────────────────────────────────────────────
 -- 4. Cross-user isolation, and materials with no ledger rows at all.
 -- ─────────────────────────────────────────────────────────────
+set local role postgres;
 insert into public.materials (id, user_id, material_type, source, raw_content) values
   ('22220000-0000-0000-0000-000000000001'::uuid, 'b0000000-0000-0000-0000-00000000000b'::uuid,
    'scene', 'onboarding', '{"user_original":"other user"}'::jsonb);
+
+set local role service_role;
 
 select record_lexicon_material_units(
   'b0000000-0000-0000-0000-00000000000b'::uuid,
@@ -167,9 +176,12 @@ select is(
 );
 
 -- A preset card never gets accounted, so deleting one must be a clean no-op.
+set local role postgres;
 insert into public.materials (id, user_id, material_type, source, raw_content) values
   ('33330000-0000-0000-0000-000000000001'::uuid, 'a0000000-0000-0000-0000-00000000000a'::uuid,
    'scene', 'onboarding', '{"user_original":"never accounted"}'::jsonb);
+
+set local role service_role;
 
 select lives_ok(
   $$ delete from public.materials where id = '33330000-0000-0000-0000-000000000001'::uuid $$,
@@ -218,6 +230,10 @@ select is(
   'commit_generated_content reports how many materials its cleanup removed'
 );
 
+-- This assertion inspects the aggregate as a test harness, not as a client
+-- query. Tab2 reads it through a service-owned RPC, so authenticated does not
+-- receive an otherwise-unused direct table SELECT grant.
+set local role postgres;
 select is(
   (select total_count from public.lexicon_entries
     where user_id = 'a0000000-0000-0000-0000-00000000000a'::uuid and lemma = 'harbour'),
@@ -229,11 +245,12 @@ select is(
 -- 5b. tier is persisted again (it was silently dropped in 20260730001000 and
 --     never restored, leaving lexicon_entries.tier permanently NULL).
 -- ─────────────────────────────────────────────────────────────
-set local role service_role;
-
+set local role postgres;
 insert into public.materials (id, user_id, material_type, source, raw_content) values
   ('44440000-0000-0000-0000-000000000001'::uuid, 'a0000000-0000-0000-0000-00000000000a'::uuid,
    'scene', 'tab1', '{"user_original":"tier check"}'::jsonb);
+
+set local role service_role;
 
 select record_lexicon_material_units(
   'a0000000-0000-0000-0000-00000000000a'::uuid,

@@ -3,6 +3,10 @@ DerivedData/
 *.xcuserstate
 supabase/.temp/
 
+# 每个 worktree 各自维护本地端口（如端口相撞时改这里）；CI 与全新检出
+# 由 scripts/ci/test-database.sh 从 config.toml.example 自动复制。
+supabase/config.toml
+
 # 编辑器 / 工具的本地状态，不该进版本库
 .obsidian/
 **/.obsidian/

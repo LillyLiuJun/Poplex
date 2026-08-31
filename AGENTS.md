@@ -230,6 +230,14 @@ edit — set this expectation now so it isn't a surprise later.
   inline instead of centrally in the theme file. List issues and proposed
   fixes — do NOT auto-edit tokens without confirmation first.
 
+## CI & Pull Requests
+
+For any task that changes code, tests, Supabase Functions, migrations, or
+GitHub workflows, read `docs/engineering/CI.md` before verification. Run the
+relevant documented local checks once the slice is stable, report their results
+to the project owner, and require the documented GitHub PR checks to pass
+before describing a PR as ready to merge.
+
 ## Project Owner Background (for Codex to calibrate explanations)
 
 A product manager with a marketing background; zero coding background. Every

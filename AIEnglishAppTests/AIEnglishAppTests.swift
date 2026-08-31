@@ -94,6 +94,9 @@ struct AppTabTests {
 // MARK: - Tab2 refresh lifecycle tests
 
 @MainActor
+// 这一组会同时驱动同一个 MainActor 上的异步 ViewModel 状态；若组内并行，
+// CI 负载高时启动任务可能迟于测试的短轮询窗口，产生并非产品行为的假失败。
+@Suite(.serialized)
 struct Tab2RefreshLifecycleTests {
     private let payload = """
     {
@@ -2546,8 +2549,27 @@ struct PendingRetryStoreTests {
 /// `clearAll()` 那条原本住在 `LocalUserDataTests`（语义上属删号链路），但
 /// `.serialized` 只在**同一个 Suite 内**生效，跨 Suite 仍并行。把所有碰
 /// `ImageCache.shared` 的测试收进同一个串行 Suite，是改动最小的根治办法。
+@MainActor
 @Suite(.serialized)
 struct ImageCacheTests {
+
+    private func makeLocalSuccessStore(suite: String) -> (LocalSuccessStore, URL, UserDefaults) {
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("local-success-inject-\(suite)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return (LocalSuccessStore(defaults: defaults, documentsDir: dir), dir, defaults)
+    }
+
+    private func makePendingRetryStore(suite: String) -> PendingRetryStore {
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("pending-inject-\(suite)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return PendingRetryStore(defaults: defaults, documentsDir: dir)
+    }
 
     @Test func getUnknownKeyReturnsNil() {
         #expect(ImageCache.shared.get("no_such_key_\(UUID().uuidString)") == nil)
@@ -2621,6 +2643,45 @@ struct ImageCacheTests {
 
         #expect(wrote == true)
         #expect(cache.get(key) != nil, "generation 未变，应正常写入")
+    }
+
+    // 它同样碰到进程级缓存，必须与上方清理测试放在同一个串行 Suite；否则
+    // 全量并行时 clearAll() 会在图片移交和断言之间将照片清掉。
+    @Test func confirmedPhotoIsPromotedToStableImageCacheBeforeLocalCopyIsRemoved() async throws {
+        let (store, _, _) = makeLocalSuccessStore(suite: "promote-confirmed-photo")
+        let requestId = UUID()
+        let userMessageId = UUID()
+        let stableKey = "user_images/test/\(UUID().uuidString).jpg"
+        let image = UIImage(systemName: "photo")!
+        try store.saveTab1(
+            text: nil, image: image, requestId: requestId,
+            userMessageId: userMessageId, assistantMessageId: UUID(),
+            createdAt: .now, card: .card(CardContent(targetExpression: "A photo."))
+        )
+
+        let response = Data("""
+        [{
+          "id": "\(userMessageId.uuidString)",
+          "role": "user",
+          "input_type": "image",
+          "user_content": "[photo]",
+          "signed_image_url": "https://example.com/signed-photo?token=<REDACTED>",
+          "image_url": "\(stableKey)",
+          "request_id": "\(requestId.uuidString)",
+          "created_at": "2026-08-28T12:00:00.000Z"
+        }]
+        """.utf8)
+        let vm = TodayViewModel(
+            service: SuccessMock(), historyDataLoader: { response },
+            isConsentGranted: { true }
+        )
+        vm.successStore = store
+        vm.pendingRetryStore = makePendingRetryStore(suite: "promote-confirmed-photo-pending")
+
+        await vm.loadHistory()
+
+        #expect(store.load().isEmpty)
+        #expect(ImageCache.shared.get(stableKey) != nil)
     }
 }
 
@@ -5176,45 +5237,6 @@ struct LocalSuccessInjectionTests {
         let f = DateFormatter()
         f.dateFormat = "MMM d"
         return f.string(from: date)
-    }
-
-    // 冷启动对齐：服务器已确认的照片会清除 LocalSuccess 副本。清除前必须把原图
-    // 移交给 imagePath 的稳定缓存键，否则历史气泡会从已显示照片退回加载占位。
-    @Test func confirmedPhotoIsPromotedToStableImageCacheBeforeLocalCopyIsRemoved() async throws {
-        let (store, _, _) = makeStore(suite: "promote-confirmed-photo")
-        let requestId = UUID()
-        let userMessageId = UUID()
-        let stableKey = "user_images/test/\(UUID().uuidString).jpg"
-        let image = UIImage(systemName: "photo")!
-        try store.saveTab1(
-            text: nil, image: image, requestId: requestId,
-            userMessageId: userMessageId, assistantMessageId: UUID(),
-            createdAt: .now, card: .card(CardContent(targetExpression: "A photo."))
-        )
-
-        let response = Data("""
-        [{
-          "id": "\(userMessageId.uuidString)",
-          "role": "user",
-          "input_type": "image",
-          "user_content": "[photo]",
-          "signed_image_url": "https://example.com/signed-photo?token=<REDACTED>",
-          "image_url": "\(stableKey)",
-          "request_id": "\(requestId.uuidString)",
-          "created_at": "2026-08-28T12:00:00.000Z"
-        }]
-        """.utf8)
-        let vm = TodayViewModel(
-            service: SuccessMock(), historyDataLoader: { response },
-            isConsentGranted: { true }
-        )
-        vm.successStore = store
-        vm.pendingRetryStore = makePendingStore(suite: "promote-confirmed-photo-pending")
-
-        await vm.loadHistory()
-
-        #expect(store.load().isEmpty)                 // 服务器正本接管后，临时 Documents 副本可清
-        #expect(ImageCache.shared.get(stableKey) != nil) // 但历史远图首帧仍能命中同一张图
     }
 
     // 发送成功 → 成功增量落本地；同会话再注入被幂等跳过（不出现重复气泡+卡片）

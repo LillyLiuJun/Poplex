@@ -26,6 +26,7 @@ the fact** — fix the doc and say so.
 | `prd/输入到成长_链路现状与待敲定_v1.md` | §二 extraction/tagging rules, §三 recording & summarising — **still open, not yet decided** |
 | `prd/Agent系统PRD_逻辑审查_v1.md` | Review record behind the v1→v2 revision (rationale, historical reference) |
 | `优化需求全量清单_v1.md` | Unified index of all low-priority / deferred / pending-decision items, trigger-gated (not a schedule) |
+| `engineering/CI.md` | Pull-request verification commands, required checks, and database privilege-test maintenance |
 | `design-system/*` | Brand colour (`#FF7622`, warm paper-grey neutrals) and typography |
 | `brand/README.md` | **Brand assets** — logo, app icon, wordmark, splash. Start there for anything visual-identity related. Note: the *source of truth is code* (`PoplexPShape`, `PoplexWordmarkMetrics`, `AppTheme.Motion.Splash`), the SVGs under `brand/assets/` are exports |
 
@@ -284,6 +285,14 @@ edit — set this expectation now so it isn't a surprise later.
   whether anything should be merged or split, and find any tokens defined
   inline instead of centrally in the theme file. List issues and proposed
   fixes — do NOT auto-edit tokens without confirmation first.
+
+## CI & Pull Requests
+
+For any task that changes code, tests, Supabase Functions, migrations, or
+GitHub workflows, read `docs/engineering/CI.md` before verification. Run the
+relevant documented local checks once the slice is stable, report their results
+to the project owner, and require the documented GitHub PR checks to pass
+before describing a PR as ready to merge.
 
 ## Project Owner Background (for Claude to calibrate explanations)
 
