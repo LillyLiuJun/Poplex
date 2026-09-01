@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 import UIKit
+import SwiftUI
 @testable import AIEnglishApp
 
 private actor Tab2RefreshGate {
@@ -353,17 +354,124 @@ struct RootTabSwipeIntentTests {
 
 // MARK: - Navigation chrome token tests
 
+private extension DynamicTypeSize {
+    /// 测试用：把 SwiftUI 的字号档映射到 UIKit 的对应档，供 UIFontMetrics 按档位测量。
+    var uiCategory: UIContentSizeCategory {
+        switch self {
+        case .xSmall: return .extraSmall
+        case .small: return .small
+        case .medium: return .medium
+        case .large: return .large
+        case .xLarge: return .extraLarge
+        case .xxLarge: return .extraExtraLarge
+        case .xxxLarge: return .extraExtraExtraLarge
+        case .accessibility1: return .accessibilityMedium
+        case .accessibility2: return .accessibilityLarge
+        case .accessibility3: return .accessibilityExtraLarge
+        case .accessibility4: return .accessibilityExtraExtraLarge
+        case .accessibility5: return .accessibilityExtraExtraExtraLarge
+        @unknown default: return .large
+        }
+    }
+}
+
 struct NavigationChromeTokenTests {
     // 最窄的在售 iPhone 点宽（SE / mini 系列），用作「顶栏在最紧屏幕上是否还装得下」的下限。
     private let narrowestSupportedScreenWidth: CGFloat = 375
 
-    @Test func iconOnlyTabRowFitsNarrowestSupportedScreen() {
-        // 与 topBarSideClearance 的定义公式无关的独立校验：真的拿两个图标按钮的
-        // 最小占宽，去比对 clearance 让出的可用宽度——clearance 改坏时这里会真的红，
-        // 而不是像重复推导同一公式那样恒为真。
-        let iconOnlyRowWidth = AppTheme.Size.barControl * 2 + AppTheme.Space.paddingM
-        let availableWidth = narrowestSupportedScreenWidth - AppTheme.Size.topBarSideClearance * 2
-        #expect(iconOnlyRowWidth <= availableWidth)
+    @Test func labelTabRowFitsNarrowestSupportedScreenAtMaxDynamicTypeSize() throws {
+        // 双面包夹：从 AX1 到 AX5 逐档实测 Tab 行宽，最大放得下的档必须恰为 token
+        // 声明的那一档——token 调高到放不下的档，或调低到还能再放一档的档，这里都会红。
+        // 文案取自 AppTab.title、字体配方取自 AppTheme.Font 的 tabLabel 配方 token
+        // （两处改动都会自动重测）；宽度独立于 topBarSideClearance 公式实测，
+        // clearance 改坏时也会红。
+        let fittingCategory = try #require(largestFittingAccessibilityCategory())
+        #expect(fittingCategory == AppTheme.Typography.topTabLabelMaxDynamicTypeSize.uiCategory)
+    }
+
+    /// AX1→AX5 逐档实测 Tab 行宽，返回最大放得下的档；一档都放不下时返回 nil。
+    /// 字体配方读自 AppTheme.Font 的 tabLabel 配方 token——与生产共用同一份，
+    /// 改 tabLabel 的 TextStyle / 字重 / design 时本测试自动按新配方重测（放不下会红）。
+    private func largestFittingAccessibilityCategory() -> UIContentSizeCategory? {
+        let categories: [UIContentSizeCategory] = [
+            .accessibilityMedium, .accessibilityLarge, .accessibilityExtraLarge,
+            .accessibilityExtraExtraLarge, .accessibilityExtraExtraExtraLarge,
+        ]
+        var largest: UIContentSizeCategory?
+        for category in categories {
+            guard labelRowWidth(at: category) <= availableWidth else { break }
+            largest = category
+        }
+        return largest
+    }
+
+    private var availableWidth: CGFloat {
+        narrowestSupportedScreenWidth - AppTheme.Size.topBarSideClearance * 2
+    }
+
+    private func labelRowWidth(at category: UIContentSizeCategory) -> CGFloat {
+        let style = uiTextStyle(AppTheme.Font.tabLabelStyle)
+        let baseSize = UIFont.preferredFont(forTextStyle: style).pointSize
+        let trait = UITraitCollection(preferredContentSizeCategory: category)
+        let size = UIFontMetrics(forTextStyle: style).scaledValue(for: baseSize, compatibleWith: trait)
+        let weight = uiWeight(AppTheme.Font.tabLabelWeight)
+        let descriptor = UIFont.systemFont(ofSize: size, weight: weight).fontDescriptor
+            .withDesign(uiDesign(AppTheme.Font.tabLabelDesign))
+            ?? UIFont.systemFont(ofSize: size, weight: weight).fontDescriptor
+        let font = UIFont(descriptor: descriptor, size: size)
+        let attributes: [NSAttributedString.Key: Any] = [.font: font]
+        let labelsWidth = AppTab.allCases
+            .map { ($0.title as NSString).size(withAttributes: attributes).width }
+            .reduce(0, +)
+        return labelsWidth
+            + AppTheme.Space.paddingM * 4          // 两个 tab 各水平内边距 paddingM ×2
+            + AppTheme.Size.topTabItemSpacing
+    }
+
+    /// 测试用：SwiftUI Font.TextStyle → UIKit UIFont.TextStyle。
+    private func uiTextStyle(_ style: SwiftUI.Font.TextStyle) -> UIFont.TextStyle {
+        switch style {
+        case .largeTitle: return .largeTitle
+        case .title: return .title1
+        case .title2: return .title2
+        case .title3: return .title3
+        case .headline: return .headline
+        case .subheadline: return .subheadline
+        case .body: return .body
+        case .callout: return .callout
+        case .footnote: return .footnote
+        case .caption: return .caption1
+        case .caption2: return .caption2
+        @unknown default: return .body
+        }
+    }
+
+    /// 测试用：SwiftUI Font.Weight → UIKit UIFont.Weight。
+    /// Font.Weight 不公开 rawValue，无法直接换算，只能按静态成员逐档匹配。
+    private func uiWeight(_ weight: SwiftUI.Font.Weight) -> UIFont.Weight {
+        switch weight {
+        case .ultraLight: return .ultraLight
+        case .thin: return .thin
+        case .light: return .light
+        case .regular: return .regular
+        case .medium: return .medium
+        case .semibold: return .semibold
+        case .bold: return .bold
+        case .heavy: return .heavy
+        case .black: return .black
+        default: return .regular
+        }
+    }
+
+    /// 测试用：SwiftUI Font.Design → UIKit UIFontDescriptor.SystemDesign。
+    private func uiDesign(_ design: SwiftUI.Font.Design) -> UIFontDescriptor.SystemDesign {
+        switch design {
+        case .default: return .default
+        case .serif: return .serif
+        case .rounded: return .rounded
+        case .monospaced: return .monospaced
+        @unknown default: return .default
+        }
     }
 
     @Test func topBarMenuIconStrokeMatchesDesignedWeight() {

@@ -415,7 +415,7 @@ enum AppTheme {
         static let screenTitle    = SwiftUI.Font.system(.title2, weight: .bold)       // 功能页大标题（onboarding 实操页等）
         static let pageTitleSerif = SwiftUI.Font.system(.largeTitle, design: .serif, weight: .semibold) // 页面衬线大标题（Warm Editorial：Tab2「Not open yet」等，与内容衬线同族）
         static let onboardingHeroSerif = SwiftUI.Font.system(size: 46, weight: .semibold, design: .serif) // Onboarding 封面大标题：比 largeTitle 更大的展示字号，撑起全屏第一印象。封面特例——固定字号、不随 Dynamic Type 放大（与 pageTitleSerif 同为衬线同族，仅尺寸更大）
-        static let onboardingLeadSerif = englishPrimary  // Onboarding 各屏副标题（标题下的价值/说明句）：复用内容衬线（现 New York→将来 Newsreader），与 onboardingHeroSerif 成对；别名而非重声明，避免与例句内容耦合、也不重复定义同值。
+        static let onboardingLeadSerif = englishPrimary  // Onboarding 各屏副标题（标题下的价值/说明句）：复用内容衬线（现 New York→将来 Newsreader），与 onboardingHeroSerif 成对；别名而非重声明，避免与例句内容耦合、也不重复定义同值。换装 Newsreader 时，独立声明的 tabLabel 须一并替换（见 tabLabel 注释、需求清单 C11）。
         static let sectionTitleSerif = SwiftUI.Font.system(.title2, design: .serif, weight: .semibold)  // 分区衬线小标题（Topics in progress / Materials Yours），比页面大标题小一档
         static let compactSectionTitleSerif = SwiftUI.Font.system(.title3, design: .serif, weight: .semibold) // 紧凑页面内的小分区标题（如 Onboarding 样例区）
         static let settingsSectionTitleSerif = SwiftUI.Font.system(.subheadline, design: .serif, weight: .medium) // Settings 卡外分组标题：保留衬线编辑感，但退到辅助层
@@ -429,9 +429,17 @@ enum AppTheme {
         static let tab2HeroWordPartOfSpeech = SwiftUI.Font.system(.caption2).italic()
         static let tab2HeroWordMeaning = SwiftUI.Font.system(.footnote)
         static let tab2HeroCTA = SwiftUI.Font.system(.subheadline, weight: .semibold)
-        // 顶部 Tab 名称：小字号导航用紧凑无衬线；Medium 保留克制的编辑感，
-        // 选中关系交给毛玻璃承托，而不是靠过重字形制造对比。
-        static let tabLabel       = SwiftUI.Font.system(.subheadline, weight: .medium)
+        // 顶部 Tab 名称：与内容标题同属衬线，给首屏留白中的导航一个稳定锚点。
+        // 独立声明而非别名（字号字重与内容衬线不同，无法整 token 复用）——
+        // 换装 Newsreader 时须与本文件其他衬线 token 一并替换，登记见 397 行。
+        // 两项同重，选中关系仍交给毛玻璃胶囊，而不是靠字重制造对比。
+        // 配方（TextStyle/design/字重）单独成 token：UIKit 无公开 API 从 SwiftUI Font
+        // 反解配方，导航 chrome 宽度测试（labelTabRowFits…）只能读这里的原值来测量——
+        // 与 tabLabel 共用同一份，改配方只改这一处、测试自动按新配方重测（放不下会红）。
+        static let tabLabelStyle  = SwiftUI.Font.TextStyle.subheadline
+        static let tabLabelDesign = SwiftUI.Font.Design.serif
+        static let tabLabelWeight = SwiftUI.Font.Weight.medium
+        static let tabLabel       = SwiftUI.Font.system(tabLabelStyle, design: tabLabelDesign, weight: tabLabelWeight)
         static let cardSentence   = SwiftUI.Font.system(.body, design: .serif, weight: .semibold) // 时刻卡英文主句（衬线 + 半粗，Dynamic Type 安全）
         static let feedbackTitleSerif = cardSentence // 轻量错误/恢复提示标题：沿用内容衬线，但保持 body 层级，不冒充页面标题
         static let onboardingUploadTitle = SwiftUI.Font.system(.body, design: .serif, weight: .medium) // 上传卡标题：比内容主句更轻一级
@@ -457,7 +465,7 @@ enum AppTheme {
         }
     }
 
-    // 排版微调（行距 / 字距）。SwiftUI 的 Font 装不下这两项，故单列一层，
+    // 排版微调（行距 / 字距 / 动态字号上限）。SwiftUI 的 Font 装不下这些，故单列一层，
     // 在用到的地方按约定 .lineSpacing() / .tracking() 引用（值集中在此，不散写）。
     // 注意：lineSpacing 只能在默认行距上「加」，无法压紧到默认以下。
     enum Typography {
@@ -467,6 +475,14 @@ enum AppTheme {
         static let lineBody: CGFloat = 3
         /// 中文 / 多语言正文的额外行距（CJK 更需要放开）。
         static let lineCJK: CGFloat = 6
+        /// 顶部 Tab 文字的动态字号上限（含本档）。「顶部 Tab 始终显示文字」决策的配套：
+        /// 375pt 最窄屏可用宽 247pt，衬线实测「Today / Library」行宽 AX2 ≈ 219pt 放得下、
+        /// AX3 ≈ 252pt 溢出（iOS 26 模拟器，UIFontMetrics subheadline/15pt 实测）——故封顶在 AX2。
+        /// 用户开到 AX3 及以上时导航文字不再放大，正文等其他内容不受此限。
+        /// 注意：具体字号随 iOS 版本的字号缩放表浮动，档位是否正确由 AIEnglishAppTests 的
+        /// labelTabRowFitsNarrowestSupportedScreenAtMaxDynamicTypeSize 双面包夹测试在运行时强制
+        /// （文案变长或加第三个 Tab 同样会让该测试变红）；本注释数值仅作参考，不必精确。
+        static let topTabLabelMaxDynamicTypeSize: DynamicTypeSize = .accessibility2
     }
 
     /// 不透明度语义层。
@@ -533,7 +549,10 @@ enum AppTheme {
         // 屏幕居中的顶部 Tab 左右避让槽：页边距 + 44pt 侧边控件。
         static let topBarSideClearance: CGFloat = AppTheme.Space.paddingPage + barControl
         // 顶部文字导航的选中玻璃：视觉高度小于 44pt 触控区，避免读成厚重工具按钮。
+        // 这是 minHeight——大字号下玻璃随文本行高撑大（AX2 时约 36pt），属预期行为。
         static let topTabSelectionHeight: CGFloat = Primitive.space32
+        // 顶部文字导航两项之间的留白：紧凑成一个居中的导航单元，但不压缩各自 44pt 热区。
+        static let topTabItemSpacing: CGFloat = Primitive.space4
         // InputBar 右侧发送/拍照/加载圆键：比 barControl（44）小，黑底圆键太满、
         // 视觉偏重；但比色阶上现成的 36 那一档 PM 又觉得偏小——是介于两档中间
         // 的手动微调值，component-private 例外（只这一个控件用，不进色阶，
