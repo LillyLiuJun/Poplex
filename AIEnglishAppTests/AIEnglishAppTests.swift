@@ -479,6 +479,25 @@ struct NavigationChromeTokenTests {
         // 而不是重新复述换算公式本身——公式或输入值算错时，这个字面值才会暴露差异。
         #expect(abs(AppTheme.Size.topBarMenuIconStroke - 1.5) < 0.0001)
     }
+
+    @Test func topBarSymmetricSideClearanceProtectsBothControls() {
+        // 验证两侧避让槽对称计算：左侧 Settings 与右侧 Usage 均占用 barControl
+        let expectedClearance = AppTheme.Space.paddingPage + AppTheme.Size.barControl
+        #expect(AppTheme.Size.topBarSideClearance == expectedClearance)
+    }
+
+    @Test func pillShadowTokensMatchDesignedSpec() {
+        // 第一层：贴地接触阴影（中性黑 4%，radius 3, y 1）
+        #expect(AppTheme.Shadow.pillContactRadius == 3)
+        #expect(AppTheme.Shadow.pillContactY == 1)
+        #expect(AppTheme.Shadow.pillContactX == 0)
+        #expect(AppTheme.Shadow.pillContactColor == AppTheme.Color.textPrimary.opacity(0.04))
+
+        // 第二层：扩散柔光（暖棕 5%，radius 8, y 2）
+        #expect(AppTheme.Shadow.pillAmbientRadius == 8)
+        #expect(AppTheme.Shadow.pillAmbientY == 2)
+        #expect(AppTheme.Shadow.pillAmbientX == 0)
+    }
 }
 
 // MARK: - AIEnvelope JSON decode tests
@@ -885,6 +904,62 @@ struct AIServiceContractTests {
         #expect(plainBody["original_created_at"] == nil)
     }
 
+    // 生成次数分桶契约：请求体带设备相对 UTC 的分钟偏移（时区方案 A）。
+    // 服务端据此换算「设备的今天」作为计数日期；这里锁定字段名与合法范围。
+    @Test func requestBodyEncodesUtcOffsetMinutes() throws {
+        let data = try LiveAIService.requestBody(
+            text: "今天会议推迟了", image: nil, context: nil, presetCardId: nil,
+            requestId: nil, source: "tab1"
+        )
+        let body = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+
+        let offset = try #require(body["utc_offset_minutes"] as? Int)
+        // 服务端校验范围 -720~+840；设备真实时区必在此内
+        #expect((-720...840).contains(offset))
+        #expect(offset == TimeZone.current.secondsFromGMT() / 60)
+    }
+
+    // 成功响应的 usage 字段（服务端报告的最新用量，含本次生成）→ 解码进信封。
+    @Test func decodesUsageFieldFromSuccessResponse() throws {
+        let json = """
+        {
+            "card_type": "s4",
+            "card_content": {
+                "granularity": "sentence",
+                "direction": "express",
+                "target_expression": "The train was packed.",
+                "learnable_units": [],
+                "examples": []
+            },
+            "usage": {"used": 3, "limit": 5, "resets_at": "2026-09-03T00:00:00+08:00"}
+        }
+        """.data(using: .utf8)!
+
+        let envelope = try JSONDecoder().decode(AIEnvelope.self, from: json)
+
+        #expect(envelope.usage == UsageInfo(used: 3, limit: 5, resetsAt: "2026-09-03T00:00:00+08:00"))
+    }
+
+    // 旧响应（无 usage 字段）依旧正常解码——usage 是信息性字段，缺了不影响信封。
+    @Test func successResponseWithoutUsageStillDecodes() throws {
+        let json = """
+        {
+            "card_type": "s4",
+            "card_content": {
+                "granularity": "sentence",
+                "direction": "express",
+                "target_expression": "The train was packed.",
+                "learnable_units": [],
+                "examples": []
+            }
+        }
+        """.data(using: .utf8)!
+
+        let envelope = try JSONDecoder().decode(AIEnvelope.self, from: json)
+
+        #expect(envelope.usage == nil)
+    }
+
     // Catches a client that loses the server proof required for durable success.
     @Test func decodesDurableResponseMetadataFromSnakeCase() throws {
         let json = """
@@ -1086,6 +1161,14 @@ private struct FailingMock: AIServicing {
     func generate(text: String?, image: UIImage?, context: ContextTurn?,
                   presetCardId: String?, requestId: UUID?, source: String?, originalCreatedAt: Date?) async throws -> AIEnvelope {
         throw URLError(.badServerResponse)
+    }
+}
+
+/// 每次生成都被服务端额度裁决拒绝（429 daily_limit_reached）。
+private struct QuotaReachedMock: AIServicing {
+    func generate(text: String?, image: UIImage?, context: ContextTurn?,
+                  presetCardId: String?, requestId: UUID?, source: String?, originalCreatedAt: Date?) async throws -> AIEnvelope {
+        throw AIServiceError.dailyLimitReached(used: 5, limit: 5, resetsAt: "2026-09-03T00:00:00+08:00")
     }
 }
 
@@ -1450,6 +1533,32 @@ struct TodayViewModelTests {
         #expect(text == "今天会议推迟了")
         #expect(image == nil)
         #expect(vm.isLoading == false)
+    }
+
+    // 额度拒绝（429 daily_limit_reached）：保留用户气泡、不产生 sendFailed 行
+    // （重试今天只会再撞 429），服务端裁决写入共享额度状态（输入栏锁定依据）。
+    @Test func sendQuotaRejectedKeepsBubbleWithoutRetryRowAndRecordsVerdict() async {
+        let store = UsageQuotaStore()
+        let vm = TodayViewModel(service: QuotaReachedMock(), isConsentGranted: { true })
+        vm.quotaStore = store
+        await vm.send("今天会议推迟了")
+
+        // 用户气泡仍在（那是用户说过的话）
+        let hasBubble = vm.entries.contains {
+            if case .userBubble = $0.content { return true }
+            return false
+        }
+        #expect(hasBubble)
+
+        // 没有 sendFailed 行、没有卡片
+        #expect(!vm.entries.contains { if case .sendFailed = $0.content { return true }; return false })
+        #expect(!vm.entries.contains { if case .aiCard = $0.content { return true }; return false })
+        #expect(vm.isLoading == false)
+
+        // 服务端裁决进入共享额度状态
+        #expect(store.isAllowed == false)
+        #expect(store.usedCount == 5)
+        #expect(store.dailyLimit == 5)
     }
 
     // 重试：移除失败提示、不新增用户气泡、成功后出现卡片
@@ -2388,6 +2497,38 @@ struct AIServiceResponseTests {
         }
     }
 
+    // 429 + {"error":"daily_limit_reached",…} → .dailyLimitReached(载荷完整)。
+    // 前端据此展示达标态（banner + 锁定），而不是误导性的「No connection」。
+    @Test func status429DailyLimitReachedCarriesQuotaPayload() {
+        let data = #"{"error":"daily_limit_reached","used":5,"limit":5,"resets_at":"2026-09-03T00:00:00+08:00"}"#.data(using: .utf8)!
+        do {
+            _ = try LiveAIService.decodeResponse(statusCode: 429, data: data)
+            Issue.record("Expected dailyLimitReached to be thrown")
+        } catch let AIServiceError.dailyLimitReached(used, limit, resetsAt) {
+            #expect(used == 5)
+            #expect(limit == 5)
+            #expect(resetsAt == "2026-09-03T00:00:00+08:00")
+        } catch {
+            Issue.record("Wrong error: \(error)")
+        }
+    }
+
+    // 429 但不是 daily_limit_reached（如网关限流）→ 照旧 .requestFailed，
+    // 不把任何 429 都当成额度耗尽。
+    @Test func status429OtherErrorThrowsRequestFailed() {
+        let data = #"{"error":"rate_limited"}"#.data(using: .utf8)!
+        do {
+            _ = try LiveAIService.decodeResponse(statusCode: 429, data: data)
+            Issue.record("Expected requestFailed to be thrown")
+        } catch AIServiceError.dailyLimitReached {
+            Issue.record("Must NOT classify a non-daily_limit_reached 429 as quota exhaustion")
+        } catch AIServiceError.requestFailed {
+            // 通过
+        } catch {
+            Issue.record("Wrong error: \(error)")
+        }
+    }
+
     // 422 但不是 content_blocked → 落到非 2xx 分支 → .requestFailed（不误报被拦）
     @Test func status422OtherErrorThrowsRequestFailed() {
         let data = #"{"error":"rate_limited"}"#.data(using: .utf8)!
@@ -2436,6 +2577,126 @@ struct AIServiceResponseTests {
         } catch {
             Issue.record("Wrong error: \(error)")
         }
+    }
+}
+
+// MARK: - Usage quota store tests (slice 4)
+
+// UsageQuotaStore 已标 @MainActor：实例状态与方法的访问必须在主线程隔离。
+@MainActor
+struct UsageQuotaStoreTests {
+
+    // refresh 成功：服务器数字与裁决全部落地，refreshFailed 复位。
+    @Test func refreshAppliesServerNumbersAndVerdict() async {
+        let store = UsageQuotaStore()
+        store.fetchQuota = { UsageQuotaStore.QuotaRow(usedCount: 4, limit: 5, allowed: true) }
+        await store.refresh()
+
+        #expect(store.usedCount == 4)
+        #expect(store.dailyLimit == 5)
+        #expect(store.isAllowed == true)
+        #expect(store.refreshFailed == false)
+    }
+
+    // refresh 失败：标记失败、保留旧值（不把旧数字抹成 nil，也不显示假 0）。
+    @Test func refreshFailureKeepsPreviousValuesAndFlags() async {
+        let store = UsageQuotaStore()
+        store.fetchQuota = { UsageQuotaStore.QuotaRow(usedCount: 2, limit: 5, allowed: true) }
+        await store.refresh()
+
+        store.fetchQuota = { throw URLError(.notConnectedToInternet) }
+        await store.refresh()
+
+        #expect(store.usedCount == 2)
+        #expect(store.dailyLimit == 5)
+        #expect(store.refreshFailed == true)
+    }
+
+    // 生成成功的 usage 字段：更新数字、裁决回到未知（服务器刚放行过一次）。
+    @Test func applyUsageUpdatesNumbersAndClearsVerdict() {
+        let store = UsageQuotaStore()
+        store.applyServerVerdict(used: 5, limit: 5, allowed: false)
+        #expect(store.isAllowed == false)
+
+        store.apply(usage: UsageInfo(used: 1, limit: 5, resetsAt: nil))
+
+        #expect(store.usedCount == 1)
+        #expect(store.dailyLimit == 5)
+        #expect(store.isAllowed == nil)
+    }
+
+    // 429 裁决：数字 + allowed=false（输入栏锁定依据）。
+    @Test func serverVerdictSetsNumbersAndLocks() {
+        let store = UsageQuotaStore()
+        store.applyServerVerdict(used: 5, limit: 5, allowed: false)
+
+        #expect(store.usedCount == 5)
+        #expect(store.dailyLimit == 5)
+        #expect(store.isAllowed == false)
+    }
+
+    // 本地日期串必须与「设备的今天」一致（yyyy-MM-dd，gregorian 格式稳定）。
+    @Test func localDateStringMatchesDeviceCalendar() {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.dateFormat = "yyyy-MM-dd"
+        #expect(UsageQuotaStore.localDateString() == formatter.string(from: Date()))
+    }
+
+    // 竞态守卫：refresh 先出发、429 裁决后落地——迟到的 refresh 带着旧数字
+    // 回来时必须被丢弃，不得把更新的裁决倒退回旧态。
+    @Test func staleRefreshResultDoesNotClobberNewerVerdict() async {
+        let store = UsageQuotaStore()
+        let (releaseStream, releaseContinuation) = AsyncStream.makeStream(of: Void.self)
+        let (startedStream, startedContinuation) = AsyncStream.makeStream(of: Void.self)
+        var gate = releaseStream.makeAsyncIterator()
+        store.fetchQuota = {
+            startedContinuation.yield(())
+            _ = await gate.next()
+            return UsageQuotaStore.QuotaRow(usedCount: 1, limit: 5, allowed: true)
+        }
+
+        let refreshTask = Task { await store.refresh() }
+        // 等 refresh 已认领世代并挂起在网关上（started 信号 = fetch 已开始）。
+        _ = await startedStream.first(where: { _ in true })
+
+        // 更近的 429 裁决先落地。
+        store.applyServerVerdict(used: 5, limit: 5, allowed: false)
+
+        releaseContinuation.yield(())
+        await refreshTask.value
+
+        #expect(store.usedCount == 5)
+        #expect(store.dailyLimit == 5)
+        #expect(store.isAllowed == false)
+        #expect(store.refreshFailed == false)
+    }
+
+    // 同守卫的失败侧：迟到的 refresh 失败也不能把 refreshFailed 从
+    // false（更近的裁决已复位）改回 true。
+    @Test func staleRefreshFailureDoesNotClobberNewerVerdict() async {
+        let store = UsageQuotaStore()
+        let (releaseStream, releaseContinuation) = AsyncStream.makeStream(of: Void.self)
+        let (startedStream, startedContinuation) = AsyncStream.makeStream(of: Void.self)
+        var gate = releaseStream.makeAsyncIterator()
+        store.fetchQuota = {
+            startedContinuation.yield(())
+            _ = await gate.next()
+            throw URLError(.notConnectedToInternet)
+        }
+
+        let refreshTask = Task { await store.refresh() }
+        _ = await startedStream.first(where: { _ in true })
+
+        store.applyServerVerdict(used: 5, limit: 5, allowed: false)
+
+        releaseContinuation.yield(())
+        await refreshTask.value
+
+        #expect(store.usedCount == 5)
+        #expect(store.dailyLimit == 5)
+        #expect(store.isAllowed == false)
+        #expect(store.refreshFailed == false)
     }
 }
 

@@ -36,15 +36,14 @@ struct TopTabSelector: View {
                 .fixedSize(horizontal: true, vertical: false)
                 .padding(.horizontal, AppTheme.Space.paddingM)
                 .frame(minHeight: AppTheme.Size.topTabSelectionHeight)
-                // 参考图中两个标签都使用深色文字；当前页只通过毛玻璃胶囊识别。
-                .foregroundStyle(AppTheme.Color.textPrimary)
+                // 选中态双重信号：选中项使用 textPrimary 配合浮动药丸，未选中项压淡至 textSecondary 且无背景（保持裸字）
+                .foregroundStyle(isSelected ? AppTheme.Color.textPrimary : AppTheme.Color.textSecondary)
                 .background {
                     if isSelected {
                         thumbShape
                             .fill(Color.clear)
-                            // 与左侧 Settings 入口使用同一套浮层毛玻璃配方；
-                            // Tab 之间仍没有共用外框，只有当前页成为独立的玻璃胶囊。
-                            .surfaceFloating(in: thumbShape, interactive: false)
+                            // 换用专为小药丸定制的 surfacePill：双层微阴影（contact + ambient）与顶部 0.5pt 内高光
+                            .surfacePill(in: thumbShape, interactive: false)
                             .matchedGeometryEffect(id: "tabThumb", in: thumbNamespace)
                     }
                 }

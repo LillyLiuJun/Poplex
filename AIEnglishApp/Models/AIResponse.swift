@@ -8,6 +8,7 @@ struct AIEnvelope: Decodable {
     let userMessageId: UUID?
     let assistantMessageId: UUID?
     let materialId: UUID?
+    let usage: UsageInfo?
 
     enum CodingKeys: String, CodingKey {
         case cardType = "card_type"
@@ -17,6 +18,7 @@ struct AIEnvelope: Decodable {
         case userMessageId = "user_message_id"
         case assistantMessageId = "assistant_message_id"
         case materialId = "material_id"
+        case usage
     }
 
     init(from decoder: Decoder) throws {
@@ -27,6 +29,7 @@ struct AIEnvelope: Decodable {
         userMessageId = try c.decodeIfPresent(UUID.self, forKey: .userMessageId)
         assistantMessageId = try c.decodeIfPresent(UUID.self, forKey: .assistantMessageId)
         materialId = try c.decodeIfPresent(UUID.self, forKey: .materialId)
+        usage = try c.decodeIfPresent(UsageInfo.self, forKey: .usage)
 
         // s1–s6 六种卡型统一解码为一个 CardContent（由 granularity/direction 驱动显隐）。
         // card_type 仍作 error 判别符保留。
@@ -132,6 +135,22 @@ struct CardContent: Decodable {
     /// 卡片主推的可学单元（高亮那个）。
     var primaryUnit: LearnableUnit? {
         learnableUnits.first(where: { $0.isPrimary }) ?? learnableUnits.first
+    }
+}
+
+// MARK: - 生成次数用量（服务端报告，只做展示）
+
+/// 成功响应 `usage` 字段与 429 `daily_limit_reached` 响应共用的用量结构：
+/// 已用次数、有效上限、下次重置时刻（ISO8601 字符串）。信息性数据——
+/// 前端只展示，不做任何拦截判断，能不能生成由服务端裁决。
+struct UsageInfo: Decodable, Equatable {
+    let used: Int
+    let limit: Int
+    let resetsAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case used, limit
+        case resetsAt = "resets_at"
     }
 }
 

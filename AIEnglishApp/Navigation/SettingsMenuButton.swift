@@ -10,7 +10,7 @@ struct SettingsMenuButton: View {
             DoubleLineMenuIcon()
                 .foregroundStyle(AppTheme.Color.textPrimary)
                 .frame(width: AppTheme.Size.barControl, height: AppTheme.Size.barControl)
-                .surfaceFloating(in: Circle())
+                .surfacePill(in: Circle())
                 .contentShape(Circle())
         }
         .buttonStyle(.iconControl)

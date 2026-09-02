@@ -17,12 +17,17 @@ struct SettingsView: View {
     /// 失败必须可见，这也是 CLAUDE.md「每个页面必须定义 error 状态」的要求。
     @State private var deleteErrorMessage: String?
     @State private var safariItem: IdentifiableURL?
+    @State private var feedbackToast: String?
     /// 推入二级页时自增 → 外壳把设置页滚回顶部。见 body 里的 onChange 说明。
     @State private var scrollToTopToken = 0
     #if DEBUG
     @State private var showResetUnlockAlert = false
     @State private var debugToast: String?
     #endif
+
+    init(previewToast: String? = nil) {
+        self._feedbackToast = State(initialValue: previewToast)
+    }
 
     /// 最后一张卡与版本号之间的距离，比分组之间的 paddingSection(32) 再远一档。
     ///
@@ -48,7 +53,9 @@ struct SettingsView: View {
                 AboutAIView()
             }
             .navigationDestination(isPresented: $showFeedback) {
-                FeedbackView()
+                FeedbackView(onSuccess: {
+                    feedbackToast = FeedbackView.successToastMessage
+                })
             }
             // 从二级页返回时，设置页应当回到顶部而不是停在离开时的位置。
             // 这里刻意在**推入**那一刻重置（`new == true`），不是在返回那一刻：
@@ -62,6 +69,7 @@ struct SettingsView: View {
             .onChange(of: showAboutAI) { _, new in if new { scrollToTopToken += 1 } }
             .onChange(of: showFeedback) { _, new in if new { scrollToTopToken += 1 } }
         }
+        .toast(message: $feedbackToast, systemImage: "paperplane.fill", placement: .bottom)
         #if DEBUG
         .toast(message: $debugToast)
         #endif
@@ -330,6 +338,10 @@ struct SettingsView: View {
     }
 }
 
-#Preview {
+#Preview("SettingsView · Default") {
     SettingsView()
+}
+
+#Preview("SettingsView · With Feedback Toast") {
+    SettingsView(previewToast: "Thank you! We'll be in touch soon")
 }

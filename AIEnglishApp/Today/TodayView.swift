@@ -13,11 +13,19 @@ struct TodayView: View {
     /// 首帧用单行基础态 52 + 8 = 60pt，实测回调随后接管；配合 32pt 内容净空，
     /// 基础态停靠线仍是此前验收过的 92pt。
     @State private var inputBarHeight = AppTheme.Size.inputBarMinHeight + AppTheme.Space.paddingS
+    /// 生成次数额度的共享展示状态：达标时 InputBar 锁输入 + 出 banner，数字从这读。
+    /// 只有服务端裁决（429 / refresh 的 allowed 字段）会把 isAllowed 置 false。
+    @State private var quotaStore = UsageQuotaStore.shared
     var onImagePreview: ((UIImage, UnitPoint) -> Void)?
+    /// 达标 banner 点击 → 打开额度 Sheet（由 RootTabContainer 呈现，顶栏仪表盘同款）。
+    var onOpenUsageLimit: (() -> Void)?
     var topInset: CGFloat = 0
 
-    init(onImagePreview: ((UIImage, UnitPoint) -> Void)? = nil, topInset: CGFloat = 0) {
+    init(onImagePreview: ((UIImage, UnitPoint) -> Void)? = nil,
+         onOpenUsageLimit: (() -> Void)? = nil,
+         topInset: CGFloat = 0) {
         self.onImagePreview = onImagePreview
+        self.onOpenUsageLimit = onOpenUsageLimit
         self.topInset = topInset
     }
 
@@ -29,7 +37,19 @@ struct TodayView: View {
 
             // InputBar 独立悬浮在内容上方；背后垫 Gemini 风格可变渐进式通透模糊底托（向下贯穿底部安全区，向上 16pt 平滑消融进入内容区），
             // 内容向下滚动穿过时自然失焦消融溶解进背景，保持极佳的通透感与景深
-            InputBar(text: $inputText, image: $vm.pendingImage, isLoading: viewModel.isLoading) {
+            InputBar(
+                text: $inputText,
+                image: $vm.pendingImage,
+                isLoading: viewModel.isLoading,
+                // 达标态 = 服务端明确裁决过「不允许」（429 或 refresh）。
+                // isAllowed == nil（未知）不锁——onboarding 豁免用户服务端永远放行，
+                // 前端绝不能自己数数去锁。
+                isLimitReached: quotaStore.isAllowed == false,
+                showLimitBanner: quotaStore.isAllowed == false,
+                usedCount: quotaStore.usedCount ?? 5,
+                dailyLimit: quotaStore.dailyLimit ?? 5,
+                onLimitTap: onOpenUsageLimit
+            ) {
                 let toSend = inputText
                 inputText = ""
                 Task { await viewModel.send(toSend) }
@@ -232,6 +252,87 @@ struct TodayView: View {
 }
 
 // MARK: - Xcode Canvas
+
+/// Tab1 达到每日额度限制时的完整上下文呈现（含历史气泡、底部内联提示条与锁定输入框、右上角仪表盘点击弹出达标 Sheet）
+private struct Tab1LimitReachedContextPreview: View {
+    @State private var inputText = ""
+    @State private var pendingImage: UIImage?
+    @State private var showLimitSheet = false
+
+    var body: some View {
+        NavigationStack {
+            ZStack(alignment: .bottom) {
+                AppTheme.Color.pageBg.ignoresSafeArea()
+                CanvasBackground().ignoresSafeArea()
+
+                // 示例时间线内容
+                ScrollView {
+                    VStack(spacing: AppTheme.Space.paddingCard) {
+                        sampleUserBubble("I was sitting by the window having my warm morning coffee.")
+                        sampleAIBubble("I was sitting by the window, sipping my hot morning coffee.")
+                        sampleUserBubble("How do I say '今天的会议推迟到下午三点' naturally?")
+                        sampleAIBubble("Today's meeting got pushed back to 3 PM.")
+                    }
+                    .padding(AppTheme.Space.paddingPage)
+                    .padding(.top, 60) // 避让顶栏
+                    .padding(.bottom, 140) // 避让底部输入区
+                }
+
+                // 底部内联输入栏（达标态 + 内联 Banner）
+                InputBar(
+                    text: $inputText,
+                    image: $pendingImage,
+                    isLoading: false,
+                    isLimitReached: true,
+                    showLimitBanner: true,
+                    usedCount: 5,
+                    dailyLimit: 5,
+                    onLimitTap: { showLimitSheet = true },
+                    onSend: {}
+                )
+                .background {
+                    VariableBlurBackdrop(extraExtend: 16)
+                        .ignoresSafeArea(.container, edges: .bottom)
+                }
+            }
+            .overlay(alignment: .topTrailing) {
+                UsageLimitButton { showLimitSheet = true }
+                    .padding(.trailing, AppTheme.Space.paddingPage)
+                    .padding(.top, 12)
+            }
+            .sheet(isPresented: $showLimitSheet) {
+                UsageLimitSheet(usedCount: 5, dailyLimit: 5)
+            }
+        }
+    }
+
+    private func sampleUserBubble(_ text: String) -> some View {
+        HStack {
+            Spacer(minLength: 60)
+            Text(text)
+                .font(AppTheme.Font.englishBody)
+                .foregroundStyle(AppTheme.Color.bubbleUserText)
+                .padding(AppTheme.Space.paddingCard)
+                .background(AppTheme.Color.bubbleUserBg, in: RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
+        }
+    }
+
+    private func sampleAIBubble(_ text: String) -> some View {
+        HStack {
+            Text(text)
+                .font(AppTheme.Font.cardSentence)
+                .foregroundStyle(AppTheme.Color.textPrimary)
+                .padding(AppTheme.Space.paddingCard)
+                .background(AppTheme.Color.cardBg, in: RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
+                .shadow(color: AppTheme.Shadow.cardColor, radius: 8, x: 0, y: 3)
+            Spacer(minLength: 60)
+        }
+    }
+}
+
+#Preview("Tab1 · Limit Reached Full Screen Context", traits: .fixedLayout(width: 393, height: 852)) {
+    Tab1LimitReachedContextPreview()
+}
 
 /// Offline-cold-start-with-no-cache state (`Tab2LoadErrorView` shown in `timeline`
 /// when `entries.isEmpty && historyLoadFailed`), rendered in the real Tab1 canvas +

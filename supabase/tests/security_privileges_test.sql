@@ -1,6 +1,6 @@
 begin;
 
-select plan(22);
+select plan(33);
 
 select ok(
   not has_function_privilege('anon', 'public.get_category_words(uuid,text)', 'EXECUTE'),
@@ -116,6 +116,71 @@ select ok(
   and has_table_privilege('authenticated', 'public.dialogue_turns', 'SELECT,INSERT')
   and not has_table_privilege('authenticated', 'public.lexicon_entries', 'DELETE'),
   'signed-in users hold exactly the ledger/dialogue privileges their RLS policies express'
+);
+
+select ok(
+  not has_function_privilege('anon', 'public.get_effective_daily_generation_limit(uuid)', 'EXECUTE')
+  and not has_function_privilege('authenticated', 'public.get_effective_daily_generation_limit(uuid)', 'EXECUTE'),
+  'effective-limit helper is not client-callable'
+);
+select ok(
+  has_function_privilege('service_role', 'public.get_effective_daily_generation_limit(uuid)', 'EXECUTE'),
+  'service_role can resolve the effective limit'
+);
+select ok(
+  has_function_privilege('authenticated', 'public.check_generation_quota(date)', 'EXECUTE')
+  and not has_function_privilege('anon', 'public.check_generation_quota(date)', 'EXECUTE'),
+  'only signed-in users can check their own quota'
+);
+select ok(
+  not has_function_privilege('anon', 'public.check_generation_quota_for_user(uuid,date)', 'EXECUTE')
+  and not has_function_privilege('authenticated', 'public.check_generation_quota_for_user(uuid,date)', 'EXECUTE'),
+  'the named-user quota check is not client-callable'
+);
+select ok(
+  has_function_privilege('service_role', 'public.check_generation_quota_for_user(uuid,date)', 'EXECUTE'),
+  'service_role can run the named-user quota check'
+);
+select ok(
+  has_table_privilege('authenticated', 'public.generation_usage', 'SELECT')
+  and not has_table_privilege('authenticated', 'public.generation_usage', 'INSERT,UPDATE,DELETE'),
+  'generation_usage is read-only for signed-in users'
+);
+select ok(
+  has_table_privilege('authenticated', 'public.app_config', 'SELECT')
+  and not has_table_privilege('authenticated', 'public.app_config', 'INSERT,UPDATE,DELETE'),
+  'app_config is read-only for signed-in users'
+);
+select ok(
+  has_function_privilege('authenticated', 'public.consume_generation_quota(date)', 'EXECUTE')
+  and not has_function_privilege('anon', 'public.consume_generation_quota(date)', 'EXECUTE'),
+  'quota consume helper runs for signed-in users only and is self-scoped via auth.uid()'
+);
+select ok(
+  has_function_privilege('authenticated', 'public.commit_generated_content(uuid,jsonb,jsonb,jsonb,date,boolean)', 'EXECUTE')
+  and has_function_privilege('service_role', 'public.commit_generated_content(uuid,jsonb,jsonb,jsonb,date,boolean)', 'EXECUTE')
+  and not has_function_privilege('anon', 'public.commit_generated_content(uuid,jsonb,jsonb,jsonb,date,boolean)', 'EXECUTE'),
+  'the quota-aware commit overload keeps the original EXECUTE grants'
+);
+-- The override column cannot be protected by a column-level REVOKE: PostgreSQL
+-- column ACLs only add privileges on top of a table-level grant, never
+-- subtract. The CI privilege contract requires the table-level profiles
+-- grants, so the column is guarded by a trigger instead (client writes are
+-- silently stripped; postgres/service_role pass through).
+select ok(
+  exists (
+    select 1
+    from pg_catalog.pg_trigger
+    where tgrelid = 'public.profiles'::regclass
+      and tgname = 'profiles_daily_generation_limit_guard'
+  ),
+  'the quota override column is guarded by a server-side trigger'
+);
+select ok(
+  not has_function_privilege('anon', 'public.guard_daily_generation_limit_override()', 'EXECUTE')
+  and not has_function_privilege('authenticated', 'public.guard_daily_generation_limit_override()', 'EXECUTE')
+  and not has_function_privilege('service_role', 'public.guard_daily_generation_limit_override()', 'EXECUTE'),
+  'guard trigger function is not directly callable by API roles'
 );
 
 insert into auth.users (id)

@@ -4,6 +4,7 @@ private enum RightButtonMode: Equatable {
     case camera
     case send
     case loading
+    case locked
 }
 
 // Measures the actual rendered width of the capsule's input row.
@@ -22,10 +23,61 @@ private struct TextWidthKey: PreferenceKey {
     }
 }
 
+/// 达到额度限制时的内联微横幅（温润极简：暖纸卡片底 + 衬线小字 + 品牌点缀）
+struct InputBarLimitBanner: View {
+    var usedCount: Int = 5
+    var dailyLimit: Int = 5
+    var onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: AppTheme.Space.paddingS) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(AppTheme.Color.brandInk)
+
+                Text("Daily limit reached (\(usedCount)/\(dailyLimit)) · Request invite code")
+                    .font(AppTheme.Font.statusNote)
+                    .foregroundStyle(AppTheme.Color.textPrimary)
+                    .lineLimit(1)
+
+                Spacer(minLength: 0)
+
+                HStack(spacing: AppTheme.Space.paddingXS) {
+                    Text("Settings")
+                        .font(AppTheme.Font.metaNote)
+                        .foregroundStyle(AppTheme.Color.textSecondary)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(AppTheme.Color.textMuted)
+                }
+            }
+            .padding(.horizontal, AppTheme.Space.paddingCard)
+            .padding(.vertical, AppTheme.Space.paddingS)
+            .background {
+                Capsule()
+                    .fill(AppTheme.Color.cardBg)
+            }
+            .overlay {
+                Capsule()
+                    .stroke(AppTheme.Color.border, lineWidth: 0.5)
+            }
+            .shadow(color: AppTheme.Shadow.cardColor, radius: 8, x: 0, y: 3)
+        }
+        .buttonStyle(PressableButtonStyle())
+        .padding(.horizontal, AppTheme.Space.paddingPage)
+    }
+}
+
 struct InputBar: View {
     @Binding var text: String
     @Binding var image: UIImage?
     var isLoading: Bool
+    var isLimitReached: Bool = false
+    var showLimitBanner: Bool = false
+    var usedCount: Int = 5
+    var dailyLimit: Int = 5
+    var onLimitTap: (() -> Void)? = nil
     var onSend: () -> Void
 
     @FocusState private var isFocused: Bool
@@ -73,47 +125,59 @@ struct InputBar: View {
 
     private var rightButtonMode: RightButtonMode {
         if isLoading { return .loading }
+        // 达标后一律锁：点击弹额度 Sheet，而不是发出一条注定被 429 拒绝的
+        // 请求并顺手清掉用户已输入的文案（审计发现 ③）。
+        if isLimitReached { return .locked }
         return hasContent ? .send : .camera
     }
 
     // MARK: - Body
 
     var body: some View {
-        capsule
-            .overlay(alignment: .topLeading) {
-                if showAttachmentMenu {
-                    attachmentMenu
-                        .offset(y: -(90 + AppTheme.Space.paddingS))
-                        .transition(
-                            .scale(scale: 0.85, anchor: .bottomLeading)
-                                .combined(with: .opacity)
-                        )
+        VStack(spacing: AppTheme.Space.paddingS) {
+            if showLimitBanner {
+                InputBarLimitBanner(usedCount: usedCount, dailyLimit: dailyLimit) {
+                    onLimitTap?()
                 }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
-            .padding(.horizontal, AppTheme.Space.paddingPage)
-            .padding(.bottom, AppTheme.Space.paddingS)
-            .onChange(of: isFocused) { _, focused in
-                wasKeyboardOpen = focused
-                if focused {
-                    withAnimation(.easeOut(duration: 0.18)) { showAttachmentMenu = false }
+
+            capsule
+                .overlay(alignment: .topLeading) {
+                    if showAttachmentMenu {
+                        attachmentMenu
+                            .offset(y: -(90 + AppTheme.Space.paddingS))
+                            .transition(
+                                .scale(scale: 0.85, anchor: .bottomLeading)
+                                    .combined(with: .opacity)
+                            )
+                    }
                 }
+                .padding(.horizontal, AppTheme.Space.paddingPage)
+        }
+        .padding(.bottom, AppTheme.Space.paddingS)
+        .onChange(of: isFocused) { _, focused in
+            wasKeyboardOpen = focused
+            if focused {
+                withAnimation(.easeOut(duration: 0.18)) { showAttachmentMenu = false }
             }
-            .sheet(item: $activeSheet, onDismiss: applyStagedImage) { source in
-                switch source {
-                case .camera:
-                    CameraCaptureView(onImage: { stagedImage = $0 }, onClose: { activeSheet = nil })
-                        .presentationDetents([.large])
-                        .presentationDragIndicator(.hidden)
-                case .photoLibrary:
-                    PHPickerView(image: $stagedImage, onFinish: { activeSheet = nil })
-                }
+        }
+        .sheet(item: $activeSheet, onDismiss: applyStagedImage) { source in
+            switch source {
+            case .camera:
+                CameraCaptureView(onImage: { stagedImage = $0 }, onClose: { activeSheet = nil })
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.hidden)
+            case .photoLibrary:
+                PHPickerView(image: $stagedImage, onFinish: { activeSheet = nil })
             }
-            .alert("Camera Access Required", isPresented: $showCameraPermissionAlert) {
-                Button("Open Settings") { PermissionService.openSettings() }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("Camera access is required to take photos. Open Settings to allow access.")
-            }
+        }
+        .alert("Camera Access Required", isPresented: $showCameraPermissionAlert) {
+            Button("Open Settings") { PermissionService.openSettings() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Camera access is required to take photos. Open Settings to allow access.")
+        }
     }
 
     // MARK: - Capsule
@@ -228,7 +292,7 @@ struct InputBar: View {
         .padding(.vertical, AppTheme.Space.paddingXS)
         .contentShape(Rectangle())
         .buttonStyle(PressableButtonStyle())
-        .disabled(isLoading)
+        .disabled(isLoading || isLimitReached)
     }
 
     // MARK: - TextField
@@ -246,6 +310,16 @@ struct InputBar: View {
         .foregroundStyle(AppTheme.Color.textPrimary)
         .tint(AppTheme.Color.interactive)
         .focused($isFocused)
+        .disabled(isLimitReached)
+        .overlay {
+            if isLimitReached {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        onLimitTap?()
+                    }
+            }
+        }
         // Stable identity across layout switches — prevents focus loss during the transition.
         .id("input-textfield")
         .onChange(of: text) { _, newValue in
@@ -256,7 +330,7 @@ struct InputBar: View {
         }
     }
 
-    // MARK: - Right circle button  (camera ⇄ arrow.up ⇄ spinner)
+    // MARK: - Right circle button  (camera ⇄ arrow.up ⇄ spinner ⇄ locked)
 
     private var rightCircleButton: some View {
         Button {
@@ -264,14 +338,15 @@ struct InputBar: View {
             case .camera:  checkCameraPermission()
             case .send:    isFocused = false; onSend()
             case .loading: break
+            case .locked:  onLimitTap?()
             }
         } label: {
             ZStack {
                 Circle()
-                    .fill(AppTheme.Color.interactive)
+                    .fill(rightButtonMode == .locked ? AppTheme.Color.controlDisabledBg : AppTheme.Color.interactive)
                     .frame(width: AppTheme.Size.inputBarActionControl, height: AppTheme.Size.inputBarActionControl)
                     // 染色近黑送出键（Warm Editorial：CTA 走 interactive，橙留作稀有强调）+ 中性柔影
-                    .shadow(color: AppTheme.Color.interactive.opacity(0.22), radius: 10, x: 0, y: 4)
+                    .shadow(color: rightButtonMode == .locked ? Color.clear : AppTheme.Color.interactive.opacity(0.22), radius: 10, x: 0, y: 4)
                 rightButtonIcon
             }
             .animation(.spring(response: 0.28, dampingFraction: 0.72), value: rightButtonMode)
@@ -297,6 +372,11 @@ struct InputBar: View {
             Image(systemName: "camera.fill")
                 .font(.system(size: 16))
                 .foregroundStyle(.white)
+                .transition(.scale(scale: 0.5).combined(with: .opacity))
+        case .locked:
+            Image(systemName: "lock.fill")
+                .font(.system(size: 15))
+                .foregroundStyle(AppTheme.Color.textSecondary)
                 .transition(.scale(scale: 0.5).combined(with: .opacity))
         }
     }
@@ -427,28 +507,105 @@ struct InputBar: View {
     }
 }
 
-// MARK: - Xcode Canvas
+// MARK: - Xcode Canvas Previews
 
-/// The right circle button's three states side by side — camera (empty
-/// composer), send (has text), loading — for a quick visual check of its size
-/// after `inputBarActionControl` shrank it from `barControl` (44pt) to 40pt.
-private struct InputBarButtonStatesPreview: View {
+/// InputBar 核心状态全景对比（正常态、输入态、加载态、达标内联横幅态、锁定态）
+private struct InputBarAllStatesPreview: View {
     @State private var cameraText = ""
-    @State private var sendText = "Hello"
-    @State private var loadingText = "Hello"
+    @State private var sendText = "A coffee cup on the warm desk"
+    @State private var loadingText = "A coffee cup on the warm desk"
+    @State private var bannerText = ""
+    @State private var lockedText = ""
     @State private var image: UIImage?
 
     var body: some View {
-        VStack(spacing: AppTheme.Space.paddingSection) {
-            InputBar(text: $cameraText, image: $image, isLoading: false, onSend: {})
-            InputBar(text: $sendText, image: $image, isLoading: false, onSend: {})
-            InputBar(text: $loadingText, image: $image, isLoading: true, onSend: {})
+        ScrollView {
+            VStack(alignment: .leading, spacing: AppTheme.Space.paddingSection) {
+                stateSection("1. Normal · Empty Composer", subtitle: "Default state with camera entry") {
+                    InputBar(text: $cameraText, image: $image, isLoading: false, onSend: {})
+                }
+
+                stateSection("2. Ready to Send", subtitle: "Text inputted, dark CTA active") {
+                    InputBar(text: $sendText, image: $image, isLoading: false, onSend: {})
+                }
+
+                stateSection("3. Loading / Generating", subtitle: "Waiting for AI generation") {
+                    InputBar(text: $loadingText, image: $image, isLoading: true, onSend: {})
+                }
+
+                stateSection("4. Limit Reached · Inline Banner Mode", subtitle: "Banner above input bar guiding to feedback") {
+                    InputBar(
+                        text: $bannerText,
+                        image: $image,
+                        isLoading: false,
+                        showLimitBanner: true,
+                        usedCount: 5,
+                        dailyLimit: 5,
+                        onLimitTap: {},
+                        onSend: {}
+                    )
+                }
+
+                stateSection("5. Limit Reached · Locked Composer Mode", subtitle: "Placeholder remains 'Capture a moment…' with lock icon") {
+                    InputBar(
+                        text: $lockedText,
+                        image: $image,
+                        isLoading: false,
+                        isLimitReached: true,
+                        usedCount: 5,
+                        dailyLimit: 5,
+                        onLimitTap: {},
+                        onSend: {}
+                    )
+                }
+            }
+            .padding(.vertical, AppTheme.Space.paddingPage)
         }
-        .padding(AppTheme.Space.paddingPage)
         .background(AppTheme.Color.pageBg)
+    }
+
+    private func stateSection<Content: View>(_ title: String, subtitle: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: AppTheme.Space.paddingS) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(AppTheme.Font.sectionLabel)
+                    .foregroundStyle(AppTheme.Color.textSecondary)
+                Text(subtitle)
+                    .font(AppTheme.Font.metaNote)
+                    .foregroundStyle(AppTheme.Color.textMuted)
+            }
+            .padding(.horizontal, AppTheme.Space.paddingPage)
+
+            content()
+        }
     }
 }
 
-#Preview("Right button: camera / send / loading", traits: .sizeThatFitsLayout) {
-    InputBarButtonStatesPreview()
+#Preview("InputBar · All States (Normal, Loading, Limit Reached)") {
+    InputBarAllStatesPreview()
 }
+
+#Preview("InputBar · Limit Reached (Banner + Locked)", traits: .sizeThatFitsLayout) {
+    VStack(spacing: AppTheme.Space.paddingSection) {
+        InputBar(
+            text: .constant(""),
+            image: .constant(nil),
+            isLoading: false,
+            isLimitReached: true,
+            showLimitBanner: true,
+            usedCount: 5,
+            dailyLimit: 5,
+            onLimitTap: {},
+            onSend: {}
+        )
+    }
+    .padding(AppTheme.Space.paddingPage)
+    .background(AppTheme.Color.pageBg)
+}
+
+#Preview("InputBar · Limit Banner Only", traits: .sizeThatFitsLayout) {
+    InputBarLimitBanner(usedCount: 5, dailyLimit: 5, onTap: {})
+        .padding(AppTheme.Space.paddingPage)
+        .background(AppTheme.Color.pageBg)
+}
+

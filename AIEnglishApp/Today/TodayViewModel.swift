@@ -26,6 +26,9 @@ final class TodayViewModel {
     var presetCardSaver: PresetCardSaving = LivePresetCardSaver()
     /// 无网点 Retry 等场景的轻提示（视图挂 toast，自动消失）。
     var offlineHint: String?
+    /// 生成次数额度的共享展示状态：成功响应的 usage 字段、429 裁决都写这里，
+    /// Sheet / InputBar 达标态从这读。可注入（单测隔离，不污染全局 shared）。
+    var quotaStore = UsageQuotaStore.shared
     /// 最近一次 loadHistory 是否以失败告终（离线/超时/解码失败）。
     /// 只在 entries 仍为空时被视图读取：冷启动无缓存又断网时，时间线会永远空着，
     /// 用户既看不到内容也没有任何重试入口（审查发现）。成功（哪怕解出 0 条记录，
@@ -770,7 +773,19 @@ final class TodayViewModel {
                     image: image
                 )
             }
+            // 服务器报告的最新用量（含本次生成）：直接进共享额度状态，
+            // Sheet 打开时无需等一次网络往返就能看到最新数字。
+            if let usage = envelope.usage {
+                quotaStore.apply(usage: usage)
+            }
             return envelope.card
+        } catch let AIServiceError.dailyLimitReached(used, limit, _) {
+            // 服务端额度裁决：移除 loading，不产生 sendFailed 行（今天重试只会再撞
+            // 429），把裁决接进共享额度状态——InputBar 转为达标态（banner + 锁定）。
+            // 用户气泡保留：那是用户说过的话，只是服务器拒绝了这次生成。
+            entries.removeAll { $0.id == loadingEntry.id }
+            quotaStore.applyServerVerdict(used: used, limit: limit, allowed: false)
+            return nil
         } catch AIServiceError.contentBlocked {
             // 内容被安全过滤拦截：移除 loading，按 id 定位对应的用户气泡就地转为「被拒」形态
             // （图片 → 占位块；文本 → 原样），不再弹窗、不保留原图。

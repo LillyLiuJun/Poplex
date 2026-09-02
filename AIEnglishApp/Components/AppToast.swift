@@ -34,6 +34,11 @@ struct AutoDismissingAppToast: View {
     var body: some View {
         if let message {
             AppToast(message: message, systemImage: systemImage)
+                .onAppear {
+                    // toast 出现时向读屏播报同一句文案：VoiceOver 用户看不到
+                    // 短暂浮现的提示，静默出现 = 反馈不存在（审计发现 ②）。
+                    UIAccessibility.post(notification: .announcement, argument: message)
+                }
                 .task(id: message) {
                     try? await Task.sleep(for: lifetime)
                     guard !Task.isCancelled else { return }
@@ -94,5 +99,33 @@ private struct ToastModifier: ViewModifier {
             )
             .padding(placement.paddingEdge, AppTheme.Space.paddingSection)
         }
+    }
+}
+
+// MARK: - Global Toast Dispatcher
+
+extension Notification.Name {
+    static let showAppToast = Notification.Name("showAppToast")
+}
+
+struct AppToastPayload: Sendable {
+    let message: String
+    let systemImage: String?
+    let lifetime: Duration
+
+    init(message: String, systemImage: String? = nil, lifetime: Duration = AppTheme.Motion.toastLifetime) {
+        self.message = message
+        self.systemImage = systemImage
+        self.lifetime = lifetime
+    }
+}
+
+enum ToastCenter {
+    @MainActor
+    static func show(_ message: String, systemImage: String? = nil, lifetime: Duration = AppTheme.Motion.toastLifetime) {
+        NotificationCenter.default.post(
+            name: .showAppToast,
+            object: AppToastPayload(message: message, systemImage: systemImage, lifetime: lifetime)
+        )
     }
 }

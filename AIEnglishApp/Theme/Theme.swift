@@ -175,6 +175,7 @@ private enum Primitive {
     // 改动前请同步改 Assets.xcassets/AppIcon.appiconset/poplex_icon_master.svg。
     static let iconGround = Color(hex: 0xFBF8F5)  // 图标底 = 开屏底
     static let iconInk    = Color(hex: 0x2A2320)  // 图标墨点 = 开屏墨点
+    static let pillWarmBrown = Color(hex: 0x4B3621) // 药丸柔光暖棕
 
     // ── 覆盖在实时媒体（相机画面 / 用户照片）上的控件 ────────────────────────
     static let mediaSurface   = Color.black             // 相机全屏底
@@ -567,6 +568,19 @@ enum AppTheme {
         static let paperLayerX: CGFloat = 0
         static let paperLayerY: CGFloat = 4
 
+        // 顶栏药丸与汉堡按钮专有双层小阴影（小尺寸元素定制，避免大卡片 32pt 阴影导致"太扁太虚"）：
+        // 第一层：贴地接触阴影（中性黑 4%），定位
+        static let pillContactColor: SwiftUI.Color = Primitive.neutral900.opacity(0.04)
+        static let pillContactRadius: CGFloat = 3
+        static let pillContactX: CGFloat = 0
+        static let pillContactY: CGFloat = 1
+
+        // 第二层：扩散柔光（暖棕 5%），浮起
+        static let pillAmbientColor: SwiftUI.Color = Primitive.pillWarmBrown.opacity(0.05)
+        static let pillAmbientRadius: CGFloat = 8
+        static let pillAmbientX: CGFloat = 0
+        static let pillAmbientY: CGFloat = 2
+
         // 空状态插画前卡：比底片多一圈柔和扩散，让暖白表层成为承重主体。
         static let emptyStateFrontColor: SwiftUI.Color = Primitive.neutral900.opacity(0.065)
         static let emptyStateFrontRadius: CGFloat = 8
@@ -888,8 +902,8 @@ enum AppTheme {
     }
 
     enum Motion {
-        // 顶部 Tab 选中滑块：贴近系统分段控件的弹性手感（有回弹、不过冲太多）
-        static let tabSelection: Animation = .spring(response: 0.34, dampingFraction: 0.72)
+        // 顶部 Tab 选中滑块：Notion 风格高阻尼质感弹簧（沉稳、有质量感，不弹跳）
+        static let tabSelection: Animation = .spring(response: 0.35, dampingFraction: 0.85)
         // 时间线被动对齐跟随（刷新带回新内容、用户已在底部时的小幅跟随）：
         // 短促 easeOut——跟上新内容但不拖沓，也不抢走阅读注意力
         static let timelinePassiveFollow: Animation = .easeOut(duration: 0.15)
@@ -952,6 +966,73 @@ enum AppTheme {
             /// 「减弱动态效果」开启时的降级版：无位移、只淡入，总长 0.45s。
             static let reducedFadeIn: Double = 0.20
             static let reducedTotal: Double  = 0.45
+        }
+    }
+}
+
+// MARK: - Surface pill modifier (顶栏药丸 / 汉堡菜单按钮等小元素)
+// 尺寸小（~36-44pt），采用定制双层阴影 + 0.5pt 顶部白色内高光（纸张厚度感）：
+// 第一层：接触阴影（定位）；第二层：暖棕柔光（浮起）；顶部：0.5pt 白色渐隐内高光。
+// iOS 26: native glass + 顶部内高光 + 双层微阴影
+// iOS 17-25: ultraThinMaterial + 暖白薄蒙 + 0.5pt 细描边 + 顶部内高光 + 双层微阴影
+private struct SurfacePillModifier<S: InsettableShape>: ViewModifier {
+    let shape: S
+    let interactive: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        let topHighlight = shape.strokeBorder(
+            LinearGradient(
+                stops: [
+                    .init(color: .white.opacity(0.65), location: 0.0),
+                    .init(color: .white.opacity(0.0), location: 0.35)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            ),
+            lineWidth: 0.5
+        )
+
+        if #available(iOS 26, *) {
+            content
+                .glassEffect(interactive ? .regular.interactive() : .regular, in: shape)
+                .overlay {
+                    topHighlight
+                }
+                .shadow(
+                    color: AppTheme.Shadow.pillAmbientColor,
+                    radius: AppTheme.Shadow.pillAmbientRadius,
+                    x: AppTheme.Shadow.pillAmbientX,
+                    y: AppTheme.Shadow.pillAmbientY
+                )
+                .shadow(
+                    color: AppTheme.Shadow.pillContactColor,
+                    radius: AppTheme.Shadow.pillContactRadius,
+                    x: AppTheme.Shadow.pillContactX,
+                    y: AppTheme.Shadow.pillContactY
+                )
+        } else {
+            content
+                .background {
+                    ZStack {
+                        shape.fill(.ultraThinMaterial)
+                        shape.fill(AppTheme.Color.cardBg.opacity(0.85))
+                        shape.strokeBorder(AppTheme.Color.border.opacity(0.8), lineWidth: 0.5)
+                        topHighlight
+                    }
+                }
+                .shadow(
+                    color: AppTheme.Shadow.pillAmbientColor,
+                    radius: AppTheme.Shadow.pillAmbientRadius,
+                    x: AppTheme.Shadow.pillAmbientX,
+                    y: AppTheme.Shadow.pillAmbientY
+                )
+                .shadow(
+                    color: AppTheme.Shadow.pillContactColor,
+                    radius: AppTheme.Shadow.pillContactRadius,
+                    x: AppTheme.Shadow.pillContactX,
+                    y: AppTheme.Shadow.pillContactY
+                )
         }
     }
 }
@@ -1184,6 +1265,12 @@ extension View {
 
     func surfaceFloating<S: InsettableShape>(in shape: S, interactive: Bool = true) -> some View {
         modifier(SurfaceFloatingModifier(shape: shape, interactive: interactive))
+    }
+
+    /// 小元素/药丸专用浮动玻璃（顶栏 Tab 药丸、Settings 汉堡按钮等）：
+    /// 包含 0.5pt 顶部高光与专属双层微阴影（contact + ambient），不复用大卡片大阴影。
+    func surfacePill<S: InsettableShape>(in shape: S, interactive: Bool = true) -> some View {
+        modifier(SurfacePillModifier(shape: shape, interactive: interactive))
     }
 
     func topEdgeFade() -> some View {

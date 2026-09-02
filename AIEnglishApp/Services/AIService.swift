@@ -11,6 +11,9 @@ enum AIServiceError: Error {
     case imageEncodingFailed
     case bodySerializationFailed
     case contentBlocked
+    /// 服务端额度裁决：今日生成次数已达上限（429 daily_limit_reached）。
+    /// 与 requestFailed 分开，前端据此展示达标态而不是误导性的「No connection」。
+    case dailyLimitReached(used: Int, limit: Int, resetsAt: String?)
 }
 
 extension UIImage {
@@ -60,6 +63,9 @@ struct LiveAIService: AIServicing {
             fmt.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
             body["original_created_at"] = fmt.string(from: originalCreatedAt)
         }
+        // 生成次数分桶：设备相对 UTC 的分钟偏移（如北京 +480）。服务端据此换算
+        // 「设备的今天」作为计数日期；缺失/非法时回退 UTC 当日。
+        body["utc_offset_minutes"] = TimeZone.current.secondsFromGMT() / 60
         if let image {
             let compressed = image.compressedForUpload()
             guard let jpeg = compressed.jpegData(compressionQuality: 0.6) else {
@@ -112,6 +118,15 @@ struct LiveAIService: AIServicing {
     /// - 其余非 2xx → .requestFailed
     /// - 2xx 但无法解码 → .decodingFailed
     static func decodeResponse(statusCode: Int, data: Data) throws -> AIEnvelope {
+        if statusCode == 429,
+           let quotaBody = try? JSONDecoder().decode(QuotaLimitBody.self, from: data),
+           quotaBody.error == "daily_limit_reached" {
+            throw AIServiceError.dailyLimitReached(
+                used: quotaBody.used,
+                limit: quotaBody.limit,
+                resetsAt: quotaBody.resetsAt
+            )
+        }
         if statusCode == 422,
            let errorBody = try? JSONDecoder().decode([String: String].self, from: data),
            errorBody["error"] == "content_blocked" {
@@ -125,6 +140,21 @@ struct LiveAIService: AIServicing {
         } catch {
             throw AIServiceError.decodingFailed
         }
+    }
+}
+
+/// 429 额度响应的 JSON 形状：{"error":"daily_limit_reached","used":N,"limit":N,"resets_at":"…"}。
+/// 与 decodeResponse 的 422 content_blocked 分支同构——错误码 + 载荷一起判，
+/// 免得把任何 429（如网关限流）都当成额度耗尽。
+private struct QuotaLimitBody: Decodable {
+    let error: String
+    let used: Int
+    let limit: Int
+    let resetsAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case error, used, limit
+        case resetsAt = "resets_at"
     }
 }
 

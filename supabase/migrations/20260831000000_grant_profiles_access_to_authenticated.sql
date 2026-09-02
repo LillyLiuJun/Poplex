@@ -13,6 +13,10 @@ GRANT DELETE ON TABLE public.messages TO authenticated;
 -- Edge Functions authenticate the caller themselves, then use service_role
 -- for narrowly-scoped server work. service_role bypasses RLS, so every query
 -- in those functions includes an explicit user_id or ownership check.
+-- generate's onboarding-exemption check reads profiles.onboarding_completed_at
+-- with the service key (isOnboardingStillOpen); the check constrains the read
+-- to the caller's own row (id=eq.user_id) before deciding anything.
+GRANT SELECT ON TABLE public.profiles TO service_role;
 GRANT SELECT, UPDATE, DELETE ON TABLE public.materials TO service_role;
 GRANT SELECT, DELETE ON TABLE public.messages TO service_role;
 

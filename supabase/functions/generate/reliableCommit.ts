@@ -49,6 +49,17 @@ export interface CommitGeneratedContentOptions
   userMessage: Record<string, unknown>;
   assistantMessage: Record<string, unknown>;
   material: Record<string, unknown>;
+  /**
+   * 生成次数分桶日期（YYYY-MM-DD），由调用方在入口算好传入。RPC 内不得用
+   * now() 现算——否则 23:59:59 的校验与 00:00:02 的落库会分到两个桶。
+   */
+  usageDate: string;
+  /**
+   * false 时跳过扣减。豁免（onboarding）由调用方用服务端事实判定后传入，
+   * RPC 内部仍会用自己的服务端判据再查一遍（防御纵深）——source 是客户端
+   * 可伪造的，两道门都不能只看 source。
+   */
+  countUsage?: boolean;
 }
 
 interface MessageRow {
@@ -290,9 +301,103 @@ export async function commitGeneratedContent(
         p_user_message: options.userMessage,
         p_assistant_message: options.assistantMessage,
         p_material: options.material,
+        p_usage_date: options.usageDate,
+        p_count_usage: options.countUsage ?? true,
       }),
     },
   );
   const body = await checkedJson(response, "commit_generated_content");
   return parseCommittedContent(body, options.requestId);
+}
+
+// ──────────────────────────────────────────────────────
+// 生成次数限制 · 第 3 刀：服务键（service role）查询。
+// 这两个调用只能走 service key（check_generation_quota_for_user 仅
+// service_role 可执行；profiles 读走 service key 不依赖 RLS 策略形状）。
+// ──────────────────────────────────────────────────────
+
+export interface ServiceKeyConnection {
+  supabaseUrl: string;
+  serviceRoleKey: string;
+  fetch?: FetchLike;
+}
+
+export interface GenerationQuotaStatus {
+  usedCount: number;
+  limit: number;
+  allowed: boolean;
+}
+
+export async function checkGenerationQuotaForUser(
+  options: ServiceKeyConnection & { userId: string; usageDate: string },
+): Promise<GenerationQuotaStatus> {
+  const fetchImpl = options.fetch ?? fetch;
+  const response = await fetchImpl(
+    `${options.supabaseUrl}/rest/v1/rpc/check_generation_quota_for_user`,
+    {
+      method: "POST",
+      headers: {
+        ...requestHeaders(
+          options.serviceRoleKey,
+          `Bearer ${options.serviceRoleKey}`,
+        ),
+        "Content-Type": "application/json",
+        // RETURNS TABLE 的 RPC 在 PostgREST 默认回 JSON 数组；object 媒体
+        // 类型让它直接回单对象（本函数恒返回一行）。2026-09-02 线上事故：
+        // 不带这个头时真实 PostgREST 回数组、解析器按对象读 → 每次预检 502。
+        // 解析侧另做数组容忍（见下），双保险。
+        "Accept": "application/vnd.pgrst.object+json",
+      },
+      body: JSON.stringify({
+        p_user_id: options.userId,
+        p_usage_date: options.usageDate,
+      }),
+    },
+  );
+  const body = await checkedJson(response, "check_generation_quota_for_user");
+  // 容忍两种形状：带了 object 头应回单对象；若仍回单行数组，取第一行。
+  const row = asObject(Array.isArray(body) ? body[0] : body);
+  if (
+    !row ||
+    typeof row.used_count !== "number" ||
+    typeof row.limit !== "number" ||
+    typeof row.allowed !== "boolean"
+  ) {
+    throw new Error(
+      "check_generation_quota_for_user returned an invalid response",
+    );
+  }
+  return {
+    usedCount: row.used_count,
+    limit: row.limit,
+    allowed: row.allowed,
+  };
+}
+
+/**
+ * 服务端 onboarding 判据：profile 行存在且 onboarding_completed_at 仍为空。
+ * 与 commit RPC 的豁免门同口径——profile 行缺失按「不免」处理（RPC 里
+ * FOUND=false 时 COALESCE 落到 false），两个判定结果必须一致。
+ */
+export async function isOnboardingStillOpen(
+  options: ServiceKeyConnection & { userId: string },
+): Promise<boolean> {
+  const fetchImpl = options.fetch ?? fetch;
+  const encodedUserId = encodeURIComponent(options.userId);
+  const response = await fetchImpl(
+    `${options.supabaseUrl}/rest/v1/profiles?select=onboarding_completed_at&id=eq.${encodedUserId}`,
+    {
+      headers: requestHeaders(
+        options.serviceRoleKey,
+        `Bearer ${options.serviceRoleKey}`,
+      ),
+    },
+  );
+  const rows = await checkedJson(response, "resolve onboarding completion");
+  if (!Array.isArray(rows)) {
+    throw new Error("resolve onboarding completion returned an invalid response");
+  }
+  const profile = (rows as Array<{ onboarding_completed_at?: unknown }>)[0];
+  if (!profile) return false;
+  return profile.onboarding_completed_at == null;
 }

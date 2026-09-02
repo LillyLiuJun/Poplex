@@ -1,6 +1,6 @@
 begin;
 
-select plan(28);
+select plan(37);
 
 -- This is a table-level ACL contract, deliberately independent of PostgREST.
 -- It catches the class of bug where a fresh migration replay has RLS policies
@@ -12,6 +12,8 @@ select ok(has_table_privilege('authenticated', 'public.profiles', 'INSERT'), 'au
 select ok(has_table_privilege('authenticated', 'public.profiles', 'UPDATE'), 'authenticated can update its RLS-protected profile');
 select ok(has_table_privilege('authenticated', 'public.materials', 'DELETE'), 'authenticated can run onboarding material cleanup');
 select ok(has_table_privilege('authenticated', 'public.messages', 'DELETE'), 'authenticated can run onboarding message cleanup');
+
+select ok(has_table_privilege('service_role', 'public.profiles', 'SELECT'), 'service role can read profiles for the onboarding exemption check');
 
 select ok(has_table_privilege('service_role', 'public.materials', 'SELECT'), 'service role can read materials for Tab2, backfill, and reconciliation');
 select ok(has_table_privilege('service_role', 'public.materials', 'UPDATE'), 'service role can enrich, delete, and restore an owned material');
@@ -39,6 +41,15 @@ select ok(has_table_privilege('service_role', 'public.dialogue_turns', 'DELETE')
 select ok(has_table_privilege('service_role', 'public.feedback', 'SELECT'), 'service role can enforce feedback rate limiting');
 select ok(has_table_privilege('service_role', 'public.feedback', 'INSERT'), 'service role can write feedback');
 select ok(has_table_privilege('service_role', 'public.analytics_events', 'INSERT'), 'service role can write analytics events');
+
+select ok(has_table_privilege('authenticated', 'public.generation_usage', 'SELECT'), 'authenticated can read its RLS-protected generation usage');
+select ok(not has_table_privilege('authenticated', 'public.generation_usage', 'INSERT,UPDATE,DELETE'), 'generation_usage writes are server-only (no API-role write grants)');
+select ok(not has_table_privilege('service_role', 'public.generation_usage', 'INSERT,UPDATE,DELETE'), 'generation_usage advances only through SECURITY DEFINER RPCs');
+select ok(has_table_privilege('authenticated', 'public.app_config', 'SELECT'), 'authenticated can read the global app config');
+select ok(not has_table_privilege('authenticated', 'public.app_config', 'INSERT,UPDATE,DELETE'), 'app_config writes are ops-only');
+select ok(not has_table_privilege('service_role', 'public.app_config', 'INSERT,UPDATE,DELETE'), 'app_config writes are ops-only even for service_role');
+select ok(has_function_privilege('authenticated', 'public.consume_generation_quota(date)', 'EXECUTE'), 'authenticated can advance its own quota via the SECURITY DEFINER consume helper');
+select ok(not has_function_privilege('anon', 'public.consume_generation_quota(date)', 'EXECUTE'), 'anonymous callers cannot invoke the quota consume helper');
 
 select * from finish();
 

@@ -27,6 +27,7 @@ struct RootTabContainer: View {
     @State private var selectedTab: AppTab = .today
     #endif
     @State private var showSettings = false
+    @State private var showUsageLimit = false
     @State private var mineListResetToken = UUID()
     @State private var mineSwipeActionOpen = false
     @State private var mineDetailActive = false
@@ -36,6 +37,8 @@ struct RootTabContainer: View {
     // Fullscreen image preview — lifted to root so it covers the top bar
     @State private var previewImage: UIImage?
     @State private var previewAnchor: UnitPoint = .center
+    @State private var globalToast: String?
+    @State private var globalToastImage: String?
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -88,7 +91,27 @@ struct RootTabContainer: View {
         .sheet(isPresented: $showSettings) {
             SettingsView()
         }
+        .sheet(isPresented: $showUsageLimit) {
+            UsageLimitSheet(onFeedbackSubmitted: {
+                globalToastImage = "paperplane.fill"
+                globalToast = FeedbackView.successToastMessage
+            })
+        }
+        .toast(
+            message: $globalToast,
+            systemImage: globalToastImage,
+            placement: .bottom
+        )
+        .onReceive(NotificationCenter.default.publisher(for: .showAppToast)) { note in
+            if let payload = note.object as? AppToastPayload {
+                globalToastImage = payload.systemImage
+                globalToast = payload.message
+            }
+        }
         .onChange(of: selectedTab) { oldTab, newTab in
+            if oldTab != newTab {
+                UISelectionFeedbackGenerator().selectionChanged()
+            }
             if oldTab == .mine {
                 mineSwipeActionOpen = false
             }
@@ -101,14 +124,19 @@ struct RootTabContainer: View {
 
     private var contentArea: some View {
         ZStack {
-            TodayView(onImagePreview: { img, anchor in
-                previewAnchor = anchor
-                withAnimation(.spring(duration: 0.35)) { previewImage = img }
-            }, topInset: topBarHeight)
+            TodayView(
+                onImagePreview: { img, anchor in
+                    previewAnchor = anchor
+                    withAnimation(.spring(duration: 0.35)) { previewImage = img }
+                },
+                // 达标 banner 点击 → 打开与顶栏仪表盘同款的额度 Sheet
+                onOpenUsageLimit: { showUsageLimit = true },
+                topInset: topBarHeight
+            )
                 .opacity(selectedTab == .today ? 1 : 0)
                 .allowsHitTesting(selectedTab == .today)
             MineView(listResetToken: mineListResetToken, swipeActionOpen: $mineSwipeActionOpen, detailActive: $mineDetailActive, topInset: topBarHeight, isActive: selectedTab == .mine, onSwitchToToday: {
-                            withAnimation(.easeInOut(duration: 0.2)) { selectedTab = .today }
+                            withAnimation(AppTheme.Motion.tabSelection) { selectedTab = .today }
                         })
                 .opacity(selectedTab == .mine ? 1 : 0)
                 .allowsHitTesting(selectedTab == .mine)
@@ -145,14 +173,14 @@ struct RootTabContainer: View {
                     let isRightSwipe = dx > 50 || predictedDx > 100
 
                     if isLeftSwipe && selectedTab == .today {
-                        withAnimation(.easeInOut(duration: 0.2)) { selectedTab = .mine }
+                        withAnimation(AppTheme.Motion.tabSelection) { selectedTab = .mine }
                     } else if isRightSwipe && selectedTab == .mine {
                         if capturedSwipeOpen {
                             // Delete action was open — reset list state, don't switch tab
                             mineListResetToken = UUID()
                             mineSwipeActionOpen = false
                         } else if !mineDetailActive {
-                            withAnimation(.easeInOut(duration: 0.2)) { selectedTab = .today }
+                            withAnimation(AppTheme.Motion.tabSelection) { selectedTab = .today }
                         }
                     }
                 }
@@ -173,6 +201,9 @@ struct RootTabContainer: View {
                     // 这样 clearance 改了，这条留白会跟着变，不会两边各改各的悄悄错开。
                     .padding(.leading, AppTheme.Size.topBarSideClearance - AppTheme.Size.barControl)
                 Spacer()
+                UsageLimitButton { showUsageLimit = true }
+                    // 与左侧汉堡按钮对称反推，保持左右配重与页边距严格一致
+                    .padding(.trailing, AppTheme.Size.topBarSideClearance - AppTheme.Size.barControl)
             }
         }
         .padding(.bottom, AppTheme.Space.paddingS)

@@ -14,11 +14,14 @@ import { buildRawContent, UnifiedRawContent } from "./rawContent.ts";
 import { isModelErrorCard } from "./modelGate.ts";
 import {
   authenticateCaller,
+  checkGenerationQuotaForUser,
   commitGeneratedContent,
   CommittedContent,
   FetchLike,
+  isOnboardingStillOpen,
   resolveCommittedRequest,
 } from "./reliableCommit.ts";
+import { resolveUsageContext, UsageContext } from "./usageContext.ts";
 import { validateSubScene } from "./subScene.ts";
 
 function environmentValue(name: string): string {
@@ -965,6 +968,8 @@ interface GenerateRequestBody {
   mime_type?: string;
   preset_card_id?: string;
   source?: string;
+  /** 设备当前 UTC 偏移（分钟）。当地分桶日期由服务端据此换算，客户端不得直接传日期。 */
+  utc_offset_minutes?: unknown;
   original_created_at?: unknown;
   context?: {
     user: string;
@@ -984,6 +989,8 @@ export interface GenerateHandlerDependencies {
   geminiApiKey: string;
   supabaseUrl: string;
   supabaseApiKey: string;
+  /** service role key：额度查询 / onboarding 判据等服务端专用读取。 */
+  privilegedApiKey: string;
   fetch: FetchLike;
   uploadImage: (
     base64: string,
@@ -1018,6 +1025,41 @@ function successBody(
   };
 }
 
+/**
+ * 第 3 刀：成功响应的 usage 字段（最新用量，含本次生成）。
+ * 信息性字段，读取失败只省略该字段、绝不拖垮成功响应——客户端若以为失败
+ * 会重试，重试落到幂等路径后 usage 还是拿不到，形成无解循环。
+ */
+async function usageField(
+  dependencies: GenerateHandlerDependencies,
+  userId: string,
+  usageContext: UsageContext,
+): Promise<Record<string, unknown>> {
+  if (!dependencies.privilegedApiKey) return {};
+  try {
+    const quota = await checkGenerationQuotaForUser({
+      supabaseUrl: dependencies.supabaseUrl,
+      serviceRoleKey: dependencies.privilegedApiKey,
+      userId,
+      usageDate: usageContext.usageDate,
+      fetch: dependencies.fetch,
+    });
+    return {
+      usage: {
+        used: quota.usedCount,
+        limit: quota.limit,
+        resets_at: usageContext.resetsAt,
+      },
+    };
+  } catch (error) {
+    console.error(
+      "[generate] post-commit usage lookup failed (non-blocking):",
+      error,
+    );
+    return {};
+  }
+}
+
 export function createGenerateHandler(
   overrides: Partial<GenerateHandlerDependencies> = {},
 ): (req: Request) => Promise<Response> {
@@ -1025,6 +1067,7 @@ export function createGenerateHandler(
     geminiApiKey: GEMINI_API_KEY,
     supabaseUrl: SUPABASE_URL,
     supabaseApiKey: GENERATE_ACCESS_CONFIG.callerApiKey,
+    privilegedApiKey: GENERATE_ACCESS_CONFIG.privilegedApiKey,
     fetch,
     uploadImage,
     deleteImage,
@@ -1106,17 +1149,85 @@ export function createGenerateHandler(
       if (!UUID_PATTERN.test(requestId)) {
         return json({ error: "invalid_request_id" }, 400);
       }
-      if (resolved.committed) {
-        return json(successBody(resolved.committed), 200);
-      }
 
       const { text, image_base64, mime_type, context, preset_card_id, source } =
         body;
+
+      // 请求时刻：一个时钟源、一次取值。usage 分桶、user 行时间戳、assistant
+      // 兜底全部基于同一瞬间——前置校验与落库共用同一个 usageDate 值，不会
+      // 出现 23:59:59 校验算昨天、00:00:02 落库扣今天的分桶错位。
+      const lockedNowMs = dependencies.now().getTime();
+      // 生成次数分桶上下文（第 3 刀）：客户端只传时区偏移，当地日期由服务端
+      // 换算；缺失/非法回退 UTC 当日。全部日期逻辑集中在 resolveUsageContext
+      // 一个函数里。
+      const usageContext = resolveUsageContext(
+        body.utc_offset_minutes,
+        lockedNowMs,
+      );
+
+      // 幂等命中：重试不占额度、不被拦截，响应同样带最新用量。
+      if (resolved.committed) {
+        const response = {
+          ...successBody(resolved.committed),
+          ...await usageField(dependencies, userId, usageContext),
+        };
+        return json(response, 200);
+      }
+
       if (!text && !image_base64) {
         return json({ error: "missing_input" }, 400);
       }
       if (!dependencies.geminiApiKey) {
         return json({ error: "missing_api_key" }, 500);
+      }
+
+      // onboarding 豁免（第 3 刀）：服务端判据（profile 完成标记）为主，body
+      // 的 source 只作辅助信号——source 是客户端可伪造的。一个判定结果同时
+      // 决定「跳过前置校验」与「p_count_usage」，两者不能各算各的。
+      let onboardingExempt = false;
+      if (source === "onboarding") {
+        if (!dependencies.privilegedApiKey) {
+          return json({ error: "quota_check_unavailable" }, 502);
+        }
+        try {
+          onboardingExempt = await isOnboardingStillOpen({
+            supabaseUrl: dependencies.supabaseUrl,
+            serviceRoleKey: dependencies.privilegedApiKey,
+            userId,
+            fetch: dependencies.fetch,
+          });
+        } catch (error) {
+          console.error("[generate] onboarding exemption lookup failed:", error);
+          return json({ error: "quota_check_unavailable" }, 502);
+        }
+      }
+
+      // 前置校验：超限在调模型之前就返回，不产生模型费用。查询失败按 502
+      // 拒绝（fail closed）——额度是硬限制，宁可本次失败也不静默放行。
+      if (!onboardingExempt) {
+        if (!dependencies.privilegedApiKey) {
+          return json({ error: "quota_check_unavailable" }, 502);
+        }
+        try {
+          const quota = await checkGenerationQuotaForUser({
+            supabaseUrl: dependencies.supabaseUrl,
+            serviceRoleKey: dependencies.privilegedApiKey,
+            userId,
+            usageDate: usageContext.usageDate,
+            fetch: dependencies.fetch,
+          });
+          if (!quota.allowed) {
+            return json({
+              error: "daily_limit_reached",
+              used: quota.usedCount,
+              limit: quota.limit,
+              resets_at: usageContext.resetsAt,
+            }, 429);
+          }
+        } catch (error) {
+          console.error("[generate] quota check failed:", error);
+          return json({ error: "quota_check_unavailable" }, 502);
+        }
       }
 
       // 在 AI 调用之前就锁定 user 消息时间戳，确保比 assistant 的 now() 早。
@@ -1128,7 +1239,6 @@ export function createGenerateHandler(
         typeof body.original_created_at === "string" ? body.original_created_at : "",
       );
       const hasOriginalTimestamp = Number.isFinite(parsedOriginalMs);
-      const lockedNowMs = dependencies.now().getTime();
       const userCreatedAtMs = hasOriginalTimestamp
         ? Math.min(parsedOriginalMs, lockedNowMs)
         : lockedNowMs;
@@ -1367,6 +1477,10 @@ When STEP 1's OBJECT is the whole input and it has a subject and a predicate:
             raw_content: extracted.rawContent,
             source: source ?? "tab1",
           },
+          usageDate: usageContext.usageDate,
+          // 与前置校验共用同一个判定结果：豁免时跳过扣减。RPC 仍会按自己的
+          // 服务端判据再查一遍（防御纵深），两道门都不只看客户端 source。
+          countUsage: !onboardingExempt,
         });
       } catch (error) {
         // 图片保留在私有 Storage，便于同 request_id 重试或后续对账；这里绝不删。
@@ -1413,7 +1527,11 @@ When STEP 1's OBJECT is the whole input and it has a subject and a predicate:
         }
       }
 
-      return json(successBody(committed), 200);
+      const response = {
+        ...successBody(committed),
+        ...await usageField(dependencies, userId, usageContext),
+      };
+      return json(response, 200);
     } catch (error) {
       console.error("[generate] internal error:", error);
       return json({ error: "internal_error" }, 500);
