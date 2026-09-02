@@ -102,8 +102,6 @@ struct MineView: View {
             .navigationDestination(for: MineRoute.self) { route in
                 switch route {
                 case .conversation(let cat):
-                    // TODO: 对话页返回实际完成的 scene_detail 后，在结束回调调用
-                    // vm.markMomentSpoken(sceneDetail:)；当前回调只有分类，不能可靠写入 moment。
                     ConversationView(sceneCategory: cat, onDismiss: { path.removeLast() })
                 }
             }
@@ -663,6 +661,29 @@ private struct Tab2UnlockedView: View {
                         onTalk: { onTalk(hero.sceneCategory) }
                     )
                     .padding(.horizontal, AppTheme.Space.paddingPage)
+                }
+
+                // More to talk about——hero 之后的推荐行（§3/§4）。行状态由行组件
+                // 按 featured 有无自行判定，不再跟踪「聊过」。空列表时标题与列表
+                // 整块不渲染（§6）：只有一件事可聊，不假装有选择。
+                let moreRows = vm.moreCategories(excluding: milestoneIDs, hero: hero)
+                if !moreRows.isEmpty {
+                    VStack(alignment: .leading, spacing: AppTheme.Space.paddingCard) {
+                        Text("More to talk about")
+                            .font(AppTheme.Font.sectionTitleSerif)
+                            .foregroundStyle(AppTheme.Color.textPrimary)
+                            .padding(.horizontal, AppTheme.Space.paddingPage)
+
+                        VStack(alignment: .leading, spacing: AppTheme.Tab2MoreRow.Layout.rowGap) {
+                            ForEach(moreRows) { category in
+                                Tab2MomentRow(
+                                    category: category,
+                                    onTap: { onTalk(category.sceneCategory) }
+                                )
+                            }
+                        }
+                        .padding(.horizontal, AppTheme.Space.paddingPage)
+                    }
                 }
 
                 // Topics in Progress——独立 Serif 标题 + 磨砂玻璃列表容器

@@ -8,10 +8,8 @@ import Foundation
 enum Tab2Defaults {
     static let permanentlyUnlocked = "tab2_permanently_unlocked"
     static let firstUnlockShown    = "tab2_first_unlock_shown"
-    static let spokenMoments       = "tab2_spoken_moments"
     static let heroMaterialID      = "tab2_hero_material_id"
     static let heroKnownMoments    = "tab2_hero_known_moments"
-    static let heroKnownSpokenMoments = "tab2_hero_known_spoken_moments"
 }
 
 private let kUnlockedKey         = Tab2Defaults.permanentlyUnlocked
@@ -145,7 +143,10 @@ final class Tab2HomeViewModel {
 
     // MARK: - Hero 选取
 
-    /// 从已解锁分类里选出稳定的 hero；只依据 moment 层数据，不读取词条级 spoken_count。
+    /// 从已解锁分类里选出稳定的 hero。排序：有 featured 的按 moment 数
+    /// （ranked：7 天新近桶 → moment 数 → featured 时间 → id），都没有
+    /// featured 时按词数。稳定规则：没有新 moment 出现时复用上次的
+    /// heroMaterialID。不读词条级 spoken_count、不跟踪「聊过」。
     func heroCategory(excluding excludedCategoryIDs: Set<String> = []) -> Tab2CategoryData? {
         guard let cats = data?.categories else { return nil }
         let unlocked = cats.filter {
@@ -153,42 +154,26 @@ final class Tab2HomeViewModel {
         }
         guard !unlocked.isEmpty else { return nil }
 
-        let spokenMoments = Set(defaults.stringArray(forKey: Tab2Defaults.spokenMoments) ?? [])
         let currentMoments = Set(unlocked.flatMap { $0.subScenes.map(\.sceneDetail) })
         let knownMoments = Set(defaults.stringArray(forKey: Tab2Defaults.heroKnownMoments) ?? [])
         let hasNewMoment = !currentMoments.subtracting(knownMoments).isEmpty
-        let knownSpokenMoments = Set(
-            defaults.stringArray(forKey: Tab2Defaults.heroKnownSpokenMoments) ?? []
-        )
-        let hasNewlySpokenMoment = !spokenMoments.subtracting(knownSpokenMoments).isEmpty
-        let unspokenCandidates = unlocked.filter { category in
-            category.featured != nil
-                && unspokenMomentCount(in: category, spokenMoments: spokenMoments) > 0
-        }
 
-        if !hasNewMoment, !hasNewlySpokenMoment,
+        if !hasNewMoment,
            let storedMaterialID = defaults.string(forKey: Tab2Defaults.heroMaterialID),
-           let stable = unlocked.first(where: { category in
-               category.featured?.materialId == storedMaterialID
-                   && (unspokenCandidates.isEmpty
-                       || unspokenMomentCount(in: category, spokenMoments: spokenMoments) > 0)
+           let stable = unlocked.first(where: {
+               $0.featured?.materialId == storedMaterialID
            }) {
             return stable
         }
 
         let selected: Tab2CategoryData?
         if let best = ranked(
-            unspokenCandidates,
-            momentCount: { unspokenMomentCount(in: $0, spokenMoments: spokenMoments) }
+            unlocked.filter { $0.featured != nil },
+            momentCount: { $0.subScenes.count }
         ).first {
             selected = best
-        } else if let best = ranked(unlocked.filter { $0.featured != nil }, momentCount: { $0.subScenes.count }).first {
-            selected = best
         } else {
-            selected = unlocked.sorted {
-                if $0.wordCount != $1.wordCount { return $0.wordCount > $1.wordCount }
-                return $0.id < $1.id
-            }.first
+            selected = Self.sortedByWordCountDescending(unlocked).first
         }
 
         if let materialID = selected?.featured?.materialId {
@@ -197,27 +182,7 @@ final class Tab2HomeViewModel {
             defaults.removeObject(forKey: Tab2Defaults.heroMaterialID)
         }
         defaults.set(Array(currentMoments).sorted(), forKey: Tab2Defaults.heroKnownMoments)
-        defaults.set(
-            Array(spokenMoments).sorted(),
-            forKey: Tab2Defaults.heroKnownSpokenMoments
-        )
         return selected
-    }
-
-    /// 对话真正结束后由对话页调用；当前对话页尚未返回 moment，接线点见 MineView TODO。
-    func markMomentSpoken(sceneDetail: String) {
-        var moments = Set(defaults.stringArray(forKey: Tab2Defaults.spokenMoments) ?? [])
-        moments.insert(sceneDetail)
-        defaults.set(Array(moments).sorted(), forKey: Tab2Defaults.spokenMoments)
-    }
-
-    private func unspokenMomentCount(
-        in category: Tab2CategoryData,
-        spokenMoments: Set<String>
-    ) -> Int {
-        category.subScenes.reduce(into: 0) { count, subScene in
-            if !spokenMoments.contains(subScene.sceneDetail) { count += 1 }
-        }
     }
 
     private func ranked(
@@ -239,6 +204,41 @@ final class Tab2HomeViewModel {
             if lhsCreatedAt != rhsCreatedAt { return lhsCreatedAt > rhsCreatedAt }
 
             return lhs.id < rhs.id
+        }
+    }
+
+    // MARK: - More 选取
+
+    /// 从已解锁分类里选出 hero 之外的 More 列表（§4）。两组组间有序、组内各自排序：
+    /// 组 1 有 featured（ranked：7 天新近桶 → moment 数 → featured 时间 → id）
+    /// → 组 2 纯查词（wordCount 降序）。不读词条级 spokenCount、不用 lastMaterialAt、
+    /// 不跟踪「聊过」——所有行一律按未聊过呈现。
+    func moreCategories(
+        excluding excludedCategoryIDs: Set<String> = [],
+        hero: Tab2CategoryData?
+    ) -> [Tab2CategoryData] {
+        guard let cats = data?.categories else { return [] }
+        let candidates = cats.filter {
+            $0.unlocked
+                && !excludedCategoryIDs.contains($0.id)
+                && $0.id != hero?.id
+        }
+
+        let withFeatured = candidates.filter { $0.featured != nil }
+        let lookedUpOnly = candidates.filter { $0.featured == nil }
+
+        return ranked(withFeatured, momentCount: { $0.subScenes.count })
+            + Self.sortedByWordCountDescending(lookedUpOnly)
+    }
+
+    /// 无 featured 时的兜底顺序：`heroCategory` 的 fallback 分支与 `moreCategories`
+    /// 的纯查词组共用同一条规则——词多的排前，词数打平时按 id 稳定兜底。
+    private static func sortedByWordCountDescending(
+        _ categories: [Tab2CategoryData]
+    ) -> [Tab2CategoryData] {
+        categories.sorted {
+            if $0.wordCount != $1.wordCount { return $0.wordCount > $1.wordCount }
+            return $0.id < $1.id
         }
     }
 

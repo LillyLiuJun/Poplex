@@ -33,12 +33,15 @@ enum LocalUserData {
     private static let accountScopedKeys = [
         Tab2Defaults.permanentlyUnlocked,
         Tab2Defaults.firstUnlockShown,
-        Tab2Defaults.spokenMoments,
         Tab2Defaults.heroMaterialID,
         Tab2Defaults.heroKnownMoments,
-        Tab2Defaults.heroKnownSpokenMoments,
         "mine_last_scene_count",       // Tab2「新增 N 条」的基线
-        ProfileService.onboardingSyncPendingKey  // 引导完成待同步到服务器的标记
+        ProfileService.onboardingSyncPendingKey,  // 引导完成待同步到服务器的标记
+        // 已退役 key（聊过机制删除时枚举 case 一并删掉了，但字面量必须留在这里）：
+        // 更新前的设备本地可能已写入过它们，字面量消失会让 clearAll() 永远清不到——
+        // 正是这个文件想防的那类「凭记忆列清单，改名漏一处」。
+        "tab2_spoken_moments",
+        "tab2_hero_known_spoken_moments"
     ]
 
     /// `CategoryMilestoneTracker` 的键前缀。

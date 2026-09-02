@@ -108,9 +108,20 @@ struct Tab2HeroCard: View {
     @ViewBuilder
     private func metaRow(for featured: Tab2FeaturedMoment) -> some View {
         let sceneDetail = Self.validatedTargetSceneDetail(featured.sceneDetail)
+        let isFromPhoto = mode(featured) == .c
 
-        if sceneDetail != nil || moreCount > 0 {
+        if sceneDetail != nil || moreCount > 0 || isFromPhoto {
             HStack(spacing: AppTheme.Tab2Hero.Layout.metaContentGap) {
+                if isFromPhoto {
+                    sourcePhotoBadge
+
+                    if sceneDetail != nil || moreCount > 0 {
+                        Text("·")
+                            .font(AppTheme.Font.tab2HeroMeta)
+                            .foregroundStyle(AppTheme.Color.neutralFaint)
+                    }
+                }
+
                 if let sceneDetail {
                     Text(sceneDetail)
                         .font(AppTheme.Font.tab2HeroMeta)
@@ -144,6 +155,20 @@ struct Tab2HeroCard: View {
                 Spacer(minLength: 0)
             }
         }
+    }
+
+    /// 模式 C 的来源标记：主句非用户产出，必须显式标注，防止用户误以为这是自己说的话。
+    /// 见 `docs/prd/Tab2_Hero卡_数据提取与展示_设计方案_v1.md` §4.5「来源标记不可省」。
+    private var sourcePhotoBadge: some View {
+        HStack(spacing: AppTheme.Tab2Hero.Layout.sourceBadgeIconGap) {
+            Image(systemName: "camera.fill")
+                .imageScale(.small)
+            Text("from your photo")
+        }
+        .font(AppTheme.Font.tab2HeroMeta)
+        .foregroundStyle(AppTheme.Color.neutralFaint)
+        .lineLimit(1)
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     private func primaryText(for featured: Tab2FeaturedMoment) -> String {
@@ -223,27 +248,9 @@ struct Tab2HeroCard: View {
         )
     }
 
-    /// 与当前 English-as-target 配置绑定；未来允许更换目标语言时，只需替换这一处脚本校验。
+    /// 与 Tab2MomentRow 共用同一条规则，见 `Tab2SceneDetailValidation`。
     private nonisolated static func validatedTargetSceneDetail(_ candidate: String) -> String? {
-        let trimmed = candidate.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let first = trimmed.unicodeScalars.first,
-              isASCIILetter(first),
-              trimmed.unicodeScalars.allSatisfy(isValidTargetSceneDetailScalar)
-        else {
-            return nil
-        }
-        return trimmed
-    }
-
-    private nonisolated static func isValidTargetSceneDetailScalar(_ scalar: UnicodeScalar) -> Bool {
-        isASCIILetter(scalar)
-            || scalar.properties.isWhitespace
-            || scalar == "'"
-            || scalar == "-"
-    }
-
-    private nonisolated static func isASCIILetter(_ scalar: UnicodeScalar) -> Bool {
-        (65...90).contains(scalar.value) || (97...122).contains(scalar.value)
+        Tab2SceneDetailValidation.validatedTargetSceneDetail(candidate)
     }
 }
 
@@ -345,37 +352,9 @@ private func mockFeatured(
 #Preview("Tab2 Hero · visual matrix") {
     ScrollView {
         VStack(spacing: AppTheme.Space.paddingPage) {
-            // A · 3 张拼图 · 短主句 / 单行母语
-            Tab2HeroCard(category: .mock(
-                category: "饮食",
-                featured: mockFeatured(
-                    scene: "Cooking dinner",
-                    userOriginal: "Dinner is ready.",
-                    target: nil,
-                    native: "晚饭做好了。",
-                    inputLang: "target",
-                    image: "https://picsum.photos/seed/11/400/300"
-                ),
-                heroPhotos: [mockPhoto(11, featured: true), mockPhoto(12), mockPhoto(13)],
-                momentCount: 4
-            ), onTalk: {})
-
-            // B · 2 张拼图 · 两行主句 / 两行母语
-            Tab2HeroCard(category: .mock(
-                category: "工作与学业",
-                featured: mockFeatured(
-                    scene: "Standup meeting",
-                    userOriginal: "他们问我时间线时我大脑一片空白，完全不知道该怎么回答。",
-                    target: "I totally blanked when they asked me for the timeline in the standup meeting.",
-                    native: nil,
-                    inputLang: "native",
-                    image: "https://picsum.photos/seed/21/400/300"
-                ),
-                heroPhotos: [mockPhoto(21, featured: true), mockPhoto(22)],
-                momentCount: 6
-            ), onTalk: {})
-
-            // C · 1 张拼图 · 超长主句与母语均截为两行
+            // A · 有图 · 单张照片满宽铺满，超长主句与母语均截为两行
+            // （原 3 张/2 张/1 张拼图三个样例已收敛成一个——图区改动后
+            // heroPhotos 数量不再影响呈现，只取第一张）
             Tab2HeroCard(category: .mock(
                 category: "日常起居",
                 featured: mockFeatured(
@@ -386,7 +365,7 @@ private func mockFeatured(
                     inputLang: nil,
                     image: "https://picsum.photos/seed/31/400/300"
                 ),
-                heroPhotos: [mockPhoto(31, featured: true)],
+                heroPhotos: [mockPhoto(31, featured: true), mockPhoto(32), mockPhoto(33)],
                 momentCount: 2
             ), onTalk: {})
 

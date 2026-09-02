@@ -1,17 +1,18 @@
 import SwiftUI
 
-/// Tab2 Hero 卡顶部照片拼图。RPC 已把 featured 照片排在 slot 1；本视图只负责以最多三张照片呈现它。
+/// Tab2 Hero 卡顶部照片。RPC 已把 featured 照片排在 slot 1；本视图只取第一张，
+/// 其余（如有）由前端直接忽略——不动 RPC 返回结构，也不动数据契约。
 struct HeroCollageView: View {
     let photos: [Tab2HeroPhoto]
     let categoryLabel: String
     let popsText: String
 
-    private var tiles: [Tab2HeroPhoto] { Array(photos.prefix(3)) }
+    private var featuredPhoto: Tab2HeroPhoto? { photos.first }
 
     var body: some View {
         ZStack {
             GeometryReader { geometry in
-                collage(in: geometry.size)
+                singlePhoto(in: geometry.size)
             }
             photoTreatment
             HeroTopOverlay(categoryLabel: categoryLabel, popsText: popsText, style: .photo)
@@ -23,34 +24,11 @@ struct HeroCollageView: View {
     }
 
     @ViewBuilder
-    private func collage(in size: CGSize) -> some View {
-        let width = size.width
-        let height = size.height
-        let gap = AppTheme.Tab2Hero.Layout.collageGap
-
-        switch tiles.count {
-        case 0:
+    private func singlePhoto(in size: CGSize) -> some View {
+        if let featuredPhoto {
+            tile(featuredPhoto, width: size.width, height: size.height)
+        } else {
             placeholder
-        case 1:
-            tile(tiles[0], width: width, height: height)
-        case 2:
-            let columnWidth = (width - gap) / 2
-            HStack(spacing: gap) {
-                tile(tiles[0], width: columnWidth, height: height)
-                tile(tiles[1], width: columnWidth, height: height)
-            }
-        default:
-            let featuredWidth = (width - gap) * AppTheme.Tab2Hero.Layout.collageFeaturedWidthRatio
-                / (AppTheme.Tab2Hero.Layout.collageFeaturedWidthRatio + 1)
-            let supportingWidth = width - gap - featuredWidth
-            let supportingHeight = (height - gap) / 2
-            HStack(spacing: gap) {
-                tile(tiles[0], width: featuredWidth, height: height)
-                VStack(spacing: gap) {
-                    tile(tiles[1], width: supportingWidth, height: supportingHeight)
-                    tile(tiles[2], width: supportingWidth, height: supportingHeight)
-                }
-            }
         }
     }
 

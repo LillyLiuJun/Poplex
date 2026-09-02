@@ -110,7 +110,9 @@ private struct PresetIconStroke: View {
     }
 }
 
-private struct PresetIconShape: Shape {
+/// 文件级可见：More 行内预设图（RowPresetThumb）复用同一组 path——
+/// 12 个图标的 path 只有此处一处真相，行内版绝不复制。
+struct PresetIconShape: Shape {
     let paths: [Path]
 
     func path(in rect: CGRect) -> Path {
@@ -124,7 +126,8 @@ private struct PresetIconShape: Shape {
 
 // MARK: - 分类图标路径（24 × 24 viewBox）
 
-private extension SceneCategory {
+/// 文件级可见：path 真相随 PresetIconShape 一起被 RowPresetThumb 复用。
+extension SceneCategory {
     var tab2HeroPresetPaths: [Path] {
         switch self {
         case .homeFamily:

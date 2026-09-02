@@ -4057,7 +4057,7 @@ struct Tab2HeroCategoryTests {
         #expect(vm.heroCategory()?.sceneCategory == "工作与学业")
     }
 
-    @Test func recentFeaturedWinsWhenBothCategoriesHaveUnspokenMoments() {
+    @Test func recentFeaturedWinsWhenBothCategoriesHaveFeaturedMoments() {
         let vm = Tab2HomeViewModel(defaults: makeDefaults(), now: { now })
         let older = now.addingTimeInterval(-8 * 24 * 60 * 60)
         let newer = now.addingTimeInterval(-2 * 24 * 60 * 60)
@@ -4073,7 +4073,7 @@ struct Tab2HeroCategoryTests {
         #expect(vm.heroCategory()?.sceneCategory == "工作与学业")
     }
 
-    @Test func moreUnspokenMomentsWinsInsideRecentBucket() {
+    @Test func moreMomentsWinsInsideRecentBucket() {
         let vm = Tab2HomeViewModel(defaults: makeDefaults(), now: { now })
         let oneMoment = makeCategory(
             sceneCategory: "工作与学业", wordCount: 20, unlocked: true,
@@ -4090,18 +4090,6 @@ struct Tab2HeroCategoryTests {
         )
 
         #expect(vm.heroCategory()?.sceneCategory == "饮食")
-    }
-
-    @Test func allMomentsSpokenStillReturnsFeaturedFallback() {
-        let vm = Tab2HomeViewModel(defaults: makeDefaults(), now: { now })
-        let category = makeCategory(
-            sceneCategory: "家庭与人际", wordCount: 8, unlocked: true,
-            featuredCreatedAt: now, subSceneDetails: ["Calling family"]
-        )
-        vm.markMomentSpoken(sceneDetail: "Calling family")
-        vm.data = Tab2HomeData(unlocked: true, inputCount: 4, categories: [category])
-
-        #expect(vm.heroCategory()?.sceneCategory == "家庭与人际")
     }
 
     @Test func recentLastMaterialAtDoesNotOverrideFeaturedRecency() {
@@ -4162,7 +4150,7 @@ struct Tab2HeroCategoryTests {
         #expect(vm.heroCategory()?.sceneCategory == "饮食")
     }
 
-    @Test func spokenTriggerReranksOnceThenHeroRemainsStable() {
+    @Test func heroRemainsStableEvenAfterRecencyWindowPasses() {
         var currentNow = now
         let vm = Tab2HomeViewModel(defaults: makeDefaults(), now: { currentNow })
         let recent = makeCategory(
@@ -4180,13 +4168,222 @@ struct Tab2HeroCategoryTests {
         )
         #expect(vm.heroCategory()?.sceneCategory == "工作与学业")
 
-        vm.markMomentSpoken(sceneDetail: "Team meeting")
-        vm.markMomentSpoken(sceneDetail: "Making breakfast")
-        vm.markMomentSpoken(sceneDetail: "Ordering lunch")
-        #expect(vm.heroCategory()?.sceneCategory == "工作与学业")
-
+        // 时间越过 7 天窗口（若重排会翻到 moment 更多的 饮食），
+        // 但没有新 moment 出现 → 复用 heroMaterialID 保持稳定。
         currentNow = now.addingTimeInterval(2 * 24 * 60 * 60)
         #expect(vm.heroCategory()?.sceneCategory == "工作与学业")
+    }
+}
+
+// MARK: - Tab2HomeViewModel.moreCategories() tests
+
+struct Tab2MoreCategoriesTests {
+
+    private let now = Date(timeIntervalSince1970: 1_788_153_600)
+
+    private func makeDefaults() -> UserDefaults {
+        UserDefaults(suiteName: "tab2-more-tests-\(UUID().uuidString)")!
+    }
+
+    private func makeCategory(
+        sceneCategory: String,
+        wordCount: Int,
+        unlocked: Bool,
+        lastMaterialAt: Date? = nil,
+        featuredCreatedAt: Date? = nil,
+        subSceneDetails: [String] = []
+    ) -> Tab2CategoryData {
+        let featured: Tab2FeaturedMoment? = featuredCreatedAt.map { createdAt in
+            Tab2FeaturedMoment(
+                sceneDetail: subSceneDetails.first ?? "Scene", occurrenceCount: 1,
+                materialId: "m-\(sceneCategory)",
+                userOriginal: "some original", targetExpression: "some target",
+                nativeMeaning: nil, imageUrl: nil, inputLang: "native",
+                sourceDirection: "express", sourceGranularity: "sentence",
+                createdAt: createdAt, spokenCount: 0
+            )
+        }
+        return Tab2CategoryData(
+            sceneCategory: sceneCategory,
+            wordCount: wordCount,
+            unlocked: unlocked,
+            lastMaterialAt: lastMaterialAt,
+            subScenes: subSceneDetails.map {
+                Tab2SubScene(
+                    sceneDetail: $0, occurrenceCount: 1, quote: nil,
+                    targetExpression: nil, imageUrl: nil
+                )
+            },
+            featured: featured
+        )
+    }
+
+    @Test func twoGroupsFeaturedBeforeWordsOnlyReturnGroupOrder() {
+        let vm = Tab2HomeViewModel(defaults: makeDefaults(), now: { now })
+        let featuredOlder = makeCategory(
+            sceneCategory: "工作与学业", wordCount: 5, unlocked: true,
+            featuredCreatedAt: now.addingTimeInterval(-1 * 24 * 60 * 60),
+            subSceneDetails: ["Team meeting"]
+        )
+        let featuredNewer = makeCategory(
+            sceneCategory: "家庭与人际", wordCount: 9, unlocked: true,
+            featuredCreatedAt: now.addingTimeInterval(-1 * 60 * 60),
+            subSceneDetails: ["Calling family"]
+        )
+        let wordsOnly = makeCategory(
+            sceneCategory: "饮食", wordCount: 99, unlocked: true
+        )
+        vm.data = Tab2HomeData(
+            unlocked: true, inputCount: 3, categories: [wordsOnly, featuredNewer, featuredOlder]
+        )
+
+        let more = vm.moreCategories(hero: nil)
+        // 组 1 有 featured：同处 7 天新近桶、moment 数打平 → featured 时间定序；
+        // 组 2 纯查词（无 featured）即使词更多也整组排后。
+        #expect(more.map(\.sceneCategory) == ["家庭与人际", "工作与学业", "饮食"])
+    }
+
+    @Test func heroCategoryIsExcluded() {
+        let vm = Tab2HomeViewModel(defaults: makeDefaults(), now: { now })
+        let heroCat = makeCategory(
+            sceneCategory: "工作与学业", wordCount: 10, unlocked: true,
+            featuredCreatedAt: now, subSceneDetails: ["Team meeting"]
+        )
+        let other = makeCategory(
+            sceneCategory: "饮食", wordCount: 10, unlocked: true,
+            featuredCreatedAt: now, subSceneDetails: ["Making breakfast"]
+        )
+        vm.data = Tab2HomeData(
+            unlocked: true, inputCount: 2, categories: [heroCat, other]
+        )
+
+        let more = vm.moreCategories(hero: heroCat)
+        #expect(more.map(\.sceneCategory) == ["饮食"])
+    }
+
+    @Test func excludedCategoryIDsAreFiltered() {
+        let vm = Tab2HomeViewModel(defaults: makeDefaults(), now: { now })
+        let milestone = makeCategory(
+            sceneCategory: "工作与学业", wordCount: 10, unlocked: true,
+            featuredCreatedAt: now, subSceneDetails: ["Team meeting"]
+        )
+        let visible = makeCategory(
+            sceneCategory: "饮食", wordCount: 10, unlocked: true,
+            featuredCreatedAt: now, subSceneDetails: ["Making breakfast"]
+        )
+        vm.data = Tab2HomeData(
+            unlocked: true, inputCount: 2, categories: [milestone, visible]
+        )
+
+        let more = vm.moreCategories(excluding: ["工作与学业"], hero: nil)
+        #expect(more.map(\.sceneCategory) == ["饮食"])
+    }
+
+    @Test func lockedCategoriesAreFiltered() {
+        let vm = Tab2HomeViewModel(defaults: makeDefaults(), now: { now })
+        let locked = makeCategory(
+            sceneCategory: "科技与数码", wordCount: 40, unlocked: false,
+            featuredCreatedAt: now, subSceneDetails: ["Fixing a device"]
+        )
+        let visible = makeCategory(
+            sceneCategory: "饮食", wordCount: 10, unlocked: true,
+            featuredCreatedAt: now, subSceneDetails: ["Making breakfast"]
+        )
+        vm.data = Tab2HomeData(
+            unlocked: true, inputCount: 2, categories: [locked, visible]
+        )
+
+        let more = vm.moreCategories(hero: nil)
+        #expect(more.map(\.sceneCategory) == ["饮食"])
+    }
+
+    @Test func group1RecentFeaturedBeatsOlder() {
+        let vm = Tab2HomeViewModel(defaults: makeDefaults(), now: { now })
+        let older = makeCategory(
+            sceneCategory: "家庭与人际", wordCount: 15, unlocked: true,
+            featuredCreatedAt: now.addingTimeInterval(-8 * 24 * 60 * 60),
+            subSceneDetails: ["Family dinner"]
+        )
+        let recent = makeCategory(
+            sceneCategory: "工作与学业", wordCount: 10, unlocked: true,
+            featuredCreatedAt: now.addingTimeInterval(-2 * 24 * 60 * 60),
+            subSceneDetails: ["Team meeting"]
+        )
+        vm.data = Tab2HomeData(
+            unlocked: true, inputCount: 2, categories: [older, recent]
+        )
+
+        let more = vm.moreCategories(hero: nil)
+        #expect(more.map(\.sceneCategory) == ["工作与学业", "家庭与人际"])
+    }
+
+    @Test func group1MoreMomentsFirstInsideRecentBucket() {
+        let vm = Tab2HomeViewModel(defaults: makeDefaults(), now: { now })
+        let oneMoment = makeCategory(
+            sceneCategory: "工作与学业", wordCount: 20, unlocked: true,
+            featuredCreatedAt: now.addingTimeInterval(-1 * 24 * 60 * 60),
+            subSceneDetails: ["Team meeting"]
+        )
+        let twoMoments = makeCategory(
+            sceneCategory: "饮食", wordCount: 10, unlocked: true,
+            featuredCreatedAt: now.addingTimeInterval(-2 * 24 * 60 * 60),
+            subSceneDetails: ["Making breakfast", "Ordering lunch"]
+        )
+        vm.data = Tab2HomeData(
+            unlocked: true, inputCount: 2, categories: [oneMoment, twoMoments]
+        )
+
+        let more = vm.moreCategories(hero: nil)
+        #expect(more.map(\.sceneCategory) == ["饮食", "工作与学业"])
+    }
+
+    @Test func recentLastMaterialAtDoesNotOverrideFeaturedRecency() {
+        let vm = Tab2HomeViewModel(defaults: makeDefaults(), now: { now })
+        let pollutedByLookup = makeCategory(
+            sceneCategory: "科技与数码", wordCount: 30, unlocked: true,
+            lastMaterialAt: now,
+            featuredCreatedAt: now.addingTimeInterval(-20 * 24 * 60 * 60),
+            subSceneDetails: ["Fixing a device"]
+        )
+        let genuinelyRecent = makeCategory(
+            sceneCategory: "休闲娱乐", wordCount: 5, unlocked: true,
+            lastMaterialAt: now.addingTimeInterval(-30 * 24 * 60 * 60),
+            featuredCreatedAt: now.addingTimeInterval(-2 * 24 * 60 * 60),
+            subSceneDetails: ["Watching a game"]
+        )
+        vm.data = Tab2HomeData(
+            unlocked: true, inputCount: 2, categories: [pollutedByLookup, genuinelyRecent]
+        )
+
+        let more = vm.moreCategories(hero: nil)
+        #expect(more.map(\.sceneCategory) == ["休闲娱乐", "科技与数码"])
+    }
+
+    @Test func emptyCandidatesReturnsEmpty() {
+        let vm = Tab2HomeViewModel(defaults: makeDefaults(), now: { now })
+        #expect(vm.moreCategories(hero: nil).isEmpty)
+
+        let heroCat = makeCategory(
+            sceneCategory: "工作与学业", wordCount: 10, unlocked: true,
+            featuredCreatedAt: now, subSceneDetails: ["Team meeting"]
+        )
+        vm.data = Tab2HomeData(unlocked: true, inputCount: 1, categories: [heroCat])
+        #expect(vm.moreCategories(hero: heroCat).isEmpty)
+    }
+
+    @Test func nilHeroExcludesNothing() {
+        let vm = Tab2HomeViewModel(defaults: makeDefaults(), now: { now })
+        let a = makeCategory(
+            sceneCategory: "工作与学业", wordCount: 10, unlocked: true,
+            featuredCreatedAt: now, subSceneDetails: ["Team meeting"]
+        )
+        let b = makeCategory(
+            sceneCategory: "饮食", wordCount: 10, unlocked: true,
+            featuredCreatedAt: now, subSceneDetails: ["Making breakfast"]
+        )
+        vm.data = Tab2HomeData(unlocked: true, inputCount: 2, categories: [a, b])
+
+        #expect(vm.moreCategories(hero: nil).count == 2)
     }
 }
 
@@ -4222,6 +4419,112 @@ struct Tab2HeroCardModeTests {
     // 无 featured（分类全查词）→ 模式 D
     @Test func noFeaturedIsModeD() {
         #expect(Tab2HeroCard.featuredMode(userOriginal: "x", inputLang: "target", hasFeatured: false) == .d)
+    }
+}
+
+// MARK: - Tab2MomentRow 行高的 minHeight 策略
+//
+// rowHeight 是「内容比这矮时兜底不塌陷」的下限，不是要死守的固定高度：装得下
+// 就锁死在这个高度（对多数用户，观感等同固定行高），装不下才放开长高、不裁字。
+// 不按字号档位分支判断——minHeight 本身就是「够用就不长，不够用才长」，
+// 不需要额外的无障碍档位门控。见 2026-09-01 讨论。
+// UIHostingController 必须在主线程创建（SwiftUI GraphHost.init 的断言，
+// 后台线程触发即 SIGTRAP）：Swift Testing 默认 testsMustRunOnMainThread:NO，
+// 测试会调度到哪个线程是随机的——曾经整宿主进程崩溃、283 个用例连带 0.000s
+// 失败。整组标 @MainActor 后三个测试串行跑在主 actor 上，与文件里其他 UI
+// 相关测试组（TodayViewModelTests 等）同一模式。
+@MainActor
+struct Tab2MomentRowHeightTests {
+
+    private func mockRow(sentence: String, momentCount: Int = 6) -> Tab2MomentRow {
+        Tab2MomentRow(
+            category: Tab2CategoryData(
+                sceneCategory: "工作与学业", wordCount: 41, unlocked: true,
+                momentCount: momentCount,
+                featured: Tab2FeaturedMoment(
+                    sceneDetail: "Meetings", occurrenceCount: 1, materialId: "m1",
+                    userOriginal: nil, targetExpression: sentence,
+                    nativeMeaning: nil, imageUrl: nil, inputLang: nil,
+                    sourceDirection: "express", sourceGranularity: "sentence",
+                    createdAt: nil, spokenCount: 0
+                )
+            ),
+            onTap: {}
+        )
+    }
+
+    private func height(_ row: Tab2MomentRow, category: ContentSizeCategory) -> CGFloat {
+        let host = UIHostingController(rootView: row.environment(\.sizeCategory, category))
+        return host.sizeThatFits(in: CGSize(width: 350, height: CGFloat.infinity)).height
+    }
+
+    private let twoLineSentence = "I totally blanked when they asked for the timeline."
+
+    // 字号调到最大（XXXL，标准档最后一级——不是无障碍边缘情况）：行高必须
+    // 大于默认下限，否则意味着内容被摁在 rowHeight 里裁掉了。
+    @Test func largestStandardSizeGrowsPastFloorInsteadOfClipping() {
+        let row = mockRow(sentence: twoLineSentence)
+        #expect(height(row, category: .extraExtraExtraLarge) > AppTheme.Tab2MoreRow.Layout.rowHeight)
+    }
+
+    // 2026-09-01 三稿：More 列表的 meta 行不再渲染 scene_detail（Hero 卡才有），
+    // 只保留 +N moments；momentCount == 1（moreCount == 0）时 meta 整行不渲染，
+    // 不留空行——锁住「不渲染」不只是视觉上不显示，而是真的不占垂直空间。
+    // 用 XXXL 档位比较（不是 .large）：默认字号下两种内容都可能被 rowHeight
+    // 下限一起摁平、测不出差异，字号调大让内容超过下限、真实撑开高度时才能
+    // 看出 meta 行到底占不占地方。
+    @Test func metaRowOmittedWhenNoMoreMoments() {
+        let withMeta = mockRow(sentence: twoLineSentence, momentCount: 6)
+        let withoutMeta = mockRow(sentence: twoLineSentence, momentCount: 1)
+        #expect(height(withoutMeta, category: .extraExtraExtraLarge) < height(withMeta, category: .extraExtraExtraLarge))
+    }
+
+    // 2026-09-01 真机复现：缩略图曾经只锁宽度、不锁高度，极端长宽比的真实照片
+    // （如手机整屏截图 9:19.5）会让 Image.resizable().scaledToFill() 按图片自身
+    // 比例反推出一个远超文字内容所需的高度，把整行撑高——五行图片比例不同，
+    // 行高就跟着各不相同。锁住修复：无论缩略图长宽比多极端，行高必须只由
+    // 文字内容决定，与图片比例无关。
+    private func solidImage(width: CGFloat, height: CGFloat) -> UIImage {
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: width, height: height))
+        return renderer.image { _ in
+            UIColor.systemBlue.setFill()
+            UIRectFill(CGRect(x: 0, y: 0, width: width, height: height))
+        }
+    }
+
+    private func mockRowWithPhoto(stableKey: String) -> Tab2MomentRow {
+        Tab2MomentRow(
+            category: Tab2CategoryData(
+                sceneCategory: "工作与学业", wordCount: 41, unlocked: true,
+                momentCount: 6,
+                featured: Tab2FeaturedMoment(
+                    sceneDetail: "Meetings", occurrenceCount: 1, materialId: "m1",
+                    userOriginal: nil,
+                    targetExpression: "I totally blanked when they asked for the timeline.",
+                    nativeMeaning: nil,
+                    imageUrl: "https://example.com/\(stableKey).jpg?token=x",
+                    inputLang: nil,
+                    sourceDirection: "express", sourceGranularity: "sentence",
+                    createdAt: nil, spokenCount: 0
+                )
+            ),
+            onTap: {}
+        )
+    }
+
+    @Test func rowHeightIsIndependentOfThumbnailAspectRatio() {
+        ImageCache.shared.clearMemoryForTesting()
+        // key 必须是 stableImageKey（= imageUrl 去掉查询参数），跟生产代码
+        // Tab2FeaturedMoment.stableImageKey 的计算方式保持一致，否则测试会
+        // 命中不了缓存、停在占位态，测不出真正的问题。
+        ImageCache.shared.set(solidImage(width: 1200, height: 900), forKey: "https://example.com/landscape.jpg")
+        ImageCache.shared.set(solidImage(width: 900, height: 1950), forKey: "https://example.com/phone-screenshot.jpg")
+
+        let landscape = mockRowWithPhoto(stableKey: "landscape")
+        let extremePortrait = mockRowWithPhoto(stableKey: "phone-screenshot")
+
+        #expect(height(landscape, category: .large) == height(extremePortrait, category: .large))
+        #expect(height(extremePortrait, category: .large) == AppTheme.Tab2MoreRow.Layout.rowHeight)
     }
 }
 
@@ -4815,25 +5118,27 @@ struct LocalUserDataTests {
         let defaults = makeDefaults("local-user-data-other")
         defaults.set(true, forKey: Tab2Defaults.permanentlyUnlocked)
         defaults.set(true, forKey: Tab2Defaults.firstUnlockShown)
-        defaults.set(["Calling family"], forKey: Tab2Defaults.spokenMoments)
         defaults.set("material-a", forKey: Tab2Defaults.heroMaterialID)
         defaults.set(["Calling family"], forKey: Tab2Defaults.heroKnownMoments)
-        defaults.set(["Calling family"], forKey: Tab2Defaults.heroKnownSpokenMoments)
         defaults.set(42, forKey: "mine_last_scene_count")
         // 2026-08-27 review 发现的遗漏：引导完成待同步标记也是账号级状态
         defaults.set(true, forKey: ProfileService.onboardingSyncPendingKey)
+        // 聊过机制删除时枚举 case 一并没了，但字面量必须留在清理清单里——
+        // 用字面量而非 Tab2Defaults.* 写入，模拟「更新前的旧设备本地已写入」这一场景。
+        defaults.set(["Calling family"], forKey: "tab2_spoken_moments")
+        defaults.set(["Calling family"], forKey: "tab2_hero_known_spoken_moments")
 
         await LocalUserData.clearDefaults(defaults)
 
-        // 这三个没有视图直接观察，移除即可，不必留占位值
+        // 这些键没有视图直接观察，移除即可，不必留占位值
         #expect(defaults.object(forKey: Tab2Defaults.permanentlyUnlocked) == nil)
         #expect(defaults.object(forKey: Tab2Defaults.firstUnlockShown) == nil)
-        #expect(defaults.object(forKey: Tab2Defaults.spokenMoments) == nil)
         #expect(defaults.object(forKey: Tab2Defaults.heroMaterialID) == nil)
         #expect(defaults.object(forKey: Tab2Defaults.heroKnownMoments) == nil)
-        #expect(defaults.object(forKey: Tab2Defaults.heroKnownSpokenMoments) == nil)
         #expect(defaults.object(forKey: "mine_last_scene_count") == nil)
         #expect(defaults.object(forKey: ProfileService.onboardingSyncPendingKey) == nil)
+        #expect(defaults.object(forKey: "tab2_spoken_moments") == nil)
+        #expect(defaults.object(forKey: "tab2_hero_known_spoken_moments") == nil)
     }
 
     // 这条锁的是 re-review 发现的 false success：
