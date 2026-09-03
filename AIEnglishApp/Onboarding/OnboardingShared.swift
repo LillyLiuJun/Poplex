@@ -73,63 +73,30 @@ struct OnboardingBackButton: View {
     }
 }
 
-// MARK: - 页面背景：暖米白 + 网格点底纹 + 底部品牌橙光晕（与 CanvasBackground 参数统一）
+// MARK: - 页面背景：暖米白 + 底部品牌橙光晕（渐变结构与 BottomAuraFooter 共用 WarmAuraGlow，
+// 数值各自独立调过——onboarding 这档更亮，见 WarmAuraGlow.swift 的说明）
 
 struct OnboardingAuraBackground: View {
-    private let gridSpacing: CGFloat = 18
-    private let dotRadius: CGFloat = 0.6
-
     var body: some View {
-        ZStack {
-            AppTheme.Color.pageBg
-                .ignoresSafeArea()
-                // 底部品牌橙光晕。原先挂在 OnboardingBottomFade 上，那层位于
-                // ScrollView **之后**，于是光晕画在内容之上，把照片、卡片、文字
-                // 全蒙了一道橙——装饰性的氛围光不该染内容。移到背景层后氛围不变
-                // （页面底色上照样有这团暖光），内容盖在它上面。
-                // 用 .overlay 而非 ZStack 兄弟：460pt 宽超过页宽，作兄弟会把整个
-                // 组件的理想宽度顶到 460，父级按理想尺寸居中时会把整页顶偏、
-                // 在页边露出相邻页（真机验证过）。overlay 内容不参与尺寸上报。
-                // 挂在已 ignoresSafeArea 的 pageBg 上 → 相对**物理**屏底定位。
-                .overlay(alignment: .bottom) {
-                    Ellipse()
-                        .fill(
-                            RadialGradient(
-                                colors: [AppTheme.Color.canvasAura.opacity(0.24), .clear],
-                                center: .center,
-                                startRadius: 0,
-                                endRadius: 220
-                            )
-                        )
-                        .frame(width: 460, height: 260)
-                        .blur(radius: 44)
-                        .offset(y: 40)
-                        .allowsHitTesting(false)
-                }
-
-            // 网格点底纹（与 Tab1/Tab2 CanvasBackground 一致）
-            Canvas { context, size in
-                let dot = Path(
-                    ellipseIn: CGRect(x: 0, y: 0, width: dotRadius * 2, height: dotRadius * 2)
-                )
-                let color = GraphicsContext.Shading.color(
-                    AppTheme.Color.canvasGridDot.opacity(0.08)
-                )
-                var y: CGFloat = 0
-                while y < size.height {
-                    var x: CGFloat = 0
-                    while x < size.width {
-                        context.fill(dot.offsetBy(dx: x, dy: y), with: color)
-                        x += gridSpacing
-                    }
-                    y += gridSpacing
-                }
-            }
+        AppTheme.Color.pageBg
             .ignoresSafeArea()
-
-        }
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
+            // 底部品牌橙光晕。原先挂在 OnboardingBottomFade 上，那层位于
+            // ScrollView **之后**，于是光晕画在内容之上，把照片、卡片、文字
+            // 全蒙了一道橙——装饰性的氛围光不该染内容。移到背景层后氛围不变
+            // （页面底色上照样有这团暖光），内容盖在它上面。
+            // 用 .overlay 而非 ZStack 兄弟：460pt 宽超过页宽，作兄弟会把整个
+            // 组件的理想宽度顶到 460，父级按理想尺寸居中时会把整页顶偏、
+            // 在页边露出相邻页（真机验证过）。overlay 内容不参与尺寸上报。
+            // 挂在已 ignoresSafeArea 的 pageBg 上 → 相对**物理**屏底定位。
+            .overlay(alignment: .bottom) {
+                WarmAuraGlow(
+                    stops: Gradient.warmAuraStops(opacities: [0.32, 0.31, 0.28, 0.23, 0.16, 0.09, 0.04, 0.01]),
+                    endRadius: 300,
+                    offsetY: 40
+                )
+            }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 }
 

@@ -703,14 +703,9 @@ private struct OnboardingResultCard: View {
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.large))
         .overlay(
             RoundedRectangle(cornerRadius: AppTheme.Radius.large)
-                .stroke(AppTheme.Color.border.opacity(0.6), lineWidth: 1)
+                .strokeBorder(AppTheme.Color.cardBorder, lineWidth: 0.5)
         )
-        .shadow(
-            color: AppTheme.Shadow.cardColor,
-            radius: AppTheme.Shadow.cardRadius,
-            x: AppTheme.Shadow.cardX,
-            y: AppTheme.Shadow.cardY
-        )
+        .cardShadow()
         .onAppear { skeletonPulse = true }
     }
 

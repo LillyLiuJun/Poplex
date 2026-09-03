@@ -53,7 +53,7 @@ enum PermissionService {
     /// present a system dialog; it blocks until the user responds).
     static func requestMic() async -> Bool {
         await withCheckedContinuation { continuation in
-            AVAudioSession.sharedInstance().requestRecordPermission {
+            AVAudioApplication.requestRecordPermission {
                 continuation.resume(returning: $0)
             }
         }

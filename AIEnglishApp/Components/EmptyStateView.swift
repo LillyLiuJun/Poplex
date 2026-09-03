@@ -46,7 +46,6 @@ struct EmptyStateView: View {
 #Preview {
     ZStack {
         AppTheme.Color.pageBg.ignoresSafeArea()
-        CanvasBackground().ignoresSafeArea()
         EmptyStateView()
     }
 }

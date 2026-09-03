@@ -37,6 +37,11 @@ struct SkeletonCardRow: View {
                 .offset(x: shimmerX)
         }
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
+        .overlay {
+            RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
+                .strokeBorder(AppTheme.Color.cardBorder, lineWidth: 0.5)
+        }
+        .cardShadow()
         .onAppear {
             withAnimation(.linear(duration: 1.3).repeatForever(autoreverses: false)) {
                 shimmerX = 500

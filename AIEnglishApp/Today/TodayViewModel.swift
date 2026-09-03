@@ -70,17 +70,22 @@ final class TodayViewModel {
     /// 抽成闭包是为了让 send() 的门控可在单元测试里注入，而不依赖全局 UserDefaults。
     private let isConsentGranted: () -> Bool
 
-    init(service: AIServicing = LiveAIService(),
+    // service/isConnected 的默认值改成在 init 体内构造，不写在参数默认值位置：
+    // 参数默认值表达式不继承 init 本身的 @MainActor 隔离（即便类型标了 @MainActor 也一样，
+    // 这是 Swift 的既有行为），LiveAIService.init() / NetworkMonitor.shared 都是主线程
+    // 隔离的，写在参数默认值里会被当成「非隔离上下文里调用主线程隔离 API」报警；
+    // init 方法体本身确定跑在 MainActor 上，挪进来就没有这个问题。
+    init(service: AIServicing? = nil,
          historyDataLoader: (@Sendable () async throws -> Data)? = nil,
          historyTimeout: Duration = .seconds(8),
-         isConnected: @escaping () -> Bool = { NetworkMonitor.shared.isConnected },
+         isConnected: (() -> Bool)? = nil,
          isConsentGranted: @escaping () -> Bool = {
              UserDefaults.standard.double(forKey: "ai_consent_accepted_at") > 0
          }) {
-        self.service = service
+        self.service = service ?? LiveAIService()
         self.historyDataLoader = historyDataLoader
         self.historyTimeout = historyTimeout
-        self.isConnected = isConnected
+        self.isConnected = isConnected ?? { NetworkMonitor.shared.isConnected }
         self.isConsentGranted = isConsentGranted
     }
 

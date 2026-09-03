@@ -21,13 +21,7 @@ struct SummaryBlock<Content: View>: View {
             }
             .padding(AppTheme.Space.paddingCard)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(AppTheme.Color.cardBg, in: RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
-            .shadow(
-                color: AppTheme.Shadow.cardColor,
-                radius: AppTheme.Shadow.cardRadius,
-                x: AppTheme.Shadow.cardX,
-                y: AppTheme.Shadow.cardY
-            )
+            .surfaceCard(cornerRadius: AppTheme.Radius.medium, fillColor: AppTheme.Color.cardBg)
         }
     }
 }

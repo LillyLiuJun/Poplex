@@ -74,9 +74,9 @@ private enum Primitive {
     // Neutral — 品牌染色中性（Warm Editorial）：深色端从种子橙 FF7622 掺入橙色相
     //   （黑带暖底，H≈24°），中/浅灰去棕回灰（低彩度、只留一丝暖），暖纸页面。
     //   深色有温度、大面积灰干净。深色模式数值未导出，勿自行补。
-    static let neutral50  = Color(hex: 0xFBF6F1)  // 暖纸页面（pageBg）
-    static let neutral100 = Color(hex: 0xEBE8E3)  // 用户气泡 / 图片占位底
-    static let neutral200 = Color(hex: 0xE3DFD9)  // 描边 / 分割
+    static let neutral50  = Color(hex: 0xFCF8F3)  // 暖纸页面（pageBg）
+    static let neutral100 = Color(hex: 0xF0EDE6)  // 用户气泡 / 图片占位底（#F0EDE6，暖度 10）
+    static let neutral200 = Color(hex: 0xE6E1DA)  // 描边 / 分割（同步加暖提亮）
     static let neutral300 = Color(hex: 0xC7C3BD)  // 最弱文字（faint）
     static let neutral400 = Color(hex: 0xA5A099)  // 区块小标（label）
     static let neutral500 = Color(hex: 0x7C7773)  // 次要弱文字（muted）
@@ -152,9 +152,9 @@ private enum Primitive {
     static let info900 = Color(hex: 0x4679D1)
     static let info950 = Color(hex: 0x3065C0)
 
-    // ── 暖近白卡片：比暖纸页面（neutral50 #FBF6F1）更亮，带一丝暖底，
-    //    靠"更亮 + 柔阴影"分层；不用纯白，避免冷白跳出整套暖色系 ──
-    static let warmWhite = Color(hex: 0xFFFDF8)
+    // ── 暖近白卡片：比暖纸页面（neutral50 #FCF8F3）更亮，带一丝暖底，
+    //    靠"描边 + 双层紧阴影"分层；不用纯白，避免冷白跳出整套暖色系 ──
+    static let warmWhite = Color(hex: 0xFFFDFB)
 
     // Tab2 Hero B1 预设图：这些值来自视觉规格，语义层按用途消费。
     static let tab2HeroPresetGradientMiddle = Color(hex: 0xFCF8F5)
@@ -238,11 +238,11 @@ enum AppTheme {
     }
 
     enum Color {
-        // 背景（暖米色页面 + 近白暖卡片，靠层次而非纯白飘白区分）
-        static let pageBg   = Primitive.neutral50   // 暖米色页面（非纯白）
-        // 顶栏的超轻暖纸融合层：中和系统 material 偏冷的白雾，不形成实色横条。
-        static let topBarMaskWarmTint = Primitive.neutral50.opacity(0.18)
-        static let cardBg   = Primitive.warmWhite   // 近白暖卡片，比页面浅一档
+        // 背景（暖米色页面 + 近白暖卡片，靠描边 + 紧阴影分层）
+        static let pageBg   = Primitive.neutral50   // 暖米色页面（非纯白 #FCF8F3）
+        // Tab1 输入框底部背板暖色补偿（中和冷感并承担 Tab1 底部承托暖光，初值 5.5%）
+        static let inputBackdropWarmTint = Primitive.primary950.opacity(0.055)
+        static let cardBg   = Primitive.warmWhite   // 近白暖卡片（#FFFDFB）
         static let inputBg  = Primitive.warmWhite
 
         // 文字（由重到轻，全部 ≥4.4:1 WCAG AA 合规）
@@ -288,9 +288,13 @@ enum AppTheme {
         static let bubbleUserBg   = Primitive.neutral100
         static let bubbleUserText = Primitive.neutral900
         static let bubbleAIBg     = Primitive.warmWhite
+        // 日期分隔胶囊背景（提亮加暖）
+        static let dateChipBg     = Primitive.neutral200.opacity(0.5)
 
         // 描边 / 分割
         static let border       = Primitive.neutral200
+        // 卡片精细轮廓描边：0.5pt @ 约 35% 透明度，与紧阴影分工建立提亮后的边界
+        static let cardBorder   = Primitive.neutral200.opacity(0.35)
         // Tab2 空状态插画内部结构线：对应 Onboarding 相机的暖石墨描边，
         // 只服务非阅读性的小型图形，不承担正文对比度职责。
         static let emptyStateIllustrationOutline = Primitive.neutral700.opacity(0.72)
@@ -323,9 +327,8 @@ enum AppTheme {
         // 词条类型图标的回退底块（无配图时）：比图片占位底更淡，让描边类型图标退后作弱提示
         static let iconTileBg = Primitive.neutral900.opacity(0.05)
 
-        // 首页画布装饰（网格点 = 暖灰底纹；aura = 底部品牌橘光晕）——
+        // 首页画布装饰（aura = 底部品牌橘光晕）——
         // 透明度在组件内按需施加，此处只定义基色
-        static let canvasGridDot = Primitive.neutral500
         static let canvasAura     = Primitive.primary950
 
         // 磨砂玻璃卡（Tab2 卡片 / 列表容器）：暖白 44% 薄蒙 + 0.5px 白边，
@@ -334,7 +337,7 @@ enum AppTheme {
         static let glassCardSurface = Primitive.warmWhite.opacity(0.44)
         static let glassCardEdge    = SwiftUI.Color.white.opacity(0.72)
         // 暖纸卡（warmGlassCard · Topics 列表容器 + Hero 卡）：单层不透明暖纸白底，
-        // 无描边、无橙薄纱、无柔光——分层职责全部交给阴影（见 Shadow.warmCard*）。
+        // 无描边、无橙薄纱、无柔光——分层职责全部交给阴影（见 Shadow.cardContact*/cardAmbient*）。
         // 名字里的 "glass" 是历史遗留：早期配方确实叠过橙薄纱与右上柔光，
         // 后因整卡发脏、削弱内容对比度而移除，只保留调用点名不改，避免大面积改名。
         static let warmGlassSurface = Primitive.warmWhite   // 暖纸白底（不透明单层）
@@ -524,10 +527,6 @@ enum AppTheme {
     enum Opacity {
         /// 装饰性图形的内部结构描边：在暖纸底上压到既可见又不抢正文重量。
         static let illustrationHairline: CGFloat = 0.55
-        // 顶栏渐进遮罩：中下段保留更多雾化承托，避免导航按钮下过早透出内容。
-        static let topBarMaskButtonTop: CGFloat = 0.94
-        static let topBarMaskButtonCenter: CGFloat = 0.74
-        static let topBarMaskTail: CGFloat = 0.34
     }
 
     /// 静态几何旋转角（度）。
@@ -549,18 +548,24 @@ enum AppTheme {
     }
 
     enum Shadow {
-        // 温润极简：无边框卡片靠暖黑（neutral900）低透明、大扩散阴影托起，
-        // 精确对齐参考稿 rgba(28,25,23,0.04) 0 12px 32px 的悬浮感。
+        // ── 卡片双层紧阴影（接触阴影 + 环境阴影，取代大扩散模糊阴影）──────────────────
+        // 贴地接触阴影（负责轮廓边缘微厚度）：y 1.5 / blur 4 / 中性近黑 3.5%
+        static let cardContactColor: SwiftUI.Color = Primitive.neutral900.opacity(0.035)
+        static let cardContactRadius: CGFloat = 4
+        static let cardContactX: CGFloat = 0
+        static let cardContactY: CGFloat = 1.5
+
+        // 浅层环境阴影（负责温润柔和扩散）：y 4 / blur 8 / 暖棕 2.5%
+        static let cardAmbientColor: SwiftUI.Color = Primitive.neutral800.opacity(0.025)
+        static let cardAmbientRadius: CGFloat = 8
+        static let cardAmbientX: CGFloat = 0
+        static let cardAmbientY: CGFloat = 4
+
+        // 浮动控件 / 独立大扩散阴影（保留原 token 供工具条/非卡片元素使用）
         static let cardColor: SwiftUI.Color = Primitive.neutral900.opacity(0.04)
         static let cardRadius: CGFloat = 32
         static let cardX: CGFloat = 0
         static let cardY: CGFloat = 12
-
-        // 暖橙薄纱卡去边框后，靠加深一档的阴影托起（无描边时承担分层职责）
-        static let warmCardColor: SwiftUI.Color = Primitive.neutral900.opacity(0.09)
-        static let warmCardRadius: CGFloat = 28
-        static let warmCardX: CGFloat = 0
-        static let warmCardY: CGFloat = 12
 
         // 小型叠纸插画：极低浓度、短距离阴影只负责交代纸层厚度，不制造悬浮卡片感。
         static let paperLayerColor: SwiftUI.Color = Primitive.neutral900.opacity(0.05)
@@ -775,8 +780,6 @@ enum AppTheme {
             static let ctaHorizontalInset: CGFloat = 22
             static let ctaContentGap: CGFloat = 7
             static let ctaCornerRadius: CGFloat = 21
-            static let cardShadowRadius: CGFloat = 8
-            static let cardShadowY: CGFloat = 2
             static let photoTopScrimHeight: CGFloat = 54
             static let photoOverlayShadowRadius: CGFloat = 6
             static let photoOverlayShadowY: CGFloat = 1
@@ -799,7 +802,6 @@ enum AppTheme {
             static let wordRowHeight: CGFloat = 26
             static let wordRowGap: CGFloat = 9
             static let metaContentGap: CGFloat = 5
-            static let sourceBadgeIconGap: CGFloat = 4
         }
 
         enum Opacity {
@@ -865,10 +867,6 @@ enum AppTheme {
             /// 卡片内边距（Space.paddingCard，同为 16）的视觉权重，否则五行会被
             /// 眼睛读成一整块，而不是各自独立的卡片。
             static let rowGap: CGFloat = Primitive.space16
-            /// 比 hero 轻两档：hero 8 → 一档 6（已废弃的一稿值）→ 两档 4，
-            /// 每档 -2，y 不变（hero/一稿都是 2）。
-            static let shadowRadius: CGFloat = 4
-            static let shadowY: CGFloat = 2
         }
 
         enum Typography {
@@ -1225,8 +1223,7 @@ private struct GlassCapsuleModifier: ViewModifier {
 }
 
 // MARK: - Surface card modifier (内容容器)
-// 单层暖纸底、无描边、不叠任何橙色层；不使用玻璃，避免内容卡发灰。
-// 内容容器统一走此配方与 28pt 容器圆角，靠阴影而不是描边建立层级。
+// 单层暖纸底 + 0.5pt 细描边 + 双层紧阴影；不使用玻璃，避免内容卡发灰。
 private struct SurfaceCardModifier: ViewModifier {
     let cornerRadius: CGFloat
     var fillColor: Color = AppTheme.Color.warmGlassSurface
@@ -1237,16 +1234,31 @@ private struct SurfaceCardModifier: ViewModifier {
             .background {
                 shape.fill(fillColor)
             }
-            .shadow(
-                color: AppTheme.Shadow.warmCardColor,
-                radius: AppTheme.Shadow.warmCardRadius,
-                x: AppTheme.Shadow.warmCardX,
-                y: AppTheme.Shadow.warmCardY
-            )
+            .overlay {
+                shape.strokeBorder(AppTheme.Color.cardBorder, lineWidth: 0.5)
+            }
+            .cardShadow()
     }
 }
 
 extension View {
+    /// 卡片双层紧阴影（contact 贴地接触 + ambient 浅层环境）
+    func cardShadow() -> some View {
+        self
+            .shadow(
+                color: AppTheme.Shadow.cardContactColor,
+                radius: AppTheme.Shadow.cardContactRadius,
+                x: AppTheme.Shadow.cardContactX,
+                y: AppTheme.Shadow.cardContactY
+            )
+            .shadow(
+                color: AppTheme.Shadow.cardAmbientColor,
+                radius: AppTheme.Shadow.cardAmbientRadius,
+                x: AppTheme.Shadow.cardAmbientX,
+                y: AppTheme.Shadow.cardAmbientY
+            )
+    }
+
     /// 内容容器：暖纸卡配方，默认 28pt 容器圆角、`warmGlassSurface` 底色。
     /// `fillColor` 留给需要更柔和底色的调用点（如 Settings 家族）单独覆盖，
     /// 默认值不变则其余调用点（Tab2 等）行为完全不受影响。

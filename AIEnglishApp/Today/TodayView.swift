@@ -13,6 +13,7 @@ struct TodayView: View {
     /// 首帧用单行基础态 52 + 8 = 60pt，实测回调随后接管；配合 32pt 内容净空，
     /// 基础态停靠线仍是此前验收过的 92pt。
     @State private var inputBarHeight = AppTheme.Size.inputBarMinHeight + AppTheme.Space.paddingS
+    @State private var refreshHaptics = PullToRefreshHaptics()
     /// 生成次数额度的共享展示状态：达标时 InputBar 锁输入 + 出 banner，数字从这读。
     /// 只有服务端裁决（429 / refresh 的 allowed 字段）会把 isAllowed 置 false。
     @State private var quotaStore = UsageQuotaStore.shared
@@ -35,8 +36,9 @@ struct TodayView: View {
             timeline
                 .task { await viewModel.loadHistory() }
 
-            // InputBar 独立悬浮在内容上方；背后垫 Gemini 风格可变渐进式通透模糊底托（向下贯穿底部安全区，向上 16pt 平滑消融进入内容区），
-            // 内容向下滚动穿过时自然失焦消融溶解进背景，保持极佳的通透感与景深
+            // InputBar 独立悬浮在内容上方；背后垫纸色渐进式底托（向下贯穿底部安全区，向上 16pt 平滑消融进入内容区），
+            // 内容向下滚动穿过时溶入暖纸底色而非虚化——当前是纯色渐变，不含模糊/失焦（那是方案 B
+            // 真·可变模糊要做的事，见 VariableBlurBackdrop 类型注释）。
             InputBar(
                 text: $inputText,
                 image: $vm.pendingImage,
@@ -73,8 +75,8 @@ struct TodayView: View {
             )
             .padding(.bottom, AppTheme.Space.paddingHero)
         }
-            // 首页画布装饰（网格点 + 底部橘色光晕），透明叠在 pageBg 之上、内容之下
-            .background(CanvasBackground().ignoresSafeArea())
+            // 首页背景（暖纸底色），底部暖光由 InputBar 的 VariableBlurBackdrop 承担
+            .background(AppTheme.Color.pageBg.ignoresSafeArea())
             .sheet(isPresented: $viewModel.showAIConsent) {
                 AIConsentView { viewModel.onConsentAgreed() }
                     .presentationDetents([.medium, .large])
@@ -124,7 +126,7 @@ struct TodayView: View {
     private var historyTimeline: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                WarmRefreshControlHelper()
+                WarmRefreshControlHelper(haptics: refreshHaptics)
                     .frame(width: 0, height: 0)
                 LazyVStack(spacing: AppTheme.Space.paddingCard) {
                     ForEach(viewModel.entries) { entry in
@@ -165,7 +167,7 @@ struct TodayView: View {
             }
             .scrollBounceBehavior(.always, axes: .vertical)
             .refreshable {
-                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                refreshHaptics.fire()
                 // 下拉刷新：手动对齐服务器正本（断网启动后恢复网络时的主要恢复入口）
                 await viewModel.loadHistory(showFailureHint: true)
             }
@@ -263,7 +265,6 @@ private struct Tab1LimitReachedContextPreview: View {
         NavigationStack {
             ZStack(alignment: .bottom) {
                 AppTheme.Color.pageBg.ignoresSafeArea()
-                CanvasBackground().ignoresSafeArea()
 
                 // 示例时间线内容
                 ScrollView {
@@ -347,7 +348,6 @@ private struct Tab1HistoryLoadErrorContextPreview: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             AppTheme.Color.pageBg.ignoresSafeArea()
-            CanvasBackground().ignoresSafeArea()
 
             Tab2LoadErrorView(isRetrying: isRetrying) { }
 

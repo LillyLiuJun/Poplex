@@ -134,9 +134,14 @@ final class CameraCaptureModel: NSObject, AVCapturePhotoCaptureDelegate {
         }
     }
 
-    func photoOutput(_ output: AVCapturePhotoOutput,
-                     didFinishProcessingPhoto photo: AVCapturePhoto,
-                     error: Error?) {
+    // AVFoundation 从它自己内部的后台队列回调这个 delegate 方法，不保证在主线程——
+    // 而这个类默认继承模块的主线程隔离，两者矛盾。显式 nonisolated：方法体本身
+    // 只读传入参数、构造 UIImage（不碰任何主线程状态），真正的状态写入已经在原来的
+    // DispatchQueue.main.async 里正确跳回主线程，nonisolated 只是让类型系统认可
+    // 这个既有的、本来就正确的线程处理方式。
+    nonisolated func photoOutput(_ output: AVCapturePhotoOutput,
+                                  didFinishProcessingPhoto photo: AVCapturePhoto,
+                                  error: Error?) {
         let image = photo.fileDataRepresentation().flatMap { UIImage(data: $0) }
         DispatchQueue.main.async { [weak self] in
             self?.captureCompletion?(image)

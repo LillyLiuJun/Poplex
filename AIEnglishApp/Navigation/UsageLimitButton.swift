@@ -282,9 +282,8 @@ private struct SheetModalCanvasPreview<Content: View>: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            // 宿主背景模拟（Tab1 页面底色 + Canvas 光晕）
+            // 宿主背景模拟（Tab1 页面底色；原 Canvas 光晕层已随 CanvasBackground 一并移除）
             AppTheme.Color.pageBg.ignoresSafeArea()
-            CanvasBackground().ignoresSafeArea()
 
             // 背景暗色遮罩（模拟系统 Sheet 弹出时的 scrim）
             Color.black.opacity(0.24)

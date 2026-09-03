@@ -2,7 +2,9 @@ import Foundation
 import UIKit
 
 // DB 消息记录——从 get-messages 解码，用于重建历史时间线
-struct MessageRecord: Decodable, Identifiable {
+// 纯数据 + 纯转换（asTimelineEntry 等），显式 nonisolated：TodayViewModel.buildEntries
+// 本身标了 nonisolated 以便随处调用，调用这里的方法不该因为模块默认主线程隔离被拦下来。
+nonisolated struct MessageRecord: Decodable, Identifiable {
     let id: UUID
     let role: String
     let inputType: String?

@@ -73,12 +73,14 @@ final class OnboardingViewModel {
     /// 当前异步生成的状态所有权 token；reset/reject 会让悬空请求立即失效。
     private var activeAttemptId: UUID?
     /// 是否联网的判定（注入点，便于单测模拟断网）。默认读全局 NetworkMonitor。
-    private let isConnected: @Sendable () -> Bool
+    /// 只在本类（主线程隔离）内调用，不需要 @Sendable——去掉它才能在闭包默认值里
+    /// 直接读 NetworkMonitor.shared.isConnected 这个主线程隔离属性，不必额外跳线程。
+    private let isConnected: () -> Bool
 
     init(
         service: AIServicing = LiveAIService(),
         presetCardSaver: PresetCardSaving = LivePresetCardSaver(),
-        isConnected: @escaping @Sendable () -> Bool = { NetworkMonitor.shared.isConnected }
+        isConnected: @escaping () -> Bool = { NetworkMonitor.shared.isConnected }
     ) {
         self.service = service
         self.presetCardSaver = presetCardSaver

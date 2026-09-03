@@ -59,7 +59,6 @@ struct SettingsScreen<Content: View>: View {
     var body: some View {
         ZStack {
             AppTheme.Color.pageBg.ignoresSafeArea()
-            CanvasBackground().ignoresSafeArea()
 
             ScrollViewReader { proxy in
                 ScrollView {

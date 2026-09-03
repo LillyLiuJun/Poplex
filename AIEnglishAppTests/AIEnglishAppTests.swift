@@ -347,8 +347,143 @@ struct RootTabSwipeIntentTests {
     }
 
     @Test func diagonalDragDoesNotBecomeTabSwipe() {
-        // 顶栏视觉调整不得放宽既有 45° 手势边界，避免垂直滚动被误判为切 Tab。
+        // 45°~55° 的斜向划动（如 dx=50, dy=50 或 dx=60, dy=40）不得被判定为水平切 Tab
         #expect(RootTabSwipeIntent.isHorizontal(CGSize(width: 50, height: 50)) == false)
+        #expect(RootTabSwipeIntent.isHorizontal(CGSize(width: 60, height: 40)) == false)
+        // 只有超过 1.7 倍（约 60°）的明确水平手势才被判定为水平
+        #expect(RootTabSwipeIntent.isHorizontal(CGSize(width: 80, height: 40)) == true)
+    }
+
+    // MARK: - nextLock（手势进行中的锁定判定）
+
+    @Test func nextLockStaysUndeterminedBelowMinimumDistance() {
+        // 9pt 总位移不到 10pt 最低确认门槛——哪怕方向已经是明确水平，也先不锁。
+        let lock = RootTabSwipeIntent.nextLock(current: .undetermined, translation: CGSize(width: 9, height: 0))
+        #expect(lock == .undetermined)
+    }
+
+    @Test func nextLockLocksHorizontalPastThreshold() {
+        let lock = RootTabSwipeIntent.nextLock(current: .undetermined, translation: CGSize(width: 20, height: 0))
+        #expect(lock == .horizontal)
+    }
+
+    @Test func nextLockLocksVerticalPastThreshold() {
+        let lock = RootTabSwipeIntent.nextLock(current: .undetermined, translation: CGSize(width: 0, height: 20))
+        #expect(lock == .vertical)
+    }
+
+    @Test func nextLockIgnoresFurtherTranslationOnceLocked() {
+        // 已经锁定水平后，哪怕后续帧的位移看起来像垂直，也不会被重新判定——
+        // 意图只在手势早期判一次，锁定后到手势结束前保持不变。
+        let lock = RootTabSwipeIntent.nextLock(current: .horizontal, translation: CGSize(width: 0, height: 200))
+        #expect(lock == .horizontal)
+
+        let stillVertical = RootTabSwipeIntent.nextLock(current: .vertical, translation: CGSize(width: 200, height: 0))
+        #expect(stillVertical == .vertical)
+    }
+
+    // MARK: - resolveAction（松手时的触发判定）
+
+    @Test func resolveActionIgnoresVerticalLockRegardlessOfDistance() {
+        // 从未锁定为水平的手势，哪怕松手位移巨大，也一律不触发切 Tab。
+        let action = RootTabSwipeIntent.resolveAction(
+            lock: .vertical,
+            translation: CGSize(width: -200, height: 0),
+            predictedTranslation: CGSize(width: -400, height: 0),
+            selectedTab: .today,
+            capturedSwipeOpen: false,
+            mineDetailActive: false
+        )
+        #expect(action == .none)
+    }
+
+    @Test func resolveActionSwitchesToMineOnLeftSwipePastHardThreshold() {
+        let action = RootTabSwipeIntent.resolveAction(
+            lock: .horizontal,
+            translation: CGSize(width: -81, height: 0),
+            predictedTranslation: .zero,
+            selectedTab: .today,
+            capturedSwipeOpen: false,
+            mineDetailActive: false
+        )
+        #expect(action == .switchToMine)
+    }
+
+    @Test func resolveActionSwitchesToMineOnInertialLeftFlick() {
+        // 实测位移只到 36pt（过 35pt 软门槛），但惯性预测位移到 -161pt（过 160pt）也应触发。
+        let action = RootTabSwipeIntent.resolveAction(
+            lock: .horizontal,
+            translation: CGSize(width: -36, height: 0),
+            predictedTranslation: CGSize(width: -161, height: 0),
+            selectedTab: .today,
+            capturedSwipeOpen: false,
+            mineDetailActive: false
+        )
+        #expect(action == .switchToMine)
+    }
+
+    @Test func resolveActionDoesNotTriggerBelowBothThresholds() {
+        let action = RootTabSwipeIntent.resolveAction(
+            lock: .horizontal,
+            translation: CGSize(width: -34, height: 0),
+            predictedTranslation: CGSize(width: -159, height: 0),
+            selectedTab: .today,
+            capturedSwipeOpen: false,
+            mineDetailActive: false
+        )
+        #expect(action == .none)
+    }
+
+    @Test func resolveActionSwitchesToTodayOnRightSwipeFromMine() {
+        let action = RootTabSwipeIntent.resolveAction(
+            lock: .horizontal,
+            translation: CGSize(width: 81, height: 0),
+            predictedTranslation: .zero,
+            selectedTab: .mine,
+            capturedSwipeOpen: false,
+            mineDetailActive: false
+        )
+        #expect(action == .switchToToday)
+    }
+
+    @Test func resolveActionResetsListInsteadOfSwitchingWhenSwipeOpenWasCaptured() {
+        // 手势开始时 Tab2 的滑动删除态是打开的：右滑应该先收起它、重置列表，
+        // 而不是真的切回 Today——用户此刻的右滑意图是关掉删除条。
+        let action = RootTabSwipeIntent.resolveAction(
+            lock: .horizontal,
+            translation: CGSize(width: 81, height: 0),
+            predictedTranslation: .zero,
+            selectedTab: .mine,
+            capturedSwipeOpen: true,
+            mineDetailActive: false
+        )
+        #expect(action == .resetMineListForOpenDelete)
+    }
+
+    @Test func resolveActionDoesNothingWhenMineDetailIsActive() {
+        // 详情页展开时右滑不该把用户甩回 Today。
+        let action = RootTabSwipeIntent.resolveAction(
+            lock: .horizontal,
+            translation: CGSize(width: 81, height: 0),
+            predictedTranslation: .zero,
+            selectedTab: .mine,
+            capturedSwipeOpen: false,
+            mineDetailActive: true
+        )
+        #expect(action == .none)
+    }
+
+    @Test func resolveActionIgnoresLeftSwipeWhileAlreadyOnMine() {
+        // 已经在 Mine 上时左滑不该有任何动作（没有更左的 Tab）。
+        let action = RootTabSwipeIntent.resolveAction(
+            lock: .horizontal,
+            translation: CGSize(width: -200, height: 0),
+            predictedTranslation: .zero,
+            selectedTab: .mine,
+            capturedSwipeOpen: false,
+            mineDetailActive: false
+        )
+        #expect(action == .none)
     }
 }
 
@@ -411,7 +546,12 @@ struct NavigationChromeTokenTests {
 
     private func labelRowWidth(at category: UIContentSizeCategory) -> CGFloat {
         let style = uiTextStyle(AppTheme.Font.tabLabelStyle)
-        let baseSize = UIFont.preferredFont(forTextStyle: style).pointSize
+        // 固定按 .large（系统默认档）取基准字号，不读 UIFont.preferredFont(forTextStyle:)
+        // 的无参数重载——那个重载读的是进程当前"活的"系统字号设置，在并行跑全量测试时
+        // 会被同一模拟器上其他用例污染，导致基准字号本身就已经被放大过一次，
+        // 叠加下面的 UIFontMetrics 二次缩放，测出的可放档位会不确定地偏低（间歇性变红）。
+        let baseTrait = UITraitCollection(preferredContentSizeCategory: .large)
+        let baseSize = UIFont.preferredFont(forTextStyle: style, compatibleWith: baseTrait).pointSize
         let trait = UITraitCollection(preferredContentSizeCategory: category)
         let size = UIFontMetrics(forTextStyle: style).scaledValue(for: baseSize, compatibleWith: trait)
         let weight = uiWeight(AppTheme.Font.tabLabelWeight)

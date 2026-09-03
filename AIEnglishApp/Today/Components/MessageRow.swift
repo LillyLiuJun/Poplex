@@ -270,7 +270,7 @@ private struct DateSeparatorView: View {
                 .foregroundStyle(AppTheme.Color.textMuted)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 4)
-                .background(AppTheme.Color.border.opacity(0.5))
+                .background(AppTheme.Color.dateChipBg)
                 .clipShape(Capsule())
             Spacer()
         }
@@ -288,8 +288,7 @@ private struct Tab1ImageLoadingContextPreview: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            AppTheme.Color.pageBg
-            CanvasBackground().ignoresSafeArea()
+            AppTheme.Color.pageBg.ignoresSafeArea()
 
             VStack(spacing: AppTheme.Space.paddingCard) {
                 DateSeparatorView(label: "Today")

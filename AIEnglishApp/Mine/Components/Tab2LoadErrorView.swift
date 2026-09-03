@@ -11,7 +11,6 @@ struct Tab2LoadErrorView: View {
     var body: some View {
         ZStack {
             AppTheme.Color.pageBg.ignoresSafeArea()
-            CanvasBackground(showBottomAura: false)
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {

@@ -210,20 +210,21 @@ private struct Tab2LockedView: View {
     @State private var unlockState: UnlockState = .idle
     // 单开手风琴：同时只展开一个主题；切回 Mine（listResetToken 变化）时回收起。
     @State private var expandedCategoryId: String?
+    // 空状态/非空状态两个 ScrollView 互斥渲染，共用同一个触感实例。
+    @State private var refreshHaptics = PullToRefreshHaptics()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         ZStack {
             AppTheme.Color.pageBg.ignoresSafeArea()
-            CanvasBackground().ignoresSafeArea()
 
             if categoriesWithWords.isEmpty {
                 GeometryReader { geo in
                     let reservedTop = max(topInset, 56)
 
                     ScrollView {
-                        WarmRefreshControlHelper()
+                        WarmRefreshControlHelper(haptics: refreshHaptics)
                             .frame(width: 0, height: 0)
                         emptyStateView
                             // safeAreaInset 会从实际滚动视口中扣除 reservedTop。
@@ -236,36 +237,45 @@ private struct Tab2LockedView: View {
                     }
                     .scrollBounceBehavior(.always, axes: .vertical)
                     .refreshable {
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        refreshHaptics.fire()
                         await vm.load(showFailureHint: true)
                     }
                 }
             } else {
                 // 1. 待解锁页面内容（固定顶栏空间，卡片与 Header 独立协同避让）
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        WarmRefreshControlHelper()
-                            .frame(width: 0, height: 0)
-                        VStack(alignment: .leading, spacing: AppTheme.Space.paddingSection) {
-                            headerSection
+                GeometryReader { geo in
+                    let reservedTop = max(topInset, 56)
+                    let availableHeight = max(geo.size.height - reservedTop, 400)
 
-                            VStack(spacing: AppTheme.Space.paddingPage) {
-                                topicsCard(proxy)
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            WarmRefreshControlHelper(haptics: refreshHaptics)
+                                .frame(width: 0, height: 0)
+                            VStack(alignment: .leading, spacing: AppTheme.Space.paddingSection) {
+                                headerSection
+
+                                VStack(spacing: AppTheme.Space.paddingPage) {
+                                    topicsCard(proxy)
+                                }
+
+                                captureButton()
                             }
-
-                            captureButton()
+                            .padding(.top, AppTheme.Space.paddingSection)     // 顶部呼吸
+                            .padding(.bottom, AppTheme.Space.paddingPage)
+                            .frame(minHeight: availableHeight, alignment: .top)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(alignment: .bottom) {
+                                BottomAuraFooter()
+                            }
                         }
-                        .padding(.top, AppTheme.Space.paddingSection)     // 顶部呼吸
-                        .padding(.bottom, AppTheme.Space.paddingPage)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .safeAreaInset(edge: .top, spacing: 0) {
-                        Color.clear.frame(height: max(topInset, 56))
-                    }
-                    .scrollBounceBehavior(.always, axes: .vertical)
-                    .refreshable {
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        await vm.load(showFailureHint: true)
+                        .safeAreaInset(edge: .top, spacing: 0) {
+                            Color.clear.frame(height: reservedTop)
+                        }
+                        .scrollBounceBehavior(.always, axes: .vertical)
+                        .refreshable {
+                            refreshHaptics.fire()
+                            await vm.load(showFailureHint: true)
+                        }
                     }
                 }
             }
@@ -586,39 +596,48 @@ private struct Tab2UnlockedView: View {
 
     // 单开手风琴：同时只展开一个 Topics-in-Progress 主题；切回 Mine 时回收起。
     @State private var expandedCategoryId: String?
+    @State private var refreshHaptics = PullToRefreshHaptics()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {
             AppTheme.Color.pageBg.ignoresSafeArea()
-            CanvasBackground().ignoresSafeArea()
 
-            ScrollViewReader { proxy in
-                ScrollView {
-                    WarmRefreshControlHelper()
-                        .frame(width: 0, height: 0)
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text("Talk about today")
-                            .font(AppTheme.Font.sectionTitleSerif)
-                            .foregroundStyle(AppTheme.Color.textPrimary)
-                        .padding(.horizontal, AppTheme.Space.paddingPage)
-                        .padding(.top, AppTheme.Space.paddingPage)
-                        // 与「Topics in progress → 卡片」保持同一标题到内容节奏。
-                        .padding(.bottom, AppTheme.Space.paddingCard)
+            GeometryReader { geo in
+                let reservedTop = max(topInset, 56)
+                let availableHeight = max(geo.size.height - reservedTop, 400)
 
-                        // 只作用于已解锁页面：最后一个可见卡片（Hero 或 Topics）
-                        // 与底部安全区之间保留明确的收尾空间。
-                        contentSections(proxy)
-                            .padding(.bottom, AppTheme.Space.paddingScreenBottom)
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        WarmRefreshControlHelper(haptics: refreshHaptics)
+                            .frame(width: 0, height: 0)
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text("Talk about today")
+                                .font(AppTheme.Font.sectionTitleSerif)
+                                .foregroundStyle(AppTheme.Color.textPrimary)
+                            .padding(.horizontal, AppTheme.Space.paddingPage)
+                            .padding(.top, AppTheme.Space.paddingPage)
+                            // 与「Topics in progress → 卡片」保持同一标题到内容节奏。
+                            .padding(.bottom, AppTheme.Space.paddingCard)
+
+                            // 只作用于已解锁页面：最后一个可见卡片（Hero 或 Topics）
+                            // 与底部安全区之间保留明确的收尾空间。
+                            contentSections(proxy)
+                                .padding(.bottom, AppTheme.Space.paddingScreenBottom)
+                        }
+                        .frame(minHeight: availableHeight, alignment: .top)
+                        .background(alignment: .bottom) {
+                            BottomAuraFooter()
+                        }
                     }
-                }
-                .safeAreaInset(edge: .top, spacing: 0) {
-                    Color.clear.frame(height: max(topInset, 56))
-                }
-                .scrollBounceBehavior(.always, axes: .vertical)
-                .refreshable {
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    await vm.load(showFailureHint: true)
+                    .safeAreaInset(edge: .top, spacing: 0) {
+                        Color.clear.frame(height: reservedTop)
+                    }
+                    .scrollBounceBehavior(.always, axes: .vertical)
+                    .refreshable {
+                        refreshHaptics.fire()
+                        await vm.load(showFailureHint: true)
+                    }
                 }
             }
         }

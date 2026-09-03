@@ -4,9 +4,69 @@ enum RootTabContainerLayout {
     static let space = "RootTabContainerSpace"
 }
 
+enum RootTabSwipeLock: Equatable {
+    case undetermined
+    case horizontal
+    case vertical
+}
+
+/// 手势结束时该做的事——从判定逻辑里剥离出来，好让 RootTabSwipeIntent.resolveAction
+/// 保持纯函数、可脱离 View 单测，不用真的驱动一次 DragGesture 才能验证触发门槛。
+enum RootTabSwipeAction: Equatable {
+    case none
+    case switchToMine
+    case switchToToday
+    /// Tab2 的滑动删除态在手势开始时是打开的：右滑切回 Today 前，先把它收起、
+    /// 重置列表，不真的切 Tab（用户此时的右滑意图是关掉删除条，不是换页）。
+    case resetMineListForOpenDelete
+}
+
 enum RootTabSwipeIntent {
+    /// 水平主导判定：水平位移必须严格大于垂直位移的 1.7 倍（约 60°），杜绝斜向滑动误判。
     static func isHorizontal(_ translation: CGSize) -> Bool {
-        abs(translation.width) > abs(translation.height)
+        abs(translation.width) > abs(translation.height) * 1.7
+    }
+
+    /// 手势进行中，从当前锁定态推出下一帧的锁定态。
+    /// 只有尚未锁定（.undetermined）且实测位移越过 10pt 最低确认门槛时才会真正判定
+    /// 方向；一旦锁定（水平或垂直）就保持不变，直到手势结束由调用方重置。
+    static func nextLock(current: RootTabSwipeLock, translation: CGSize) -> RootTabSwipeLock {
+        guard current == .undetermined else { return current }
+        let totalDistance = hypot(translation.width, translation.height)
+        guard totalDistance >= 10 else { return .undetermined }
+        return isHorizontal(translation) ? .horizontal : .vertical
+    }
+
+    /// 手势结束，决定要不要切 Tab / 收起 Tab2 滑动删除态。
+    /// lock 必须在手势初期就已锁定为水平——垂直手势或从未越过 10pt 门槛的手势，
+    /// 哪怕松手那一刻位移看起来很大，也一律不触发（意图锁定只在手势早期判一次）。
+    static func resolveAction(
+        lock: RootTabSwipeLock,
+        translation: CGSize,
+        predictedTranslation: CGSize,
+        selectedTab: AppTab,
+        capturedSwipeOpen: Bool,
+        mineDetailActive: Bool
+    ) -> RootTabSwipeAction {
+        guard lock == .horizontal else { return .none }
+
+        let dx = translation.width
+        let predictedDx = predictedTranslation.width
+
+        // 触发门槛：实测位移 80pt，或 实测位移 35pt 且 惯性预测位移 160pt（右滑取正）
+        let isLeftSwipe = dx < -80 || (dx < -35 && predictedDx < -160)
+        let isRightSwipe = dx > 80 || (dx > 35 && predictedDx > 160)
+
+        if isLeftSwipe && selectedTab == .today {
+            return .switchToMine
+        } else if isRightSwipe && selectedTab == .mine {
+            if capturedSwipeOpen {
+                return .resetMineListForOpenDelete
+            } else if !mineDetailActive {
+                return .switchToToday
+            }
+        }
+        return .none
     }
 }
 
@@ -34,6 +94,7 @@ struct RootTabContainer: View {
     @State private var topBarHeight: CGFloat = 0
     @State private var capturedSwipeOpen = false
     @State private var captureRecorded = false
+    @State private var swipeLock: RootTabSwipeLock = .undetermined
     // Fullscreen image preview — lifted to root so it covers the top bar
     @State private var previewImage: UIImage?
     @State private var previewAnchor: UnitPoint = .center
@@ -86,6 +147,18 @@ struct RootTabContainer: View {
             .animation(.spring(duration: 0.35), value: previewImage != nil)
             .allowsHitTesting(previewImage != nil)
         }
+        .overlay {
+            // Settings sheet 弹出期间，给呈现视图叠一层暖调遮罩（neutral950 @ 25%）。
+            // 系统的调暗层压在其上时，底下暖调染过的底色会让合成结果显著偏暖，
+            // 消除系统冷灰中性遮罩在顶部露出的生硬感，同时完全保留原生 sheet 下拉手势。
+            if showSettings {
+                AppTheme.Color.scrimOverlay
+                    .ignoresSafeArea()
+                    .transition(.opacity)
+                    .allowsHitTesting(false)
+            }
+        }
+        .animation(.easeInOut(duration: 0.28), value: showSettings)
         .onPreferenceChange(TopBarHeightKey.self) { topBarHeight = $0 }
         .background(AppTheme.Color.pageBg)
         .sheet(isPresented: $showSettings) {
@@ -144,44 +217,40 @@ struct RootTabContainer: View {
         .contentShape(Rectangle())
         .coordinateSpace(name: RootTabContainerLayout.space)
         .simultaneousGesture(
-            DragGesture(minimumDistance: 15, coordinateSpace: .named(RootTabContainerLayout.space))
+            DragGesture(minimumDistance: 24, coordinateSpace: .named(RootTabContainerLayout.space))
                 .onChanged { value in
-                    // 下拉刷新同样是 DragGesture。只有已经显露出明确横向意图时才写根容器状态，
-                    // 避免垂直下拉触发 RootTabContainer 重算并取消 ScrollView.refreshable 任务。
-                    guard RootTabSwipeIntent.isHorizontal(value.translation) else { return }
-                    // 明确成为水平手势的第一帧捕获状态；垂直下拉阶段不写根容器状态。
-                    if !captureRecorded {
-                        captureRecorded = true
-                        capturedSwipeOpen = mineSwipeActionOpen
+                    let nextLock = RootTabSwipeIntent.nextLock(current: swipeLock, translation: value.translation)
+                    if nextLock != swipeLock {
+                        swipeLock = nextLock
+                        if nextLock == .horizontal, !captureRecorded {
+                            captureRecorded = true
+                            capturedSwipeOpen = mineSwipeActionOpen
+                        }
                     }
                 }
                 .onEnded { value in
-                    let didCaptureHorizontalSwipe = captureRecorded
-                    defer {
-                        if didCaptureHorizontalSwipe {
-                            captureRecorded = false
-                        }
-                    }
-                    let dx = value.translation.width
-                    let predictedDx = value.predictedEndTranslation.width
+                    let action = RootTabSwipeIntent.resolveAction(
+                        lock: swipeLock,
+                        translation: value.translation,
+                        predictedTranslation: value.predictedEndTranslation,
+                        selectedTab: selectedTab,
+                        capturedSwipeOpen: capturedSwipeOpen,
+                        mineDetailActive: mineDetailActive
+                    )
+                    swipeLock = .undetermined
+                    captureRecorded = false
 
-                    // 水平意图判断：水平位移必须严格大于垂直位移（45°，同系统侧滑返回标准）
-                    guard RootTabSwipeIntent.isHorizontal(value.translation) else { return }
-
-                    // 50pt 实测位移 或 100pt 惯性轻扫预测（斜率已过才到这里，不单独绕过）
-                    let isLeftSwipe = dx < -50 || predictedDx < -100
-                    let isRightSwipe = dx > 50 || predictedDx > 100
-
-                    if isLeftSwipe && selectedTab == .today {
+                    switch action {
+                    case .none:
+                        break
+                    case .switchToMine:
                         withAnimation(AppTheme.Motion.tabSelection) { selectedTab = .mine }
-                    } else if isRightSwipe && selectedTab == .mine {
-                        if capturedSwipeOpen {
-                            // Delete action was open — reset list state, don't switch tab
-                            mineListResetToken = UUID()
-                            mineSwipeActionOpen = false
-                        } else if !mineDetailActive {
-                            withAnimation(AppTheme.Motion.tabSelection) { selectedTab = .today }
-                        }
+                    case .switchToToday:
+                        withAnimation(AppTheme.Motion.tabSelection) { selectedTab = .today }
+                    case .resetMineListForOpenDelete:
+                        // Delete action was open — reset list state, don't switch tab
+                        mineListResetToken = UUID()
+                        mineSwipeActionOpen = false
                     }
                 }
         )

@@ -61,12 +61,11 @@ struct Tab2MomentRow: View {
         .background(AppTheme.Color.warmGlassSurface)
         .compositingGroup()
         .clipShape(.rect(cornerRadius: AppTheme.Radius.medium))
-        .shadow(
-            color: AppTheme.Shadow.cardColor,
-            radius: AppTheme.Tab2MoreRow.Layout.shadowRadius,
-            x: 0,
-            y: AppTheme.Tab2MoreRow.Layout.shadowY
-        )
+        .overlay {
+            RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
+                .strokeBorder(AppTheme.Color.cardBorder, lineWidth: 0.5)
+        }
+        .cardShadow()
         .opacity(isWordsOnly ? AppTheme.Tab2MoreRow.Opacity.wordsOnlyRow : 1)
     }
 

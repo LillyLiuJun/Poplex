@@ -26,12 +26,11 @@ struct Tab2HeroCard: View {
         .background(AppTheme.Color.warmGlassSurface)
         .compositingGroup()
         .clipShape(.rect(cornerRadius: AppTheme.Radius.large))
-        .shadow(
-            color: AppTheme.Shadow.cardColor,
-            radius: AppTheme.Tab2Hero.Layout.cardShadowRadius,
-            x: 0,
-            y: AppTheme.Tab2Hero.Layout.cardShadowY
-        )
+        .overlay {
+            RoundedRectangle(cornerRadius: AppTheme.Radius.large)
+                .strokeBorder(AppTheme.Color.cardBorder, lineWidth: 0.5)
+        }
+        .cardShadow()
     }
 
     // MARK: - 顶部图像（featured 无图时不能借用分类的其他照片，避免图文错配）
@@ -108,20 +107,9 @@ struct Tab2HeroCard: View {
     @ViewBuilder
     private func metaRow(for featured: Tab2FeaturedMoment) -> some View {
         let sceneDetail = Self.validatedTargetSceneDetail(featured.sceneDetail)
-        let isFromPhoto = mode(featured) == .c
 
-        if sceneDetail != nil || moreCount > 0 || isFromPhoto {
+        if sceneDetail != nil || moreCount > 0 {
             HStack(spacing: AppTheme.Tab2Hero.Layout.metaContentGap) {
-                if isFromPhoto {
-                    sourcePhotoBadge
-
-                    if sceneDetail != nil || moreCount > 0 {
-                        Text("·")
-                            .font(AppTheme.Font.tab2HeroMeta)
-                            .foregroundStyle(AppTheme.Color.neutralFaint)
-                    }
-                }
-
                 if let sceneDetail {
                     Text(sceneDetail)
                         .font(AppTheme.Font.tab2HeroMeta)
@@ -155,20 +143,6 @@ struct Tab2HeroCard: View {
                 Spacer(minLength: 0)
             }
         }
-    }
-
-    /// 模式 C 的来源标记：主句非用户产出，必须显式标注，防止用户误以为这是自己说的话。
-    /// 见 `docs/prd/Tab2_Hero卡_数据提取与展示_设计方案_v1.md` §4.5「来源标记不可省」。
-    private var sourcePhotoBadge: some View {
-        HStack(spacing: AppTheme.Tab2Hero.Layout.sourceBadgeIconGap) {
-            Image(systemName: "camera.fill")
-                .imageScale(.small)
-            Text("from your photo")
-        }
-        .font(AppTheme.Font.tab2HeroMeta)
-        .foregroundStyle(AppTheme.Color.neutralFaint)
-        .lineLimit(1)
-        .fixedSize(horizontal: true, vertical: false)
     }
 
     private func primaryText(for featured: Tab2FeaturedMoment) -> String {

@@ -1,15 +1,20 @@
 import SwiftUI
 
-/// ChatGPT / Gemini 风格可变渐进式通透毛玻璃底托（Translucent Variable Blur Backdrop）。
-/// 目前只服务 Tab1 底部 InputBar；顶栏遮罩见下方 `TopBarProgressiveMask`（两者视觉诉求不同，
-/// 顶栏不需要 extraExtend/底色融合这套底栏专属机制，曾经共用一个 direction 开关反而互相牵制）。
+/// Tab1 底部 InputBar 纸色渐隐背板（Paper-tone Progressive Backdrop）。
 ///
-/// 视觉设计准则：
-/// 1. **顶部极微弱羽化（Subtle Top Fade）**：朝向内容区的上边缘羽化极其轻微自然（对齐 ChatGPT），
-///    输入框上方的卡片和文字不会提前发灰发暗，保持内容区最高通透度。
-/// 2. **内部丝滑散焦（Smooth In-Pill Defocus）**：内容滑动进入输入框本体背后时，平滑且迅速地过渡散焦与实底融合。
-/// 3. **底部坚实沉稳（Solid Bottom Protection）**：输入框下沿与底部安全区（Home Bar）保持饱满的实底遮蔽（对齐初始版本），
-///    底色浑然一体（几乎不可见），绝不透底穿帮。
+/// 名字里的 "VariableBlur" 是留给方案 B（真·可变模糊，CAFilter variableBlur）的占位——
+/// 当前内部实现是单层纯色渐变，完全不含任何模糊/失焦效果，是有意的、不是命名遗留。
+/// 方案 B 落地时只替换这个类型的内部实现，对外 API（extraExtend/baseColor）保持不变，
+/// 三处调用点不用跟着改（TodayView 底栏生产用 1 处，TodayView/MessageRow 的 #Preview
+/// 各 1 处）。注意顶栏走的是 TopBarProgressiveMask，与本组件无关。方案 B 做完之前，
+/// 别被名字误导去找模糊效果——现在真的没有。
+///
+/// 视觉设计准则（§3.03）：
+/// 1. **全纸色同源渐变**：彻底移除系统 `.ultraThinMaterial`（避免冷灰材质导致文字淡出前先发灰），
+///    改用 `clear → 暖化后的纸色（pageBg + inputBackdropWarmTint）`。
+/// 2. **多段非线性缓出羽化**：上段 0~30% 核心区平滑衰减，70~100% 极长尾，全程无平台、无拐点，
+///    消除马赫带效应（Mach band effect）带来的视觉硬边。
+/// 3. **底端 100% 饱满实底遮蔽**：底端混入 5.5% 暖橙，承担 Tab1 底部承托暖光，并确保 Home Bar 安全区不透底穿帮。
 struct VariableBlurBackdrop: View {
     /// 渐隐过渡区高度（超出组件本体朝内容侧延伸的平滑消融区域）
     var extraExtend: CGFloat
@@ -27,42 +32,37 @@ struct VariableBlurBackdrop: View {
     var body: some View {
         GeometryReader { geo in
             let totalHeight = geo.size.height + extraExtend
-            let fadeRatio = extraExtend / max(totalHeight, 1)
 
             ZStack {
-                // Layer 1: 真实硬件级高斯模糊材质（提供通透毛玻璃散焦）
-                Rectangle()
-                    .fill(.ultraThinMaterial)
-
-                // Layer 2: 极轻量暖色融合（刚好中和冷灰）
-                Rectangle()
-                    .fill(baseColor.opacity(0.12))
-
-                // Layer 3: 底部沉稳实底渐变（上部轻量通透，底部安全区高度实底，消除透底感）
+                // Layer 1: 纸色基底非线性渐变（clear → 100% 满浓度 baseColor）
                 LinearGradient(
                     stops: [
-                        .init(color: baseColor.opacity(0.00), location: 0.0),
-                        .init(color: baseColor.opacity(0.02), location: min(1.0, fadeRatio)),
-                        .init(color: baseColor.opacity(0.25), location: min(1.0, fadeRatio + (1.0 - fadeRatio) * 0.25)),
-                        .init(color: baseColor.opacity(0.65), location: min(1.0, fadeRatio + (1.0 - fadeRatio) * 0.55)),
-                        .init(color: baseColor.opacity(0.85), location: 1.0)
+                        .init(color: .clear,                  location: 0.00), // 上沿起点：0% 完全透明
+                        .init(color: baseColor.opacity(0.04),  location: 0.03), // 极长尾衰减，消除马赫带硬边
+                        .init(color: baseColor.opacity(0.13),  location: 0.08),
+                        .init(color: baseColor.opacity(0.29),  location: 0.17),
+                        .init(color: baseColor.opacity(0.50),  location: 0.28),
+                        .init(color: baseColor.opacity(0.72),  location: 0.40),
+                        .init(color: baseColor.opacity(0.88),  location: 0.54),
+                        .init(color: baseColor.opacity(0.97),  location: 0.72),
+                        .init(color: baseColor,                location: 1.00)  // 底部安全区：100% 满浓度实底
                     ],
                     startPoint: .top,
                     endPoint: .bottom
                 )
-            }
-            // 核心：平滑非线性 Alpha 遮罩。ChatGPT 顶通透 + 原始底沉稳：
-            // 上沿极微弱羽化，内部平滑散焦，底部 100% 坚实遮罩
-            .mask {
+
+                // Layer 2: 暖光补偿层（clear → 100% inputBackdropWarmTint，承担 Tab1 底部承托暖光）
                 LinearGradient(
                     stops: [
-                        .init(color: .clear, location: 0.0),                                       // 离开输入框顶部 16pt：0% 完全透明
-                        .init(color: .white.opacity(0.04), location: min(1.0, fadeRatio * 0.45)),  // 输入框上方预备区：4% 极微弱羽化
-                        .init(color: .white.opacity(0.24), location: min(1.0, fadeRatio)),         // 精确在输入框上沿：24% 通透起步
-                        .init(color: .white.opacity(0.75), location: min(1.0, fadeRatio + (1.0 - fadeRatio) * 0.18)), // 深入输入框上部：迅速提升遮蔽
-                        .init(color: .white.opacity(0.96), location: min(1.0, fadeRatio + (1.0 - fadeRatio) * 0.38)), // 输入框中段：高度遮蔽
-                        .init(color: .white, location: min(1.0, fadeRatio + (1.0 - fadeRatio) * 0.55)),                // 输入框下沿及以下：100% 满浓度保护
-                        .init(color: .white, location: 1.0)                                        // 底部安全区：满浓度实底，沉稳不透
+                        .init(color: .clear,                                               location: 0.00),
+                        .init(color: AppTheme.Color.inputBackdropWarmTint.opacity(0.04),  location: 0.03),
+                        .init(color: AppTheme.Color.inputBackdropWarmTint.opacity(0.13),  location: 0.08),
+                        .init(color: AppTheme.Color.inputBackdropWarmTint.opacity(0.29),  location: 0.17),
+                        .init(color: AppTheme.Color.inputBackdropWarmTint.opacity(0.50),  location: 0.28),
+                        .init(color: AppTheme.Color.inputBackdropWarmTint.opacity(0.72),  location: 0.40),
+                        .init(color: AppTheme.Color.inputBackdropWarmTint.opacity(0.88),  location: 0.54),
+                        .init(color: AppTheme.Color.inputBackdropWarmTint.opacity(0.97),  location: 0.72),
+                        .init(color: AppTheme.Color.inputBackdropWarmTint,                location: 1.00)
                     ],
                     startPoint: .top,
                     endPoint: .bottom
@@ -77,35 +77,32 @@ struct VariableBlurBackdrop: View {
 
 // MARK: - Top bar mask
 
-/// Tab1 顶栏遮罩：ChatGPT 风格自然渐进式高质感遮罩——状态栏区域满浓度保护，
-/// 按钮区域丝滑衰减到高通透，下边缘极轻触底后完全消隐。
-/// 固定比例节点（相对于 `.ignoresSafeArea(.container, edges: .top)` 扩展后的整条遮罩高度），
-/// 已在 iPhone 17 / 16 Pro / 13 上真机验证；换更极端的安全区高度或 Dynamic Type 需要重新校准。
+/// Tab1 / Tab2 顶栏遮罩：纯纸色非线性渐隐（pageBg → clear）。
+///
+/// 彻底移除系统 `.ultraThinMaterial`（消除原本压在顶栏的冷灰雾与 -16 亮度 / -5 暖度断层），
+/// 改用与 `SheetTopScrim` 完全同源的 `pageBg` 多段逼近非线性缓出渐变：
+/// - 顶部状态栏区域：100% 满浓度 `pageBg`，滚动内容向上穿过时彻底平滑消失
+/// - 按钮与下边缘区域：长尾缓出羽化至 `.clear`，全程无平台、无拐点，消除马赫带效应
 struct TopBarProgressiveMask: View {
+    private let base = AppTheme.Color.pageBg
+
     var body: some View {
-        ZStack {
-            Rectangle()
-                .fill(.ultraThinMaterial)
-            // 参考图的白雾不是冷白：以极轻暖纸融合提升承托感，
-            // 又不会像实色背景一样切出一条横带。
-            Rectangle()
-                .fill(AppTheme.Color.topBarMaskWarmTint)
-        }
-            .mask {
-                LinearGradient(
-                    stops: [
-                        .init(color: .white, location: 0.0),                // 0~59pt 状态栏区域：100% 浓度，充分遮盖背景
-                        .init(color: .white, location: 0.38),               // 状态栏主体：保持稳定保护
-                        .init(color: .white.opacity(AppTheme.Opacity.topBarMaskButtonTop), location: 0.54), // 按钮上边缘：保持厚实的柔雾承托
-                        .init(color: .white.opacity(AppTheme.Opacity.topBarMaskButtonCenter), location: 0.74), // 按钮中心：仍可读内容，但不提前透底
-                        .init(color: .white.opacity(AppTheme.Opacity.topBarMaskTail), location: 0.92), // 按钮下边缘：留出更长的羽化尾巴
-                        .init(color: .clear, location: 1.0)                 // 离开按钮区域：0% 完全透明
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            }
-            .ignoresSafeArea(.container, edges: .top)
+        LinearGradient(
+            stops: [
+                .init(color: base,                location: 0.00), // 状态栏顶部：完全不透
+                .init(color: base.opacity(0.97),  location: 0.28),
+                .init(color: base.opacity(0.88),  location: 0.46),
+                .init(color: base.opacity(0.72),  location: 0.60),
+                .init(color: base.opacity(0.50),  location: 0.72),
+                .init(color: base.opacity(0.29),  location: 0.83),
+                .init(color: base.opacity(0.13),  location: 0.92),
+                .init(color: base.opacity(0.04),  location: 0.97),
+                .init(color: .clear,              location: 1.00)  // 顶栏下沿：干净归零
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .ignoresSafeArea(.container, edges: .top)
     }
 }
 

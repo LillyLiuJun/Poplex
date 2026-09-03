@@ -24,14 +24,7 @@ struct AICardBody: View {
         }
         .padding(AppTheme.Space.paddingCard)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.Color.cardBg)
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.large))
-        .shadow(
-            color: AppTheme.Shadow.cardColor,
-            radius: AppTheme.Shadow.cardRadius,
-            x: AppTheme.Shadow.cardX,
-            y: AppTheme.Shadow.cardY
-        )
+        .surfaceCard(cornerRadius: AppTheme.Radius.large, fillColor: AppTheme.Color.cardBg)
     }
 
     private var cardTypeLabel: String {

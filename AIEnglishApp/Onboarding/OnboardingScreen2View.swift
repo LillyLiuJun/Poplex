@@ -250,6 +250,10 @@ struct OnboardingScreen2View: View {
         .padding(AppTheme.Space.paddingS)
         .background(AppTheme.Color.cardBg)
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
+        .overlay {
+            RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
+                .strokeBorder(AppTheme.Color.cardBorder, lineWidth: 0.5)
+        }
         .collageShadow()
     }
 
@@ -300,6 +304,10 @@ struct OnboardingScreen2View: View {
         .frame(width: 270)
         .background(AppTheme.Color.cardBg)
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
+        .overlay {
+            RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
+                .strokeBorder(AppTheme.Color.cardBorder, lineWidth: 0.5)
+        }
         .collageShadow()
     }
 
@@ -354,6 +362,10 @@ struct OnboardingScreen2View: View {
         .padding(AppTheme.Space.paddingCard)
         .background(AppTheme.Color.cardBg)
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
+        .overlay {
+            RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
+                .strokeBorder(AppTheme.Color.cardBorder, lineWidth: 0.5)
+        }
         .collageShadow()
     }
 }
