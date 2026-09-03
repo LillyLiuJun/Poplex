@@ -120,8 +120,10 @@ processes), not by "two views of the same content".
 - **Frontend**: SwiftUI (native, not UIKit/Storyboard)
 - **Target OS version**: iOS 17+
 - **Backend/database**: Supabase (free tier covers MVP)
-- **AI content generation provider**: the code currently calls **Gemini 2.5 Flash**
-  (`supabase/functions/generate/index.ts`). The provider is not final — cost is
+- **AI content generation provider**: the code currently calls **Gemini 3.7 Flash**
+  (`supabase/functions/generate/index.ts`, `supabase/functions/dialogue/index.ts`).
+  Switched from 2.5 Flash on 2026-09-03: 2.5 Flash returns 404 for new API accounts
+  and its free tier was cut to ~20 requests/day. The provider is not final — cost is
   still being compared — so **do not let provider-specific behaviour leak into
   design docs or the data contract**. Swapping providers should only touch the
   Edge Function.

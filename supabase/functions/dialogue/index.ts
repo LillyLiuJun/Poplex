@@ -10,7 +10,7 @@
 const SUPABASE_URL     = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SVC_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const GEMINI_API_KEY   = Deno.env.get("GEMINI_API_KEY") ?? "";
-const GEMINI_URL       = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
+const GEMINI_URL       = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.7-flash:generateContent";
 
 // ─────────────────────────────────────────────────────────────
 // CORS

@@ -778,8 +778,9 @@ final class TodayViewModel {
                     image: image
                 )
             }
-            // 服务器报告的最新用量（含本次生成）：直接进共享额度状态，
-            // Sheet 打开时无需等一次网络往返就能看到最新数字。
+            // 服务器报告的最新用量（含本次生成）与落账后裁决（方案 B）：直接进
+            // 共享额度状态——Sheet 打开时无需等一次网络往返就能看到最新数字；
+            // allowed=false 时额度在本次生成用尽，输入栏立即锁定。
             if let usage = envelope.usage {
                 quotaStore.apply(usage: usage)
             }

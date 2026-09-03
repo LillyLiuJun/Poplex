@@ -289,6 +289,10 @@ interface HandlerHarnessOptions {
   onboardingCompleted?: boolean;
   /** check_generation_quota_for_user 的返回。缺省 = 已用 2 / 上限 5 / 放行。 */
   quotaStatus?: { usedCount: number; limit: number; allowed: boolean };
+  /** 落账后 usage 读取的返回（第二次 quota RPC）；缺省与 quotaStatus 相同。
+   *  用于模拟「前置校验放行（4/5）→ 本次生成落账后额度用尽（5/5）」的真实
+   *  时序——成功响应据此携带 allowed:false，客户端立即锁定。 */
+  quotaStatusAfterCommit?: { usedCount: number; limit: number; allowed: boolean };
   /** 额度 RPC 的 HTTP 状态（模拟服务端查询故障）。 */
   quotaCheckStatus?: number;
   /** 成功后的 usage 读取的 HTTP 状态（与预检分开，模拟「生成成功但读取挂掉」）。 */
@@ -406,8 +410,10 @@ function createHandlerHarness(options: HandlerHarnessOptions = {}) {
       if (failStatus !== undefined) {
         return Promise.resolve(jsonResponse({ message: "boom" }, failStatus));
       }
-      const quota = options.quotaStatus ??
-        { usedCount: 2, limit: 5, allowed: true };
+      const quota = quotaCalls.quotaRpc === 1
+        ? options.quotaStatus ?? { usedCount: 2, limit: 5, allowed: true }
+        : options.quotaStatusAfterCommit ?? options.quotaStatus ??
+          { usedCount: 2, limit: 5, allowed: true };
       return Promise.resolve(jsonResponse({
         used_count: quota.usedCount,
         limit: quota.limit,
@@ -613,6 +619,26 @@ Deno.test("generate exempts an in-onboarding request: skips the pre-check and re
   assertEquals(payload.p_count_usage, false);
 });
 
+Deno.test("generate exempts an in-onboarding request and carries the latest usage on success", async () => {
+  const { handler, rpcPayloads, quotaCalls } = createHandlerHarness({
+    onboardingCompleted: false,
+    nowIso: "2026-08-21T23:59:00.000Z",
+    quotaStatus: { usedCount: 0, limit: 5, allowed: true },
+  });
+  const response = await handler(generationRequest());
+
+  assertEquals(response.status, 200);
+  assertEquals(quotaCalls, { profiles: 1, quotaRpc: 1 }); // 成功后的 usage 读取，免除前置校验
+  assertEquals(rpcPayloads[0].p_count_usage, false); // 引导期不计入日常用量
+  const body = await response.json();
+  assertEquals(body.usage, {
+    used: 0,
+    limit: 5,
+    allowed: true,
+    resets_at: "2026-08-22T00:00:00Z",
+  });
+});
+
 // ─────────────────────────────────────────────────────────────
 // 第 3 刀：前置校验 / 429 / 时区分桶 / usage 字段
 // ─────────────────────────────────────────────────────────────
@@ -692,8 +718,32 @@ Deno.test("generate success carries the latest usage for the frontend", async ()
   assertEquals(body.usage, {
     used: 3,
     limit: 5,
+    allowed: true,
     resets_at: "2026-08-22T00:00:00+08:00",
   });
+});
+
+Deno.test("generate success carries the post-commit verdict: last slot consumed → allowed false", async () => {
+  // 真实时序：前置校验时 4/5 放行，本次生成落账后额度用尽 5/5——成功响应
+  // 携带 allowed:false，前端在最后一次卡片生成完成的同时锁定输入栏。
+  const { handler, calls } = createHandlerHarness({
+    quotaStatus: { usedCount: 4, limit: 5, allowed: true },
+    quotaStatusAfterCommit: { usedCount: 5, limit: 5, allowed: false },
+  });
+  const response = await handler(generationRequest(requestId, {
+    source: "tab1",
+    utc_offset_minutes: 480,
+  }));
+  const body = await response.json();
+
+  assertEquals(response.status, 200);
+  assertEquals(body.usage, {
+    used: 5,
+    limit: 5,
+    allowed: false,
+    resets_at: "2026-08-22T00:00:00+08:00",
+  });
+  assertEquals(calls.gemini, 1);
 });
 
 Deno.test("generate duplicate responses also carry the latest usage", async () => {
@@ -709,6 +759,7 @@ Deno.test("generate duplicate responses also carry the latest usage", async () =
   assertEquals((await response.json()).usage, {
     used: 3,
     limit: 5,
+    allowed: true,
     resets_at: "2026-08-22T00:00:00+08:00",
   });
   // 幂等路径不产生模型费用、不重复落库。

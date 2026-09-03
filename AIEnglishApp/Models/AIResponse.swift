@@ -140,16 +140,18 @@ struct CardContent: Decodable {
 
 // MARK: - 生成次数用量（服务端报告，只做展示）
 
-/// 成功响应 `usage` 字段与 429 `daily_limit_reached` 响应共用的用量结构：
-/// 已用次数、有效上限、下次重置时刻（ISO8601 字符串）。信息性数据——
-/// 前端只展示，不做任何拦截判断，能不能生成由服务端裁决。
+/// 成功响应 `usage` 字段的用量结构：已用次数、有效上限、下次重置时刻
+/// （ISO8601 字符串），以及服务端落账后的裁决 `allowed`（本次生成已计入，
+/// 还能不能再生成）。信息性数据——前端只展示，不做任何拦截判断，能不能
+/// 生成由服务端裁决；`allowed` 可选（旧版服务端不返回时保持未知）。
 struct UsageInfo: Decodable, Equatable {
     let used: Int
     let limit: Int
+    let allowed: Bool?
     let resetsAt: String?
 
     enum CodingKeys: String, CodingKey {
-        case used, limit
+        case used, limit, allowed
         case resetsAt = "resets_at"
     }
 }

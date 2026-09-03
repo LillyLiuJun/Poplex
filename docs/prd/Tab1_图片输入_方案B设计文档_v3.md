@@ -50,7 +50,7 @@ Edge Function (generate/index.ts) 收到请求
   有 image_base64 → 图片 + 固定描述 prompt（用户文字被忽略）
   只有 text      → 用户原始文字
   ↓
-调用 Gemini 2.5 Flash（带 SYSTEM_PROMPT）
+调用 Gemini 3.7 Flash（带 SYSTEM_PROMPT）
   SYSTEM_PROMPT 定义了 5 种卡片分类规则（s1/s2/s3/s4/chat）
   ↓
 解析 AI 返回的 JSON → { card_type, card_content, extracted_concept }
@@ -62,7 +62,7 @@ Edge Function (generate/index.ts) 收到请求
 返回 { card_type, card_content, extracted_concept } 给 App
 ```
 
-> 注：这里的 Gemini 2.5 Flash 是**当前已上线的实现**，不代表 AI 服务商已最终锁定——项目 `CLAUDE.md` 里明确写了"AI content generation provider: TBD，需先测试不同方案成本再定"。方案B的改动不涉及换供应商，按现状（Gemini）设计即可，供应商决策是另一条独立的待办。
+> 注：这里的 Gemini 3.7 Flash 是**当前已上线的实现**，不代表 AI 服务商已最终锁定——项目 `CLAUDE.md` 里明确写了"AI content generation provider: TBD，需先测试不同方案成本再定"。方案B的改动不涉及换供应商，按现状（Gemini）设计即可，供应商决策是另一条独立的待办。
 
 ### 2.3 现有 AIService 接口
 

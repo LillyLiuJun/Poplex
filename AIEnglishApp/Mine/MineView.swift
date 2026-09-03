@@ -18,7 +18,13 @@ struct MineView: View {
     @State private var comingSoonToast: String? = nil
     @State private var milestoneToast: String? = nil
     @State private var isRadiantAscentActive: Bool = false
+    @State private var lockedBottomBarHeight: CGFloat = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// 解锁前有沉底操作栏时，Toast 自动上浮避让按钮高度与呼吸间距；解锁后沉底栏销毁，自然归零
+    private var toastExtraBottomOffset: CGFloat {
+        lockedBottomBarHeight > 0 ? lockedBottomBarHeight + AppTheme.Space.paddingM : 0
+    }
 
     /// 解锁揭幕转场：参考 main 基线从底部优雅生长舒展，配合温润微上浮与消融淡入
     private var unlockRevealTransition: AnyTransition {
@@ -91,14 +97,23 @@ struct MineView: View {
             }
             .toast(
                 message: Binding(get: { vm.toastMessage }, set: { vm.toastMessage = $0 }),
-                systemImage: "exclamationmark.triangle"
+                systemImage: "exclamationmark.triangle",
+                extraBottomOffset: toastExtraBottomOffset
             )
-            .toast(message: $comingSoonToast, systemImage: "clock")
+            .toast(
+                message: $comingSoonToast,
+                systemImage: "clock",
+                extraBottomOffset: toastExtraBottomOffset
+            )
             .toast(
                 message: $milestoneToast,
                 systemImage: "sparkles",
-                lifetime: AppTheme.Motion.milestoneToastLifetime
+                lifetime: AppTheme.Motion.milestoneToastLifetime,
+                extraBottomOffset: toastExtraBottomOffset
             )
+            .onPreferenceChange(Tab2LockedBottomBarHeightKey.self) { height in
+                lockedBottomBarHeight = height
+            }
             .navigationDestination(for: MineRoute.self) { route in
                 switch route {
                 case .conversation(let cat):
@@ -189,6 +204,15 @@ struct MineView: View {
     }
 }
 
+// MARK: - Locked bottom bar height preference
+
+private struct Tab2LockedBottomBarHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
 // MARK: - Locked view
 
 private enum UnlockState {
@@ -208,6 +232,7 @@ private struct Tab2LockedView: View {
     private let wordTarget  = 20
 
     @State private var unlockState: UnlockState = .idle
+    @State private var measuredBottomBarHeight: CGFloat = 0
     // 单开手风琴：同时只展开一个主题；切回 Mine（listResetToken 变化）时回收起。
     @State private var expandedCategoryId: String?
     // 空状态/非空状态两个 ScrollView 互斥渲染，共用同一个触感实例。
@@ -227,9 +252,8 @@ private struct Tab2LockedView: View {
                         WarmRefreshControlHelper(haptics: refreshHaptics)
                             .frame(width: 0, height: 0)
                         emptyStateView
-                            // safeAreaInset 会从实际滚动视口中扣除 reservedTop。
-                            // 内容高度也必须按同一个视口计算，否则空状态会比视口高一截，
-                            // 导致首次布局与刷新回弹落在不同的滚动锚点。
+                            // safeAreaInset 会从实际滚动视口中扣除 reservedTop 与 bottomBar。
+                            // 内容高度按同一个视口计算，居中负空间匀称舒展。
                             .frame(minHeight: max(geo.size.height - reservedTop, 400))
                     }
                     .safeAreaInset(edge: .top, spacing: 0) {
@@ -257,16 +281,11 @@ private struct Tab2LockedView: View {
                                 VStack(spacing: AppTheme.Space.paddingPage) {
                                     topicsCard(proxy)
                                 }
-
-                                captureButton()
                             }
                             .padding(.top, AppTheme.Space.paddingSection)     // 顶部呼吸
                             .padding(.bottom, AppTheme.Space.paddingPage)
                             .frame(minHeight: availableHeight, alignment: .top)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(alignment: .bottom) {
-                                BottomAuraFooter()
-                            }
                         }
                         .safeAreaInset(edge: .top, spacing: 0) {
                             Color.clear.frame(height: reservedTop)
@@ -297,6 +316,12 @@ private struct Tab2LockedView: View {
             .allowsHitTesting(false)
             .animation(AppTheme.Motion.unlockDissolve, value: unlockState)
         }
+        // 沉底操作栏通过 safeAreaInset 统一挂载在容器最外层：
+        // 自动扣减两套 ScrollView 的底部视口，滚条不穿帮，零一帧回环。
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            bottomBarContainer
+        }
+        // ★ 解锁动效包含按钮：.blur 挂在 safeAreaInset 之后，保证 releasing 时按钮与正文一同被模糊消融
         .blur(radius: unlockState == .releasing ? 8 : 0)
         .opacity(unlockState == .releasing ? 0 : 1)
         .scaleEffect(unlockState == .releasing ? 0.98 : 1.0)
@@ -304,6 +329,30 @@ private struct Tab2LockedView: View {
         .onChange(of: listResetToken) { _, _ in
             expandedCategoryId = nil   // 切回 Mine：回到初始收起
         }
+    }
+
+    // ── 统一常驻沉底栏（承载纸色暖光背板 + CTA 按钮 + 真实高度测量）─────────────
+    private var bottomBarContainer: some View {
+        VStack(spacing: 0) {
+            captureButton(showsCaptureIcon: categoriesWithWords.isEmpty)
+                .padding(.horizontal, AppTheme.Space.paddingPage)
+                .padding(.bottom, AppTheme.Space.bottomBarActionBottom)
+        }
+        .padding(.top, AppTheme.Space.paddingS)
+        .background {
+            // 对齐 Tab1 既定分工：有常驻底栏的页面，承托暖光归控件背板承担，不另画椭圆。
+            // 纯纸色非线性渐隐 + 5.5% 暖橙补充层，杜绝系统 material 冷灰发脏。
+            VariableBlurBackdrop(extraExtend: 16)
+                .ignoresSafeArea(.container, edges: .bottom)
+        }
+        // 实测沉底栏真实高度（无障碍大字号下按钮自适应长高），仅服务 Toast 动态避让
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.size.height
+        } action: { newHeight in
+            guard newHeight > 0, abs(newHeight - measuredBottomBarHeight) > 0.5 else { return }
+            measuredBottomBarHeight = newHeight
+        }
+        .preference(key: Tab2LockedBottomBarHeightKey.self, value: measuredBottomBarHeight)
     }
 
     // ── 待解锁 header ────────────────────────────────────────────────────
@@ -329,20 +378,9 @@ private struct Tab2LockedView: View {
     }
 
     // ── 无数据空状态（Warm Minimalism 减法设计）───────────────────────────
-    // 采用通用 EmptyStateView，以叠纸插画 + 优雅 Typography 构建舒展居中负空间。
-    // 底部 CTA 沉底作为唯一操作焦点。
+    // 按钮已提升至外层 safeAreaInset 统一沉底，此处专注纯净负空间居中
     private var emptyStateView: some View {
-        // CTA 必须与文案同处一个 VStack、真正参与布局，不能用 overlay 浮在上面。
-        // overlay 不占布局位置：CTA 一旦因大字号换行长高，就会直接压住正文
-        // （实测 AX5 下「your day.」被盖掉）。EmptyStateView 自身吃满剩余高度，
-        // CTA 自然沉底，两者从此互相知道对方多高。
-        VStack(spacing: 0) {
-            EmptyStateView()
-
-            captureButton(showsCaptureIcon: true)
-                .padding(.horizontal, AppTheme.Space.paddingPage)
-                .padding(.bottom, AppTheme.Space.paddingSection)
-        }
+        EmptyStateView()
     }
 
     // ── TOPICS list ──────────────────────────────────────────────────────
@@ -493,8 +531,7 @@ private struct Tab2LockedView: View {
                 y: shadowY
             )
             .scaleEffect(buttonScale)
-            .opacity(buttonOpacity)      // 释放时溶解：淡出
-            .blur(radius: buttonBlur)     // + 虚化，溶入升腾光晕
+            .opacity(buttonOpacity)      // 释放时溶解淡出（虚化由外层统一施加，避免双重模糊）
         }
         .buttonStyle(.plain)
         .padding(.horizontal, AppTheme.Space.paddingPage)
@@ -509,9 +546,8 @@ private struct Tab2LockedView: View {
         }
     }
 
-    // 释放时按钮原地淡出 + 柔和虚化
+    // 释放时按钮原地淡出（虚化由外层统一施加，避免双重模糊）
     private var buttonOpacity: Double { unlockState == .releasing ? 0 : 1 }
-    private var buttonBlur: CGFloat { unlockState == .releasing ? 8 : 0 }
 
     private var shadowRadius: CGFloat {
         switch unlockState {
@@ -593,6 +629,8 @@ private struct Tab2UnlockedView: View {
     var listResetToken: UUID = UUID()
     var milestonePresentations: [CategoryMilestonePresentation] = []
     let onTalk: (String) -> Void
+    var footerTopSpace: CGFloat = AppTheme.Space.pageFooterTop
+    var footerBottomSpace: CGFloat = AppTheme.Space.pageFooterBottom
 
     // 单开手风琴：同时只展开一个 Topics-in-Progress 主题；切回 Mine 时回收起。
     @State private var expandedCategoryId: String?
@@ -621,9 +659,11 @@ private struct Tab2UnlockedView: View {
                             .padding(.bottom, AppTheme.Space.paddingCard)
 
                             // 只作用于已解锁页面：最后一个可见卡片（Hero 或 Topics）
-                            // 与底部安全区之间保留明确的收尾空间。
                             contentSections(proxy)
-                                .padding(.bottom, AppTheme.Space.paddingScreenBottom)
+
+                            // 页面底部收尾宣言
+                            footerSignoff
+                                .padding(.bottom, footerBottomSpace)
                         }
                         .frame(minHeight: availableHeight, alignment: .top)
                         .background(alignment: .bottom) {
@@ -734,6 +774,28 @@ private struct Tab2UnlockedView: View {
                 }
             }
         }
+    }
+
+    /// 品牌收尾印记（方案 C 暖光微影印记：用宣纸老墨暖棕灰叠 22% 极低透明度，融进晨曦暖光）
+    private var footerSignoff: some View {
+        VStack(spacing: 5) {
+            PoplexWordmark(
+                capHeight: 13,
+                style: .mono(AppTheme.Color.footerSignoff),
+                showsPeriod: true
+            )
+
+            Text(Self.footerTagline())
+                .font(AppTheme.Font.libraryFooterTagline)
+                .foregroundStyle(AppTheme.Color.footerSignoff)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, footerTopSpace)
+    }
+
+    /// 目标语言动态解耦（MVP 默认 English，未来支持多语种无缝扩展）
+    static func footerTagline(targetLanguage: String = "English") -> String {
+        "\(targetLanguage) from your everyday life."
     }
 }
 
@@ -925,6 +987,58 @@ private struct BrandRadiantAscentOverlay: View {
         .environment(\.colorScheme, .light)
 }
 
-#Preview {
-    MineView()
+#Preview("Tab2 · 正式生产效果 (暖光微影印记)") {
+    Tab2FullPagePreviewView()
+}
+
+private struct Tab2FullPagePreviewView: View {
+    var topSpace: CGFloat = AppTheme.Space.pageFooterTop
+    var bottomSpace: CGFloat = AppTheme.Space.pageFooterBottom
+
+    private var previewVM: Tab2HomeViewModel {
+        let vm = Tab2HomeViewModel()
+        vm.data = Tab2HomeData(
+            unlocked: true,
+            inputCount: 28,
+            categories: [
+                Tab2CategoryData(
+                    sceneCategory: "工作与学业",
+                    wordCount: 24,
+                    unlocked: true,
+                    momentCount: 5
+                ),
+                Tab2CategoryData(
+                    sceneCategory: "饮食与生活",
+                    wordCount: 12,
+                    unlocked: false,
+                    previewWords: [
+                        Tab2PreviewWord(lemma: "comfort food"),
+                        Tab2PreviewWord(lemma: "grab a bite")
+                    ],
+                    momentCount: 3
+                ),
+                Tab2CategoryData(
+                    sceneCategory: "日常社交",
+                    wordCount: 8,
+                    unlocked: false,
+                    previewWords: [
+                        Tab2PreviewWord(lemma: "catch up"),
+                        Tab2PreviewWord(lemma: "take it easy")
+                    ],
+                    momentCount: 4
+                )
+            ]
+        )
+        return vm
+    }
+
+    var body: some View {
+        Tab2UnlockedView(
+            vm: previewVM,
+            onTalk: { _ in },
+            footerTopSpace: topSpace,
+            footerBottomSpace: bottomSpace
+        )
+        .environment(\.colorScheme, .light)
+    }
 }

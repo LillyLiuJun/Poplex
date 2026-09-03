@@ -15,7 +15,8 @@ struct TodayView: View {
     @State private var inputBarHeight = AppTheme.Size.inputBarMinHeight + AppTheme.Space.paddingS
     @State private var refreshHaptics = PullToRefreshHaptics()
     /// 生成次数额度的共享展示状态：达标时 InputBar 锁输入 + 出 banner，数字从这读。
-    /// 只有服务端裁决（429 / refresh 的 allowed 字段）会把 isAllowed 置 false。
+    /// 只有服务端裁决会把 isAllowed 置 false：429、refresh 的 allowed 字段，
+    /// 以及成功响应的落账后裁决（方案 B——最后一次生成用完额度即锁定）。
     @State private var quotaStore = UsageQuotaStore.shared
     var onImagePreview: ((UIImage, UnitPoint) -> Void)?
     /// 达标 banner 点击 → 打开额度 Sheet（由 RootTabContainer 呈现，顶栏仪表盘同款）。
@@ -90,6 +91,15 @@ struct TodayView: View {
                 // 回前台自动补拉一次历史：断网启动/断网期间拉取失败后，网络恢复时
                 // 用户切后台再回来即对齐服务器正本（loadHistory 有 isLoadingHistory 防重入）。
                 Task { await viewModel.loadHistory() }
+                // 回前台静默同步一次额度（方案 C）：App 在后台跨天/跨重置窗口，
+                // 回来立即纠正锁定状态——不用等下一次发送撞 429 或手动点开 Sheet。
+                Task { await quotaStore.refresh() }
+            }
+            .task {
+                // 启动/首次出现时静默同步一次额度（方案 C）：覆盖「昨天用完、今天
+                // 打开 App」的场景。静默 = 失败保持原状（refresh 只标 refreshFailed，
+                // 不动旧裁决），不打扰用户。
+                await quotaStore.refresh()
             }
     }
 

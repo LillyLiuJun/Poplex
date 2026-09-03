@@ -27,6 +27,7 @@ private enum Primitive {
     static let space32: CGFloat = 32
     static let space48: CGFloat = 48
     static let space56: CGFloat = 56
+    static let space72: CGFloat = 72
 
     // 控件尺寸
     static let size28: CGFloat = 28
@@ -70,6 +71,8 @@ private enum Primitive {
     // Primary Deep — 比种子更深的橘（用于浅橘底上承载文字 / 深橘强调，
     // 渐白色阶里没有更深的档，单列一枚 shade）
     static let primaryDeep = Color(hex: 0xC2410C)
+    /// 宣纸老墨暖棕灰（晨曦暖光微影印记）
+    static let warmShadowInk = Color(hex: 0x8C684E)
 
     // Neutral — 品牌染色中性（Warm Editorial）：深色端从种子橙 FF7622 掺入橙色相
     //   （黑带暖底，H≈24°），中/浅灰去棕回灰（低彩度、只留一丝暖），暖纸页面。
@@ -195,6 +198,12 @@ enum AppTheme {
         static let paddingHero: CGFloat         = Primitive.space48
         static let paddingScreenBottom: CGFloat = Primitive.space56
 
+        /// 页面收尾页脚留白（打破卡片吸附感，72pt 营造呼吸断层；28pt 稳固沉底）
+        static let pageFooterTop: CGFloat       = Primitive.space72
+        static let pageFooterBottom: CGFloat    = Primitive.space28
+        /// 沉底操作栏按钮距离安全区底部的间距（Tab2 待解锁底栏等；与 Onboarding 具有相同数值但用途独立演化）
+        static let bottomBarActionBottom: CGFloat = Primitive.space12
+
 
         // 区标题→内容（Topics / Materials 分区标题到其卡片的呼吸距离，统一散落字面值）
         // 与 onboardingHeaderToContent 当前同值（24）但**用途不同、各自演化**，故不合并：
@@ -264,6 +273,9 @@ enum AppTheme {
 
         static let textOnChip    = Primitive.neutral50   // chip 胶囊 / 深底按钮上的浅色文字
 
+        // 页面收尾印记专用轻量色（Tab2 底部字标与宣言，如出版物末页的安静印记，暖光微影融入晨曦）
+        static let footerSignoff = Primitive.warmShadowInk.opacity(0.22)
+
         // 品牌 / 交互
         // 橙按「做什么」分档，不按「好不好看」调透明度：
         //   brandInk   — 橙做文字的唯一出口（5.09:1）：≤24pt 文字
@@ -293,6 +305,8 @@ enum AppTheme {
 
         // 描边 / 分割
         static let border       = Primitive.neutral200
+        // 输入框聚焦态描边：中性暖灰微深档（neutral400 #ABA69F），柔和温润，避免纯黑重框
+        static let inputFocusBorder = Primitive.neutral400
         // 卡片精细轮廓描边：0.5pt @ 约 35% 透明度，与紧阴影分工建立提亮后的边界
         static let cardBorder   = Primitive.neutral200.opacity(0.35)
         // Tab2 空状态插画内部结构线：对应 Onboarding 相机的暖石墨描边，
@@ -430,6 +444,7 @@ enum AppTheme {
         static let growthStatus   = SwiftUI.Font.system(.footnote, weight: .semibold)  // 成长线状态（如「0 pops so far」）
         static let actionNote     = SwiftUI.Font.system(.footnote)                     // 操作项的补充说明（如拍照入口副文案）
         static let compactActionLabel = SwiftUI.Font.system(.subheadline, weight: .medium) // 上传胶囊动作（Camera / Gallery）：无图标时用中等字重建立操作重量
+        static let feedbackChipLabel = SwiftUI.Font.system(.subheadline, weight: .regular) // 反馈分类标签：常规细字重，保持视觉轻柔收敛
         static let chineseFaint   = SwiftUI.Font.system(.footnote)                    // 中文原文弱化
         static let chineseBody    = SwiftUI.Font.system(.subheadline)                 // 中文翻译（=参考稿 content-zh 14px 灰）
         static let date           = SwiftUI.Font.system(.caption2, weight: .semibold) // 日期分隔
@@ -442,7 +457,8 @@ enum AppTheme {
         static let compactSectionTitleSerif = SwiftUI.Font.system(.title3, design: .serif, weight: .semibold) // 紧凑页面内的小分区标题（如 Onboarding 样例区）
         static let settingsSectionTitleSerif = SwiftUI.Font.system(.subheadline, design: .serif, weight: .medium) // Settings 卡外分组标题：保留衬线编辑感，但退到辅助层
         static let settingsPinnedTitleSerif = SwiftUI.Font.system(.title3, design: .serif, weight: .semibold) // Settings 家族固定顶栏标题：比系统导航栏字号大一档，仍在 60pt 顶栏内不挤，保留品牌衬线
-        static let settingsVersion = SwiftUI.Font.system(.caption2, design: .serif) // Settings 页脚版本号：小号衬线注脚
+        static let settingsVersion = SwiftUI.Font.system(.caption, design: .serif) // Settings 页脚版本号：caption 直立端正衬线（方案 2：严谨书籍出版感）
+        static let libraryFooterTagline = SwiftUI.Font.system(.caption, design: .serif) // Library 页脚品牌收口宣言：caption 直立端正衬线，与标题 Serif 呼应
         static let ctaLabel       = SwiftUI.Font.system(.body, weight: .semibold)     // 主按钮文字（Continue / Get Started）
         static let tab2HeroCategoryLabel = SwiftUI.Font.system(.caption2, weight: .heavy)
         static let tab2HeroPopsLabel = SwiftUI.Font.system(.caption2, weight: .semibold)

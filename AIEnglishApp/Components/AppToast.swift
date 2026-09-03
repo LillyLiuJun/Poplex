@@ -72,13 +72,15 @@ extension View {
         message: Binding<String?>,
         systemImage: String? = nil,
         lifetime: Duration = AppTheme.Motion.toastLifetime,
-        placement: AppToastPlacement = .bottom
+        placement: AppToastPlacement = .bottom,
+        extraBottomOffset: CGFloat = 0
     ) -> some View {
         modifier(ToastModifier(
             message: message,
             systemImage: systemImage,
             lifetime: lifetime,
-            placement: placement
+            placement: placement,
+            extraBottomOffset: extraBottomOffset
         ))
     }
 }
@@ -88,6 +90,7 @@ private struct ToastModifier: ViewModifier {
     var systemImage: String? = nil
     let lifetime: Duration
     let placement: AppToastPlacement
+    var extraBottomOffset: CGFloat = 0
 
     func body(content: Content) -> some View {
         ZStack(alignment: placement.alignment) {
@@ -97,7 +100,12 @@ private struct ToastModifier: ViewModifier {
                 systemImage: systemImage,
                 lifetime: lifetime
             )
-            .padding(placement.paddingEdge, AppTheme.Space.paddingSection)
+            .padding(
+                placement.paddingEdge,
+                placement == .bottom
+                    ? AppTheme.Space.paddingSection + extraBottomOffset
+                    : AppTheme.Space.paddingSection
+            )
         }
     }
 }

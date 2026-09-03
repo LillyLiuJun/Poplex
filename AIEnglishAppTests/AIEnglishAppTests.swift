@@ -1059,8 +1059,31 @@ struct AIServiceContractTests {
         #expect(offset == TimeZone.current.secondsFromGMT() / 60)
     }
 
-    // 成功响应的 usage 字段（服务端报告的最新用量，含本次生成）→ 解码进信封。
+    // 成功响应的 usage 字段（服务端报告的最新用量，含本次生成）→ 解码进信封，
+    // 落账后裁决 allowed（方案 B：最后一次生成用完额度时客户端立即锁定）一并落地。
     @Test func decodesUsageFieldFromSuccessResponse() throws {
+        let json = """
+        {
+            "card_type": "s4",
+            "card_content": {
+                "granularity": "sentence",
+                "direction": "express",
+                "target_expression": "The train was packed.",
+                "learnable_units": [],
+                "examples": []
+            },
+            "usage": {"used": 3, "limit": 5, "allowed": false, "resets_at": "2026-09-03T00:00:00+08:00"}
+        }
+        """.data(using: .utf8)!
+
+        let envelope = try JSONDecoder().decode(AIEnvelope.self, from: json)
+
+        #expect(envelope.usage == UsageInfo(used: 3, limit: 5, allowed: false, resetsAt: "2026-09-03T00:00:00+08:00"))
+    }
+
+    // 旧版服务端（部署回滚或尚未升级）不返回 allowed → 解码为 nil，客户端保持未知态，
+    // 行为与方案 B 上线前一致——新旧服务端与新旧 App 任意组合都不崩。
+    @Test func usageFieldWithoutAllowedStillDecodes() throws {
         let json = """
         {
             "card_type": "s4",
@@ -1077,7 +1100,7 @@ struct AIServiceContractTests {
 
         let envelope = try JSONDecoder().decode(AIEnvelope.self, from: json)
 
-        #expect(envelope.usage == UsageInfo(used: 3, limit: 5, resetsAt: "2026-09-03T00:00:00+08:00"))
+        #expect(envelope.usage == UsageInfo(used: 3, limit: 5, allowed: nil, resetsAt: "2026-09-03T00:00:00+08:00"))
     }
 
     // 旧响应（无 usage 字段）依旧正常解码——usage 是信息性字段，缺了不影响信封。
@@ -2752,13 +2775,38 @@ struct UsageQuotaStoreTests {
         #expect(store.refreshFailed == true)
     }
 
-    // 生成成功的 usage 字段：更新数字、裁决回到未知（服务器刚放行过一次）。
-    @Test func applyUsageUpdatesNumbersAndClearsVerdict() {
+    // 方案 B：成功响应的落账后裁决 false（额度在本次生成用尽）→ 立即锁定，
+    // 数字同步更新——用户不用等下一次发送撞 429 才发现。
+    @Test func applyUsageWithAllowedFalseLocksImmediately() {
+        let store = UsageQuotaStore()
+        store.apply(usage: UsageInfo(used: 5, limit: 5, allowed: false, resetsAt: nil))
+
+        #expect(store.usedCount == 5)
+        #expect(store.dailyLimit == 5)
+        #expect(store.isAllowed == false)
+    }
+
+    // 落账后裁决 true（还能继续生成）：旧锁定状态被正确的服务端裁决覆盖。
+    @Test func applyUsageWithAllowedTrueOverridesPreviousLock() {
         let store = UsageQuotaStore()
         store.applyServerVerdict(used: 5, limit: 5, allowed: false)
         #expect(store.isAllowed == false)
 
-        store.apply(usage: UsageInfo(used: 1, limit: 5, resetsAt: nil))
+        store.apply(usage: UsageInfo(used: 1, limit: 5, allowed: true, resetsAt: nil))
+
+        #expect(store.usedCount == 1)
+        #expect(store.dailyLimit == 5)
+        #expect(store.isAllowed == true)
+    }
+
+    // 旧版服务端不返回 allowed → 保持未知态（不锁）：与方案 B 上线前行为一致，
+    // 生成成功本身已证明服务端刚放行过一次。
+    @Test func applyUsageWithoutAllowedFallsBackToUnknown() {
+        let store = UsageQuotaStore()
+        store.applyServerVerdict(used: 5, limit: 5, allowed: false)
+        #expect(store.isAllowed == false)
+
+        store.apply(usage: UsageInfo(used: 1, limit: 5, allowed: nil, resetsAt: nil))
 
         #expect(store.usedCount == 1)
         #expect(store.dailyLimit == 5)

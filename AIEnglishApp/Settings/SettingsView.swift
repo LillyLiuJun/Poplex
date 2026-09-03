@@ -25,21 +25,32 @@ struct SettingsView: View {
     @State private var debugToast: String?
     #endif
 
-    init(previewToast: String? = nil) {
-        self._feedbackToast = State(initialValue: previewToast)
-    }
+    /// 最后一张卡与版本号之间的距离，打破卡片吸附，达到 pageFooterTop (72pt) 深度呼吸留白。
+    /// 因为 SettingsScreen 的 VStack 已经自带 paddingSection (32pt)，
+    /// 这里补齐差额：72 - 32 = 40pt。
+    private static let sectionToFooter =
+        AppTheme.Space.pageFooterTop - AppTheme.Space.paddingSection
 
-    /// 最后一张卡与版本号之间的距离，比分组之间的 paddingSection(32) 再远一档。
-    ///
-    /// 版本号是页脚，不是分组：拿着分组的间距会让它看起来像最后一个分组的一部分。
-    /// 写成加法而不是直接写某个数：意图是「总距 = paddingHero 这一档」，
-    /// 直接写死的话，哪天 paddingSection 从 32 调成 24，总距会悄悄变化且无人察觉。
-    private static let sectionToPageLevel =
-        AppTheme.Space.paddingHero - AppTheme.Space.paddingSection
+    var footerTopExtraPadding: CGFloat = Self.sectionToFooter
+    var footerBottomPadding: CGFloat = AppTheme.Space.pageFooterBottom
+
+    init(
+        previewToast: String? = nil,
+        footerTopExtraPadding: CGFloat = Self.sectionToFooter,
+        footerBottomPadding: CGFloat = AppTheme.Space.pageFooterBottom
+    ) {
+        self._feedbackToast = State(initialValue: previewToast)
+        self.footerTopExtraPadding = footerTopExtraPadding
+        self.footerBottomPadding = footerBottomPadding
+    }
 
     var body: some View {
         NavigationStack {
-            SettingsScreen(pinnedTitle: "Settings", scrollToTopToken: scrollToTopToken) {
+            SettingsScreen(
+                pinnedTitle: "Settings",
+                bottomPadding: footerBottomPadding,
+                scrollToTopToken: scrollToTopToken
+            ) {
                 languageCard
                 legalCard
                 supportCard
@@ -210,15 +221,13 @@ struct SettingsView: View {
     }
     #endif
 
-    /// 小写 `version` 是 PM 明确选定的写法（编辑风页脚）。
-    /// 代价已知并接受：它是全 App 唯一一个首字母小写的字符串，
-    /// 与其余「句首大写」的文案不同规。改回来只需大写这一个字母。
+    /// 严谨克制的页脚版本号：句首大写 + caption 直立端正衬线（方案 2：严肃书籍出版感，杜绝随性感）。
     private var versionFooter: some View {
-        Text("version \(Bundle.main.appVersion)")
+        Text("Version \(Bundle.main.appVersion)")
             .font(AppTheme.Font.settingsVersion)
             .foregroundStyle(AppTheme.Color.textMuted)
             .frame(maxWidth: .infinity)
-            .padding(.top, Self.sectionToPageLevel)
+            .padding(.top, footerTopExtraPadding)
     }
 
     // MARK: - Delete account
@@ -338,10 +347,48 @@ struct SettingsView: View {
     }
 }
 
-#Preview("SettingsView · Default") {
+#Preview("Settings · 正式生产效果 (Option 2 · 72/28)") {
     SettingsView()
 }
 
-#Preview("SettingsView · With Feedback Toast") {
-    SettingsView(previewToast: "Thank you! We'll be in touch soon")
+#Preview("Settings · 方案对比 (横向并列 3 部真实 iPhone)") {
+    ScrollView(.horizontal, showsIndicators: false) {
+        HStack(spacing: 32) {
+            VStack(spacing: 12) {
+                Text("Option 0 · 现状 (Top 48pt / Bottom 56pt)")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(.white)
+                SettingsView(footerTopExtraPadding: 16, footerBottomPadding: 56)
+                    .frame(width: 393, height: 852)
+                    .clipShape(RoundedRectangle(cornerRadius: 48, style: .continuous))
+                    .shadow(color: .black.opacity(0.4), radius: 24, x: 0, y: 12)
+            }
+
+            VStack(spacing: 12) {
+                Text("Option 1 · 推荐 (Top 64pt / Bottom 32pt 沉底)")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(AppTheme.Color.brandStrong)
+                SettingsView(footerTopExtraPadding: 32, footerBottomPadding: 32)
+                    .frame(width: 393, height: 852)
+                    .clipShape(RoundedRectangle(cornerRadius: 48, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 48, style: .continuous)
+                            .stroke(AppTheme.Color.brandStrong, lineWidth: 3)
+                    )
+                    .shadow(color: .black.opacity(0.4), radius: 24, x: 0, y: 12)
+            }
+
+            VStack(spacing: 12) {
+                Text("Option 2 · 深呼吸 (Top 72pt / Bottom 28pt)")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(.white)
+                SettingsView(footerTopExtraPadding: 40, footerBottomPadding: 28)
+                    .frame(width: 393, height: 852)
+                    .clipShape(RoundedRectangle(cornerRadius: 48, style: .continuous))
+                    .shadow(color: .black.opacity(0.4), radius: 24, x: 0, y: 12)
+            }
+        }
+        .padding(32)
+    }
+    .background(Color(red: 0.08, green: 0.07, blue: 0.06))
 }

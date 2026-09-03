@@ -34,7 +34,7 @@ function environmentValue(name: string): string {
 
 const GEMINI_API_KEY = environmentValue("GEMINI_API_KEY");
 const GEMINI_URL =
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
+  "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.7-flash:generateContent";
 const SUPABASE_URL = environmentValue("SUPABASE_URL");
 const SUPABASE_ANON_KEY = environmentValue("SUPABASE_ANON_KEY");
 const SUPABASE_SVC_KEY = environmentValue("SUPABASE_SERVICE_ROLE_KEY");
@@ -1048,6 +1048,10 @@ async function usageField(
       usage: {
         used: quota.usedCount,
         limit: quota.limit,
+        // 落账后的裁决（第 3 刀补丁）：本次生成已计入，这个布尔值就是
+        // 「还能不能再生成」——客户端在最后一次成功生成后立即锁定输入栏，
+        // 不用等下一次发送撞 429 才发现额度用尽。
+        allowed: quota.allowed,
         resets_at: usageContext.resetsAt,
       },
     };

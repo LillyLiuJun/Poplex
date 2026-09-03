@@ -21,12 +21,18 @@ struct AboutAIView: View {
     var body: some View {
         SettingsScreen(onBack: { dismiss() }, pinnedTitle: "Personal data") {
             VStack(alignment: .leading, spacing: AppTheme.Space.paddingCard) {
-                Text("Poplex creates your English learning content using AI (Google Gemini), based on the text and images you provide. This content is generated automatically and may be inaccurate or inappropriate — it's for learning reference only, not professional advice.")
-                Text("To generate content, the text and photos you provide are sent to Google Gemini for processing. We don't collect your real identity or use your data for ads. You can delete all your data anytime in Settings.")
+                Text(Self.title)
+                    .font(AppTheme.Font.sectionTitleSerif)
+                    .foregroundStyle(AppTheme.Color.textPrimary)
+
+                VStack(alignment: .leading, spacing: AppTheme.Space.paddingCard) {
+                    Text("Poplex creates your English learning content using AI (Google Gemini), based on the text and images you provide. This content is generated automatically and may be inaccurate or inappropriate — it's for learning reference only, not professional advice.")
+                    Text("To generate content, the text and photos you provide are sent to Google Gemini for processing. We don't collect your real identity or use your data for ads. You can delete all your data anytime in Settings.")
+                }
+                .font(AppTheme.Font.englishBody)
+                .foregroundStyle(AppTheme.Color.textSecondary)
+                .lineSpacing(AppTheme.Typography.lineBody)
             }
-            .font(AppTheme.Font.englishBody)
-            .foregroundStyle(AppTheme.Color.textSecondary)
-            .lineSpacing(AppTheme.Typography.lineBody)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, AppTheme.Space.paddingPage)
 

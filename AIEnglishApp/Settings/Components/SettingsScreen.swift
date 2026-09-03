@@ -30,6 +30,8 @@ struct SettingsScreen<Content: View>: View {
     var pinnedTitle: String?
     /// 内容相对顶栏的额外留白。有返回键或固定标题时会自动再加上一整条顶栏高度。
     var topPadding: CGFloat = AppTheme.Space.paddingSection
+    /// 底部留白（常规内容页默认 56pt；仅带版本号页脚的 SettingsView 显式传 pageFooterBottom 28pt）
+    var bottomPadding: CGFloat = AppTheme.Space.paddingScreenBottom
     /// 仅 Feedback 需要——它有长文本输入框。
     var dismissesKeyboardOnScroll: Bool = false
     /// 值发生变化即把内容滚回顶部。调用方在**推入**二级页时自增，
@@ -66,7 +68,7 @@ struct SettingsScreen<Content: View>: View {
                         content()
                     }
                     .padding(.top, contentTopInset)
-                    .padding(.bottom, AppTheme.Space.paddingScreenBottom)
+                    .padding(.bottom, bottomPadding)
                     .frame(maxWidth: .infinity)
                     // 锚点挂在**加完内边距之后**的容器上。挂在容器内部的话，
                     // `scrollTo(anchor: .top)` 会把那个内部视图的顶边对齐到视口顶边，

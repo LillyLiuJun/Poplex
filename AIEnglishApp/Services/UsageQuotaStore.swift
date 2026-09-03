@@ -6,7 +6,8 @@ import Supabase
 /// 三个入口，都只写「服务器说的话」：
 /// - `refresh()`：调 `check_generation_quota` RPC（用户由 auth.uid() 决定，
 ///   不接受 user_id 参数），拿到服务器数字与裁决——Sheet 打开时刷新；
-/// - `apply(usage:)`：生成成功响应携带的最新用量（含本次生成），免一次网络往返；
+/// - `apply(usage:)`：生成成功响应携带的最新用量（含本次生成）与落账后裁决
+///   （`allowed`），免一次网络往返；
 /// - `applyServerVerdict(used:limit:allowed:)`：429 时服务端的明确裁决（不允许）。
 ///
 /// 前端不做任何拦截判断：`isAllowed` 只来自服务器；`nil` = 未知，输入栏不锁。
@@ -100,13 +101,15 @@ final class UsageQuotaStore {
         }
     }
 
-    /// 生成成功响应携带的最新用量（含本次生成）：直接覆盖，免一次网络往返。
-    /// 服务器刚放行过一次生成，旧的「不可生成」裁决随之过期，回到未知态。
+    /// 生成成功响应携带的最新用量（含本次生成）与落账后裁决：直接覆盖，
+    /// 免一次网络往返。`allowed=false` 时输入栏立即锁定——额度在本次生成
+    /// 用尽，用户不用等下一次发送撞 429 才发现；`allowed` 缺省（旧版
+    /// 服务端不返回该字段）保持未知态，行为与从前一致。
     func apply(usage: UsageInfo) {
         commit(claimGeneration()) {
             usedCount = usage.used
             dailyLimit = usage.limit
-            isAllowed = nil
+            isAllowed = usage.allowed
         }
     }
 
