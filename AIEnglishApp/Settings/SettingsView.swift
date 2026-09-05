@@ -109,6 +109,7 @@ struct SettingsView: View {
                     .tint(AppTheme.Color.cardBg)
             }
         }
+        .presentationDragIndicator(.hidden)
         #if DEBUG
         .alert("Reset Library unlock?", isPresented: $showResetUnlockAlert) {
             Button("Reset", role: .destructive) { resetLibraryUnlock() }
@@ -131,7 +132,7 @@ struct SettingsView: View {
             SettingsCircleButton(kind: .close) { dismiss() }
                 .padding(.trailing, AppTheme.Space.paddingPage)
         }
-        .padding(.top, AppTheme.Space.paddingS)
+        .padding(.top, AppTheme.Space.titleToContent)
     }
 
     // MARK: - Page title
@@ -347,48 +348,55 @@ struct SettingsView: View {
     }
 }
 
+#Preview("Settings · 真实 Sheet 效果 (含顶部横线)", traits: .fixedLayout(width: 393, height: 852)) {
+    ZStack(alignment: .bottom) {
+        AppTheme.Color.pageBg.ignoresSafeArea()
+        Color.black.opacity(0.24).ignoresSafeArea()
+
+        SettingsView()
+            .frame(height: 740)
+            .background(AppTheme.Color.pageBg)
+            .clipShape(UnevenRoundedRectangle(
+                topLeadingRadius: AppTheme.Radius.large,
+                bottomLeadingRadius: 0,
+                bottomTrailingRadius: 0,
+                topTrailingRadius: AppTheme.Radius.large,
+                style: .continuous
+            ))
+            .shadow(color: Color.black.opacity(0.18), radius: 24, x: 0, y: -4)
+    }
+}
+
+/// 交互式预览：在 Xcode Live Preview 中点击按钮即可呼出真实系统 Sheet
+private struct SettingsInteractivePreview: View {
+    @State private var showSettings = true
+
+    var body: some View {
+        ZStack {
+            AppTheme.Color.pageBg.ignoresSafeArea()
+
+            Button {
+                showSettings = true
+            } label: {
+                Text("Open Settings Sheet")
+                    .font(AppTheme.Font.ctaLabel)
+                    .foregroundStyle(AppTheme.Color.textOnChip)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 12)
+                    .background(AppTheme.Color.interactive, in: Capsule())
+            }
+        }
+        .sheet(isPresented: $showSettings) {
+            SettingsView()
+        }
+    }
+}
+
+#Preview("Settings · 交互式实时弹窗演示 (Xcode Live 预览)") {
+    SettingsInteractivePreview()
+}
+
 #Preview("Settings · 正式生产效果 (Option 2 · 72/28)") {
     SettingsView()
 }
 
-#Preview("Settings · 方案对比 (横向并列 3 部真实 iPhone)") {
-    ScrollView(.horizontal, showsIndicators: false) {
-        HStack(spacing: 32) {
-            VStack(spacing: 12) {
-                Text("Option 0 · 现状 (Top 48pt / Bottom 56pt)")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(.white)
-                SettingsView(footerTopExtraPadding: 16, footerBottomPadding: 56)
-                    .frame(width: 393, height: 852)
-                    .clipShape(RoundedRectangle(cornerRadius: 48, style: .continuous))
-                    .shadow(color: .black.opacity(0.4), radius: 24, x: 0, y: 12)
-            }
-
-            VStack(spacing: 12) {
-                Text("Option 1 · 推荐 (Top 64pt / Bottom 32pt 沉底)")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(AppTheme.Color.brandStrong)
-                SettingsView(footerTopExtraPadding: 32, footerBottomPadding: 32)
-                    .frame(width: 393, height: 852)
-                    .clipShape(RoundedRectangle(cornerRadius: 48, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 48, style: .continuous)
-                            .stroke(AppTheme.Color.brandStrong, lineWidth: 3)
-                    )
-                    .shadow(color: .black.opacity(0.4), radius: 24, x: 0, y: 12)
-            }
-
-            VStack(spacing: 12) {
-                Text("Option 2 · 深呼吸 (Top 72pt / Bottom 28pt)")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(.white)
-                SettingsView(footerTopExtraPadding: 40, footerBottomPadding: 28)
-                    .frame(width: 393, height: 852)
-                    .clipShape(RoundedRectangle(cornerRadius: 48, style: .continuous))
-                    .shadow(color: .black.opacity(0.4), radius: 24, x: 0, y: 12)
-            }
-        }
-        .padding(32)
-    }
-    .background(Color(red: 0.08, green: 0.07, blue: 0.06))
-}

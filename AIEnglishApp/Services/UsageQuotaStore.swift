@@ -50,6 +50,38 @@ final class UsageQuotaStore {
         return formatter.string(from: Date())
     }
 
+    // MARK: - 离线持久化缓存（Offline-first）
+    //
+    // 注意：只持久化 usedCount 和 dailyLimit，绝不持久化 isAllowed。
+    // 服务端裁决（isAllowed）必须保持「会话/在线即时有效」，绝不能跨启动回放——
+    // 否则昨天达标的「isAllowed = false」会在今早启动时误锁今天的输入栏，
+    // 破坏「前端不主观拦截、一切以服务端实时裁决为准」的根本原则。
+
+    private let defaults: UserDefaults
+    static let cachedDateKey = "usage_quota_cached_date"
+    static let cachedUsedCountKey = "usage_quota_cached_used_count"
+    static let cachedDailyLimitKey = "usage_quota_cached_daily_limit"
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        let today = Self.localDateString()
+        if defaults.string(forKey: Self.cachedDateKey) == today {
+            if defaults.object(forKey: Self.cachedUsedCountKey) != nil {
+                self.usedCount = defaults.integer(forKey: Self.cachedUsedCountKey)
+            }
+            if defaults.object(forKey: Self.cachedDailyLimitKey) != nil {
+                self.dailyLimit = defaults.integer(forKey: Self.cachedDailyLimitKey)
+            }
+        }
+    }
+
+    private func persistCache(used: Int?, limit: Int?) {
+        guard let used, let limit else { return }
+        defaults.set(Self.localDateString(), forKey: Self.cachedDateKey)
+        defaults.set(used, forKey: Self.cachedUsedCountKey)
+        defaults.set(limit, forKey: Self.cachedDailyLimitKey)
+    }
+
     // MARK: - 写入世代守卫
 
     // 三个入口可能交错：例如 Sheet 里的 refresh 还在途，用户已发消息并收到
@@ -93,6 +125,7 @@ final class UsageQuotaStore {
                 dailyLimit = row.limit
                 isAllowed = row.allowed
                 refreshFailed = false
+                persistCache(used: row.usedCount, limit: row.limit)
             }
         } catch {
             // 保留旧值（若有），只标记本次刷新失败；迟到的失败同样不能
@@ -110,6 +143,7 @@ final class UsageQuotaStore {
             usedCount = usage.used
             dailyLimit = usage.limit
             isAllowed = usage.allowed
+            persistCache(used: usage.used, limit: usage.limit)
         }
     }
 
@@ -120,6 +154,7 @@ final class UsageQuotaStore {
             dailyLimit = limit
             isAllowed = allowed
             refreshFailed = false
+            persistCache(used: used, limit: limit)
         }
     }
 }

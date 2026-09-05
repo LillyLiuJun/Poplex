@@ -2886,6 +2886,70 @@ struct UsageQuotaStoreTests {
         #expect(store.isAllowed == false)
         #expect(store.refreshFailed == false)
     }
+
+    // 离线缓存：当天缓存存在时，初始化能正确还原数字。
+    @Test func cachedUsageRestoredWhenDateMatchesToday() {
+        let suiteName = "test_usage_quota_cache_today_\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.set(UsageQuotaStore.localDateString(), forKey: UsageQuotaStore.cachedDateKey)
+        defaults.set(3, forKey: UsageQuotaStore.cachedUsedCountKey)
+        defaults.set(5, forKey: UsageQuotaStore.cachedDailyLimitKey)
+
+        let store = UsageQuotaStore(defaults: defaults)
+        #expect(store.usedCount == 3)
+        #expect(store.dailyLimit == 5)
+    }
+
+    // 离线缓存过期：非当天（如昨天）缓存被忽略，数字保持 nil。
+    @Test func cachedUsageIgnoredWhenDateDoesNotMatchToday() {
+        let suiteName = "test_usage_quota_cache_expired_\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.set("2020-01-01", forKey: UsageQuotaStore.cachedDateKey)
+        defaults.set(4, forKey: UsageQuotaStore.cachedUsedCountKey)
+        defaults.set(5, forKey: UsageQuotaStore.cachedDailyLimitKey)
+
+        let store = UsageQuotaStore(defaults: defaults)
+        #expect(store.usedCount == nil)
+        #expect(store.dailyLimit == nil)
+    }
+
+    // 刷新成功后同步写入持久化缓存。
+    @Test func refreshPersistsCacheToDefaults() async {
+        let suiteName = "test_usage_quota_cache_persist_\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        let store = UsageQuotaStore(defaults: defaults)
+        store.fetchQuota = { UsageQuotaStore.QuotaRow(usedCount: 2, limit: 5, allowed: true) }
+
+        await store.refresh()
+
+        #expect(defaults.string(forKey: UsageQuotaStore.cachedDateKey) == UsageQuotaStore.localDateString())
+        #expect(defaults.integer(forKey: UsageQuotaStore.cachedUsedCountKey) == 2)
+        #expect(defaults.integer(forKey: UsageQuotaStore.cachedDailyLimitKey) == 5)
+    }
+
+    // 生成成功落账（apply）同步写入持久化缓存（W4）。
+    @Test func applyPersistsCacheToDefaults() {
+        let suiteName = "test_usage_quota_cache_apply_\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        let store = UsageQuotaStore(defaults: defaults)
+        store.apply(usage: UsageInfo(used: 3, limit: 5, allowed: true, resetsAt: nil))
+
+        #expect(defaults.string(forKey: UsageQuotaStore.cachedDateKey) == UsageQuotaStore.localDateString())
+        #expect(defaults.integer(forKey: UsageQuotaStore.cachedUsedCountKey) == 3)
+        #expect(defaults.integer(forKey: UsageQuotaStore.cachedDailyLimitKey) == 5)
+    }
+
+    // 429 达标裁决（applyServerVerdict）同步写入持久化缓存（W4）。
+    @Test func applyServerVerdictPersistsCacheToDefaults() {
+        let suiteName = "test_usage_quota_cache_verdict_\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        let store = UsageQuotaStore(defaults: defaults)
+        store.applyServerVerdict(used: 5, limit: 5, allowed: false)
+
+        #expect(defaults.string(forKey: UsageQuotaStore.cachedDateKey) == UsageQuotaStore.localDateString())
+        #expect(defaults.integer(forKey: UsageQuotaStore.cachedUsedCountKey) == 5)
+        #expect(defaults.integer(forKey: UsageQuotaStore.cachedDailyLimitKey) == 5)
+    }
 }
 
 // MARK: - Onboarding gate three-state parsing tests
@@ -5572,6 +5636,10 @@ struct LocalUserDataTests {
         defaults.set(42, forKey: "mine_last_scene_count")
         // 2026-08-27 review 发现的遗漏：引导完成待同步标记也是账号级状态
         defaults.set(true, forKey: ProfileService.onboardingSyncPendingKey)
+        // 每日额度本地缓存（W3）：删号清理后不应残留
+        defaults.set("2026-09-05", forKey: UsageQuotaStore.cachedDateKey)
+        defaults.set(3, forKey: UsageQuotaStore.cachedUsedCountKey)
+        defaults.set(5, forKey: UsageQuotaStore.cachedDailyLimitKey)
         // 聊过机制删除时枚举 case 一并没了，但字面量必须留在清理清单里——
         // 用字面量而非 Tab2Defaults.* 写入，模拟「更新前的旧设备本地已写入」这一场景。
         defaults.set(["Calling family"], forKey: "tab2_spoken_moments")
@@ -5586,6 +5654,9 @@ struct LocalUserDataTests {
         #expect(defaults.object(forKey: Tab2Defaults.heroKnownMoments) == nil)
         #expect(defaults.object(forKey: "mine_last_scene_count") == nil)
         #expect(defaults.object(forKey: ProfileService.onboardingSyncPendingKey) == nil)
+        #expect(defaults.object(forKey: UsageQuotaStore.cachedDateKey) == nil)
+        #expect(defaults.object(forKey: UsageQuotaStore.cachedUsedCountKey) == nil)
+        #expect(defaults.object(forKey: UsageQuotaStore.cachedDailyLimitKey) == nil)
         #expect(defaults.object(forKey: "tab2_spoken_moments") == nil)
         #expect(defaults.object(forKey: "tab2_hero_known_spoken_moments") == nil)
     }
@@ -6713,3 +6784,26 @@ struct SettingsSingleSourceTests {
         #expect(LearningLanguages.target != LearningLanguages.native)
     }
 }
+
+// MARK: - AI Consent Presentation Detents (N1 回归守卫)
+
+@Suite("AI Consent presentation detents")
+struct AIConsentPresentationDetentsTests {
+
+    // Tab1 场景：allowsLarge: true 时产出两档（包含 .large 展开档与默认 410pt 高度），保证 AX 大字号可舒适阅读
+    @Test func allowsLargeTrueIncludesLargeAndFixedDetent() {
+        let detents = AIConsentPresentationDetents.detents(allowsLarge: true)
+        #expect(detents.count == 2)
+        #expect(detents.contains(.large))
+        #expect(detents.contains(.height(AppTheme.Size.consentSheetHeight)))
+    }
+
+    // Onboarding 场景：allowsLarge: false 锁定单档 .height(410)，符合封闭引导流产品决策
+    @Test func allowsLargeFalseLocksToSingleHeightDetent() {
+        let detents = AIConsentPresentationDetents.detents(allowsLarge: false)
+        #expect(detents.count == 1)
+        #expect(!detents.contains(.large))
+        #expect(detents.contains(.height(AppTheme.Size.consentSheetHeight)))
+    }
+}
+

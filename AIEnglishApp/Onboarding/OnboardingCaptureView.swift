@@ -138,18 +138,12 @@ struct OnboardingCaptureView: View {
         // 新页面的 ScrollView 还没上报，旧值会残留一帧、顶部渐隐闪一下——切换时清零。
         .onChange(of: isSelecting) { _, _ in scrollOffset = 0 }
         .sheet(isPresented: $showConsentSheet) {
-            // 弹窗高度固定（仅 medium）：不可拉大——拉大会让"内容在上、按钮在下"
-            // 的布局中间出现大片空白。文案多时在弹窗内部滚动，按钮始终可见。
-            // 拖拽指示隐藏（没有可展开的大档）；下拉关闭手势仍有效。
-            // contentInteraction(.scrolls)：把拖动手势交给内容区滚动，
-            // 而不是上拉调整弹窗高度（弹窗只有 medium 一档，上拉无意义）。
-            // interactiveDismissDisabled：禁止下滑拖动关闭——弹窗是决策点，
-            // 只能通过 Agree / Not now 显式离开，防误触；也彻底消除"可拉动"感。
+            // 弹窗高度固定（AppTheme.Size.consentSheetHeight = 410pt）：文案精简自洽，不设展开档。
+            // 顶部横线显式可见作为 Sheet 层级视觉提示；
+            // 启用 interactiveDismissDisabled 禁止下滑拖动关闭——弹窗是法律合规决策点，
+            // 只能通过 Agree / Not now 显式离开，防手滑误触跳过授权。
             AIConsentView(onAgree: { performSelection() })
-                .presentationDetents([.medium])
-                .presentationDragIndicator(.hidden)
-                .presentationContentInteraction(.scrolls)
-                .interactiveDismissDisabled()
+                .aiConsentSheetPresentation(isInteractiveDismissDisabled: true)
         }
         .onPreferenceChange(CarouselFramePreferenceKey.self) { carouselFrame = $0 }
         // 被拒：清视图层暂存选中——图片不上屏、Continue 回到禁用态（fail-open 唯一例外）。

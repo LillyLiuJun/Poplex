@@ -512,6 +512,9 @@ enum AppTheme {
         static func wordmark(size: CGFloat) -> SwiftUI.Font {
             SwiftUI.Font.system(size: size, weight: .bold, design: .serif).italic()
         }
+
+        /// 每日额度大数字展示（仪表盘 Sheet 主数字：以 .largeTitle 衬线加粗为基座，保留 Dynamic Type 缩放能力）。
+        static let quotaHeroNumber = SwiftUI.Font.system(.largeTitle, design: .serif, weight: .bold)
     }
 
     // 排版微调（行距 / 字距 / 动态字号上限）。SwiftUI 的 Font 装不下这些，故单列一层，
@@ -628,6 +631,8 @@ enum AppTheme {
         static let imageLoadingIndicatorDiameter: CGFloat = 24
         static let imageLoadingIndicatorStroke: CGFloat = 2
         static let categoryBadge: CGFloat = Primitive.size36  // Topics 类别圆形徽章边长（浅橘底托类别图标）
+        /// AI Consent 弹窗固定高度：文案精简自洽，不设展开档；消灭空旷下巴与过度拉伸。
+        static let consentSheetHeight: CGFloat = 410
         // brandMark（84pt 圆形 app-icon 报头直径）已随 Settings 删除品牌报头一并移除。
         // brandGlyph 在此之前就已无消费者，属既有债务，留待 token 体检时统一清理。
         static let brandGlyph: CGFloat = Primitive.size36  // 报头里 PoplexPShape 的字高

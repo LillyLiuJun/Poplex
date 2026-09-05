@@ -80,8 +80,10 @@ struct TodayView: View {
             .background(AppTheme.Color.pageBg.ignoresSafeArea())
             .sheet(isPresented: $viewModel.showAIConsent) {
                 AIConsentView { viewModel.onConsentAgreed() }
-                    .presentationDetents([.medium, .large])
-                    .presentationDragIndicator(.visible)
+                    // N1 设计决策：Tab1 属于日常主界面，用户可能开启 Dynamic Type 或 AX 大字号，
+                    // 默认 410pt 高度下正文阅读区受限；传入 allowsLarge: true 允许向上拖动把手展开至 .large，
+                    // 保障无障碍阅读体验；而 Onboarding 处于强引导流，按产品决策锁定单档 .height(410)。
+                    .aiConsentSheetPresentation(allowsLarge: true)
             }
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
                 viewModel.session.didEnterBackground()

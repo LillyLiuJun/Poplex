@@ -47,10 +47,21 @@ struct SettingsScreen<Content: View>: View {
     /// 基准，否则大字号下按钮长大了、遮罩带还是原来那么高，按钮会露出带子外面。
     @ScaledMetric(relativeTo: .body) private var barControlSide = AppTheme.Size.barControl
 
-    /// 顶栏条高 = 控件本体 + 上下留白。遮罩带按它算——遮罩的职责是罩住顶部
+    /// 顶栏上边距（24pt）：带右上角关闭控件的 Sheet（Settings / Daily Limit）统一采用 24pt
+    /// 紧凑控件基线；无关闭控件的纯卡片（AIConsentView）则采用 48pt（paddingHero）舒展留白，
+    /// 避免大标题挤压顶部横线。
+    private var barTopPadding: CGFloat {
+        AppTheme.Space.titleToContent
+    }
+
+    private var barBottomPadding: CGFloat {
+        AppTheme.Space.paddingS
+    }
+
+    /// 顶栏条高 = 控件本体 + 上留白 + 下留白。遮罩带按它算——遮罩的职责是罩住顶部
     /// 那条固定控件带，所以它跟控件走，与内容排版留白（topPadding）各自独立。
     private var barHeight: CGFloat {
-        barControlSide + AppTheme.Space.paddingS * 2
+        barControlSide + barTopPadding + barBottomPadding
     }
 
     /// 静止状态下内容之上的空白区高度。
@@ -92,19 +103,29 @@ struct SettingsScreen<Content: View>: View {
             SheetTopScrim()
                 .frame(height: barHeight)
         }
-        // 固定标题：居中、系统导航栏字号量级的品牌衬线，遮罩之上、返回键之下
-        // （返回键在左侧，标题居中，短文案下两者不会重叠，见设计稿）。
-        // h1 语义从原本三页各自的滚动大标题搬过来——分组标题（SettingsCard）
-        // 是 h2，读屏用户靠这层级知道 "Legal" 从属于 "Settings"，见
-        // settingsPageTitleSemantics 的注释。
+        // 固定标题：根页（Settings）左对齐，与 UsageLimit / AI Consent 弹窗统一视觉语言（左标题 + 右关闭键）；
+        // 二级页（About AI / Feedback，带返回键）标题居中。
         .overlay(alignment: .top) {
             if let pinnedTitle {
-                Text(pinnedTitle)
-                    .font(AppTheme.Font.settingsPinnedTitleSerif)
-                    .foregroundStyle(AppTheme.Color.textPrimary)
-                    .frame(height: barHeight)
-                    .frame(maxWidth: .infinity)
-                    .settingsPageTitleSemantics()
+                HStack {
+                    if onBack != nil {
+                        Spacer()
+                        Text(pinnedTitle)
+                            .font(AppTheme.Font.settingsPinnedTitleSerif)
+                            .foregroundStyle(AppTheme.Color.textPrimary)
+                            .settingsPageTitleSemantics()
+                        Spacer()
+                    } else {
+                        Text(pinnedTitle)
+                            .font(AppTheme.Font.sectionTitleSerif)
+                            .foregroundStyle(AppTheme.Color.textPrimary)
+                            .settingsPageTitleSemantics()
+                        Spacer()
+                    }
+                }
+                .frame(height: barControlSide)
+                .padding(.horizontal, AppTheme.Space.paddingPage)
+                .padding(.top, barTopPadding)
             }
         }
         // 返回键后画，稳稳压在遮罩之上。
@@ -114,9 +135,18 @@ struct SettingsScreen<Content: View>: View {
                     SettingsCircleButton(kind: .back, action: onBack)
                     Spacer()
                 }
+                .frame(height: barControlSide)
                 .padding(.horizontal, AppTheme.Space.paddingPage)
-                .padding(.vertical, AppTheme.Space.paddingS)
+                .padding(.top, barTopPadding)
             }
+        }
+        // 顶部拖拽指示把手：针对大尺寸全屏 Sheet 采用行业高定标准（44pt 宽 / 4.5pt 高），
+        // 相比苹果系统默认 36pt 短条，横向比例更加舒展沉稳，与 393pt+ 全屏宽度更契合。
+        .overlay(alignment: .top) {
+            Capsule()
+                .fill(Color.secondary.opacity(0.32))
+                .frame(width: 44, height: 4.5)
+                .padding(.top, 8)
         }
         .toolbar(.hidden, for: .navigationBar)
     }

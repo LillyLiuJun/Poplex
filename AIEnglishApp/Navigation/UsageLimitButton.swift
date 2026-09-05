@@ -68,21 +68,32 @@ struct UsageLimitSheet: View {
     @State private var usedCount: Int?
     @State private var showFeedback = false
     @State private var loadFailed = false
+    @State private var isRetrying = false
     private let isPreviewInjected: Bool
     /// 反馈提交成功后由宿主展示 toast（FeedbackView 不再自行发全局 toast，审计发现 ④）。
     private let onFeedbackSubmitted: (() -> Void)?
 
-    init(usedCount: Int? = nil, dailyLimit: Int = 5, onFeedbackSubmitted: (() -> Void)? = nil) {
+    init(
+        usedCount: Int? = nil,
+        dailyLimit: Int = 5,
+        initialLoadFailed: Bool = false,
+        onFeedbackSubmitted: (() -> Void)? = nil
+    ) {
         self.onFeedbackSubmitted = onFeedbackSubmitted
+        self._loadFailed = State(initialValue: initialLoadFailed)
         if let count = usedCount {
             self._dailyLimit = State(initialValue: dailyLimit)
             self._usedCount = State(initialValue: count)
             self.isPreviewInjected = true
+        } else if initialLoadFailed {
+            self._dailyLimit = State(initialValue: dailyLimit)
+            self._usedCount = State(initialValue: nil)
+            self.isPreviewInjected = true
         } else {
-            // 先用缓存里的服务器数字渲染（429 达标后 store 已有数字），
-            // 首帧即达标态、无加载态闪烁；.task 里的 refresh 随后仍以
+            // 先用缓存里的服务器数字渲染（429 达标后或当天已同步过，store 已有数字），
+            // 首帧即达标态/已知数字，无加载态闪烁；.task 里的 refresh 随后仍以
             // 服务端为准覆盖——数字通常不变，也就没有跳变。
-            // 冷启动从未取到过数字（usedCount == nil）时仍走加载态。
+            // 冷启动从未取到过数字（usedCount == nil）时仍走加载态或离线空态。
             let store = UsageQuotaStore.shared
             self._usedCount = State(initialValue: store.usedCount)
             self._dailyLimit = State(initialValue: store.dailyLimit ?? dailyLimit)
@@ -95,6 +106,31 @@ struct UsageLimitSheet: View {
         return usedCount >= dailyLimit
     }
 
+    private var sheetHeight: CGFloat {
+        if isLimitReached {
+            return loadFailed ? 405 : 375
+        } else if usedCount == nil && loadFailed {
+            return 310
+        } else {
+            return 260
+        }
+    }
+
+    private func refreshQuota() async {
+        guard !isPreviewInjected else { return }
+        guard NetworkMonitor.shared.isConnected else {
+            loadFailed = true
+            return
+        }
+        isRetrying = true
+        defer { isRetrying = false }
+        let store = UsageQuotaStore.shared
+        await store.refresh()
+        if let used = store.usedCount { usedCount = used }
+        dailyLimit = store.dailyLimit ?? 5
+        loadFailed = store.refreshFailed
+    }
+
     var body: some View {
         // 标准字号下内容装不满 detent 高度 → ScrollView 不滚动，与旧版静态布局视觉一致；
         // 大字号（AX）下内容超高时，从「裁切看不到」变为「可滚动看到」。
@@ -103,27 +139,37 @@ struct UsageLimitSheet: View {
             VStack(spacing: AppTheme.Space.paddingCard) {
                 headerRow
 
-                usageCard
-
-                if isLimitReached {
-                    limitReachedText
-                        .padding(.top, AppTheme.Space.paddingXS)
-
-                    feedbackCTAButton
-                } else if loadFailed && usedCount == nil {
-                    refreshFailedNote
-                        .padding(.top, AppTheme.Space.paddingS)
+                if usedCount == nil && loadFailed {
+                    offlineEmptyCard
                 } else {
-                    normalFooterNote
-                        .padding(.top, AppTheme.Space.paddingS)
+                    usageCard
+
+                    if isLimitReached {
+                        limitReachedText
+                            .padding(.top, AppTheme.Space.paddingXS)
+
+                        feedbackCTAButton
+
+                        if loadFailed {
+                            offlineCachedNote
+                                .padding(.top, AppTheme.Space.paddingXS)
+                        }
+                    } else if loadFailed {
+                        offlineCachedNote
+                            .padding(.top, AppTheme.Space.paddingS)
+                    } else {
+                        normalFooterNote
+                            .padding(.top, AppTheme.Space.paddingS)
+                    }
                 }
             }
-            .padding(AppTheme.Space.paddingPage)
-            .padding(.top, AppTheme.Space.paddingM)
+            .padding(.horizontal, AppTheme.Space.paddingPage)
+            .padding(.top, AppTheme.Space.titleToContent)
+            .padding(.bottom, AppTheme.Space.paddingPage)
         }
         .scrollBounceBehavior(.basedOnSize)
         .background(AppTheme.Color.pageBg)
-        .presentationDetents([isLimitReached ? .height(375) : .height(260)])
+        .presentationDetents([.height(sheetHeight)])
         .presentationDragIndicator(.visible)
         .sheet(isPresented: $showFeedback) {
             NavigationStack {
@@ -139,16 +185,11 @@ struct UsageLimitSheet: View {
             }
         }
         .task {
-            guard !isPreviewInjected else { return }
-            // 服务端正本：check_generation_quota RPC（经 UsageQuotaStore）。
-            // 旧实现数 LocalCache 里今天的 user 消息——快照滞后（冷启动缓存可能是
-            // 昨天的），且统计口径错误：数的是用户消息而非成功生成，被拦截/失败的
-            // 发送也会被算进去。
-            let store = UsageQuotaStore.shared
-            await store.refresh()
-            if let used = store.usedCount { usedCount = used }
-            dailyLimit = store.dailyLimit ?? 5
-            loadFailed = store.refreshFailed
+            await refreshQuota()
+        }
+        .onChange(of: NetworkMonitor.shared.isConnected) { _, isConnected in
+            guard isConnected, !isPreviewInjected else { return }
+            Task { await refreshQuota() }
         }
     }
 
@@ -178,8 +219,13 @@ struct UsageLimitSheet: View {
             HStack(alignment: .firstTextBaseline) {
                 if let usedCount {
                     Text("\(usedCount)")
-                        .font(SwiftUI.Font.system(size: 36, weight: .bold, design: .serif))
+                        .font(AppTheme.Font.quotaHeroNumber)
                         .foregroundStyle(isLimitReached ? AppTheme.Color.danger : AppTheme.Color.textPrimary)
+                } else if loadFailed {
+                    // 断网或加载失败：显示占位破折号，停止无休止的转圈
+                    Text("–")
+                        .font(AppTheme.Font.quotaHeroNumber)
+                        .foregroundStyle(AppTheme.Color.textMuted)
                 } else {
                     // 服务器数字还没到：轻量加载态，不显示误导性的 0
                     ProgressView()
@@ -200,9 +246,11 @@ struct UsageLimitSheet: View {
                     Capsule()
                         .fill(AppTheme.Color.neutralFaint.opacity(0.4))
                         .frame(height: 6)
-                    Capsule()
-                        .fill(isLimitReached ? AppTheme.Color.danger : AppTheme.Color.textPrimary)
-                        .frame(width: max(geo.size.width * ratio, 6), height: 6)
+                    if usedCount != nil {
+                        Capsule()
+                            .fill(isLimitReached ? AppTheme.Color.danger : AppTheme.Color.textPrimary)
+                            .frame(width: max(geo.size.width * ratio, 6), height: 6)
+                    }
                 }
             }
             .frame(height: 6)
@@ -263,13 +311,84 @@ struct UsageLimitSheet: View {
             .padding(.horizontal, AppTheme.Space.paddingM)
     }
 
-    /// 首次加载即失败（如断网）时的真实反馈：比显示 0/5 更诚实。
-    private var refreshFailedNote: some View {
-        Text("Couldn't refresh right now. Check your connection and try again.")
-            .font(AppTheme.Font.statusNote)
-            .foregroundStyle(AppTheme.Color.textMuted)
-            .multilineTextAlignment(.center)
-            .padding(.horizontal, AppTheme.Space.paddingM)
+    /// 离线或刷新失败时且已有今日缓存（如 2/5 或 5/5 达标）：
+    /// 真实数字与进度条正常呈现，底部告知网络状态并展示上次同步数据。
+    private var offlineCachedNote: some View {
+        let isConnected = NetworkMonitor.shared.isConnected
+        return HStack(spacing: AppTheme.Space.paddingXS) {
+            Image(systemName: isConnected ? "arrow.clockwise" : "wifi.slash")
+                .font(.system(size: 13, weight: .medium))
+            Text(isConnected
+                ? "Couldn't refresh. Showing last synced usage."
+                : "You're offline. Showing last synced usage.")
+                .font(AppTheme.Font.statusNote)
+        }
+        .foregroundStyle(AppTheme.Color.textMuted)
+        .multilineTextAlignment(.center)
+        .padding(.horizontal, AppTheme.Space.paddingM)
+    }
+
+    /// 冷启动且无今日缓存时的离线/刷新失败专用空状态卡片：
+    /// 拒绝破损的「– / 5」与空轨道，根据实际网络状态呈现精准文案与重试入口。
+    private var offlineEmptyCard: some View {
+        let isConnected = NetworkMonitor.shared.isConnected
+        return VStack(spacing: AppTheme.Space.paddingM) {
+            Image(systemName: isConnected ? "arrow.clockwise" : "wifi.slash")
+                .font(.system(size: 30, weight: .medium))
+                .foregroundStyle(AppTheme.Color.textSecondary)
+                .frame(width: 44, height: 44)
+
+            VStack(spacing: AppTheme.Space.paddingXS) {
+                Text(isConnected ? "Couldn't Refresh" : "You're Offline")
+                    .font(AppTheme.Font.cardSentence)
+                    .foregroundStyle(AppTheme.Color.textPrimary)
+
+                Text(isConnected
+                    ? "We couldn't check your remaining quota right now. Please try again."
+                    : "Connect to the internet to check your remaining quota and generate content.")
+                    .font(AppTheme.Font.statusNote)
+                    .foregroundStyle(AppTheme.Color.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(AppTheme.Typography.lineBody)
+            }
+
+            Button {
+                Task { await refreshQuota() }
+            } label: {
+                HStack(spacing: AppTheme.Space.paddingXS) {
+                    if isRetrying {
+                        ProgressView()
+                            .controlSize(.small)
+                            .tint(AppTheme.Color.textPrimary)
+                    } else {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 13, weight: .semibold))
+                    }
+                    Text(isRetrying ? "Retrying..." : "Try again")
+                        .font(AppTheme.Font.compactActionLabel)
+                }
+                .foregroundStyle(AppTheme.Color.textPrimary)
+                .padding(.horizontal, AppTheme.Space.paddingCard)
+                .padding(.vertical, AppTheme.Space.paddingS)
+                .background(AppTheme.Color.neutralFaint.opacity(0.6), in: Capsule())
+            }
+            .buttonStyle(PressableButtonStyle())
+            .disabled(isRetrying)
+            .padding(.top, AppTheme.Space.paddingXS)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, AppTheme.Space.paddingPage)
+        .padding(.horizontal, AppTheme.Space.paddingCard)
+        .background {
+            RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
+                .fill(AppTheme.Color.cardBg)
+        }
+        .shadow(
+            color: AppTheme.Shadow.cardColor,
+            radius: 12,
+            x: 0,
+            y: 4
+        )
     }
 }
 
@@ -290,15 +409,14 @@ private struct SheetModalCanvasPreview<Content: View>: View {
                 .ignoresSafeArea()
 
             // 底部 Sheet 容器
-            VStack(spacing: 0) {
+            ZStack(alignment: .top) {
+                content()
+
                 // 顶部系统拖拽把手指示条
                 Capsule()
                     .fill(Color.secondary.opacity(0.35))
                     .frame(width: 36, height: 5)
                     .padding(.top, 8)
-                    .padding(.bottom, 4)
-
-                content()
             }
             .frame(height: sheetHeight)
             .background(AppTheme.Color.pageBg)
@@ -314,15 +432,33 @@ private struct SheetModalCanvasPreview<Content: View>: View {
     }
 }
 
-#Preview("Usage Limit Sheet · Limit Reached (5/5) · Modal View", traits: .fixedLayout(width: 393, height: 852)) {
+#Preview("Usage Limit Sheet · Limit Reached (5/5)", traits: .fixedLayout(width: 393, height: 852)) {
     SheetModalCanvasPreview(sheetHeight: 375) {
         UsageLimitSheet(usedCount: 5, dailyLimit: 5)
     }
 }
 
-#Preview("Usage Limit Sheet · Normal (2/5) · Modal View", traits: .fixedLayout(width: 393, height: 852)) {
+#Preview("Usage Limit Sheet · Limit Reached Offline (5/5)", traits: .fixedLayout(width: 393, height: 852)) {
+    SheetModalCanvasPreview(sheetHeight: 405) {
+        UsageLimitSheet(usedCount: 5, dailyLimit: 5, initialLoadFailed: true)
+    }
+}
+
+#Preview("Usage Limit Sheet · Normal Online (2/5)", traits: .fixedLayout(width: 393, height: 852)) {
     SheetModalCanvasPreview(sheetHeight: 260) {
         UsageLimitSheet(usedCount: 2, dailyLimit: 5)
+    }
+}
+
+#Preview("Usage Limit Sheet · Offline With Cache (2/5)", traits: .fixedLayout(width: 393, height: 852)) {
+    SheetModalCanvasPreview(sheetHeight: 260) {
+        UsageLimitSheet(usedCount: 2, dailyLimit: 5, initialLoadFailed: true)
+    }
+}
+
+#Preview("Usage Limit Sheet · Offline Empty State", traits: .fixedLayout(width: 393, height: 852)) {
+    SheetModalCanvasPreview(sheetHeight: 310) {
+        UsageLimitSheet(usedCount: nil, dailyLimit: 5, initialLoadFailed: true)
     }
 }
 
