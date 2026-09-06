@@ -221,8 +221,13 @@ edit — set this expectation now so it isn't a surprise later.
   running and has basically settled (i.e. once you've reached "I believe this
   feature is correct") — at that point, write unit tests to lock in the
   verified behavior so future changes don't accidentally break it. Prefer
-  unit tests (validating data parsing logic, state transitions, etc.); do not
-  require complex UI automation tests. After tests are written and passing,
+  unit tests (validating data parsing logic, state transitions, etc.) as the
+  primary layer. UI tests are not skipped: `iOS tests` is a required PR check
+  and the existing UI launch test must keep passing; when a slice changes
+  navigation, onboarding, or screen structure, add a minimal UI smoke test for
+  the affected critical path. What is not required is exhaustive UI automation
+  (tap-through of every screen and edge case) — see `docs/engineering/CI.md`
+  §Current UI-test scope. After tests are written and passing,
   report the results (pass/fail, specific error messages if any) to the
   project owner in writing, and wait for confirmation that the result is
   acceptable before moving to the next slice — do not repeatedly modify tests
@@ -243,12 +248,26 @@ before describing a PR as ready to merge.
 
 ### 自动化 PR 交付与生命周期闭环（Ship & Auto-Cleanup）
 
-当用户指示「提交 PR / 提 PR / ship / merge」等需求时，Codex、Antigravity 等所有 Agent 必须全自动闭环接管，严禁中途停滞催促用户：
-1. **统一入口**：在当前分支/worktree 下执行 `bash scripts/ci/ship-pr.sh`。
-2. **确定性 CI 熔断**：
-   - 脚本通过 `gh pr checks --watch` 阻塞等待 GitHub Actions。
-   - **如果 CI 失败**：绝对禁止合并，绝对禁止删除分支与 worktree，自动提取 `gh run view --log-failed` 关键日志向用户汇报诊断。
-   - **如果 CI 全绿**：自动执行 Squash Merge 并删除远程分支，安全切换回主仓库拉取最新 `main`，并彻底删除当前本地分支与 worktree 工作区。
+合并与清理**永远不随「提 PR」自动发生**，分三阶段执行：
+
+1. **阶段一 · 提 PR**：用户指示「提交 PR / 提 PR」时，在当前分支/worktree 下执行
+   `bash scripts/ci/ship-pr.sh`。脚本先跑本地守卫（工作区必须完全干净**含未跟踪文件**、
+   提交作者必须与当前 git 身份一致），然后推送分支、创建/复用 PR、阻塞等待 GitHub Actions
+   并汇报结果；CI 红则自动提取失败日志，现场完整保留。**脚本到此为止，绝不合并。**
+2. **阶段二 · 合并**：用户明确指示「合并」后执行 `bash scripts/ci/ship-pr.sh merge`。
+   脚本复核 PR 上**至少有一个检查且全部通过**（无检查一律拒绝，如 commit 带 `[skip ci]`），
+   Squash Merge（**不删分支**——远端与本地分支统一留给阶段三），切回主仓库
+   `--ff-only` 对齐 main（分叉即停止报告，禁止 reset --hard）。**改动涉及
+   `supabase/` 或 `.github/` 的 PR 脚本拒绝自动合并，改由用户手动处理。**
+3. **阶段三 · 清理**：合并后用户确认已关闭 Xcode，执行
+   `bash scripts/ci/ship-pr.sh cleanup <PR号>`（PR 号见阶段二收尾提示；**合并后仓库
+   已停在 main，在 main 上执行 cleanup 是预期行为**）。脚本确认 PR 为 MERGED 后：
+   删远端分支（若还在）→ **无 `--force`** 移除 worktree（目录含未跟踪/修改文件时
+   git 拒绝删除、保留现场）→ 删本地分支。若当前会话正运行在该 worktree 内，
+   清理后需立即退出该目录会话。
+
+**触发词纪律**：关键词只进入阶段一；「合并 / 清理」必须是一句独立、明确的用户指令，
+禁止因用户消息里出现 "merge" 字样就执行阶段二或阶段三。
 
 ## Project Owner Background (for Codex to calibrate explanations)
 
