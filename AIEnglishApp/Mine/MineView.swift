@@ -79,6 +79,7 @@ struct MineView: View {
             }
             .onChange(of: vm.isPermanentlyUnlocked) { _, newValue in
                 if newValue {
+                    lockedBottomBarHeight = 0
                     withAnimation(AppTheme.Motion.tabSelection) {}
                 }
             }
@@ -335,7 +336,6 @@ private struct Tab2LockedView: View {
     private var bottomBarContainer: some View {
         VStack(spacing: 0) {
             captureButton(showsCaptureIcon: categoriesWithWords.isEmpty)
-                .padding(.horizontal, AppTheme.Space.paddingPage)
                 .padding(.bottom, AppTheme.Space.bottomBarActionBottom)
         }
         .padding(.top, AppTheme.Space.paddingS)

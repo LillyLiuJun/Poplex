@@ -26,6 +26,7 @@ the fact** — fix the doc and say so.
 | `prd/输入到成长_链路现状与待敲定_v1.md` | §二 extraction/tagging rules, §三 recording & summarising — **still open, not yet decided** |
 | `prd/Agent系统PRD_逻辑审查_v1.md` | Review record behind the v1→v2 revision (rationale, historical reference) |
 | `design-system/*` | Brand colour (`#FF7622`, warm paper-grey neutrals) and typography |
+| `design-system/底部暖光规范_v1.md` | Three-tier warm glow spec (A/B/C tier, background vs ellipse vs none) |
 | `brand/README.md` | **Brand assets** — logo, app icon, wordmark, splash. Start there for anything visual-identity related. Note: the *source of truth is code* (`PoplexPShape`, `PoplexWordmarkMetrics`, `AppTheme.Motion.Splash`), the SVGs under `brand/assets/` are exports |
 
 **Treat with care — partly outdated:**
@@ -239,6 +240,15 @@ GitHub workflows, read `docs/engineering/CI.md` before verification. Run the
 relevant documented local checks once the slice is stable, report their results
 to the project owner, and require the documented GitHub PR checks to pass
 before describing a PR as ready to merge.
+
+### 自动化 PR 交付与生命周期闭环（Ship & Auto-Cleanup）
+
+当用户指示「提交 PR / 提 PR / ship / merge」等需求时，Codex、Antigravity 等所有 Agent 必须全自动闭环接管，严禁中途停滞催促用户：
+1. **统一入口**：在当前分支/worktree 下执行 `bash scripts/ci/ship-pr.sh`。
+2. **确定性 CI 熔断**：
+   - 脚本通过 `gh pr checks --watch` 阻塞等待 GitHub Actions。
+   - **如果 CI 失败**：绝对禁止合并，绝对禁止删除分支与 worktree，自动提取 `gh run view --log-failed` 关键日志向用户汇报诊断。
+   - **如果 CI 全绿**：自动执行 Squash Merge 并删除远程分支，安全切换回主仓库拉取最新 `main`，并彻底删除当前本地分支与 worktree 工作区。
 
 ## Project Owner Background (for Codex to calibrate explanations)
 

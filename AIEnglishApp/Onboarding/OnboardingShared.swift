@@ -73,27 +73,43 @@ struct OnboardingBackButton: View {
     }
 }
 
-// MARK: - 页面背景：暖米白 + 底部品牌橙光晕（渐变结构与 BottomAuraFooter 共用 WarmAuraGlow，
-// 数值各自独立调过——onboarding 这档更亮，见 WarmAuraGlow.swift 的说明）
-
+// MARK: - 背景层：暖纸 + 底部品牌橙光晕（椭圆画在内容之下，不染内容）
+//
+// ⚠️ 这团椭圆是 Onboarding 有意保留的 **A 档例外**，不要按「A 档不画椭圆」的通则删掉。
+//
+// 为什么这里必须是径向椭圆、线性背板替代不了：
+// Onboarding 要的是「一团浮在 Continue 上方的暖光」，它有**横向衰减**——屏幕中线最暖、
+// 左右边缘基本回到纸色。参照版实测（iPhone 16 Pro，距屏底 131pt 那一行）：
+// 中线 R−B 比页面基线高 32，屏幕左右边缘只高 5.5。线性渐变在水平方向是恒定的，
+// 物理上给不出这个 falloff——Tab1 WarmGlassBar 那套背板配方无法复现本页观感。
+//
+// 挂载方式：用 .overlay 而非 ZStack 兄弟——460pt 宽超过页宽，作兄弟会把整个组件的理想
+// 宽度顶到 460，父级按理想尺寸居中时会把整页顶偏、在页边露出相邻页（真机验证过）。
+// overlay 内容不参与尺寸上报。挂在已 ignoresSafeArea 的 pageBg 上 → 相对**物理**屏底定位。
+//
+// 椭圆中心落在屏底上方 90pt（frame 高 260 底对齐 → 中心 130，再 offsetY 40 下推），
+// 正好在 Continue 按钮（屏底 46~98）背后，下半部会被 OnboardingBottomFade 的 130pt
+// 纸雾压白——**这是刻意的，不是 bug**。曾有一版把「峰值被纸雾吃掉」当缺陷记录，
+// 据此改成「暖光并进背板」的纯线性方案，结果暖度全堆在屏幕最底部、被按钮和 Home 条
+// 挡死，页面上几乎看不到光。下半部被削掉之后，肉眼可见的最亮处才会浮到按钮上方
+// 约 130pt，而底部 45pt 干净收成纸色——这正是要的观感。
 struct OnboardingAuraBackground: View {
     var body: some View {
         AppTheme.Color.pageBg
             .ignoresSafeArea()
-            // 底部品牌橙光晕。原先挂在 OnboardingBottomFade 上，那层位于
-            // ScrollView **之后**，于是光晕画在内容之上，把照片、卡片、文字
-            // 全蒙了一道橙——装饰性的氛围光不该染内容。移到背景层后氛围不变
-            // （页面底色上照样有这团暖光），内容盖在它上面。
-            // 用 .overlay 而非 ZStack 兄弟：460pt 宽超过页宽，作兄弟会把整个
-            // 组件的理想宽度顶到 460，父级按理想尺寸居中时会把整页顶偏、
-            // 在页边露出相邻页（真机验证过）。overlay 内容不参与尺寸上报。
-            // 挂在已 ignoresSafeArea 的 pageBg 上 → 相对**物理**屏底定位。
             .overlay(alignment: .bottom) {
-                WarmAuraGlow(
-                    stops: Gradient.warmAuraStops(opacities: [0.32, 0.31, 0.28, 0.23, 0.16, 0.09, 0.04, 0.01]),
-                    endRadius: 300,
-                    offsetY: 40
-                )
+                Ellipse()
+                    .fill(
+                        RadialGradient(
+                            colors: [AppTheme.Color.canvasAura.opacity(0.20), .clear],
+                            center: .center,
+                            startRadius: 0,
+                            endRadius: 220
+                        )
+                    )
+                    .frame(width: 460, height: 260)
+                    .blur(radius: 44)
+                    .offset(y: 40)
             }
             .allowsHitTesting(false)
             .accessibilityHidden(true)

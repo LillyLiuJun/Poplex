@@ -6807,3 +6807,31 @@ struct AIConsentPresentationDetentsTests {
     }
 }
 
+// MARK: - 底部暖光规范验证（WarmAuraGlow 结构与 B 档专属参数）
+
+@Suite("Bottom Warm Aura Spec Tests")
+struct BottomWarmAuraSpecTests {
+
+    @Test func warmAuraStopsEnforcesEightPlusOneContract() {
+        let opacities: [Double] = [0.17, 0.16, 0.15, 0.12, 0.08, 0.05, 0.02, 0.01]
+        let stops = Gradient.warmAuraStops(opacities: opacities)
+        #expect(stops.count == 9)
+        #expect(stops.first?.location == 0.00)
+        #expect(stops.last?.location == 1.00)
+    }
+
+    @Test func warmAuraGlowBtierDefaultDimensionsWithinScreenBounds() {
+        let glow = WarmAuraGlow(
+            stops: Gradient.warmAuraStops(opacities: [0.17, 0.16, 0.15, 0.12, 0.08, 0.05, 0.02, 0.01]),
+            endRadius: 150,
+            offsetY: 90
+        )
+        // 宽度 320、高度 170：严格收进最小 iPhone 屏宽（SE3: 375pt）以内，确保横向衰减可见
+        #expect(glow.width == 320)
+        #expect(glow.height == 170)
+        #expect(glow.endRadius == 150)
+        #expect(glow.offsetY == 90)
+    }
+}
+
+
