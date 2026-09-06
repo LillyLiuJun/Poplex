@@ -26,6 +26,7 @@ private enum Primitive {
     static let space28: CGFloat = 28
     static let space32: CGFloat = 32
     static let space48: CGFloat = 48
+    static let space52: CGFloat = 52
     static let space56: CGFloat = 56
     static let space72: CGFloat = 72
 
@@ -71,8 +72,9 @@ private enum Primitive {
     // Primary Deep — 比种子更深的橘（用于浅橘底上承载文字 / 深橘强调，
     // 渐白色阶里没有更深的档，单列一枚 shade）
     static let primaryDeep = Color(hex: 0xC2410C)
-    /// 宣纸老墨暖棕灰（晨曦暖光微影印记）
-    static let warmShadowInk = Color(hex: 0x8C684E)
+    /// 深琥珀老墨（晨曦暖光品牌收尾印记，为品牌橙 #FF7622 同源深阶压暗版）
+    static let primaryAmberDark = Color(hex: 0x9E4A1C)
+
 
     // Neutral — 品牌染色中性（Warm Editorial）：深色端从种子橙 FF7622 掺入橙色相
     //   （黑带暖底，H≈24°），中/浅灰去棕回灰（低彩度、只留一丝暖），暖纸页面。
@@ -198,9 +200,12 @@ enum AppTheme {
         static let paddingHero: CGFloat         = Primitive.space48
         static let paddingScreenBottom: CGFloat = Primitive.space56
 
-        /// 页面收尾页脚留白（打破卡片吸附感，72pt 营造呼吸断层；28pt 稳固沉底）
+        /// 页面收尾页脚留白（SettingsView 等通用内容页脚版本号底部留白：28pt；卡片到页脚呼吸断层：72pt）
         static let pageFooterTop: CGFloat       = Primitive.space72
         static let pageFooterBottom: CGFloat    = Primitive.space28
+        /// Tab2 解锁态收尾页脚留白（打破卡片吸附感，72pt 营造呼吸断层；52pt 踏光上浮沉底）
+        static let tab2FooterTop: CGFloat       = Primitive.space72
+        static let tab2FooterBottom: CGFloat    = Primitive.space52
         /// 沉底操作栏按钮距离安全区底部的间距（Tab2 待解锁底栏等；与 Onboarding 具有相同数值但用途独立演化）
         static let bottomBarActionBottom: CGFloat = Primitive.space12
 
@@ -273,8 +278,11 @@ enum AppTheme {
 
         static let textOnChip    = Primitive.neutral50   // chip 胶囊 / 深底按钮上的浅色文字
 
-        // 页面收尾印记专用轻量色（Tab2 底部字标与宣言，如出版物末页的安静印记，暖光微影融入晨曦）
-        static let footerSignoff = Primitive.warmShadowInk.opacity(0.22)
+        // 页面收尾印记专用轻量色（Tab2 底部字标与宣言，深琥珀老墨同源双阶，融入晨曦暖光）
+        /// 底部品牌字标（深琥珀老墨 #9E4A1C，透明度 0.42）
+        static let footerSignoffPrimary = Primitive.primaryAmberDark.opacity(0.42)
+        /// 底部副标 tagline（同色 #9E4A1C，透明度 0.30）
+        static let footerSignoffSecondary = Primitive.primaryAmberDark.opacity(0.30)
 
         // 品牌 / 交互
         // 橙按「做什么」分档，不按「好不好看」调透明度：

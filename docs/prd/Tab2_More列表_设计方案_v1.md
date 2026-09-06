@@ -131,11 +131,11 @@ Topics in progress              ← 本轮不动
 | 项 | 值 |
 |---|---|
 | 卡片宽 | 350（与 hero 同轴，左右各留 `Space.paddingPage`） |
-| **行高** | **固定 100** |
+| **行高** | **固定 104** |
 | 圆角 | 16 |
-| 阴影 | `radius 6 · y 2`，比 hero 轻一档 |
+| 阴影 | `radius 4 · y 1`，比 hero 轻两档 |
 | 底色 | `Color.warmGlassSurface` |
-| 行间距 | 11 |
+| 行间距 | 10 |
 | 交互 | **整行可点** → 直接进对话页。无按钮 |
 
 **为什么行没有 CTA**：这就是推荐强度的表达。hero 说"就这个，点这里"给实心按钮；行说"也可以"只给箭头。如果每行都配按钮，页面上就有 N 个同等强度的号召，「系统替你选了一件事」的价值立刻消失。
@@ -143,46 +143,59 @@ Topics in progress              ← 本轮不动
 ### 5.2 内容布局
 
 ```
-┌────────┬──────────────────────────────────┬───┐
-│        │ WORK & STUDY            41 pops  │   │
-│  缩略图 │ I totally blanked when they      │ → │
-│  84×100│ asked me for the timeline.       │   │
-│        │ Meetings · +5 more moments       │   │
-└────────┴──────────────────────────────────┴───┘
+┌───────┬───────────────────────────────────┬───┐
+│       │ Work & study            44 pops   │   │
+│ 缩略图 │ I totally blanked when they asked │ → │
+│ 76×104│ me for the timeline.              │   │
+│       │ Meetings · +5 more moments        │   │
+└───────┴───────────────────────────────────┴───┘
 ```
+
+**两个声部，不是四个。** 分类标签、pops、meta 三者用**完全相同**的写法，合为「元数据」一档；主句独立为「内容」一档。
 
 | 元素 | 取值 | 规格 |
 |---|---|---|
-| 分类标签 | `scene_category` → 英文映射 | 9.5 / 800 / 字距 1.2 / 全大写 / `textMuted`，单行截断 |
-| pops | `word_count` | 9.5 / 600 / `neutralFaint`，右对齐，与分类标签同基线，`layoutPriority(1)` |
-| 主句 | `featured` 主句，模式判据**完全复用** `Tab2HeroCard.featuredMode` | 衬线 15 / 600 / 行高 1.32 / `textPrimary`，**固定两行高度**，超出尾部省略号 |
-| meta | `scene_detail · +N more moments` | 10.5 / 600 / `textMuted`；分隔点与 `+N` 用 `neutralFaint`，单行 |
+| 分类标签 | `scene_category` → `englishLabel` | **10.5 / 400 / 字距 0.2 / 句首大写 / `textMuted`**，单行截断 |
+| pops | `word_count` | **10.5 / 400 / 字距 0.2 / `textMuted`**，右对齐，与分类标签同基线，`layoutPriority(1)` |
+| 主句 | `featured` 主句，模式判据**完全复用** `Tab2HeroCard.featuredMode` | 衬线 **14.5 / 400 / 行高 1.42** / `textPrimary`，**固定两行高度**，超出尾部省略号 |
+| meta | `scene_detail · +N more moments` | **10.5 / 400 / 字距 0.2 / `textMuted`**，单行 |
 
-**间距**：顶内边距 12 → 分类行 → 4 → 主句（2 行 40）→ 3 → meta → 底内边距 12。
+**间距**：顶内边距 11 → 分类行 15 → 6 → 主句（2 行 41）→ 5 → meta 15 → 底内边距 11 = **104**。
 
-**主句为什么固定两行而不是最多两行**：真实数据里长句占多数——你们截图里那五条主句是 63 / 42 / 45 / 41 / 69 字符，行内正文宽约 214、衬线 15 一行约 28 字符，**五条全部需要两行**。既然绝大多数都是两行，固定两行等于白拿一个统一行高，短句留白的代价极小。
+**行内正文宽约 216**，衬线 14.5 常规字重一行约 **31 字符**。
 
-> ⚠️ **上线前用真实数据复核一次**。若"一行以内（≤28 字符）"的占比超过 15%，或"两行仍截断（>56 字符）"超过三成，回来重新评估——后者要先改的是缩略图宽度而不是行数。
+### 5.2.1 为什么是这套字重（v1.1 修订）
+
+首版按 hero 卡的字重直接搬过来，真机上五行连排像一堵墙。但拆开之后发现，**病因不是"主句太重"，而是"配角太散"**：
+
+| 元素 | 首版 | 问题 |
+|---|---|---|
+| 分类标签 | 9.5 / 800 / 字距 1.4 / 全大写 / `textMuted` | 全大写 + 大字距是"强调"手势，重复五次成噪音 |
+| pops | 9.5 / 600 / `neutralFaint` | 几乎看不见 |
+| 主句 | 衬线 15 / 600 / `textPrimary` | 全卡唯一的深色 |
+| meta | 10.5 / 600 / `textMuted` | 又是另一档 |
+
+四种字号、三种颜色、两种字重挤在一个盒子里。主句"跳"是**结果**——它旁边三个元素各说各话且都太弱，中间没有过渡档，只好由它独自撑起整张卡。
+
+修订分两步：
+
+**第一步 · 元数据并成一个声部。** 分类、pops、meta 统一为 `10.5 / 400 / 字距 0.2 / textMuted`。四个声部收敛成两个：内容一档、元数据一档。
+
+**第二步 · 主句让出一档尺寸。** 衬线 15 / 600 → **14.5 / 400**，行高 1.42 补回可读性。
+
+> 只做第一步（主句保持 15.5）也验证过，真机上主句仍偏突出。第二步的附带收益是**每行多约 2 个字符，截断率下降**。
 >
-> ```sql
-> SELECT CASE WHEN len <= 28 THEN '1 行' WHEN len <= 56 THEN '2 行' ELSE '截断' END AS lines,
->        COUNT(*), ROUND(100.0*COUNT(*)/SUM(COUNT(*)) OVER (), 1) AS pct
-> FROM (SELECT length(COALESCE(raw_content->>'target_expression',
->                              raw_content->>'user_original')) AS len
->       FROM materials WHERE material_type='scene' AND deleted_at IS NULL) t
-> GROUP BY 1 ORDER BY 1;
-> ```
+> 明确**没有**采用的做法：把主句颜色降到 `textSecondary`。主句是用户判断"点不点这一行"的唯一依据，为视觉平衡削弱它方向是反的；且五行扫下来会失去落点，眼睛不知道该停在哪。
 
-**meta 行抢位**：`scene_detail` 自适应剩余宽 + 尾部截断；`· +N more moments` 用 `layoutPriority(1)` 永远完整。规则与 hero 一致。
+**卡片形态保留。** 页面上 hero 与 `Topics in progress` 都是卡片，唯独 More 是裸行会突兀——页面级一致性优先于「卡片形态是 hero 的特权」那条。层级改由**字重与字号**拉开，不靠形态。
 
-**不放**：母语行、`created_at`、引号、CTA 按钮。
-引号是 hero 的特权（"这是你真的说过的目标语言"），行上放会和主句抢重量。母语在 hero 上是兜底（看不懂时瞄一眼），但行上主句已经是截断的摘要，再叠一个截断的母语摘要，两个残句一起读更费劲；且中文笔画密，12px 中文压在 15px 英文下会把重心拽下去。
+**分类标签句首大写是有意与 hero 拉开的。** hero 卡上仍是全大写（它压在照片上、是那张卡的身份标识）；行上是 `Work & study`。同一个字段，越靠近推荐位越响。`englishLabel` 返回的本就是句首大写，这一改是**删掉 `.textCase(.uppercase)` 和 tracking**，不需要新数据。
 
 ### 5.3 缩略图
 
 | 情况 | 用什么 |
 |---|---|
-| `featured.imageUrl != nil` | 那一张照片，填满 84 × 100 |
+| `featured.imageUrl != nil` | 那一张照片，填满 76 × 104 |
 | `featured.imageUrl == nil` | **行内预设图**（见 §5.6） |
 
 **同源规则与 hero 完全一致：要么是 `featured` 那条素材自己的照片，要么不用照片。** 绝不退回"这个分类里最近的一张"。
@@ -221,7 +234,7 @@ Topics in progress              ← 本轮不动
 
 | 位 | 内容 | 规格 |
 |---|---|---|
-| 主句位 | `preview_words` **前 2 个**，`词 + 释义`，中点分隔 | **无衬线** 14 / 600 / `textSecondary`；释义 11 / 400 / `textMuted`，紧跟词后左距 4 |
+| 主句位 | `preview_words` **前 2 个**，`词 + 释义`，中点分隔 | **无衬线** 14 / **500** / `textSecondary`；释义 11 / 400 / `textMuted`，紧跟词后左距 4 |
 | meta 位 | `No moment yet` | 同 meta 规格，用 `neutralFaint` |
 | 整行 | 透明度 `.82` | 见下 |
 | 缩略图 | 行内预设图的**更淡变体**（见 §5.6） | |

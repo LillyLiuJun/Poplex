@@ -620,17 +620,14 @@ private struct Tab2LockedView: View {
     }
 }
 
-// MARK: - Unlocked view
-
-
 private struct Tab2UnlockedView: View {
     let vm: Tab2HomeViewModel
     var topInset: CGFloat = 0
     var listResetToken: UUID = UUID()
     var milestonePresentations: [CategoryMilestonePresentation] = []
     let onTalk: (String) -> Void
-    var footerTopSpace: CGFloat = AppTheme.Space.pageFooterTop
-    var footerBottomSpace: CGFloat = AppTheme.Space.pageFooterBottom
+    var footerTopSpace: CGFloat = AppTheme.Space.tab2FooterTop
+    var footerBottomSpace: CGFloat = AppTheme.Space.tab2FooterBottom
 
     // 单开手风琴：同时只展开一个 Topics-in-Progress 主题；切回 Mine 时回收起。
     @State private var expandedCategoryId: String?
@@ -776,18 +773,20 @@ private struct Tab2UnlockedView: View {
         }
     }
 
-    /// 品牌收尾印记（方案 C 暖光微影印记：用宣纸老墨暖棕灰叠 22% 极低透明度，融进晨曦暖光）
     private var footerSignoff: some View {
-        VStack(spacing: 5) {
+        // 方案 3D（定稿）：【低调静音收束 · 暖灰弱化】
+        // 弱化暖灰调，不喧宾夺主，极度安静克制，退后两步不抢上方卡片视线
+        VStack(spacing: 6) {
             PoplexWordmark(
-                capHeight: 13,
-                style: .mono(AppTheme.Color.footerSignoff),
+                capHeight: 12.5,
+                style: .mono(AppTheme.Color.textMuted),
                 showsPeriod: true
             )
 
             Text(Self.footerTagline())
                 .font(AppTheme.Font.libraryFooterTagline)
-                .foregroundStyle(AppTheme.Color.footerSignoff)
+                .tracking(0.5)
+                .foregroundStyle(AppTheme.Color.textMuted.opacity(0.85))
         }
         .frame(maxWidth: .infinity)
         .padding(.top, footerTopSpace)
@@ -987,13 +986,279 @@ private struct BrandRadiantAscentOverlay: View {
         .environment(\.colorScheme, .light)
 }
 
-#Preview("Tab2 · 正式生产效果 (暖光微影印记)") {
+// MARK: - Xcode Canvas 专属对比预览（方案3：晨曦托底 · 字立光上）
+
+#if DEBUG
+
+/// Tab2 底部品牌与收尾视觉探索变体（仅供 Canvas / Debug 预览对比，不进入 Release）
+enum Tab2FooterStyle: String, CaseIterable, Identifiable {
+    case scheme3Classic    = "方案3A: 经典书刊双行 (深暖墨字 · 晨曦地平光)"
+    case scheme3Inline     = "方案3B: 极简单行横排 (空灵通透 · 纤薄晨曦)"
+    case scheme3Crest      = "方案3C: 晨曦徽标仪式 (日出P标 · 品牌印记)"
+    case scheme3Quiet      = "方案3D: 低调静音收束 (暖灰弱化 · 纯净退后)"
+    case currentWatermark  = "对照组: 现状硬叠水印 (旧版对照)"
+    case pureAmbient       = "对照组: 纯暖光留白 (无文字对照)"
+    case editorialBadge    = "对照组: 杂志微胶囊 (浮雕印章对照)"
+
+    var id: String { rawValue }
+
+    var shortTitle: String {
+        switch self {
+        case .scheme3Classic: return "3A 经典双行"
+        case .scheme3Inline: return "3B 极简单行"
+        case .scheme3Crest: return "3C 晨曦微标"
+        case .scheme3Quiet: return "🌟 3D 低调静音 (当前真机方案)"
+        case .currentWatermark: return "旧版硬叠"
+        case .pureAmbient: return "纯光留白"
+        case .editorialBadge: return "微胶囊"
+        }
+    }
+}
+
+#Preview("🌟 方案 3D 页面全览 (当前定稿)") {
     Tab2FullPagePreviewView()
 }
 
+#Preview("🌟 方案3 变体交互切换器 (Canvas 可点选切换)") {
+    Tab2FooterInteractivePreviewView()
+}
+
+#Preview("📐 方案3 变体局部对比矩阵 (同屏一览)") {
+    Tab2FooterMatrixPreviewView()
+}
+
+// 供 Canvas 交互点击切换的专用容器
+private struct Tab2FooterInteractivePreviewView: View {
+    @State private var selectedStyle: Tab2FooterStyle = .scheme3Quiet
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Picker("Footer Style", selection: $selectedStyle) {
+                ForEach(Tab2FooterStyle.allCases) { style in
+                    Text(style.shortTitle).tag(style)
+                }
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal, AppTheme.Space.paddingPage)
+            .padding(.vertical, AppTheme.Space.paddingS)
+            .background(AppTheme.Color.cardBg)
+            .overlay(alignment: .bottom) {
+                Divider()
+            }
+
+            ZStack(alignment: .bottom) {
+                AppTheme.Color.pageBg.ignoresSafeArea()
+                VStack {
+                    Spacer()
+                    Tab2FooterSignoffSample(style: selectedStyle)
+                        .padding(.bottom, AppTheme.Space.tab2FooterBottom)
+                }
+                .background(alignment: .bottom) {
+                    sampleAura(for: selectedStyle)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func sampleAura(for style: Tab2FooterStyle) -> some View {
+        switch style {
+        case .scheme3Classic:
+            WarmAuraGlow(width: 340, height: 340 * 0.36, peakOpacity: 0.17, offsetY: 68, blurRadius: 20)
+        case .scheme3Inline:
+            WarmAuraGlow(width: 360, height: 360 * 0.28, peakOpacity: 0.15, offsetY: 55, blurRadius: 20)
+        case .scheme3Crest:
+            WarmAuraGlow(width: 340, height: 340 * 0.38, peakOpacity: 0.18, offsetY: 70, blurRadius: 20)
+        case .scheme3Quiet:
+            WarmAuraGlow(width: 320, height: 102, peakOpacity: 0.11, offsetY: 60, blurRadius: 20)
+        case .pureAmbient:
+            WarmAuraGlow(width: 320, height: 320 * 0.42, peakOpacity: 0.18, offsetY: 35, blurRadius: 20)
+        case .currentWatermark, .editorialBadge:
+            BottomAuraFooter()
+        }
+    }
+}
+
+// 底部局部对比视口（同屏一览）
+private struct Tab2FooterMatrixPreviewView: View {
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 24) {
+                ForEach(Tab2FooterStyle.allCases) { style in
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(style.rawValue)
+                            .font(AppTheme.Font.sectionLabel)
+                            .foregroundStyle(AppTheme.Color.textSecondary)
+                            .padding(.horizontal, AppTheme.Space.paddingPage)
+
+                        ZStack(alignment: .bottom) {
+                            AppTheme.Color.pageBg
+
+                            VStack(spacing: 0) {
+                                HStack {
+                                    Image(systemName: "tram.fill")
+                                        .foregroundStyle(AppTheme.Color.textSecondary)
+                                    Text("Getting around")
+                                        .font(AppTheme.Font.englishBody)
+                                        .foregroundStyle(AppTheme.Color.textPrimary)
+                                    Spacer()
+                                    Text("3 pops ▾")
+                                        .font(AppTheme.Font.pos)
+                                        .foregroundStyle(AppTheme.Color.textMuted)
+                                }
+                                .padding()
+                                .surfaceCard()
+                                .padding(.horizontal, AppTheme.Space.paddingPage)
+                                .padding(.top, 16)
+
+                                Tab2FooterSignoffSample(style: style)
+                                    .padding(.bottom, AppTheme.Space.tab2FooterBottom)
+                            }
+                        }
+                        .frame(height: 220)
+                        .background(alignment: .bottom) {
+                            sampleAura(for: style)
+                        }
+                        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.large))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: AppTheme.Radius.large)
+                                .strokeBorder(AppTheme.Color.cardBorder, lineWidth: 0.5)
+                        }
+                        .padding(.horizontal, AppTheme.Space.paddingPage)
+                    }
+                }
+            }
+            .padding(.vertical, 20)
+        }
+        .background(AppTheme.Color.pageBg.ignoresSafeArea())
+    }
+
+    @ViewBuilder
+    private func sampleAura(for style: Tab2FooterStyle) -> some View {
+        switch style {
+        case .scheme3Classic:
+            WarmAuraGlow(width: 340, height: 340 * 0.36, peakOpacity: 0.17, offsetY: 68, blurRadius: 20)
+        case .scheme3Inline:
+            WarmAuraGlow(width: 360, height: 360 * 0.28, peakOpacity: 0.15, offsetY: 55, blurRadius: 20)
+        case .scheme3Crest:
+            WarmAuraGlow(width: 340, height: 340 * 0.38, peakOpacity: 0.18, offsetY: 70, blurRadius: 20)
+        case .scheme3Quiet:
+            WarmAuraGlow(width: 320, height: 102, peakOpacity: 0.11, offsetY: 60, blurRadius: 20)
+        case .pureAmbient:
+            WarmAuraGlow(width: 320, height: 320 * 0.42, peakOpacity: 0.18, offsetY: 35, blurRadius: 20)
+        case .currentWatermark, .editorialBadge:
+            BottomAuraFooter()
+        }
+    }
+}
+
+private struct Tab2FooterSignoffSample: View {
+    let style: Tab2FooterStyle
+
+    var body: some View {
+        switch style {
+        case .scheme3Classic:
+            VStack(spacing: 7) {
+                PoplexWordmark(
+                    capHeight: 13.5,
+                    style: .mono(AppTheme.Color.textPrimary),
+                    showsPeriod: true
+                )
+                Text(Tab2UnlockedView.footerTagline())
+                    .font(AppTheme.Font.libraryFooterTagline)
+                    .tracking(0.6)
+                    .foregroundStyle(AppTheme.Color.textSecondary)
+            }
+            .padding(.top, AppTheme.Space.tab2FooterTop)
+
+        case .scheme3Inline:
+            HStack(spacing: 6) {
+                Text("Poplex")
+                    .font(AppTheme.Font.tab2HeroWord)
+                    .foregroundStyle(AppTheme.Color.textPrimary)
+                Text("·")
+                    .font(AppTheme.Font.metaNote)
+                    .foregroundStyle(AppTheme.Color.textMuted)
+                Text(Tab2UnlockedView.footerTagline())
+                    .font(AppTheme.Font.libraryFooterTagline)
+                    .foregroundStyle(AppTheme.Color.textSecondary)
+            }
+            .padding(.top, AppTheme.Space.tab2FooterTop + 6)
+
+        case .scheme3Crest:
+            VStack(spacing: 5) {
+                PoplexPShape()
+                    .frame(width: 10 * PoplexPShape.aspect, height: 10)
+                    .foregroundStyle(AppTheme.Color.brandStrong)
+                PoplexWordmark(
+                    capHeight: 12.5,
+                    style: .mono(AppTheme.Color.textPrimary),
+                    showsPeriod: true
+                )
+                Text(Tab2UnlockedView.footerTagline())
+                    .font(AppTheme.Font.libraryFooterTagline)
+                    .tracking(0.5)
+                    .foregroundStyle(AppTheme.Color.textSecondary)
+                    .padding(.top, 1)
+            }
+            .padding(.top, AppTheme.Space.tab2FooterTop - 4)
+
+        case .scheme3Quiet:
+            VStack(spacing: 6) {
+                PoplexWordmark(
+                    capHeight: 12.5,
+                    style: .mono(AppTheme.Color.textMuted),
+                    showsPeriod: true
+                )
+                Text(Tab2UnlockedView.footerTagline())
+                    .font(AppTheme.Font.libraryFooterTagline)
+                    .tracking(0.5)
+                    .foregroundStyle(AppTheme.Color.textMuted.opacity(0.85))
+            }
+            .padding(.top, AppTheme.Space.tab2FooterTop)
+
+        case .pureAmbient:
+            Color.clear.frame(height: 56)
+
+        case .editorialBadge:
+            HStack(spacing: 7) {
+                PoplexPShape()
+                    .frame(width: 9 * PoplexPShape.aspect, height: 9)
+                    .foregroundStyle(AppTheme.Color.brandStrong)
+                Text("Poplex · English from everyday life")
+                    .font(AppTheme.Font.pos)
+                    .foregroundStyle(AppTheme.Color.textSecondary)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 7)
+            .background(AppTheme.Color.cardBg.opacity(0.88))
+            .clipShape(Capsule())
+            .overlay {
+                Capsule().strokeBorder(AppTheme.Color.cardBorder, lineWidth: 0.5)
+            }
+            .shadow(color: AppTheme.Shadow.cardColor, radius: 4, x: 0, y: 2)
+            .padding(.top, 36)
+
+        case .currentWatermark:
+            VStack(spacing: 9) {
+                PoplexWordmark(
+                    capHeight: 13,
+                    style: .mono(AppTheme.Color.footerSignoffPrimary),
+                    showsPeriod: true
+                )
+                Text(Tab2UnlockedView.footerTagline())
+                    .font(AppTheme.Font.libraryFooterTagline)
+                    .tracking(0.6)
+                    .foregroundStyle(AppTheme.Color.footerSignoffSecondary)
+            }
+            .padding(.top, AppTheme.Space.tab2FooterTop)
+        }
+    }
+}
+
 private struct Tab2FullPagePreviewView: View {
-    var topSpace: CGFloat = AppTheme.Space.pageFooterTop
-    var bottomSpace: CGFloat = AppTheme.Space.pageFooterBottom
+    var topSpace: CGFloat = AppTheme.Space.tab2FooterTop
+    var bottomSpace: CGFloat = AppTheme.Space.tab2FooterBottom
 
     private var previewVM: Tab2HomeViewModel {
         let vm = Tab2HomeViewModel()
@@ -1042,3 +1307,6 @@ private struct Tab2FullPagePreviewView: View {
         .environment(\.colorScheme, .light)
     }
 }
+
+#endif
+

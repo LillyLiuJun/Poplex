@@ -4,53 +4,66 @@ import SwiftUI
 //
 // 规范文档：`docs/design-system/底部暖光规范_v1.md`
 //
-// 本组件（9 档非线性椭圆）专供 B 档（Tab2 解锁后）。
+// 本组件专供 B 档（Tab2 解锁后列表底部微光收尾）。
 // Tab1 与 Tab2 解锁前走控件背板；Onboarding 是 A 档的有意例外，用的是
 // OnboardingAuraBackground 里那颗 2 档径向 RadialGradient 椭圆（0.20 / r220 / 460×260），
-// 不是本组件——两者曲线不同，别互相套用。
+// 不是本组件——两者曲线与几何模型不同，别互相套用。
 
-extension Gradient {
-    /// Tab2 列表底部（`BottomAuraFooter`）使用的 9 档非线性缓出位置表：
-    /// 0.00 / 0.28 / 0.46 / 0.60 / 0.72 / 0.83 / 0.92 / 0.97 / 1.00。
-    ///
-    /// 全局三档暖光规则（详见 `docs/design-system/底部暖光规范_v1.md`）：
-    /// - A 档 · 主场景 + 底部常驻控件：暖光归控件背板（Tab1、Tab2 解锁前）
-    /// - B 档 · 主场景 + 无底部常驻控件：一抹收尾微光椭圆（只有 Tab2 解锁后）
-    /// - C 档 · 工具层 / Sheet：不给暖光（Settings、Feedback、AboutAI）
-    ///
-    /// 本组件为 B 档专属实现（`BottomAuraFooter`：宽 320、高 170、峰值 0.17、endRadius 150、offsetY 90）。
-    /// 此处收拢 8 档透明度 + 1 档 clear 的非线性位置结构，防抄错抄漏。
-    static func warmAuraStops(opacities: [Double]) -> [Gradient.Stop] {
-        // assert 而非 precondition：纯视觉渐变，Release 下传错档数宁可画偏也不闪退；
-        // 调用点全是字面量，DEBUG 立崩即可在开发期拦住。
-        assert(opacities.count == 8, "warmAuraStops 需要恰好 8 档透明度，第 9 档固定为 clear")
-        let locations: [Double] = [0.00, 0.28, 0.46, 0.60, 0.72, 0.83, 0.92, 0.97]
-        var stops = zip(opacities, locations).map { opacity, location in
-            Gradient.Stop(color: AppTheme.Color.canvasAura.opacity(opacity), location: location)
-        }
-        stops.append(.init(color: .clear, location: 1.00))
-        return stops
-    }
-}
-
-/// 暖光晕椭圆：B 档收尾微光，径向渐变 + 44pt 模糊。
-/// 宽度 320、高度 170（收进屏宽以内，横向衰减可见，读作光团而非光带）。
+/// 暖光晕椭圆：B 档收尾微光，等比压制无截断单层椭圆径向渐变 + 柔和高斯模糊。
+/// 宽度 320、扁平压制比 0.32（高度约 102pt）、下沉 offsetY 60pt、峰值 0.11、模糊 20pt。
+/// 从几何源头消除了旧版“正圆径向渐变遭扁椭圆硬裁切”导致的内外双层光圈缺陷。
 /// 纯装饰：不拦截交互、对无障碍隐藏，两样都收在组件内。
 /// 规范详见 `docs/design-system/底部暖光规范_v1.md`。
 struct WarmAuraGlow: View {
-    let stops: [Gradient.Stop]
-    let endRadius: CGFloat
-    let offsetY: CGFloat
     var width: CGFloat = 320
-    var height: CGFloat = 170
+    var height: CGFloat = 102
+    var peakOpacity: Double = 0.11
+    var offsetY: CGFloat = 60
+    var blurRadius: CGFloat = 20
+
+    var endRadius: CGFloat { width / 2 }
+
+    /// 规范 B 档默认构造器（3D 定稿：320×102，峰值 0.11，下沉 60pt，模糊 20pt）
+    init(
+        width: CGFloat = 320,
+        height: CGFloat = 102,
+        peakOpacity: Double = 0.11,
+        offsetY: CGFloat = 60,
+        blurRadius: CGFloat = 20
+    ) {
+        self.width = width
+        self.height = height
+        self.peakOpacity = peakOpacity
+        self.offsetY = offsetY
+        self.blurRadius = blurRadius
+    }
+
+    /// 方案 3D 专属 4 档各向同性渐变阶梯：
+    /// 0.00 峰值 -> 0.35 衰减至 70% -> 0.70 衰减至 25% -> 1.00 纯透明
+    var gradientStops: [Gradient.Stop] {
+        [
+            Gradient.Stop(color: AppTheme.Color.canvasAura.opacity(peakOpacity), location: 0.0),
+            Gradient.Stop(color: AppTheme.Color.canvasAura.opacity(peakOpacity * 0.70), location: 0.35),
+            Gradient.Stop(color: AppTheme.Color.canvasAura.opacity(peakOpacity * 0.25), location: 0.70),
+            Gradient.Stop(color: .clear, location: 1.0)
+        ]
+    }
 
     var body: some View {
-        Ellipse()
+        let scaleY = width > 0 ? height / width : 0.32
+
+        Circle()
             .fill(
-                RadialGradient(stops: stops, center: .center, startRadius: 0, endRadius: endRadius)
+                RadialGradient(
+                    stops: gradientStops,
+                    center: .center,
+                    startRadius: 0,
+                    endRadius: width / 2
+                )
             )
-            .frame(width: width, height: height)
-            .blur(radius: 44)
+            .frame(width: width, height: width)
+            .scaleEffect(y: scaleY, anchor: .center)
+            .blur(radius: blurRadius)
             .offset(y: offsetY)
             .allowsHitTesting(false)
             .accessibilityHidden(true)

@@ -237,6 +237,7 @@ edit — set this expectation now so it isn't a surprise later.
   whether anything should be merged or split, and find any tokens defined
   inline instead of centrally in the theme file. List issues and proposed
   fixes — do NOT auto-edit tokens without confirmation first.
+- **禁止随意渲染大截图**: 严禁未经用户明确同意擅自使用无头浏览器/脚本抓取大图或生成长截图并在回复中贴出展示。用户不需要看大图，此类操作耗费上下文和渲染时间。遇到可视化对比需求，优先提供可打开的本地 HTML 文件（直接帮用户打开）或引导在 Xcode Canvas 查看；如确实有必要生成静态截图，**必须先询问用户确认是否需要**。
 
 ## CI & Pull Requests
 

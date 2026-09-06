@@ -29,6 +29,12 @@ struct OnboardingScreen2View: View {
 
     /// 语音条声波的柱高（固定示意波形，16 根流畅起伏波形，两端对称收尾）。
     private let waveHeights: [CGFloat] = [7, 14, 22, 11, 19, 9, 16, 23, 12, 18, 14, 21, 10, 16, 11, 7]
+    private var minWaveHeight: CGFloat { waveHeights.min() ?? 7 }
+    private var waveHeightSpan: CGFloat {
+        let minH = minWaveHeight
+        let maxH = waveHeights.max() ?? 23
+        return max(maxH - minH, 1)
+    }
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -276,15 +282,23 @@ struct OnboardingScreen2View: View {
 
             HStack(spacing: 3) {
                 ForEach(Array(waveHeights.enumerated()), id: \.offset) { index, h in
+                    // 全员连贯流体声学律动：
+                    // 1. 全员参与：高柱缩至 0.64，矮柱缩至 0.76，人人都在随音律跳跃，杜绝孤岛与看客；
+                    // 2. 正弦谐波延时：sin(i/15*π)*0.30 + i*0.015，整条波形如琴弦一体起伏，浑然天成；
+                    // 3. 0.82s 从容节拍：兼顾呼吸从容感与声波弹跳力。
+                    let normalizedHeight = (h - minWaveHeight) / waveHeightSpan
+                    let pulseScale: CGFloat = 0.64 + (1.0 - normalizedHeight) * 0.12
+                    let delay: Double = sin(Double(index) / 15.0 * .pi) * 0.30 + (Double(index) * 0.015)
+
                     Capsule()
                         .fill(AppTheme.Color.brandStrong)
                         .frame(width: 3, height: h)
-                        .scaleEffect(y: wavePulsing ? 0.78 : 1.0, anchor: .center)
+                        .scaleEffect(y: wavePulsing ? pulseScale : 1.0, anchor: .center)
                         .animation(
                             reduceMotion ? nil :
-                                .easeInOut(duration: 0.9)
+                                .easeInOut(duration: 0.82)
                                 .repeatForever(autoreverses: true)
-                                .delay(Double(index) * 0.05),
+                                .delay(delay),
                             value: wavePulsing
                         )
                 }

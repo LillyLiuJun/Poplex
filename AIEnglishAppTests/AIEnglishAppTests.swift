@@ -6865,25 +6865,24 @@ struct AIConsentPresentationDetentsTests {
 @Suite("Bottom Warm Aura Spec Tests")
 struct BottomWarmAuraSpecTests {
 
-    @Test func warmAuraStopsEnforcesEightPlusOneContract() {
-        let opacities: [Double] = [0.17, 0.16, 0.15, 0.12, 0.08, 0.05, 0.02, 0.01]
-        let stops = Gradient.warmAuraStops(opacities: opacities)
-        #expect(stops.count == 9)
+    @Test func warmAuraGlowGradientStopsEnforceFourPhaseContract() {
+        let glow = WarmAuraGlow()
+        let stops = glow.gradientStops
+        #expect(stops.count == 4)
         #expect(stops.first?.location == 0.00)
         #expect(stops.last?.location == 1.00)
     }
 
     @Test func warmAuraGlowBtierDefaultDimensionsWithinScreenBounds() {
-        let glow = WarmAuraGlow(
-            stops: Gradient.warmAuraStops(opacities: [0.17, 0.16, 0.15, 0.12, 0.08, 0.05, 0.02, 0.01]),
-            endRadius: 150,
-            offsetY: 90
-        )
-        // 宽度 320、高度 170：严格收进最小 iPhone 屏宽（SE3: 375pt）以内，确保横向衰减可见
+        let glow = WarmAuraGlow()
+        // 方案 3D 规范定稿：宽度 320、高度 102（scaleY 0.32）、下沉 60pt、峰值 0.11、模糊 20pt
+        // 严格收进最小 iPhone 屏宽（SE3: 375pt）以内，单层平滑各向同性衰减，消灭内外双层光圈
         #expect(glow.width == 320)
-        #expect(glow.height == 170)
-        #expect(glow.endRadius == 150)
-        #expect(glow.offsetY == 90)
+        #expect(glow.height == 102)
+        #expect(glow.offsetY == 60)
+        #expect(glow.peakOpacity == 0.11)
+        #expect(glow.blurRadius == 20)
+        #expect(glow.endRadius == 160)
     }
 }
 
