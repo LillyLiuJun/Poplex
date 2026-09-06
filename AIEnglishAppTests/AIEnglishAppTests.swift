@@ -804,6 +804,26 @@ struct AIEnvelopeDecodeTests {
             targetExpression: "I have to work overtime tonight. \n"
         )
         #expect(!whitespaceDrift.hasMeaningfulRevision)
+
+        // userOriginal 为空时绝不能误判为有修正（避免 != nil 伪命中）
+        let nilOriginal = CardContent(
+            granularity: "sentence", direction: "comprehend", revisionType: "polish",
+            userOriginal: nil, targetExpression: "I'm heading out."
+        )
+        #expect(!nilOriginal.hasMeaningfulRevision)
+
+        // revisionType 为空或非法时绝不能误判为有修正
+        let nilRevisionType = CardContent(
+            granularity: "sentence", direction: "comprehend", revisionType: nil,
+            userOriginal: "I am sleep", targetExpression: "I am sleepy"
+        )
+        #expect(!nilRevisionType.hasMeaningfulRevision)
+
+        let invalidRevisionType = CardContent(
+            granularity: "sentence", direction: "comprehend", revisionType: "unknown",
+            userOriginal: "I am sleep", targetExpression: "I am sleepy"
+        )
+        #expect(!invalidRevisionType.hasMeaningfulRevision)
     }
 
     // s3 = word + express：母语词 → 目标语表达
@@ -3031,7 +3051,9 @@ struct OnboardingStateParsingTests {
 
 // MARK: - LocalCache tombstone tests
 // LocalCache 已是 actor：所有调用都要 await。
+// .serialized 防止并发测试对 LocalCache.shared 的清空/写入相互踩踏。
 
+@Suite(.serialized)
 struct LocalCacheTombstoneTests {
 
     // 加墓碑 → 读缓存时该 ID 被过滤（不再出现）
@@ -3075,6 +3097,7 @@ struct LocalCacheTombstoneTests {
 
 // MARK: - LocalCache tests
 
+@Suite(.serialized)
 struct LocalCacheTests {
 
     @Test func saveThenLoadRoundTrips() async {

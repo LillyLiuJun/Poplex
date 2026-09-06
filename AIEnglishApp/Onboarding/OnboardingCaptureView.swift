@@ -792,7 +792,7 @@ private struct OnboardingResultCard: View {
             Text("COULDN'T GENERATE")
                 .font(AppTheme.Font.sectionLabel)
                 .tracking(1.2)
-                .foregroundStyle(AppTheme.Color.danger)
+                .foregroundStyle(AppTheme.Color.textMuted)
 
             Text(copy)
                 .font(AppTheme.Font.statusNote)

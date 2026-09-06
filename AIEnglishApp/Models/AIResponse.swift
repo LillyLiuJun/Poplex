@@ -144,13 +144,20 @@ struct CardContent: Decodable {
         return note
     }
 
-    /// sentence+comprehend 是否存在「有意义」的修正：target_expression 与 user_original 确实不同。
-    /// 防止模型漂移——设了 revision_type 却回传与原句相同（或仅首尾空白不同）的 target_expression 时，
-    /// 正文会把同一句话展示两遍（弱化原句 + 修正句）。视为无修正，回落到「原句即主内容」的展示路径。
+    /// sentence+comprehend 是否存在「有意义」的修正：
+    /// 1. 必须有 user_original 原句与 target_expression 修正句，且两者经 trim 后确实不同；
+    /// 2. revision_type 必须有效（"error" 或 "polish"），无修正（nil）或模型异常漂移时不展示；
+    /// 防止模型漂移——设了 revision_type 却回传与原句相同（或仅首尾空白不同）的 target_expression、
+    /// 或者 user_original 为空时发生 != nil 的误判。视为无修正，回落到「原句即主内容」的展示路径。
     var hasMeaningfulRevision: Bool {
-        guard !isWord, isComprehend, let target = targetExpression else { return false }
+        guard !isWord, isComprehend,
+              let target = targetExpression,
+              let original = userOriginal,
+              let revisionType,
+              (revisionType == "error" || revisionType == "polish")
+        else { return false }
         let trim: (String) -> String = { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-        return trim(target) != userOriginal.map(trim)
+        return trim(target) != trim(original)
     }
 }
 

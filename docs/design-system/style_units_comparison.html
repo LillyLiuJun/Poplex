@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UI 风格的最小单元：物理材质契约对比</title>
+  <!-- Google Fonts for authentic typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-page: #0D0E12;
+      --text-main: #F2F3F5;
+      --text-muted: #8E929B;
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-page);
+      color: var(--text-main);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      min-height: 100vh;
+      padding: 40px 28px 80px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Header */
+    header {
+      max-width: 1440px;
+      margin: 0 auto 36px;
+      border-bottom: 1px solid var(--border-subtle);
+      padding-bottom: 24px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255, 118, 34, 0.12);
+      color: #FF7622;
+      border: 1px solid rgba(255, 118, 34, 0.25);
+      border-radius: 999px;
+      padding: 4px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      margin-bottom: 14px;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 10px;
+      color: #FFFFFF;
+    }
+
+    .subtitle {
+      font-size: 14px;
+      color: var(--text-muted);
+      line-height: 1.6;
+      max-width: 860px;
+    }
+
+    .subtitle code {
+      background: rgba(255, 255, 255, 0.08);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: var(--font-mono);
+      color: #E2E4E9;
+      font-size: 12px;
+    }
+
+    /* Grid Layout */
+    .comparison-grid {
+      max-width: 1440px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 20px;
+      align-items: stretch;
+    }
+
+    @media (max-width: 1200px) {
+      .comparison-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 640px) {
+      .comparison-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Style Column Container */
+    .style-column {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* Meta Head */
+    .col-header {
+      padding: 0 4px;
+    }
+
+    .col-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: #FFFFFF;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .col-subtitle {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* Card Stage (The micro-environment) */
+    .stage {
+      height: 360px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      border-radius: 12px;
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.2s ease;
+    }
+
+    /* ==========================================================
+       STYLE 1: 现代高效 SaaS (Linear 风格)
+       深蓝黑底 + 8px 圆角 + 1px 极细半透边框 + 无外阴影/微内高光
+       ========================================================== */
+    .stage-saas {
+      background-color: #0B0C0E;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .card-saas {
+      width: 100%;
+      background-color: #121316;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+      padding: 22px;
+      font-family: 'Inter', sans-serif;
+      color: #E2E4E9;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .card-saas:hover {
+      background-color: #17181D;
+      border-color: rgba(255, 255, 255, 0.16);
+      transform: translateY(-2px);
+    }
+
+    .card-saas .tag {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 0.05em;
+      color: #6C7280;
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .card-saas .tag::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #5E6AD2;
+    }
+
+    .card-saas .title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #F7F8F8;
+      letter-spacing: -0.01em;
+      line-height: 1.3;
+    }
+
+    .card-saas .body {
+      font-size: 13px;
+      color: #9498A1;
+      line-height: 1.55;
+    }
+
+    .card-saas .footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 6px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .card-saas .meta {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: #636874;
+    }
+
+    .card-saas .btn {
+      font-size: 12px;
+      font-weight: 500;
+      color: #FFFFFF;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 6px;
+      padding: 5px 10px;
+      transition: background 0.15s;
+    }
+
+    .card-saas .btn:hover {
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    /* ==========================================================
+       STYLE 2: 杂志与编辑排版 (Editorial 风格)
+       暖米纸底 + 0px 锐角 + 1px 高对比墨色细线 + 纯平无光
+       ========================================================== */
+    .stage-editorial {
+      background-color: #EFECE6;
+      border: 1px solid #DCD8D0;
+    }
+
+    .card-editorial {
+      width: 100%;
+      background-color: #FDFBF7;
+      border-radius: 0px;
+      border: 1px solid #1A1A1A;
+      box-shadow: none;
+      padding: 24px;
+      font-family: 'Newsreader', Georgia, serif;
+      color: #1A1A1A;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      cursor: pointer;
+      transition: background-color 0.2s ease;
+    }
+
+    .card-editorial:hover {
+      background-color: #FAF6EE;
+    }
+
+    .card-editorial .tag {
+      font-family: 'Inter', sans-serif;
+      font-size: 10px;
+      letter-spacing: 0.18em;
+      color: #66635D;
+      text-transform: uppercase;
+      font-weight: 600;
+      border-bottom: 0.5px solid #1A1A1A;
+      padding-bottom: 6px;
+    }
+
+    .card-editorial .title {
+      font-size: 19px;
+      font-weight: 400;
+      color: #111111;
+      line-height: 1.25;
+      font-style: italic;
+    }
+
+    .card-editorial .body {
+      font-size: 13.5px;
+      color: #383633;
+      line-height: 1.6;
+      font-family: 'Inter', sans-serif;
+      font-weight: 400;
+    }
+
+    .card-editorial .footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 6px;
+      padding-top: 12px;
+      border-top: 0.5px solid rgba(26, 26, 26, 0.3);
+    }
+
+    .card-editorial .meta {
+      font-family: 'Newsreader', Georgia, serif;
+      font-style: italic;
+      font-size: 12px;
+      color: #736F69;
+    }
+
+    .card-editorial .btn {
+      font-family: 'Inter', sans-serif;
+      font-size: 11px;
+      font-weight: 600;
+      color: #FFFFFF;
+      background: #1A1A1A;
+      border: 1px solid #1A1A1A;
+      border-radius: 0px;
+      padding: 5px 12px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    /* ==========================================================
+       STYLE 3: 潮流新野兽派 (Neobrutalism 风格)
+       高饱和亮黄底 + 12px 圆角 + 2.5px 粗黑边 + 4px 硬投影(无模糊)
+       ========================================================== */
+    .stage-neo {
+      background-color: #FFFDF4;
+      border: 2px solid #000000;
+    }
+
+    .card-neo {
+      width: 100%;
+      background-color: #FFE600;
+      border-radius: 12px;
+      border: 2.5px solid #000000;
+      box-shadow: 4px 4px 0px #000000;
+      padding: 22px;
+      font-family: 'Space Grotesk', sans-serif;
+      color: #000000;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      cursor: pointer;
+      transition: all 0.15s cubic-bezier(0.1, 1, 0.1, 1);
+    }
+
+    .card-neo:hover {
+      transform: translate(-2px, -2px);
+      box-shadow: 6px 6px 0px #000000;
+    }
+
+    .card-neo:active {
+      transform: translate(3px, 3px);
+      box-shadow: 1px 1px 0px #000000;
+    }
+
+    .card-neo .tag {
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      color: #000000;
+      text-transform: uppercase;
+      font-weight: 700;
+      background: #FFFFFF;
+      border: 1.5px solid #000000;
+      padding: 2px 8px;
+      width: fit-content;
+      border-radius: 6px;
+    }
+
+    .card-neo .title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #000000;
+      letter-spacing: -0.02em;
+      line-height: 1.25;
+      text-transform: uppercase;
+    }
+
+    .card-neo .body {
+      font-size: 13px;
+      color: #000000;
+      line-height: 1.45;
+      font-weight: 500;
+    }
+
+    .card-neo .footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 6px;
+      padding-top: 10px;
+      border-top: 2px dashed #000000;
+    }
+
+    .card-neo .meta {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 700;
+      color: #000000;
+    }
+
+    .card-neo .btn {
+      font-size: 12px;
+      font-weight: 700;
+      color: #000000;
+      background: #FF66C4;
+      border: 2px solid #000000;
+      border-radius: 8px;
+      padding: 5px 12px;
+      box-shadow: 2px 2px 0px #000000;
+    }
+
+    /* ==========================================================
+       STYLE 4: 暖极简 (Warm Minimalism 风格 / AIEnglishApp 定调)
+       暖灰低噪底 + 20px 平滑圆角 + 无生硬边框 + 底部漫射暖光
+       ========================================================== */
+    .stage-warm {
+      background-color: #EFECE6; /* 暖纸灰基调 H 28° */
+      border: 1px solid rgba(210, 203, 192, 0.6);
+      position: relative;
+    }
+
+    .card-warm {
+      width: 100%;
+      background-color: #FAF8F5; /* 极柔暖白 */
+      border-radius: 20px;
+      border: none;
+      /* 核心：漫反射微影 + 底部渗透微暖光 (FF7622) */
+      box-shadow: 
+        0 4px 20px -2px rgba(110, 85, 60, 0.06),
+        0 14px 34px -4px rgba(255, 118, 34, 0.12);
+      padding: 24px;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      color: #2D2926;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      position: relative;
+      cursor: pointer;
+      overflow: hidden;
+      transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+
+    /* 底部暖光椭圆 (符合设计规范) */
+    .card-warm::after {
+      content: '';
+      position: absolute;
+      bottom: -30px;
+      left: 10%;
+      width: 80%;
+      height: 60px;
+      background: radial-gradient(ellipse at center, rgba(255, 118, 34, 0.22) 0%, rgba(255, 118, 34, 0) 75%);
+      pointer-events: none;
+      filter: blur(8px);
+      transition: opacity 0.3s ease;
+    }
+
+    .card-warm:hover {
+      transform: translateY(-3px);
+      box-shadow: 
+        0 8px 24px -2px rgba(110, 85, 60, 0.08),
+        0 20px 42px -4px rgba(255, 118, 34, 0.2);
+    }
+
+    .card-warm .tag {
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      color: #FF7622;
+      font-weight: 600;
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .card-warm .tag::before {
+      content: '';
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: #FF7622;
+    }
+
+    .card-warm .title {
+      font-size: 17px;
+      font-weight: 600;
+      color: #1C1917;
+      letter-spacing: -0.015em;
+      line-height: 1.35;
+    }
+
+    .card-warm .body {
+      font-size: 13.5px;
+      color: #6E6862;
+      line-height: 1.6;
+      font-weight: 400;
+    }
+
+    .card-warm .footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 4px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(220, 214, 204, 0.5);
+    }
+
+    .card-warm .meta {
+      font-size: 11.5px;
+      color: #9C948A;
+      font-weight: 500;
+    }
+
+    .card-warm .btn {
+      font-size: 12px;
+      font-weight: 600;
+      color: #FFFFFF;
+      background: #FF7622;
+      border: none;
+      border-radius: 999px;
+      padding: 6px 14px;
+      box-shadow: 0 4px 10px rgba(255, 118, 34, 0.3);
+      transition: opacity 0.15s;
+    }
+
+    .card-warm .btn:hover {
+      opacity: 0.92;
+    }
+
+    /* ==========================================================
+       SPEC SHEET (规格标注面板)
+       ========================================================== */
+    .spec-box {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .spec-item {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .spec-label {
+      font-size: 10.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #717580;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .spec-value {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: #D6D8DF;
+      word-break: break-all;
+      line-height: 1.4;
+    }
+
+    .spec-value .pill {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+      vertical-align: middle;
+      margin-right: 5px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .spec-vibe {
+      font-size: 12px;
+      color: #E2995C;
+      margin-top: 4px;
+      padding-top: 8px;
+      border-top: 1px dashed rgba(255, 255, 255, 0.08);
+      line-height: 1.45;
+    }
+
+    /* Comparison Footnote */
+    .summary-card {
+      max-width: 1440px;
+      margin: 40px auto 0;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 24px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+    }
+
+    @media (max-width: 900px) {
+      .summary-card {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .summary-item h3 {
+      font-size: 14px;
+      color: #FFFFFF;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .summary-item p {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header>
+    <div class="badge">Design System Insight</div>
+    <h1>UI 风格的最小单元：物理材质契约对比</h1>
+    <p class="subtitle">
+      控制变量实验：每个容器内的<strong>内容与骨架完全相同</strong>（1个标签 + 1个标题 + 1段两行释义 + 1个状态 + 1个按钮）。<br>
+      风格的诞生<strong>不依赖任何业务插图或花哨修饰</strong>，仅由 <code>底色底温 (Undertone)</code>、<code>边缘曲率 (Radius & Border)</code>、<code>光影深度 (Light & Elevation)</code> 三者咬合而成。
+    </p>
+  </header>
+
+  <!-- 4-Column Parallel Comparison Grid -->
+  <main class="comparison-grid">
+
+    <!-- 1. 现代高效 SaaS (Linear) -->
+    <div class="style-column">
+      <div class="col-header">
+        <div class="col-title">
+          <span>01 · 现代高效 SaaS</span>
+        </div>
+        <div class="col-subtitle">如 Linear / Raycast / Cron</div>
+      </div>
+
+      <!-- 渲染容器 -->
+      <div class="stage stage-saas">
+        <div class="card-saas">
+          <div class="tag">Surface Protocol</div>
+          <div class="title">How light meets the edge</div>
+          <div class="body">Style is determined prior to complex layouts. A single surface establishes the physical rules.</div>
+          <div class="footer">
+            <span class="meta">SYNCED · 12ms</span>
+            <button class="btn">Inspect</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 规格标注 -->
+      <div class="spec-box">
+        <div class="spec-item">
+          <span class="spec-label">🎨 Surface 底色</span>
+          <span class="spec-value"><span class="pill" style="background:#121316"></span>#121316（深蓝黑）</span>
+        </div>
+        <div class="spec-item">
+          <span class="spec-label">📐 Radius 圆角</span>
+          <span class="spec-value">8px（理性紧凑）</span>
+        </div>
+        <div class="spec-item">
+          <span class="spec-label">🖋️ Border 边缘</span>
+          <span class="spec-value">1px solid rgba(255,255,255,0.08)</span>
+        </div>
+        <div class="spec-item">
+          <span class="spec-label">💡 Light & Shadow 光深</span>
+          <span class="spec-value">无外阴影 · 仅微内高光 (inset 1px)</span>
+        </div>
+        <div class="spec-vibe">
+          ⚡ <strong>感知</strong>：冷峻、极客、克制、无冗余干扰的高效操作台。
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. 杂志与编辑排版 (Editorial) -->
+    <div class="style-column">
+      <div class="col-header">
+        <div class="col-title">
+          <span>02 · 杂志编辑排版</span>
+        </div>
+        <div class="col-subtitle">如 Kinfolk / Readcv / 出版刊物</div>
+      </div>
+
+      <!-- 渲染容器 -->
+      <div class="stage stage-editorial">
+        <div class="card-editorial">
+          <div class="tag">Surface Protocol</div>
+          <div class="title">How light meets the edge</div>
+          <div class="body">Style is determined prior to complex layouts. A single surface establishes the physical rules.</div>
+          <div class="footer">
+            <span class="meta">Issue No. 04</span>
+            <button class="btn">Read</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 规格标注 -->
+      <div class="spec-box">
+        <div class="spec-item">
+          <span class="spec-label">🎨 Surface 底色</span>
+          <span class="spec-value"><span class="pill" style="background:#FDFBF7"></span>#FDFBF7（暖米纸白）</span>
+        </div>
+        <div class="spec-item">
+          <span class="spec-label">📐 Radius 圆角</span>
+          <span class="spec-value">0px（纯粹锐角直角）</span>
+        </div>
+        <div class="spec-item">
+          <span class="spec-label">🖋️ Border 边缘</span>
+          <span class="spec-value">1px solid #1A1A1A（高对比墨线）</span>
+        </div>
+        <div class="spec-item">
+          <span class="spec-label">💡 Light & Shadow 光深</span>
+          <span class="spec-value">0 阴影 · 纯平面纸张物理</span>
+        </div>
+        <div class="spec-vibe" style="color: #DFC090;">
+          📖 <strong>感知</strong>：油墨香、出版物尊贵感、静心阅读的人文情调。
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. 潮流新野兽派 (Neobrutalism) -->
+    <div class="style-column">
+      <div class="col-header">
+        <div class="col-title">
+          <span>03 · 潮流新野兽派</span>
+        </div>
+        <div class="col-subtitle">如 Gumroad / Figma FigJam / Deno</div>
+      </div>
+
+      <!-- 渲染容器 -->
+      <div class="stage stage-neo">
+        <div class="card-neo">
+          <div class="tag">Surface Protocol</div>
+          <div class="title">How light meets the edge</div>
+          <div class="body">Style is determined prior to complex layouts. A single surface establishes the physical rules.</div>
+          <div class="footer">
+            <span class="meta">STATUS · ACTIVE</span>
+            <button class="btn">Click!</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 规格标注 -->
+      <div class="spec-box">
+        <div class="spec-item">
+          <span class="spec-label">🎨 Surface 底色</span>
+          <span class="spec-value"><span class="pill" style="background:#FFE600"></span>#FFE600（高饱和明黄）</span>
+        </div>
+        <div class="spec-item">
+          <span class="spec-label">📐 Radius 圆角</span>
+          <span class="spec-value">12px（外放玩趣圆角）</span>
+        </div>
+        <div class="spec-item">
+          <span class="spec-label">🖋️ Border 边缘</span>
+          <span class="spec-value">2.5px solid #000000（粗黑线）</span>
+        </div>
+        <div class="spec-item">
+          <span class="spec-label">💡 Light & Shadow 光深</span>
+          <span class="spec-value">4px 4px 0px #000（硬边缘投影）</span>
+        </div>
+        <div class="spec-vibe" style="color: #FFE600;">
+          🔥 <strong>感知</strong>：年轻、戏谑、粗粝反叛、强烈的波普视觉冲击。
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. 暖极简 (Warm Minimalism) -->
+    <div class="style-column">
+      <div class="col-header">
+        <div class="col-title">
+          <span>04 · 暖极简 (Warm)</span>
+        </div>
+        <div class="col-subtitle">AIEnglishApp 定调 / 苹果生活向</div>
+      </div>
+
+      <!-- 渲染容器 -->
+      <div class="stage stage-warm">
+        <div class="card-warm">
+          <div class="tag">Surface Protocol</div>
+          <div class="title">How light meets the edge</div>
+          <div class="body">Style is determined prior to complex layouts. A single surface establishes the physical rules.</div>
+          <div class="footer">
+            <span class="meta">Personal Space</span>
+            <button class="btn">Explore</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 规格标注 -->
+      <div class="spec-box">
+        <div class="spec-item">
+          <span class="spec-label">🎨 Surface 底色</span>
+          <span class="spec-value"><span class="pill" style="background:#FAF8F5"></span>#FAF8F5（暖白在暖纸灰上）</span>
+        </div>
+        <div class="spec-item">
+          <span class="spec-label">📐 Radius 圆角</span>
+          <span class="spec-value">20px（平滑大连续曲率）</span>
+        </div>
+        <div class="spec-item">
+          <span class="spec-label">🖋️ Border 边缘</span>
+          <span class="spec-value">None（去线框化，无生硬描边）</span>
+        </div>
+        <div class="spec-item">
+          <span class="spec-label">💡 Light & Shadow 光深</span>
+          <span class="spec-value">底部漫射暖光 (#FF7622) + 柔和漫浮</span>
+        </div>
+        <div class="spec-vibe" style="color: #FF7622;">
+          ☀️ <strong>感知</strong>：有温度、安定陪伴、克制但不冰冷的私人领地。
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Summary Footnote -->
+  <section class="summary-card">
+    <div class="summary-item">
+      <h3>1. 为什么骨架完全相同？</h3>
+      <p>如果不同卡片放了不同的按钮、不同的字数、不同的图标，我们就会被“内容差异”所误导。只有完全相同的骨骼，才能证明：<strong>风格不是画出来的，是物理材质属性赋予的。</strong></p>
+    </div>
+    <div class="summary-item">
+      <h3>2. 为什么圆角是关键分水岭？</h3>
+      <p><code>0px</code> 导向传统印刷与现代建筑的严肃；<code>8px</code> 是桌面效率与紧凑逻辑的标准；<code>12px+粗黑</code> 是波普玩具感；<code>20px+连续曲率</code> 则是移动人机工程中的亲和温润。</p>
+    </div>
+    <div class="summary-item">
+      <h3>3. 为什么“光”决定了世界观？</h3>
+      <p>Linear 的内微光让你感觉像隔着强化玻璃操作精密机密；纸质杂志把光完全吸掉；新野兽派用无虚化的黑块打破现实；暖极简的底部微光则像台灯下的一隅桌面。</p>
+    </div>
+  </section>
+
+</body>
+</html>
