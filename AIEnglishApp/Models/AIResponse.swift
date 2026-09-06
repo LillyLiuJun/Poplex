@@ -136,6 +136,22 @@ struct CardContent: Decodable {
     var primaryUnit: LearnableUnit? {
         learnableUnits.first(where: { $0.isPrimary }) ?? learnableUnits.first
     }
+
+    /// 说明区块该不该显示：仅 comprehend 侧生成 grammar_note（word/sentence/passage 共用同一条规则，
+    /// 见 generate/index.ts 各 flow 说明——express 侧从不产出该字段）。
+    var displayableGrammarNote: String? {
+        guard isComprehend, let note = grammarNote, !note.isEmpty else { return nil }
+        return note
+    }
+
+    /// sentence+comprehend 是否存在「有意义」的修正：target_expression 与 user_original 确实不同。
+    /// 防止模型漂移——设了 revision_type 却回传与原句相同（或仅首尾空白不同）的 target_expression 时，
+    /// 正文会把同一句话展示两遍（弱化原句 + 修正句）。视为无修正，回落到「原句即主内容」的展示路径。
+    var hasMeaningfulRevision: Bool {
+        guard !isWord, isComprehend, let target = targetExpression else { return false }
+        let trim: (String) -> String = { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        return trim(target) != userOriginal.map(trim)
+    }
 }
 
 // MARK: - 生成次数用量（服务端报告，只做展示）

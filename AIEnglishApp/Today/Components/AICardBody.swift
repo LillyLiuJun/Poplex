@@ -1,9 +1,12 @@
 import SwiftUI
 
 /// 统一学习卡（Tab1 输入输出卡片设计交付 v2）
-/// · word 卡：大词条 → 音标+词性同行 → 释义 → 例句区块 → 形式说明区块
-/// · sentence 卡：双行（comprehend: 目标语在前；express/图: 母语在前）→ 语法说明区块
-/// · passage 卡：逐行双语对照 + 折叠/展开
+/// · word 卡：大词条 → 音标+词性同行 → 释义 → 例句区块 → 形式说明区块（仅 comprehend）
+/// · sentence 卡：双行（comprehend: 目标语在前；express/图: 母语在前）；
+///   revision 场景：原句弱化 → 译文（先看懂原意）→ 标签 → 修正/润色句（仅此一句，后不跟译文）；
+///   语法说明区块仅 comprehend
+/// · passage 卡：逐行双语对照 + 折叠/展开 → 说明区块（仅 comprehend）
+/// · 说明区块（Note）在所有卡片类型中都排在最后
 struct AICardBody: View {
     let content: CardContent
     @State private var passageExpanded = false
@@ -13,9 +16,9 @@ struct AICardBody: View {
             CardTypeChip(label: cardTypeLabel)
 
             if content.isWord {
-                if let note = content.grammarNote, !note.isEmpty { noteSection(note: note) }
                 wordMainBlock
                 if !content.examples.isEmpty { examplesSection }
+                if let note = content.displayableGrammarNote { noteSection(note: note) }
             } else if content.isPassage {
                 passageContent
             } else {
@@ -114,42 +117,54 @@ struct AICardBody: View {
                 .buttonStyle(.plain)
             }
 
-            // grammar_note（如有）
-            if let note = content.grammarNote, !note.isEmpty {
+            // grammar_note（如有；仅 comprehend——express 的提示词不生成）
+            if let note = content.displayableGrammarNote {
                 noteSection(note: note)
             }
         }
     }
     private var sentenceContent: some View {
         VStack(alignment: .leading, spacing: AppTheme.Space.paddingCard) {
-            // revision 场景：先 Note（解释语言事实），再 revision label + 表达
-            if let note = content.grammarNote, !note.isEmpty, revisionLabel != nil {
-                noteSection(note: note)
-            }
             sentenceMainBlock
-            // 非 revision 场景：Note 在表达之后（如有）
-            if let note = content.grammarNote, !note.isEmpty, revisionLabel == nil {
+            // 语法说明区块：仅 comprehend（express 不生成 grammar_note），
+            // 统一放在表达与译文之后（正文优先、说明后置，与 word 卡一致）
+            if let note = content.displayableGrammarNote {
                 noteSection(note: note)
             }
         }
     }
 
-    // MARK: - Sentence: 修正提示 + 双行（原文↔译文顺序由方向决定）
+    // MARK: - Sentence: 原句 → 译文 →（revision 时）标签 → 修正句（原文↔译文顺序由方向决定）
     private var sentenceMainBlock: some View {
         VStack(alignment: .leading, spacing: AppTheme.Space.paddingXS) {
-            if let label = revisionLabel {
-                Text(label)
-                    .font(AppTheme.Font.pos)
-                    .foregroundStyle(AppTheme.Color.textMuted)
-            }
-
             if content.isComprehend {
-                // comprehend: 目标语在前（近黑主内容）、母语译文在后（小灰）
+                let label = revisionLabel
+                if let label {
+                    // revision 场景：原句弱化在前、译文紧跟（先看懂原意），
+                    // 标签 + 修正句在后——修正句仅此一句，后面不再跟译文
+                    if let original = content.userOriginal, !original.isEmpty {
+                        Text(original)
+                            .font(AppTheme.Font.englishPrimary)
+                            .foregroundStyle(AppTheme.Color.textMuted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if let meaning = content.nativeMeaning, !meaning.isEmpty {
+                        Text(meaning)
+                            .font(AppTheme.Font.chineseBody)
+                            .foregroundStyle(AppTheme.Color.textMuted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Text(label)
+                        .font(AppTheme.Font.pos)
+                        .foregroundStyle(AppTheme.Color.textMuted)
+                }
+                // 主表达：无修正时是原句本身、有修正时是修正句（近黑主内容）
                 Text(content.displayTarget)
                     .font(AppTheme.Font.englishPrimary)
                     .foregroundStyle(AppTheme.Color.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
-                if let meaning = content.nativeMeaning, !meaning.isEmpty {
+                // 译文：无修正时跟在主表达后；revision 场景已提前到原句之下，不重复
+                if label == nil, let meaning = content.nativeMeaning, !meaning.isEmpty {
                     Text(meaning)
                         .font(AppTheme.Font.chineseBody)
                         .foregroundStyle(AppTheme.Color.textMuted)
@@ -205,9 +220,9 @@ struct AICardBody: View {
 
     // MARK: - Derived
 
-    // sentence+comprehend 有修正时的提示文字
+    // sentence+comprehend 有修正时的提示文字（无「有意义的修正」时不出现，见 hasMeaningfulRevision）
     private var revisionLabel: String? {
-        guard !content.isWord, content.isComprehend, content.targetExpression != nil else { return nil }
+        guard content.hasMeaningfulRevision else { return nil }
         switch content.revisionType {
         case "error":  return "A clearer way to say it"
         case "polish": return "You could also say"

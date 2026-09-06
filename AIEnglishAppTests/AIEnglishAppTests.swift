@@ -753,6 +753,59 @@ struct AIEnvelopeDecodeTests {
         #expect(c.grammarNote == nil)
     }
 
+    // displayableGrammarNote：word/sentence/passage 共用同一条门控（AICardBody 曾经三处各写一遍，
+    // 一度与自己的头注释矛盾——收敛到 CardContent 上后用这一处测试锁住规则）
+    @Test func displayableGrammarNoteOnlyForComprehend() {
+        let comprehend = CardContent(direction: "comprehend", grammarNote: "note")
+        #expect(comprehend.displayableGrammarNote == "note")
+
+        let express = CardContent(direction: "express", grammarNote: "note")
+        #expect(express.displayableGrammarNote == nil)
+
+        let emptyNote = CardContent(direction: "comprehend", grammarNote: "")
+        #expect(emptyNote.displayableGrammarNote == nil)
+
+        let noNote = CardContent(direction: "comprehend", grammarNote: nil)
+        #expect(noNote.displayableGrammarNote == nil)
+    }
+
+    // hasMeaningfulRevision：只有 target_expression 确实不同于 user_original 才算修正，
+    // 防止模型漂移（设了 revision_type 却回传同一句话）导致原句与修正句重复展示。
+    @Test func hasMeaningfulRevisionRequiresActualChange() {
+        let revised = CardContent(
+            granularity: "sentence", direction: "comprehend", revisionType: "error",
+            userOriginal: "I am very sleep today", targetExpression: "I am very sleepy today"
+        )
+        #expect(revised.hasMeaningfulRevision)
+
+        let driftedSame = CardContent(
+            granularity: "sentence", direction: "comprehend", revisionType: "polish",
+            userOriginal: "I have to work overtime tonight.",
+            targetExpression: "I have to work overtime tonight."
+        )
+        #expect(!driftedSame.hasMeaningfulRevision)
+
+        let noRevision = CardContent(
+            granularity: "sentence", direction: "comprehend",
+            userOriginal: "I have to work overtime tonight.", targetExpression: nil
+        )
+        #expect(!noRevision.hasMeaningfulRevision)
+
+        let expressCase = CardContent(
+            granularity: "sentence", direction: "express",
+            userOriginal: "今天工作好 stress", targetExpression: "Work is so stressful today"
+        )
+        #expect(!expressCase.hasMeaningfulRevision)
+
+        // 首尾空白漂移（模型常见抖动）不应算作有意义的修正
+        let whitespaceDrift = CardContent(
+            granularity: "sentence", direction: "comprehend", revisionType: "polish",
+            userOriginal: "I have to work overtime tonight.",
+            targetExpression: "I have to work overtime tonight. \n"
+        )
+        #expect(!whitespaceDrift.hasMeaningfulRevision)
+    }
+
     // s3 = word + express：母语词 → 目标语表达
     @Test func decodesWordExpressCard() throws {
         let json = """
