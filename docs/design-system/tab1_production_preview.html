@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Tab1 线上生产环境 1:1 全真交互原型 (Warm Editorial)</title>
+
+  <!-- 目标字族：Newsreader (出版物衬线) + JetBrains Mono (音标) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <style>
+    /* =====================================================================
+       1. Design Tokens (100% 严格对齐 AIEnglishApp/Theme/Theme.swift 生产源码)
+       ===================================================================== */
+    :root {
+      /* 页面与卡片材质 (Warm Paper) */
+      --page-bg: #FCF8F3;         /* Primitive.neutral50: 暖米色纸面 */
+      --card-bg: #FFFDFB;         /* Primitive.warmWhite: 近白暖卡片 */
+      --bubble-user-bg: #F0EDE6;  /* Primitive.neutral100: 用户气泡暖灰底 */
+      --date-chip-bg: rgba(230, 225, 218, 0.5); /* 日期分割弱背景 */
+
+      /* 纸墨文字阶梯 (Text Hierarchy - 全部 >= 4.5:1 AA 合规) */
+      --text-primary: #211811;    /* Primitive.neutral900: 品牌染色近黑 17.2:1 */
+      --text-secondary: #4B4640;  /* Primitive.neutral700: 次要正文/Note 9.9:1 */
+      --text-muted: #7C7773;      /* Primitive.neutral500: 标注/词性/小标 4.4:1 */
+      --text-faint: #C7C3BD;      /* Primitive.neutral300: 极弱发丝文字 */
+
+      /* 品牌色阶梯 (严格克制使用，无任何大面积填充色块) */
+      --brand-strong: #FF7622;    /* 满饱和品牌橙 (图标/指示) */
+      --brand-ink: #C2410C;       /* Primitive.primaryDeep: 橙文字唯一出口 */
+      --brand-amber: #9E4A1C;     /* 深琥珀老墨 */
+
+      /* 几何间距与圆角 */
+      --space-xs: 4px;
+      --space-s: 8px;
+      --space-m: 12px;
+      --space-card: 16px;
+      --space-page: 20px;
+      --space-section: 32px;
+
+      --radius-s: 8px;
+      --radius-bubble: 14px;
+      --radius-card: 18px;
+      --radius-large: 20px;
+      --radius-pill: 9999px;
+
+      /* 边框与发丝线 */
+      --border-hairline: 0.5px solid rgba(230, 225, 218, 0.45);
+      --card-border: 0.5px solid rgba(230, 225, 218, 0.35);
+      --divider-line: 0.5px solid rgba(124, 119, 115, 0.15);
+
+      /* 生产微呼吸双层阴影 (AppTheme.Shadow.cardShadow) */
+      --card-shadow: 
+        0 1.5px 4px rgba(33, 24, 17, 0.035),
+        0 4px 8px rgba(46, 40, 32, 0.025);
+      
+      --float-shadow:
+        0 4px 16px rgba(33, 24, 17, 0.06),
+        0 1px 3px rgba(33, 24, 17, 0.03);
+
+      /* 字族 */
+      --font-serif: 'Newsreader', 'New York', Georgia, serif;
+      --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "PingFang SC", "Hiragino Sans GB", sans-serif;
+      --font-mono: 'SF Mono', 'JetBrains Mono', Menlo, monospace;
+    }
+
+    /* 全局重置 */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background-color: #121214;
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      padding: 24px 12px;
+    }
+
+    /* 顶部控制工具栏 */
+    .top-toolbar {
+      width: 100%;
+      max-width: 412px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+      padding: 0 4px;
+      color: #9296A1;
+      font-size: 12px;
+    }
+    .top-toolbar .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255, 255, 255, 0.08);
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-weight: 500;
+      letter-spacing: 0.02em;
+    }
+    .top-toolbar .badge::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #10B981;
+    }
+    .top-toolbar .actions button {
+      background: rgba(255, 255, 255, 0.08);
+      border: none;
+      color: #FFF;
+      padding: 5px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .top-toolbar .actions button:hover {
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    /* 手机外壳容器 (模拟 iPhone 15/16 Pro 393 × 852) */
+    .device-viewport {
+      width: 100%;
+      max-width: 393px;
+      height: 844px;
+      background-color: var(--page-bg);
+      border-radius: 46px;
+      overflow: hidden;
+      position: relative;
+      box-shadow: 
+        0 0 0 10px #26272B,
+        0 0 0 11px rgba(255, 255, 255, 0.1),
+        0 24px 60px rgba(0, 0, 0, 0.6);
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* 状态栏 */
+    .status-bar {
+      height: 48px;
+      padding: 0 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+      z-index: 50;
+      flex-shrink: 0;
+    }
+    .dynamic-island {
+      width: 110px;
+      height: 28px;
+      background: #000;
+      border-radius: 20px;
+      margin: 0 auto;
+    }
+
+    /* 顶栏 Tab 导航 (Today vs Library) */
+    .app-header {
+      padding: 4px 20px 10px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 40;
+      flex-shrink: 0;
+    }
+    .tab-pill {
+      display: inline-flex;
+      background: rgba(230, 225, 218, 0.4);
+      padding: 3px;
+      border-radius: var(--radius-pill);
+      border: var(--border-hairline);
+    }
+    .tab-btn {
+      padding: 5px 18px;
+      border-radius: var(--radius-pill);
+      border: none;
+      font-size: 13.5px;
+      font-weight: 500;
+      background: transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .tab-btn.active {
+      background: #FFF;
+      color: var(--text-primary);
+      box-shadow: 0 1px 3px rgba(33, 24, 17, 0.08);
+      font-weight: 600;
+    }
+
+    /* 滚动内容区 (时间线) */
+    .timeline-scroll {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px 20px 120px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      scroll-behavior: smooth;
+    }
+    .timeline-scroll::-webkit-scrollbar {
+      display: none;
+    }
+
+    /* 日期分割指示器 */
+    .date-separator {
+      display: flex;
+      justify-content: center;
+      margin: 8px 0;
+    }
+    .date-chip {
+      background: var(--date-chip-bg);
+      color: var(--text-muted);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: var(--radius-pill);
+      letter-spacing: 0.04em;
+    }
+
+    /* 用户输入气泡 (靠右) */
+    .user-bubble-row {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 8px;
+      max-width: 86%;
+      align-self: flex-end;
+    }
+    .user-photo {
+      width: 112px;
+      height: 112px;
+      border-radius: var(--radius-bubble);
+      object-fit: cover;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+      border: var(--border-hairline);
+    }
+    .user-text-bubble {
+      background: var(--bubble-user-bg);
+      color: var(--text-primary);
+      font-size: 15.5px;
+      line-height: 1.45;
+      padding: 12px 16px;
+      border-radius: var(--radius-bubble);
+      letter-spacing: -0.01em;
+      word-break: break-word;
+    }
+
+    /* =====================================================================
+       2. AI 学习卡片 (100% 还原 AICardBody.swift 生产排版)
+       ===================================================================== */
+    .ai-card {
+      background: var(--card-bg);
+      border: var(--card-border);
+      border-radius: var(--radius-card);
+      box-shadow: var(--card-shadow);
+      padding: var(--space-card);
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      align-self: stretch;
+      position: relative;
+    }
+
+    /* 顶部类型标签 (CardTypeChip: 纯大写中性灰字，无底色) */
+    .card-type-chip {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+    }
+
+    /* 小节标签 (CardSectionLabel: 11px, 600, 单色灰) */
+    .section-label {
+      font-size: 10.5px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+
+    /* 衬线主角文字 (englishPrimary: Newsreader) */
+    .serif-hero {
+      font-family: var(--font-serif);
+      font-size: 18.5px;
+      font-weight: 500;
+      line-height: 1.42;
+      color: var(--text-primary);
+      letter-spacing: -0.01em;
+    }
+    .serif-word-title {
+      font-family: var(--font-serif);
+      font-size: 24px;
+      font-weight: 600;
+      line-height: 1.25;
+      color: var(--text-primary);
+      letter-spacing: -0.015em;
+    }
+
+    /* 中文译文 / 辅助说明 */
+    .chinese-body {
+      font-size: 14.5px;
+      line-height: 1.45;
+      color: var(--text-secondary);
+    }
+    .chinese-muted {
+      font-size: 13.5px;
+      line-height: 1.4;
+      color: var(--text-muted);
+    }
+
+    /* 原句弱化区块 (Sentence Polish 场景) */
+    .original-weakened {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .original-weakened-en {
+      font-family: var(--font-serif);
+      font-size: 15.5px;
+      color: var(--text-muted);
+      text-decoration: line-through;
+      text-decoration-color: rgba(124, 119, 115, 0.5);
+    }
+
+    /* 润色区块 */
+    .polish-block {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    /* Word 卡音标与词性同行 */
+    .word-meta-row {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+    }
+    .phonetic-tag {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+    .pos-tag {
+      font-size: 11px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-muted);
+    }
+
+    /* Examples 双例句 */
+    .examples-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .example-item {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .example-en {
+      font-size: 14px;
+      line-height: 1.4;
+      color: var(--text-primary);
+    }
+    .example-zh {
+      font-size: 12.5px;
+      color: var(--text-muted);
+    }
+
+    /* Passage 篇章卡逐行双语对照 */
+    .passage-lines-container {
+      display: flex;
+      flex-direction: column;
+    }
+    .passage-row {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding: 6px 0;
+    }
+    .passage-row:not(:last-child) {
+      border-bottom: var(--divider-line);
+    }
+    .passage-row.hidden-line {
+      display: none;
+    }
+    .expand-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: none;
+      border: none;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 6px 0 2px;
+      align-self: flex-start;
+      transition: color 0.15s;
+    }
+    .expand-btn:hover {
+      color: var(--text-primary);
+    }
+
+    /* Note 区域 */
+    .note-block {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding-top: 2px;
+    }
+
+    /* =====================================================================
+       3. 底部 InputBar 与消融毛玻璃底托 (VariableBlurBackdrop)
+       ===================================================================== */
+    .bottom-input-container {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 10px 16px 28px;
+      z-index: 60;
+      /* 硬件级消融毛玻璃：渐变蒙版 + backdrop-filter */
+      background: linear-gradient(to top, rgba(252, 248, 243, 0.98) 55%, rgba(252, 248, 243, 0.8) 80%, rgba(252, 248, 243, 0) 100%);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+    }
+    .input-bar-inner {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .media-buttons {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      color: var(--text-muted);
+    }
+    .icon-btn {
+      background: none;
+      border: none;
+      color: inherit;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px;
+      border-radius: 50%;
+      transition: opacity 0.15s;
+    }
+    .icon-btn:active {
+      opacity: 0.6;
+    }
+    .input-capsule {
+      flex: 1;
+      height: 44px;
+      background: #FFFFFF;
+      border: 0.5px solid rgba(230, 225, 218, 0.8);
+      border-radius: var(--radius-pill);
+      box-shadow: 0 1.5px 4px rgba(33, 24, 17, 0.04);
+      display: flex;
+      align-items: center;
+      padding: 0 6px 0 14px;
+      gap: 8px;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .input-capsule:focus-within {
+      border-color: #ABA69F;
+      box-shadow: 0 2px 8px rgba(33, 24, 17, 0.08);
+    }
+    .input-capsule input {
+      flex: 1;
+      border: none;
+      outline: none;
+      background: transparent;
+      font-size: 14.5px;
+      color: var(--text-primary);
+      font-family: inherit;
+    }
+    .input-capsule input::placeholder {
+      color: var(--text-muted);
+      opacity: 0.8;
+    }
+    .send-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--text-primary);
+      border: none;
+      color: #FFF;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: transform 0.1s, opacity 0.1s;
+    }
+    .send-btn:active {
+      transform: scale(0.92);
+      opacity: 0.85;
+    }
+    .home-indicator {
+      position: absolute;
+      bottom: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 134px;
+      height: 5px;
+      background: #000;
+      border-radius: 3px;
+      opacity: 0.8;
+    }
+
+    /* 动态添加气泡的淡入动效 */
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(8px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    .animate-in {
+      animation: fadeInUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 顶部调试信息条 -->
+  <div class="top-toolbar">
+    <div class="badge">Tab1 Production Parity (HTML 1:1 像素级复刻)</div>
+    <div class="actions">
+      <button onclick="scrollToBottom()">滑动到底部</button>
+    </div>
+  </div>
+
+  <!-- 真实设备画板 -->
+  <div class="device-viewport">
+    
+    <!-- 状态栏 -->
+    <div class="status-bar">
+      <span>9:41</span>
+      <div class="dynamic-island"></div>
+      <div style="display: flex; gap: 4px; align-items: center;">
+        <svg width="15" height="11" viewBox="0 0 15 11" fill="currentColor">
+          <path d="M1 9h2v2H1zm4-3h2v5H5zm4-3h2v8H9zm4-3h2v11h-2z"/>
+        </svg>
+        <svg width="15" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="2" y="7" width="18" height="10" rx="2" ry="2"/>
+          <path d="M22 11v2"/>
+        </svg>
+      </div>
+    </div>
+
+    <!-- 顶部 Tab 导航 -->
+    <header class="app-header">
+      <div class="tab-pill">
+        <button class="tab-btn active">Today</button>
+        <button class="tab-btn">Practice</button>
+      </div>
+    </header>
+
+    <!-- 主时间线长卷 (包含五大场景真实卡片) -->
+    <main class="timeline-scroll" id="timelineScroll">
+
+      <!-- 日期分割：Yesterday -->
+      <div class="date-separator">
+        <span class="date-chip">Yesterday</span>
+      </div>
+
+      <!-- 场景 1：用户纯文本提问 -->
+      <div class="user-bubble-row">
+        <div class="user-text-bubble">I am very sleep today, because too much meeting.</div>
+      </div>
+
+      <!-- AI 回复 1：Sentence 卡片 · Polish 润色修正态 -->
+      <article class="ai-card">
+        <span class="card-type-chip">Sentence</span>
+        
+        <!-- 原句弱化 -->
+        <div class="original-weakened">
+          <div class="original-weakened-en">I am very sleep today, because too much meeting.</div>
+          <div class="chinese-muted">我今天很困，因为会议太多。</div>
+        </div>
+
+        <!-- 润色主角 -->
+        <div class="polish-block">
+          <div class="section-label">Polish</div>
+          <div class="serif-hero">I’m completely snowed under with meetings today and feeling exhausted.</div>
+          <div class="chinese-body" style="color: var(--text-muted); margin-top: 3px;">我今天被各种会议彻底淹没了，精疲力竭。</div>
+        </div>
+
+        <!-- 语法 Note -->
+        <div class="note-block">
+          <div class="section-label">Note</div>
+          <div class="chinese-body">用 "snowed under with" 形象描述被大量工作压得透不过气；修饰人困倦疲惫要用形容词 sleepy 或 exhausted，而非动词原形 sleep。</div>
+        </div>
+      </article>
+
+      <!-- 日期分割：Today -->
+      <div class="date-separator">
+        <span class="date-chip">Today</span>
+      </div>
+
+      <!-- 场景 2：用户含图提问 (咖啡拉花照片) -->
+      <div class="user-bubble-row">
+        <!-- 本地矢量拉花照片 (零外部网络依赖，永不失效) -->
+        <svg class="user-photo" viewBox="0 0 240 240" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect width="240" height="240" fill="#E2D4C3"/>
+          <circle cx="120" cy="120" r="85" fill="#FAF6F0"/>
+          <circle cx="120" cy="120" r="48" fill="#754B2C" opacity="0.85"/>
+          <path d="M120 78C120 78 138 98 138 114C138 126 128 134 120 148C112 134 102 126 102 114C102 98 120 78 120 78Z" fill="#FAF6F0"/>
+          <circle cx="120" cy="124" r="6" fill="#754B2C"/>
+        </svg>
+        <div class="user-text-bubble">点单时想跟咖啡师说换燕麦奶加一份浓缩，英文怎么说？</div>
+      </div>
+
+      <!-- AI 回复 2：Sentence 卡片 · Express 点单表达态 -->
+      <article class="ai-card">
+        <span class="card-type-chip">Sentence</span>
+        
+        <div style="display: flex; flex-direction: column; gap: 3px;">
+          <div class="chinese-muted">麻烦来一杯燕麦奶拿铁，额外加一份浓缩。</div>
+          <div class="serif-hero">Could I get an oat milk latte with an extra shot, please?</div>
+        </div>
+      </article>
+
+      <!-- 场景 3：用户查词提问 -->
+      <div class="user-bubble-row">
+        <div class="user-text-bubble">ephemeral 是什么意思？帮我讲解一下</div>
+      </div>
+
+      <!-- AI 回复 3：Word 卡片 (大词条/音标/双例句/Note) -->
+      <article class="ai-card">
+        <span class="card-type-chip">Word</span>
+
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <div class="serif-word-title">ephemeral</div>
+          <div class="word-meta-row">
+            <span class="phonetic-tag">/ɪˈfemərəl/</span>
+            <span class="pos-tag">ADJ. / N.</span>
+          </div>
+          <div class="chinese-body" style="margin-top: 2px;">短暂的，转瞬即逝的；朝生暮死的生命</div>
+        </div>
+
+        <!-- 双例句 -->
+        <div class="examples-list">
+          <div class="section-label">Examples</div>
+          <div class="example-item">
+            <div class="example-en">Fame in the digital age is increasingly ephemeral.</div>
+            <div class="example-zh">数字时代的名气越来越转瞬即逝。</div>
+          </div>
+          <div class="example-item">
+            <div class="example-en">The ephemeral bloom of spring cherry blossoms draws millions every year.</div>
+            <div class="example-zh">春天樱花那短暂灿烂的盛开每年吸引数百万人观赏。</div>
+          </div>
+        </div>
+
+        <!-- 词源 Note -->
+        <div class="note-block">
+          <div class="section-label">Note</div>
+          <div class="chinese-body">文学与散文高频书面词，多用于形容时光、美景、名声等不可长久保留的事物；词源来自希腊语 ephemeros（仅存在一天）。</div>
+        </div>
+      </article>
+
+      <!-- 场景 4：用户晨读长文需求 -->
+      <div class="user-bubble-row">
+        <div class="user-text-bubble">帮我写一段关于现代咖啡文化的双语晨读短文</div>
+      </div>
+
+      <!-- AI 回复 4：Passage 篇章长文卡 (支持交互折叠展开) -->
+      <article class="ai-card" id="passageCard">
+        <span class="card-type-chip">Passage</span>
+
+        <div class="passage-lines-container" id="passageLines">
+          <!-- 句 1 -->
+          <div class="passage-row">
+            <div class="serif-hero" style="font-size: 16.5px;">Coffee culture is not merely about caffeine; it has evolved into a quiet daily ritual of modern urban life.</div>
+            <div class="chinese-muted">咖啡文化不仅关乎咖啡因，它已演进为现代都市人的一种日常仪式。</div>
+          </div>
+          <!-- 句 2 -->
+          <div class="passage-row">
+            <div class="serif-hero" style="font-size: 16.5px;">From early morning commute to late-night contemplation, a warm cup offers both solitude and connection.</div>
+            <div class="chinese-muted">从清晨的匆忙通勤到深夜的沉静思索，一杯温热的咖啡既给予独处的安宁，也维系着与外界的连接。</div>
+          </div>
+          <!-- 句 3 (折叠) -->
+          <div class="passage-row hidden-line">
+            <div class="serif-hero" style="font-size: 16.5px;">As third-wave specialty cafes spread, craft roasters pay homage to single-origin terroir and sustainable harvesting.</div>
+            <div class="chinese-muted">随着精品咖啡浪潮蔓延，独立烘焙者们愈发致敬单一产区的风土韵味与可持续手作工艺。</div>
+          </div>
+          <!-- 句 4 (折叠) -->
+          <div class="passage-row hidden-line">
+            <div class="serif-hero" style="font-size: 16.5px;">In every sip, one tastes not just roasted beans, but the patience and care of human craftsmanship.</div>
+            <div class="chinese-muted">在每一次细细品味中，人们尝到的不仅是烘焙豆香，更是人手倾注的耐心与匠心。</div>
+          </div>
+        </div>
+
+        <!-- 展开/收起按钮 (真实可点击交互) -->
+        <button class="expand-btn" id="expandBtn" onclick="togglePassage()">
+          <span>Expand full text</span>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M6 9l6 6 6-6"/>
+          </svg>
+        </button>
+
+        <!-- 晨读 Note -->
+        <div class="note-block">
+          <div class="section-label">Note</div>
+          <div class="chinese-body">长句结构层层递进，适合晨间朗读。重点体会 not merely... but... 的递进语调与连读顿挫。</div>
+        </div>
+      </article>
+
+      <!-- 场景 5：用户表达完全正确无修正 -->
+      <div class="user-bubble-row">
+        <div class="user-text-bubble">I’m heading out for lunch now, back in thirty minutes.</div>
+      </div>
+
+      <!-- AI 回复 5：Sentence 卡片 · 无修正正确态 -->
+      <article class="ai-card">
+        <span class="card-type-chip">Sentence</span>
+
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+          <div class="serif-hero">I’m heading out for lunch now, back in thirty minutes.</div>
+          <div class="chinese-muted">我现在出去吃午饭，半小时后回来。</div>
+        </div>
+
+        <div class="note-block">
+          <div class="section-label">Note</div>
+          <div class="chinese-body">"heading out" 极为自然地道；"back in" 准确表达在特定时间长度后返回。</div>
+        </div>
+      </article>
+
+    </main>
+
+    <!-- 底部真实悬浮 InputBar (带渐变消融毛玻璃) -->
+    <div class="bottom-input-container">
+      <div class="input-bar-inner">
+        <!-- 媒体按钮 -->
+        <div class="media-buttons">
+          <button class="icon-btn" title="相机">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+              <circle cx="12" cy="13" r="4"/>
+            </svg>
+          </button>
+          <button class="icon-btn" title="相册">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+              <circle cx="8.5" cy="8.5" r="1.5"/>
+              <polyline points="21 15 16 10 5 21"/>
+            </svg>
+          </button>
+        </div>
+
+        <!-- 输入胶囊 -->
+        <div class="input-capsule">
+          <input type="text" id="userInput" placeholder="Describe your moment or thought…" onkeydown="handleInputKey(event)" />
+          <button class="send-btn" id="sendBtn" onclick="handleSend()">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M12 19V5M5 12l7-7 7 7"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Home Indicator 条 -->
+      <div class="home-indicator"></div>
+    </div>
+
+  </div>
+
+  <script>
+    // 1. Passage 长文折叠/展开交互
+    let isPassageExpanded = false;
+    function togglePassage() {
+      isPassageExpanded = !isPassageExpanded;
+      const hiddenLines = document.querySelectorAll('.passage-row.hidden-line');
+      const btn = document.getElementById('expandBtn');
+
+      hiddenLines.forEach(line => {
+        line.style.display = isPassageExpanded ? 'flex' : 'none';
+      });
+
+      if (isPassageExpanded) {
+        btn.innerHTML = `
+          <span>Collapse</span>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M18 15l-6-6-6 6"/>
+          </svg>
+        `;
+      } else {
+        btn.innerHTML = `
+          <span>Expand full text</span>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M6 9l6 6 6-6"/>
+          </svg>
+        `;
+      }
+    }
+
+    // 2. 交互发送体验 (追加新气泡与卡片)
+    function handleInputKey(e) {
+      if (e.key === 'Enter') {
+        handleSend();
+      }
+    }
+
+    function handleSend() {
+      const input = document.getElementById('userInput');
+      const text = input.value.trim();
+      if (!text) return;
+
+      const scrollArea = document.getElementById('timelineScroll');
+
+      // 创建用户气泡
+      const userBubble = document.createElement('div');
+      userBubble.className = 'user-bubble-row animate-in';
+      userBubble.innerHTML = `<div class="user-text-bubble">${escapeHtml(text)}</div>`;
+      scrollArea.appendChild(userBubble);
+
+      // 清空输入框
+      input.value = '';
+
+      // 平滑滚动到底部
+      scrollToBottom();
+
+      // 模拟 600ms 后 AI 回复一张 Polish 卡片
+      setTimeout(() => {
+        const aiCard = document.createElement('article');
+        aiCard.className = 'ai-card animate-in';
+        aiCard.innerHTML = `
+          <span class="card-type-chip">Sentence</span>
+          <div class="original-weakened">
+            <div class="original-weakened-en">${escapeHtml(text)}</div>
+          </div>
+          <div class="polish-block">
+            <div class="section-label">Polish</div>
+            <div class="serif-hero">Sounds like you’re making great progress in daily practice.</div>
+            <div class="chinese-body" style="color: var(--text-muted); margin-top: 3px;">看来你在日常练习中进步很快。</div>
+          </div>
+          <div class="note-block">
+            <div class="section-label">Note</div>
+            <div class="chinese-body">在生产环境中，系统将自动进行语法意图提取与 lemma 词干入账。</div>
+          </div>
+        `;
+        scrollArea.appendChild(aiCard);
+        scrollToBottom();
+      }, 650);
+    }
+
+    function scrollToBottom() {
+      const scrollArea = document.getElementById('timelineScroll');
+      setTimeout(() => {
+        scrollArea.scrollTop = scrollArea.scrollHeight;
+      }, 50);
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+  </script>
+</body>
+</html>

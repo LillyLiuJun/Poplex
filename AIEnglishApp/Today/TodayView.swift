@@ -5,7 +5,6 @@ import SwiftUI
 @MainActor
 struct TodayView: View {
     @State private var viewModel = TodayViewModel(service: LiveAIService())
-    @State private var inputText = ""
     /// 时间线末尾的 0 高锚点是否在视口内 → 用户是否处于（或接近）底部。
     /// 被动对齐时只在底部跟随滚动；用户在阅读中部内容时不被拽走。
     @State private var atBottomVisible = false
@@ -41,7 +40,7 @@ struct TodayView: View {
             // 内容向下滚动穿过时溶入暖纸底色而非虚化——当前是纯色渐变，不含模糊/失焦（那是方案 B
             // 真·可变模糊要做的事，见 VariableBlurBackdrop 类型注释）。
             InputBar(
-                text: $inputText,
+                text: $vm.inputText,
                 image: $vm.pendingImage,
                 isLoading: viewModel.isLoading,
                 // 达标态 = 服务端明确裁决过「不允许」（429 或 refresh）。
@@ -53,9 +52,7 @@ struct TodayView: View {
                 dailyLimit: quotaStore.dailyLimit ?? 5,
                 onLimitTap: onOpenUsageLimit
             ) {
-                let toSend = inputText
-                inputText = ""
-                Task { await viewModel.send(toSend) }
+                Task { await viewModel.send() }
             }
             .onGeometryChange(for: CGFloat.self) { proxy in
                 proxy.size.height

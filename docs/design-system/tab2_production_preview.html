@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Tab2 解锁态全真交互原型 (3大核心板块：Hero / More / Topics)</title>
+
+  <!-- Google Fonts: 目标出版物衬线 Newsreader + JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    /* =====================================================================
+       1. Design Tokens (100% 严格对齐 Theme.swift 生产源码)
+       ===================================================================== */
+    :root {
+      /* 页面与卡片材质 (Warm Paper) */
+      --page-bg: #FCF8F3;         /* Primitive.neutral50: 暖米色纸面 */
+      --card-bg: #FFFDFB;         /* Primitive.warmWhite: 近白暖卡片 */
+      --card-glass: rgba(255, 253, 251, 0.88); /* warmGlassSurface */
+      --row-hover-bg: #F5EFE6;
+      --bubble-user-bg: #F0EDE6;  /* Primitive.neutral100 */
+
+      /* 纸墨文字阶梯 (全部 >= 4.5:1 AA 合规) */
+      --text-primary: #211811;    /* Primitive.neutral900: 品牌染色近黑 17.2:1 */
+      --text-secondary: #4B4640;  /* Primitive.neutral700: 次要正文 9.9:1 */
+      --text-muted: #7C7773;      /* Primitive.neutral500: 标注/词性/小标 4.4:1 */
+      --text-faint: #C7C3BD;      /* Primitive.neutral300: 极弱发丝文字 */
+
+      /* 品牌色阶梯 */
+      --brand-strong: #FF7622;    /* 满饱和品牌橙 (进度满格/重点点亮) */
+      --brand-ink: #C2410C;       /* Primitive.primaryDeep: 橙文字唯一出口 */
+      --brand-amber: #9E4A1C;     /* 深琥珀老墨 (Poplex 品牌收尾) */
+
+      /* 几何间距与圆角 */
+      --space-xs: 4px;
+      --space-s: 8px;
+      --space-m: 12px;
+      --space-card: 16px;
+      --space-page: 20px;
+      --space-section: 28px;      /* paddingBetweenSections */
+
+      --radius-s: 8px;
+      --radius-m: 14px;
+      --radius-large: 20px;       /* AppTheme.Radius.large */
+      --radius-pill: 9999px;
+
+      /* 边框与发丝线 */
+      --border-hairline: 0.5px solid rgba(230, 225, 218, 0.45);
+      --card-border: 0.5px solid rgba(230, 225, 218, 0.35);
+      --divider-line: 0.5px solid rgba(124, 119, 115, 0.12);
+
+      /* 生产微呼吸双层阴影 (AppTheme.Shadow.cardShadow) */
+      --card-shadow: 
+        0 1.5px 4px rgba(33, 24, 17, 0.035),
+        0 4px 8px rgba(46, 40, 32, 0.025);
+      
+      --row-shadow:
+        0 1px 3px rgba(33, 24, 17, 0.03),
+        0 3px 6px rgba(46, 40, 32, 0.02);
+
+      /* 字族 */
+      --font-serif: 'Newsreader', 'New York', Georgia, serif;
+      --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "PingFang SC", "Hiragino Sans GB", sans-serif;
+      --font-mono: 'SF Mono', 'JetBrains Mono', Menlo, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background-color: #121214;
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      padding: 24px 12px;
+    }
+
+    /* 顶部调试工具栏 */
+    .top-toolbar {
+      width: 100%;
+      max-width: 412px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+      padding: 0 4px;
+      color: #9296A1;
+      font-size: 12px;
+    }
+    .top-toolbar .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255, 255, 255, 0.08);
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-weight: 500;
+    }
+    .top-toolbar .badge::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #FF7622;
+    }
+
+    /* 手机外壳容器 (393 × 852) */
+    .device-viewport {
+      width: 100%;
+      max-width: 393px;
+      height: 844px;
+      background-color: var(--page-bg);
+      border-radius: 46px;
+      overflow: hidden;
+      position: relative;
+      box-shadow: 
+        0 0 0 10px #26272B,
+        0 0 0 11px rgba(255, 255, 255, 0.1),
+        0 24px 60px rgba(0, 0, 0, 0.6);
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* 状态栏 */
+    .status-bar {
+      height: 48px;
+      padding: 0 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+      z-index: 50;
+      flex-shrink: 0;
+    }
+    .dynamic-island {
+      width: 110px;
+      height: 28px;
+      background: #000;
+      border-radius: 20px;
+      margin: 0 auto;
+    }
+
+    /* 顶栏 Tab 导航 (Today vs Practice) */
+    .app-header {
+      padding: 4px 20px 10px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 40;
+      flex-shrink: 0;
+    }
+    .tab-pill {
+      display: inline-flex;
+      background: rgba(230, 225, 218, 0.4);
+      padding: 3px;
+      border-radius: var(--radius-pill);
+      border: var(--border-hairline);
+    }
+    .tab-btn {
+      padding: 5px 18px;
+      border-radius: var(--radius-pill);
+      border: none;
+      font-size: 13.5px;
+      font-weight: 500;
+      background: transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .tab-btn.active {
+      background: #FFF;
+      color: var(--text-primary);
+      box-shadow: 0 1px 3px rgba(33, 24, 17, 0.08);
+      font-weight: 600;
+    }
+
+    /* Tab2 解锁态主体滚动区 */
+    .tab2-scroll {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px 0 60px;
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-section);
+      scroll-behavior: smooth;
+    }
+    .tab2-scroll::-webkit-scrollbar {
+      display: none;
+    }
+
+    /* 分区小标题 (AppTheme.Font.sectionTitleSerif) */
+    .section-title-serif {
+      font-family: var(--font-serif);
+      font-size: 22px;
+      font-weight: 600;
+      letter-spacing: -0.015em;
+      color: var(--text-primary);
+      padding: 0 var(--space-page);
+      margin-bottom: 12px;
+    }
+
+    /* =====================================================================
+       板块 1: Talk about today (Tab2HeroCard 生产对齐)
+       ===================================================================== */
+    .hero-section {
+      padding: 0 var(--space-page);
+    }
+    .hero-card {
+      background: var(--card-bg);
+      border: var(--card-border);
+      border-radius: var(--radius-large);
+      box-shadow: var(--card-shadow);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .hero-card:active {
+      transform: scale(0.985);
+    }
+    
+    /* 顶部拼贴图区 (HeroCollageView) */
+    .hero-top-art {
+      height: 180px;
+      background: #E8DFD3;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero-top-art svg {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    /* 悬浮在图上的标签胶囊 */
+    .hero-art-badges {
+      position: absolute;
+      bottom: 12px;
+      left: 14px;
+      right: 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .hero-category-chip {
+      background: rgba(23, 18, 12, 0.72);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      color: #FFF;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 4px 10px;
+      border-radius: var(--radius-pill);
+    }
+    .hero-pops-badge {
+      background: rgba(255, 255, 255, 0.88);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      color: var(--text-primary);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 9px;
+      border-radius: var(--radius-pill);
+    }
+
+    /* 底部内容区 */
+    .hero-bottom-content {
+      padding: 16px var(--space-card);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .hero-sentence {
+      font-family: var(--font-serif);
+      font-size: 18px;
+      font-weight: 600;
+      line-height: 1.38;
+      color: var(--text-primary);
+      letter-spacing: -0.01em;
+    }
+    .hero-footnote {
+      font-size: 13.5px;
+      color: var(--text-muted);
+      line-height: 1.4;
+      margin-top: 3px;
+    }
+    .hero-meta-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 4px;
+    }
+    .hero-meta-text {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+    .hero-cta-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--text-primary);
+      color: #FFF;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 7px 16px;
+      border-radius: var(--radius-pill);
+      box-shadow: 0 2px 6px rgba(33, 24, 17, 0.18);
+    }
+
+    /* =====================================================================
+       板块 2: More to talk about (Tab2MomentRow 生产对齐)
+       ===================================================================== */
+    .more-section {
+      display: flex;
+      flex-direction: column;
+    }
+    .more-rows-list {
+      padding: 0 var(--space-page);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .moment-row {
+      background: var(--card-bg);
+      border: var(--card-border);
+      border-radius: var(--radius-m);
+      box-shadow: var(--row-shadow);
+      display: flex;
+      align-items: center;
+      overflow: hidden;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.12s;
+    }
+    .moment-row:hover {
+      background: var(--row-hover-bg);
+    }
+    .moment-row:active {
+      transform: scale(0.99);
+    }
+    .moment-thumb {
+      width: 76px;
+      height: 82px;
+      flex-shrink: 0;
+      background: #E5DDD0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .moment-thumb svg {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .moment-info {
+      flex: 1;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      min-width: 0;
+    }
+    .moment-category-line {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .moment-cat-name {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+    }
+    .moment-pops {
+      font-size: 10.5px;
+      color: var(--brand-ink);
+      font-weight: 600;
+    }
+    .moment-sentence {
+      font-family: var(--font-serif);
+      font-size: 15px;
+      font-weight: 500;
+      line-height: 1.35;
+      color: var(--text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .moment-meta {
+      font-size: 11px;
+      color: var(--text-faint);
+    }
+    .moment-arrow {
+      padding-right: 14px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+    }
+
+    /* =====================================================================
+       板块 3: Topics in progress (CategoryProgressRow 手风琴生产对齐)
+       ===================================================================== */
+    .topics-section {
+      display: flex;
+      flex-direction: column;
+    }
+    .topics-container-card {
+      margin: 0 var(--space-page);
+      background: var(--card-bg);
+      border: var(--card-border);
+      border-radius: var(--radius-large);
+      box-shadow: var(--card-shadow);
+      padding: 6px 0;
+      overflow: hidden;
+    }
+    .topic-item {
+      display: flex;
+      flex-direction: column;
+      border-bottom: var(--divider-line);
+      transition: background 0.15s;
+    }
+    .topic-item:last-child {
+      border-bottom: none;
+    }
+    
+    /* 折叠态触发栏 */
+    .topic-header-toggle {
+      padding: 14px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .topic-header-toggle:active {
+      background: rgba(230, 225, 218, 0.4);
+    }
+    .topic-top-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .topic-name {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+    .topic-stats-chevron {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .topic-counter {
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+    .topic-counter.hot {
+      color: var(--brand-strong);
+    }
+    .topic-chevron {
+      color: var(--text-muted);
+      transition: transform 0.2s ease;
+    }
+    .topic-item.open .topic-chevron {
+      transform: rotate(180deg);
+    }
+
+    /* 进度条 (Progress Track) */
+    .progress-track {
+      height: 4.5px;
+      background: rgba(230, 225, 218, 0.7);
+      border-radius: 3px;
+      overflow: hidden;
+      width: 100%;
+    }
+    .progress-fill {
+      height: 100%;
+      background: var(--brand-strong);
+      border-radius: 3px;
+      transition: width 0.4s ease;
+    }
+    .progress-fill.muted {
+      background: #A5A099;
+    }
+
+    /* 手风琴展开的单词列表 (wordList) */
+    .topic-wordlist {
+      display: none;
+      padding: 4px 18px 14px;
+      background: rgba(252, 248, 243, 0.6);
+      border-top: 0.5px solid rgba(230, 225, 218, 0.5);
+    }
+    .topic-item.open .topic-wordlist {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .mini-word-row {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      padding: 4px 0;
+      border-bottom: 0.5px dashed rgba(230, 225, 218, 0.6);
+    }
+    .mini-word-row:last-child {
+      border-bottom: none;
+    }
+    .mini-word-en {
+      font-family: var(--font-serif);
+      font-size: 15.5px;
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+    .mini-word-phonetic {
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      color: var(--text-muted);
+      margin-left: 6px;
+    }
+    .mini-word-zh {
+      font-size: 12.5px;
+      color: var(--text-secondary);
+      text-align: right;
+    }
+
+    /* 页面收尾宣言 (footerSignoff) */
+    .footer-signoff {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 38px 0 24px;
+      gap: 6px;
+      position: relative;
+    }
+    .footer-signoff::before {
+      content: "";
+      position: absolute;
+      top: 14px;
+      width: 140px;
+      height: 50px;
+      background: radial-gradient(ellipse at center, rgba(255, 118, 34, 0.08) 0%, rgba(255, 118, 34, 0) 70%);
+      pointer-events: none;
+    }
+    .footer-wordmark {
+      font-family: var(--font-serif);
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--brand-amber);
+      opacity: 0.55;
+      letter-spacing: 0.05em;
+    }
+    .footer-tagline {
+      font-size: 11.5px;
+      color: var(--brand-amber);
+      opacity: 0.45;
+      letter-spacing: 0.02em;
+    }
+
+    /* Toast 提示 */
+    .demo-toast {
+      position: absolute;
+      top: 64px;
+      left: 20px;
+      right: 20px;
+      background: #211811;
+      color: #FFF;
+      padding: 12px 16px;
+      border-radius: 12px;
+      font-size: 13.5px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      z-index: 100;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+      opacity: 0;
+      transform: translateY(-8px);
+      transition: all 0.25s ease;
+      pointer-events: none;
+    }
+    .demo-toast.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 顶部信息 -->
+  <div class="top-toolbar">
+    <div class="badge">Tab2 Unlocked (线上真实3大板块：Hero / More / Topics)</div>
+    <div style="color: #9296A1; font-size: 11.5px;">支持手风琴展开与对话</div>
+  </div>
+
+  <!-- 手机外壳容器 -->
+  <div class="device-viewport">
+
+    <!-- 状态栏 -->
+    <div class="status-bar">
+      <span>9:41</span>
+      <div class="dynamic-island"></div>
+      <div style="display: flex; gap: 4px; align-items: center;">
+        <svg width="15" height="11" viewBox="0 0 15 11" fill="currentColor">
+          <path d="M1 9h2v2H1zm4-3h2v5H5zm4-3h2v8H9zm4-3h2v11h-2z"/>
+        </svg>
+        <svg width="15" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="2" y="7" width="18" height="10" rx="2" ry="2"/>
+          <path d="M22 11v2"/>
+        </svg>
+      </div>
+    </div>
+
+    <!-- 顶栏 Tab 导航 -->
+    <header class="app-header">
+      <div class="tab-pill">
+        <button class="tab-btn" onclick="goToTab1()">Today</button>
+        <button class="tab-btn active">Practice</button>
+      </div>
+    </header>
+
+    <!-- Tab2 主内容滚动区 -->
+    <main class="tab2-scroll">
+
+      <!-- =====================================================================
+           板块 1: Talk about today (Hero 大卡片)
+           ===================================================================== -->
+      <section class="hero-section">
+        <div class="section-title-serif" style="padding: 0 0 12px 0;">Talk about today</div>
+        
+        <article class="hero-card" onclick="triggerTalk('Work & Meetings')">
+          <!-- 顶部照片 / 拼贴画 -->
+          <div class="hero-top-art">
+            <!-- 纯代码矢量会议/工作笔记本场景图 -->
+            <svg viewBox="0 0 353 180" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect width="353" height="180" fill="#DDD5C7"/>
+              <!-- 笔记本与桌面 -->
+              <rect x="40" y="24" width="273" height="170" rx="8" fill="#FFFDFB" opacity="0.95"/>
+              <line x1="80" y1="56" x2="270" y2="56" stroke="#E6E1DA" stroke-width="2"/>
+              <line x1="80" y1="76" x2="240" y2="76" stroke="#E6E1DA" stroke-width="2"/>
+              <line x1="80" y1="96" x2="260" y2="96" stroke="#E6E1DA" stroke-width="2"/>
+              <line x1="80" y1="116" x2="190" y2="116" stroke="#E6E1DA" stroke-width="2"/>
+              <!-- 咖啡杯影子与杯身 -->
+              <circle cx="280" cy="130" r="32" fill="#C9BEAE" opacity="0.5"/>
+              <circle cx="278" cy="128" r="28" fill="#F0EDE6"/>
+              <circle cx="278" cy="128" r="22" fill="#754B2C"/>
+              <circle cx="278" cy="128" r="14" fill="#FAF6F0"/>
+            </svg>
+            
+            <div class="hero-art-badges">
+              <span class="hero-category-chip">Work & Meetings</span>
+              <span class="hero-pops-badge">16 words</span>
+            </div>
+          </div>
+
+          <!-- 底部话题文案与按钮 -->
+          <div class="hero-bottom-content">
+            <div>
+              <div class="hero-sentence">“I’m completely snowed under with meetings today.”</div>
+              <div class="hero-footnote">我今天被各种会议彻底淹没了，精疲力竭。</div>
+            </div>
+
+            <div class="hero-meta-row">
+              <span class="hero-meta-text">Weekly Sync · +3 more moments</span>
+              <div class="hero-cta-pill">
+                <span>Start talking</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <path d="M5 12h14M12 5l7 7-7 7"/>
+                </svg>
+              </div>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <!-- =====================================================================
+           板块 2: More to talk about (推荐话题行列表)
+           ===================================================================== -->
+      <section class="more-section">
+        <div class="section-title-serif">More to talk about</div>
+
+        <div class="more-rows-list">
+          
+          <!-- 行 1: Coffee & Life -->
+          <div class="moment-row" onclick="triggerTalk('Coffee & Life')">
+            <div class="moment-thumb">
+              <svg viewBox="0 0 76 82" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect width="76" height="82" fill="#E8DFD3"/>
+                <circle cx="38" cy="41" r="24" fill="#FAF6F0"/>
+                <circle cx="38" cy="41" r="16" fill="#754B2C"/>
+                <circle cx="38" cy="41" r="9" fill="#FAF6F0"/>
+              </svg>
+            </div>
+            <div class="moment-info">
+              <div class="moment-category-line">
+                <span class="moment-cat-name">Coffee & Life</span>
+                <span class="moment-pops">8 words</span>
+              </div>
+              <div class="moment-sentence">“Could I get an oat milk latte with an extra shot?”</div>
+              <div class="moment-meta">Cafe Visit · +2 more moments</div>
+            </div>
+            <div class="moment-arrow">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M9 18l6-6-6-6"/>
+              </svg>
+            </div>
+          </div>
+
+          <!-- 行 2: Daily Commute -->
+          <div class="moment-row" onclick="triggerTalk('Daily Commute')">
+            <div class="moment-thumb">
+              <svg viewBox="0 0 76 82" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect width="76" height="82" fill="#DED7CB"/>
+                <rect x="18" y="24" width="40" height="34" rx="6" fill="#FFFDFB"/>
+                <circle cx="28" cy="62" r="4" fill="#7C7773"/>
+                <circle cx="48" cy="62" r="4" fill="#7C7773"/>
+                <line x1="24" y1="36" x2="52" y2="36" stroke="#C7C3BD" stroke-width="2"/>
+              </svg>
+            </div>
+            <div class="moment-info">
+              <div class="moment-category-line">
+                <span class="moment-cat-name">Daily Commute</span>
+                <span class="moment-pops">5 words</span>
+              </div>
+              <div class="moment-sentence">“Running a bit late, traffic is heavier than usual.”</div>
+              <div class="moment-meta">Morning Subway · No more moments</div>
+            </div>
+            <div class="moment-arrow">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M9 18l6-6-6-6"/>
+              </svg>
+            </div>
+          </div>
+
+          <!-- 行 3: Dining Out -->
+          <div class="moment-row" onclick="triggerTalk('Dining Out')">
+            <div class="moment-thumb">
+              <svg viewBox="0 0 76 82" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect width="76" height="82" fill="#E2DACD"/>
+                <circle cx="38" cy="41" r="22" stroke="#FFFDFB" stroke-width="3" fill="none"/>
+                <line x1="26" y1="32" x2="26" y2="50" stroke="#FFFDFB" stroke-width="2"/>
+                <line x1="50" y1="32" x2="50" y2="50" stroke="#FFFDFB" stroke-width="2"/>
+              </svg>
+            </div>
+            <div class="moment-info">
+              <div class="moment-category-line">
+                <span class="moment-cat-name">Dining Out</span>
+                <span class="moment-pops">11 words</span>
+              </div>
+              <div class="moment-sentence">“A quiet table for two outside, please.”</div>
+              <div class="moment-meta">Dinner Date · +1 more moment</div>
+            </div>
+            <div class="moment-arrow">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M9 18l6-6-6-6"/>
+              </svg>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- =====================================================================
+           板块 3: Topics in progress (手风琴列表容器)
+           ===================================================================== */
+      <section class="topics-section">
+        <div class="section-title-serif">Topics in progress</div>
+
+        <div class="topics-container-card">
+          
+          <!-- 手风琴项 1: Casual Chat (默认展开示范) -->
+          <div class="topic-item open" id="topic1">
+            <div class="topic-header-toggle" onclick="toggleTopic('topic1')">
+              <div class="topic-top-row">
+                <span class="topic-name">Casual Chat</span>
+                <div class="topic-stats-chevron">
+                  <span class="topic-counter hot">14/20 words</span>
+                  <svg class="topic-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M6 9l6 6 6-6"/>
+                  </svg>
+                </div>
+              </div>
+              <!-- 进度条 -->
+              <div class="progress-track">
+                <div class="progress-fill" style="width: 70%;"></div>
+              </div>
+            </div>
+
+            <!-- 展开的单词列表 (wordList) -->
+            <div class="topic-wordlist">
+              <div class="mini-word-row">
+                <div>
+                  <span class="mini-word-en">set up</span>
+                  <span class="mini-word-phonetic">/set ʌp/</span>
+                </div>
+                <div class="mini-word-zh">安排；布置</div>
+              </div>
+              <div class="mini-word-row">
+                <div>
+                  <span class="mini-word-en">wrap up</span>
+                  <span class="mini-word-phonetic">/ræp ʌp/</span>
+                </div>
+                <div class="mini-word-zh">顺利收尾</div>
+              </div>
+              <div class="mini-word-row">
+                <div>
+                  <span class="mini-word-en">head out</span>
+                  <span class="mini-word-phonetic">/hed aʊt/</span>
+                </div>
+                <div class="mini-word-zh">出门出发</div>
+              </div>
+              <div class="mini-word-row">
+                <div>
+                  <span class="mini-word-en">catch up</span>
+                  <span class="mini-word-phonetic">/kætʃ ʌp/</span>
+                </div>
+                <div class="mini-word-zh">叙旧；赶上进度</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 手风琴项 2: Travel & Transit -->
+          <div class="topic-item" id="topic2">
+            <div class="topic-header-toggle" onclick="toggleTopic('topic2')">
+              <div class="topic-top-row">
+                <span class="topic-name">Travel & Transit</span>
+                <div class="topic-stats-chevron">
+                  <span class="topic-counter">7/20 words</span>
+                  <svg class="topic-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M6 9l6 6 6-6"/>
+                  </svg>
+                </div>
+              </div>
+              <div class="progress-track">
+                <div class="progress-fill muted" style="width: 35%;"></div>
+              </div>
+            </div>
+
+            <div class="topic-wordlist">
+              <div class="mini-word-row">
+                <div>
+                  <span class="mini-word-en">boarding pass</span>
+                  <span class="mini-word-phonetic">/ˈbɔːrdɪŋ pæs/</span>
+                </div>
+                <div class="mini-word-zh">登机牌</div>
+              </div>
+              <div class="mini-word-row">
+                <div>
+                  <span class="mini-word-en">layover</span>
+                  <span class="mini-word-phonetic">/ˈleɪoʊvər/</span>
+                </div>
+                <div class="mini-word-zh">中途停留</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 手风琴项 3: Health & Fitness -->
+          <div class="topic-item" id="topic3">
+            <div class="topic-header-toggle" onclick="toggleTopic('topic3')">
+              <div class="topic-top-row">
+                <span class="topic-name">Health & Fitness</span>
+                <div class="topic-stats-chevron">
+                  <span class="topic-counter">4/20 words</span>
+                  <svg class="topic-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M6 9l6 6 6-6"/>
+                  </svg>
+                </div>
+              </div>
+              <div class="progress-track">
+                <div class="progress-fill muted" style="width: 20%;"></div>
+              </div>
+            </div>
+
+            <div class="topic-wordlist">
+              <div class="mini-word-row">
+                <div>
+                  <span class="mini-word-en">burnout</span>
+                  <span class="mini-word-phonetic">/ˈbɜːrnaʊt/</span>
+                </div>
+                <div class="mini-word-zh">极度疲惫</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- 页面收尾印记 (footerSignoff) -->
+      <footer class="footer-signoff">
+        <div class="footer-wordmark">Poplex.</div>
+        <div class="footer-tagline">English from your everyday life.</div>
+      </footer>
+
+    </main>
+
+    <!-- 弹窗反馈提示 -->
+    <div class="demo-toast" id="demoToast">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FF7622" stroke-width="2.5">
+        <circle cx="12" cy="12" r="10"/>
+        <polyline points="12 6 12 12 16 14"/>
+      </svg>
+      <div id="toastMessage">已进入该主题练习</div>
+    </div>
+
+  </div>
+
+  <script>
+    // 1. 手风琴展开与收起 (单开手风琴逻辑，同 MineView.swift)
+    function toggleTopic(id) {
+      const target = document.getElementById(id);
+      const isAlreadyOpen = target.classList.contains('open');
+
+      // 关闭全部
+      document.querySelectorAll('.topic-item').forEach(item => {
+        item.classList.remove('open');
+      });
+
+      // 如果点击的原来没开，则展开它
+      if (!isAlreadyOpen) {
+        target.classList.add('open');
+      }
+    }
+
+    // 2. 点击发起对话
+    function triggerTalk(category) {
+      const toast = document.getElementById('demoToast');
+      const msg = document.getElementById('toastMessage');
+      msg.textContent = `已载入【${category}】生活切片，正在进入练习…`;
+      toast.classList.add('show');
+      setTimeout(() => {
+        toast.classList.remove('show');
+      }, 2200);
+    }
+
+    // 3. 顶部 Tab 切换回 Tab1
+    function goToTab1() {
+      window.location.href = "tab1_production_preview.html";
+    }
+  </script>
+</body>
+</html>

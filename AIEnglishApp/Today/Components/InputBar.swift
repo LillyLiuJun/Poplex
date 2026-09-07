@@ -7,21 +7,6 @@ private enum RightButtonMode: Equatable {
     case locked
 }
 
-// Measures the actual rendered width of the capsule's input row.
-private struct RowWidthKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = max(value, nextValue())
-    }
-}
-
-// Measures the single-line width of the current text string.
-private struct TextWidthKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = max(value, nextValue())
-    }
-}
 
 /// 达到额度限制时的内联微横幅（温润极简：暖纸卡片底 + 衬线小字 + 品牌点缀）
 struct InputBarLimitBanner: View {
@@ -85,36 +70,90 @@ struct InputBar: View {
     @State private var showCameraPermissionAlert = false
     @State private var stagedImage: UIImage?
     @State private var showAttachmentMenu = false
-    // Drives press feedback on the thumbnail's delete icon — it can't be a
-    // `Button` (see thumbnailRow), so there's no ButtonStyle to supply
-    // isPressed for free; this stands in for it.
-    @State private var isDeleteIconPressed = false
+    // Drives press feedback on the thumbnail's delete icon — @GestureState guarantees
+    // automatic reset even if the gesture is interrupted by scrolling or system gestures.
+    @GestureState private var isDeleteIconPressed = false
 
     // Layout measurement state
     @State private var rowWidth: CGFloat = 0
     @State private var measuredTextWidth: CGFloat = 0
-    // Tracks whether the keyboard was open so we can re-focus after layout switch.
-    @State private var wasKeyboardOpen = false
+    // Layout switch state: whether the bar is currently expanded to multi-line layout.
+    // Uses hysteresis deadband to prevent rapid single/multi-line flickering when text
+    // length oscillates around the threshold.
+    @State private var isMultiLine: Bool = false
+    // Tracks whether multi-line expansion was caused by text width exceeding inline available width.
+    // When true, hysteresis collapseMargin applies to prevent layout vibration.
+    // When false (e.g. expanded purely due to user pressing Return), deleting Return allows
+    // immediate collapse back to single-line without getting stuck in the 36pt deadband (F2).
+    @State private var wasExpandedByWidth: Bool = false
+
+    // Single-line fixed element padding constants, reused in buttonAreaWidth calculation to prevent desync.
+    private static let singleLineLeadingPadding = AppTheme.Space.paddingS
+    private static let singleLineTrailingPadding = AppTheme.Space.paddingS
+    private static let singleLineButtonSpacing = AppTheme.Space.paddingXS
+
+    // Hysteresis deadband: when collapsing from 2-row to 1-row, text width must drop
+    // noticeably below the expansion threshold (by approx. 2 characters / 36pt scaled with Dynamic Type)
+    // to prevent layout hunting/flickering around the single-line boundary.
+    @ScaledMetric(relativeTo: .body) private var collapseMargin: CGFloat = 36
 
     // Total horizontal space consumed by fixed elements in single-line row:
     // leading-padding + plus-button + right-button + right-button's own
-    // leading/trailing padding (asymmetric — pulled a bit further off the
-    // trailing edge than off the text field, see rightCircleButton's padding).
+    // leading/trailing padding.
     private let buttonAreaWidth: CGFloat =
-        AppTheme.Space.paddingS +
+        singleLineLeadingPadding +
         AppTheme.Size.barControl +
         AppTheme.Size.inputBarActionControl +
-        AppTheme.Space.paddingXS +
-        AppTheme.Space.paddingS
+        singleLineButtonSpacing +
+        singleLineTrailingPadding
 
     private var availableInlineWidth: CGFloat {
         max(0, rowWidth - buttonAreaWidth)
     }
 
-    // Switches to two-row layout the moment text would overflow the inline zone.
-    private var isMultiLine: Bool {
-        guard availableInlineWidth > 0, !text.isEmpty else { return false }
-        return measuredTextWidth > availableInlineWidth
+    private func recomputeMultiLine() {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        // #2: Pure whitespace/newlines should never expand to multi-line.
+        if trimmed.isEmpty {
+            if isMultiLine { isMultiLine = false }
+            wasExpandedByWidth = false
+            return
+        }
+        // #10: Support all Unicode newlines (e.g. \r, \n, U+2028).
+        if text.contains(where: \.isNewline) {
+            if !isMultiLine { isMultiLine = true }
+            return
+        }
+        guard availableInlineWidth > 0 else { return }
+
+        // F4: If exiting a newline state where measuredTextWidth hasn't been measured yet,
+        // preserve current multi-line state to prevent false single-line collapse flicker.
+        if isMultiLine && measuredTextWidth == 0 {
+            // 刚出换行态、扩张原因未知：清除 wasExpandedByWidth 锁存，等 overlay 测出
+            // 真实宽度后由 147-149 行按实测宽度重定。否则宽度溢出历史会让删 Return
+            // 后的塌缩误套 36pt 死区（F2 在溢出路径下永久失效，见第三轮复审 #1）。
+            wasExpandedByWidth = false
+            return
+        }
+
+        // F2: If multi-line expansion was caused by text width, apply the collapseMargin
+        // (hysteresis) to prevent layout hunting. If expanded by Return, collapse immediately
+        // when text fits without requiring the 36pt deadband.
+        let threshold = (isMultiLine && wasExpandedByWidth)
+            ? max(0, availableInlineWidth - collapseMargin)
+            : availableInlineWidth
+
+        let nextState = measuredTextWidth > threshold
+        if isMultiLine != nextState {
+            isMultiLine = nextState
+        }
+        if isMultiLine {
+            if measuredTextWidth > availableInlineWidth {
+                wasExpandedByWidth = true
+            }
+        } else {
+            wasExpandedByWidth = false
+        }
     }
 
     // MARK: - Derived state
@@ -157,7 +196,6 @@ struct InputBar: View {
         }
         .padding(.bottom, AppTheme.Space.paddingS)
         .onChange(of: isFocused) { _, focused in
-            wasKeyboardOpen = focused
             if focused {
                 withAnimation(.easeOut(duration: 0.18)) { showAttachmentMenu = false }
             }
@@ -200,77 +238,97 @@ struct InputBar: View {
     }
 
     // MARK: - Input row (layout switches based on text width)
-
+    //
+    // Single-line: [+]  [TextField]  [●]
+    // Multi-line:  [TextField — full width]
+    //              [+]      [spacer]      [●]
+    //
+    // `textField` is written ONCE, at a fixed slot inside the top HStack, and is never
+    // itself wrapped in an if/else across the whole subtree. Only its neighbors
+    // (plusButton / rightCircleButton) are conditionally included, and the second row
+    // is conditionally added below. This keeps the TextField's parent/position
+    // structurally identical across the single↔multi-line switch — previously the two
+    // modes were entirely separate HStack/VStack subtrees, and swapping between them
+    // could transiently drop the field's first-responder status, which iOS resolves by
+    // discarding any in-flight IME composition (a Pinyin candidate string disappearing
+    // mid-type, right as the text crossed the single-line width threshold).
     private var inputRow: some View {
-        Group {
+        VStack(spacing: 0) {
+            HStack(alignment: .center, spacing: 0) {
+                if !isMultiLine { plusButton }
+                textField
+                    .padding(.horizontal, isMultiLine ? AppTheme.Space.paddingCard : 0)
+                    // When an image sits above the text, the thumbnail already provides
+                    // visual separation — use a tighter top gap so the combined spacing
+                    // (thumbnailRow bottom 8pt + this padding) doesn't balloon to 24pt.
+                    .padding(.top, isMultiLine ? (image != nil ? AppTheme.Space.paddingS : AppTheme.Space.paddingCard) : 0)
+                    .padding(.bottom, isMultiLine ? AppTheme.Space.paddingXS : 0)
+                if !isMultiLine {
+                    rightCircleButton
+                        .padding(.vertical, AppTheme.Space.paddingXS)
+                        .padding(.leading, Self.singleLineButtonSpacing)
+                        .padding(.trailing, Self.singleLineTrailingPadding)
+                }
+            }
+            .padding(.leading, isMultiLine ? 0 : Self.singleLineLeadingPadding)
+
             if isMultiLine {
-                multiLineInputRow(hasImage: image != nil)
-            } else {
-                singleLineInputRow
+                HStack(alignment: .center, spacing: 0) {
+                    plusButton
+                    Spacer()
+                    rightCircleButton
+                        .padding(AppTheme.Space.paddingXS)
+                }
+                .padding(.leading, AppTheme.Space.paddingS)
             }
         }
-        .background(
-            GeometryReader { geo in
-                Color.clear.preference(key: RowWidthKey.self, value: geo.size.width)
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.size.width
+        } action: { width in
+            if width > 0, abs(width - rowWidth) > 0.5 {
+                rowWidth = width
+                recomputeMultiLine()
             }
-        )
+        }
         .overlay(alignment: .leading) {
-            if !text.isEmpty {
+            if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !text.contains(where: \.isNewline) {
                 Text(text)
                     .lineLimit(1)
                     .font(AppTheme.Font.englishBody)
                     .fixedSize()
                     .opacity(0)
                     .allowsHitTesting(false)
-                    .background(
-                        GeometryReader { geo in
-                            Color.clear.preference(key: TextWidthKey.self, value: geo.size.width)
+                    .onGeometryChange(for: CGFloat.self) { proxy in
+                        proxy.size.width
+                    } action: { width in
+                        if abs(width - measuredTextWidth) > 0.5 {
+                            measuredTextWidth = width
+                            recomputeMultiLine()
                         }
-                    )
+                    }
             }
         }
-        .onPreferenceChange(RowWidthKey.self) { if $0 > 0 { rowWidth = $0 } }
-        .onPreferenceChange(TextWidthKey.self) { measuredTextWidth = text.isEmpty ? 0 : $0 }
-        .onChange(of: isMultiLine) { _, _ in
-            if wasKeyboardOpen {
-                DispatchQueue.main.async { isFocused = true }
+        .onChange(of: text) { _, newText in
+            let trimmed = newText.trimmingCharacters(in: .whitespacesAndNewlines)
+            // F1: 空输入框按回车（或只含空白换行），直接重置为空，防止 TextField 自身撑出空白第二行
+            if trimmed.isEmpty && newText.contains(where: \.isNewline) {
+                text = ""
+                measuredTextWidth = 0
+                wasExpandedByWidth = false
+                recomputeMultiLine()
+                return
             }
-        }
-    }
-
-    // MARK: - Single-line layout:  [+]  [TextField]  [●]
-
-    private var singleLineInputRow: some View {
-        HStack(alignment: .center, spacing: 0) {
-            plusButton
-            textField
-            rightCircleButton
-                .padding(.vertical, AppTheme.Space.paddingXS)
-                .padding(.leading, AppTheme.Space.paddingXS)
-                .padding(.trailing, AppTheme.Space.paddingS)
-        }
-        .padding(.leading, AppTheme.Space.paddingS)
-    }
-
-    // MARK: - Multi-line layout:  [text — full width]
-    //                             [+]      [spacer]      [●]
-
-    private func multiLineInputRow(hasImage: Bool) -> some View {
-        VStack(spacing: 0) {
-            textField
-                .padding(.horizontal, AppTheme.Space.paddingCard)
-                // When an image sits above the text, the thumbnail already provides
-                // visual separation — use a tighter top gap so the combined spacing
-                // (thumbnailRow bottom 8pt + this padding) doesn't balloon to 24pt.
-                .padding(.top, hasImage ? AppTheme.Space.paddingS : AppTheme.Space.paddingCard)
-                .padding(.bottom, AppTheme.Space.paddingXS)
-            HStack(alignment: .center, spacing: 0) {
-                plusButton
-                Spacer()
-                rightCircleButton
-                    .padding(AppTheme.Space.paddingXS)
+            // F4: 纯空白或存在换行符期间重置测宽值，避免删换行时用旧的非零值引发瞬时塌缩-再展开
+            if trimmed.isEmpty || newText.contains(where: \.isNewline) {
+                measuredTextWidth = 0
+                if trimmed.isEmpty {
+                    wasExpandedByWidth = false
+                }
             }
-            .padding(.leading, AppTheme.Space.paddingS)
+            recomputeMultiLine()
+        }
+        .onAppear {
+            recomputeMultiLine()
         }
     }
 
@@ -320,14 +378,11 @@ struct InputBar: View {
                     }
             }
         }
-        // Stable identity across layout switches — prevents focus loss during the transition.
+        // Defensive: this view is now written at a single fixed slot in `inputRow`
+        // (never wrapped in its own if/else), so the id is largely belt-and-suspenders,
+        // but keeping it costs nothing and guards against a future refactor
+        // reintroducing a structural branch around this field.
         .id("input-textfield")
-        .onChange(of: text) { _, newValue in
-            if !newValue.isEmpty,
-               newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                text = ""
-            }
-        }
     }
 
     // MARK: - Right circle button  (camera ⇄ arrow.up ⇄ spinner ⇄ locked)
@@ -361,17 +416,17 @@ struct InputBar: View {
         case .loading:
             ProgressView()
                 .progressViewStyle(.circular)
-                .tint(.white)
+                .tint(AppTheme.Color.cameraControl)
                 .scaleEffect(0.77)
         case .send:
             Image(systemName: "arrow.up")
                 .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(AppTheme.Color.cameraControl)
                 .transition(.scale(scale: 0.5).combined(with: .opacity))
         case .camera:
             Image(systemName: "camera.fill")
                 .font(.system(size: 16))
-                .foregroundStyle(.white)
+                .foregroundStyle(AppTheme.Color.cameraControl)
                 .transition(.scale(scale: 0.5).combined(with: .opacity))
         case .locked:
             Image(systemName: "lock.fill")
@@ -415,7 +470,7 @@ struct InputBar: View {
             .padding(.vertical, AppTheme.Space.paddingM)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressableButtonStyle())
     }
 
     // MARK: - Thumbnail row (inside capsule, above input row)
@@ -438,10 +493,10 @@ struct InputBar: View {
                 // `.onTapGesture` instead of `Button`, both stayed clean.
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 18))
-                    .foregroundStyle(.white, Color(uiColor: .systemGray3))
+                    .foregroundStyle(AppTheme.Color.cameraControl, AppTheme.Color.cameraControlBg)
                     // Not a Button, so there's no ButtonStyle to give this
                     // press feedback for free — mirrors PressableButtonStyle's
-                    // constants by hand via the drag gesture's press state below.
+                    // constants via @GestureState's auto-resetting press state.
                     .scaleEffect(isDeleteIconPressed ? 0.92 : 1)
                     .opacity(isDeleteIconPressed ? 0.6 : 1)
                     .frame(width: 32, height: 32)
@@ -453,24 +508,12 @@ struct InputBar: View {
                     .offset(x: 8, y: -8)
                     .gesture(
                         DragGesture(minimumDistance: 0)
-                            .onChanged { _ in
-                                guard !isDeleteIconPressed else { return }
-                                withAnimation(.easeInOut(duration: 0.1)) { isDeleteIconPressed = true }
+                            .updating($isDeleteIconPressed) { _, state, _ in
+                                state = true
                             }
                             .onEnded { value in
-                                // Only counts as a tap if the finger didn't drag away —
-                                // matches Button's own cancel-on-drag-outside behavior.
-                                guard abs(value.translation.width) + abs(value.translation.height) < 10 else {
-                                    withAnimation(.easeInOut(duration: 0.1)) { isDeleteIconPressed = false }
-                                    return
-                                }
-                                // Deleting: the icon is about to leave with the row's own
-                                // removal transition. Snap the press state back instantly
-                                // (no competing animation) instead of letting the 0.1s
-                                // press-release spring fight the row's 0.2s scale/opacity
-                                // exit — running both at once reads as a slight ghosting/
-                                // double-motion flicker.
-                                isDeleteIconPressed = false
+                                // Only counts as a tap if the finger didn't drag away (10pt tolerance)
+                                guard abs(value.translation.width) + abs(value.translation.height) < 10 else { return }
                                 withAnimation(.easeOut(duration: 0.2)) { image = nil }
                             }
                     )
@@ -496,9 +539,13 @@ struct InputBar: View {
         case .granted:
             activeSheet = .camera
         case .undetermined:
-            Task {
+            Task { @MainActor in
                 if await PermissionService.requestCamera() {
-                    activeSheet = .camera
+                    if activeSheet == nil {
+                        activeSheet = .camera
+                    }
+                } else {
+                    showCameraPermissionAlert = true
                 }
             }
         case .denied:

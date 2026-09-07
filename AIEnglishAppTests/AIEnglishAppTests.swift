@@ -2226,6 +2226,14 @@ struct AIConsentGateTests {
         vm.entries.contains { if case .sendFailed = $0.content { return true }; return false }
     }
 
+    private func waitUntil(_ condition: @escaping @MainActor () -> Bool) async {
+        for _ in 0..<100 {
+            if condition() { return }
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+        Issue.record("Timed out waiting for consent gate state")
+    }
+
     /// 与 TodayViewModel.dayLabel 同逻辑的测试版副本：测试构造的日期标题
     /// 必须与注入逻辑计算的标签一致（locale 无关）。
     private func dayLabelInTest(for date: Date) -> String {
@@ -2622,26 +2630,98 @@ struct AIConsentGateTests {
         return nil
     }
 
-    // 未同意：只弹同意页 + 暂存输入，不追加气泡 / 卡片 / loading，不触发生成
+    // 未同意：只弹同意页 + 暂存输入，不追加气泡 / 卡片 / loading，不触发生成，且保留 inputText
     @Test func sendWithoutConsentShowsSheetAndSkipsGeneration() async {
         let vm = TodayViewModel(service: SuccessMock(), isConsentGranted: { false })
-        await vm.send("今天会议推迟了")
+        vm.inputText = "今天会议推迟了"
+        await vm.send()
 
         #expect(vm.showAIConsent == true)
+        #expect(vm.inputText == "今天会议推迟了")   // 防丢测试：未同意时草稿完好保留
         #expect(hasBubble(vm) == false)
         #expect(hasCard(vm) == false)
         #expect(hasLoading(vm) == false)
         #expect(vm.isLoading == false)
     }
 
-    // 已同意：门控放行，send() 照常走生成 → 气泡 + 卡片，同意页不弹
-    @Test func sendWithConsentProceedsToGeneration() async {
-        let vm = TodayViewModel(service: SuccessMock(), isConsentGranted: { true })
-        await vm.send("今天会议推迟了")
+    // 同意后自动发送并清空 inputText
+    @Test func consentAgreedSendsAndClearsInputText() async {
+        var consentGranted = false
+        let vm = TodayViewModel(service: SuccessMock(), isConsentGranted: { consentGranted })
+        vm.inputText = "今天会议推迟了"
+        await vm.send()
+
+        #expect(vm.showAIConsent == true)
+        #expect(vm.inputText == "今天会议推迟了")
+
+        consentGranted = true
+        vm.onConsentAgreed()
+        // 等待异步 send 任务落位
+        await waitUntil { hasBubble(vm) }
 
         #expect(vm.showAIConsent == false)
+        #expect(vm.inputText == "")              // 放行后输入框被清空
+        // 载荷断言：锁住「发的是谁」而不只「是否发」——气泡必须携带暂存原文
+        #expect(vm.entries.contains {
+            if case .userBubble(let t, _, _, _) = $0.content { return t == "今天会议推迟了" }
+            return false
+        })
+    }
+
+    // 外部传参（如快捷卡片）在同意后发送，不误清输入框内的用户草稿
+    @Test func consentAgreedWithExternalTextPreservesDraftInputText() async {
+        var consentGranted = false
+        let vm = TodayViewModel(service: SuccessMock(), isConsentGranted: { consentGranted })
+        vm.inputText = "未发出的草稿"
+        await vm.send("外部快捷短语")
+
+        #expect(vm.showAIConsent == true)
+        #expect(vm.inputText == "未发出的草稿")
+
+        consentGranted = true
+        vm.onConsentAgreed()
+        // 等待异步 send 任务落位
+        await waitUntil { hasBubble(vm) }
+
+        #expect(vm.showAIConsent == false)
+        #expect(vm.inputText == "未发出的草稿")   // 外部发送成功后，用户草稿完好保留
+        // 载荷断言：发出的是外部传参文本，而不是用户输入框里的半成品草稿
+        #expect(vm.entries.contains {
+            if case .userBubble(let t, _, _, _) = $0.content { return t == "外部快捷短语" }
+            return false
+        })
+        #expect(vm.entries.contains {
+            if case .userBubble(let t, _, _, _) = $0.content { return t == "未发出的草稿" }
+            return false
+        } == false)
+    }
+
+    // 已同意：门控放行，send() 照常走生成 → 气泡 + 卡片，同意页不弹，inputText 清空
+    @Test func sendWithConsentProceedsToGeneration() async {
+        let vm = TodayViewModel(service: SuccessMock(), isConsentGranted: { true })
+        vm.inputText = "今天会议推迟了"
+        await vm.send()
+
+        #expect(vm.showAIConsent == false)
+        #expect(vm.inputText == "")              // 放行后草稿清空
         #expect(hasBubble(vm) == true)
         #expect(hasCard(vm) == true)
+        #expect(vm.isLoading == false)
+    }
+
+    // 已同意 + 外部显式传参直发：发送成功且不清空用户输入框内的草稿（第三轮复审 #5：
+    // 封住未来快捷卡片调用方按直觉 send(vm.inputText) 导致的「发出但框不清 → 重复发送」）
+    @Test func sendWithConsentAndExternalTextPreservesDraftInputText() async {
+        let vm = TodayViewModel(service: SuccessMock(), isConsentGranted: { true })
+        vm.inputText = "正在打的草稿"
+        await vm.send("外部快捷短语")
+
+        #expect(vm.showAIConsent == false)
+        #expect(vm.inputText == "正在打的草稿")   // 外部直发绝不清用户草稿
+        #expect(vm.entries.contains {
+            if case .userBubble(let t, _, _, _) = $0.content { return t == "外部快捷短语" }
+            return false
+        })
         #expect(vm.isLoading == false)
     }
 

@@ -17,6 +17,8 @@ final class TodayViewModel {
     var isLoading = false
     var isLoadingHistory = false
     var pendingImage: UIImage?
+    /// 输入框草稿文本（双向绑定到 InputBar，由 ViewModel 统一管控生命周期）。
+    var inputText: String = ""
     /// 待重试记录存储（可注入，便于单测）；loadHistory 时把记录注入时间线。
     var pendingRetryStore = PendingRetryStore.shared
     /// 本地成功增量存储（可注入，便于单测）：生成成功的「气泡 + 卡片」底稿，
@@ -349,22 +351,31 @@ final class TodayViewModel {
     /// 同意后自动重发，不清空输入框以避免用户重新输入。
     var showAIConsent = false
     private var pendingSendText: String?
+    private var pendingSendIsDraft = false
 
-    func send(_ text: String) async {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    func send(_ text: String? = nil) async {
+        let rawText = text ?? inputText
+        let trimmed = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
         let image = pendingImage
         guard !trimmed.isEmpty || image != nil else { return }
 
         // 未同意 AI 数据处理 → 暂存输入、弹出同意页，不修改任何 UI 状态。
         // 同意后 onConsentAgreed() 自动重发；拒绝则清空暂存，用户可再次尝试。
         guard isConsentGranted() else {
-            pendingSendText = text
+            pendingSendText = rawText
+            pendingSendIsDraft = (text == nil)
             showAIConsent = true
             return
         }
         // 同意页关闭后若用户未同意，showAIConsent=false 但 pendingSendText 还在；
         // 下次 send 走到这里时清理掉残留。
         pendingSendText = nil
+        pendingSendIsDraft = false
+        // 只有发送输入框自身草稿（text == nil）时才清空草稿，
+        // 避免外部显式传参（如快捷卡片、推荐词条）误清用户正在输入的文字。
+        if text == nil {
+            inputText = ""
+        }
 
         hasLiveActivity = true   // 本次会话已有实时对话，后台历史刷新不得覆盖
 
@@ -395,7 +406,14 @@ final class TodayViewModel {
     func onConsentAgreed() {
         showAIConsent = false
         guard let text = pendingSendText else { return }
+        let isDraft = pendingSendIsDraft
         pendingSendText = nil
+        pendingSendIsDraft = false
+        // 只有当暂存的请求来源于输入框草稿时，才在放行时清空草稿；
+        // 若来源于外部显式传参（如快捷卡片推荐词条），则绝不误清输入框内的用户草稿。
+        if isDraft {
+            inputText = ""
+        }
         Task { await send(text) }
     }
 
