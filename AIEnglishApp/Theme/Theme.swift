@@ -209,6 +209,18 @@ enum AppTheme {
         /// 沉底操作栏按钮距离安全区底部的间距（Tab2 待解锁底栏等；与 Onboarding 具有相同数值但用途独立演化）
         static let bottomBarActionBottom: CGFloat = Primitive.space12
 
+        // ── Tab1 时间线外部间距（4pt 律，统一时间线节奏）─────────────────────────
+        // 与既有内边距 token 当前同值但**用途不同、各自演化**，保持独立语义：
+        /// 用户输入 → 对应 AI 结果 / 失败行：12pt
+        static let timelineUserToAI: CGFloat           = Primitive.space12
+        /// AI 结果 / 失败行 → 下一次输入：28pt
+        static let timelineResultToNextInput: CGFloat  = Primitive.space28
+        /// 上一组内容 → 日期胶囊：32pt
+        static let timelineContentToDate: CGFloat      = Primitive.space32
+        /// 日期胶囊 → 当天第一条输入：16pt
+        static let timelineDateToFirstInput: CGFloat   = Primitive.space16
+        /// 同次输入的图片 → 文字：8pt
+        static let timelineImageToText: CGFloat        = Primitive.space8
 
         // 区标题→内容（Topics / Materials 分区标题到其卡片的呼吸距离，统一散落字面值）
         // 与 onboardingHeaderToContent 当前同值（24）但**用途不同、各自演化**，故不合并：

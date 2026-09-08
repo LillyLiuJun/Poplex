@@ -36,7 +36,8 @@ struct PendingRetryRow: View {
     var onRetry: () -> Void
 
     var body: some View {
-        VStack(alignment: .trailing, spacing: AppTheme.Space.paddingXS) {
+        // 行内气泡到重试按钮也是「用户输入→反馈」，与外部 timelineUserToAI (12pt) 视觉规格一致
+        VStack(alignment: .trailing, spacing: AppTheme.Space.timelineUserToAI) {
             UserBubble(
                 text: "Describe this image",
                 image: PendingRetryStore.shared.photoImage(for: record),
@@ -53,7 +54,7 @@ struct PendingRetryRow: View {
                 }
                 .foregroundStyle(AppTheme.Color.danger)
                 .frame(maxWidth: .infinity, alignment: .trailing)
-                .padding(.vertical, AppTheme.Space.paddingXS)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
         }
@@ -119,7 +120,7 @@ private struct SendFailedRow: View {
             }
             .foregroundStyle(AppTheme.Color.danger)
             .frame(maxWidth: .infinity, alignment: .trailing)
-            .padding(.vertical, AppTheme.Space.paddingXS)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
@@ -139,7 +140,7 @@ private struct UserBubble: View {
     private let imageSize = UIScreen.main.bounds.width * 0.3
 
     var body: some View {
-        VStack(alignment: .trailing, spacing: AppTheme.Space.paddingS) {
+        VStack(alignment: .trailing, spacing: AppTheme.Space.timelineImageToText) {
             if let img = image {
                 HStack {
                     Spacer()
@@ -235,7 +236,6 @@ private struct AILoadingCard: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, AppTheme.Space.paddingCard)
         // 减弱动态：直接显示静态三点，不循环
         .onAppear { if reduceMotion { dotCount = 3 } }
         .onReceive(timer) { _ in
@@ -254,7 +254,7 @@ struct ErrorBanner: View {
             .font(AppTheme.Font.chineseFaint)
             .foregroundStyle(AppTheme.Color.textSecondary)
             .frame(maxWidth: .infinity, alignment: .center)
-            .padding(AppTheme.Space.paddingCard)
+            .padding(.horizontal, AppTheme.Space.paddingCard)
     }
 }
 
@@ -274,7 +274,6 @@ private struct DateSeparatorView: View {
                 .clipShape(Capsule())
             Spacer()
         }
-        .padding(.vertical, AppTheme.Space.paddingS)
     }
 }
 

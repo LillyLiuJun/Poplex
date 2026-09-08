@@ -137,8 +137,8 @@ struct TodayView: View {
             ScrollView {
                 WarmRefreshControlHelper(haptics: refreshHaptics)
                     .frame(width: 0, height: 0)
-                LazyVStack(spacing: AppTheme.Space.paddingCard) {
-                    ForEach(viewModel.entries) { entry in
+                LazyVStack(spacing: 0) {
+                    ForEach(Array(viewModel.entries.enumerated()), id: \.element.id) { index, entry in
                         TimelineRow(entry: entry, onImageTap: { img, frame in
                             let screen = UIScreen.main.bounds.size
                             let anchor = UnitPoint(
@@ -156,6 +156,7 @@ struct TodayView: View {
                             Task { await viewModel.retryPending(record: record) }
                         })
                         .id(entry.id)
+                        .padding(.bottom, Self.timelineSpacing(after: index, in: viewModel.entries))
                     }
                     // 底部探针：出现在视口内 → 用户已处于（或接近）底部。
                     // 0 高不占位、不影响布局；被动对齐的「底部跟随」判定全靠它。
@@ -256,6 +257,48 @@ struct TodayView: View {
             }
         }
     }
+
+    /// 计算时间线中相邻条目之间的外部间距（严格遵循 Tab1 时间线外部间距规范）：
+    /// - 上一组内容 → 日期胶囊：32pt
+    /// - 日期胶囊 → 当天第一条输入：16pt
+    /// - 用户输入 → 对应 AI 结果 / 失败行：12pt
+    /// - AI 结果／失败行 → 下一次输入：28pt
+    /// - 首个日期不额外增加 32pt；末尾条目下方不留额外间距。
+    static func timelineSpacing(after index: Int, in entries: [TimelineEntry]) -> CGFloat {
+        guard index + 1 < entries.count else { return 0 }
+        let current = entries[index]
+        let next = entries[index + 1]
+
+        // 1. 上一组内容 → 日期胶囊：32pt（下一个是日期胶囊）
+        if case .dateSeparator = next.content {
+            // N4: 若当前也为日期胶囊（连续两枚胶囊空天场景），返回 16pt 避免空档过大
+            if case .dateSeparator = current.content {
+                return AppTheme.Space.timelineDateToFirstInput
+            }
+            return AppTheme.Space.timelineContentToDate
+        }
+        // 2. 日期胶囊 → 当天第一条输入：16pt（当前是日期胶囊）
+        if case .dateSeparator = current.content {
+            return AppTheme.Space.timelineDateToFirstInput
+        }
+        // N1: pendingRetry 重试时紧随追加的 loading 属于同组生成延续：12pt
+        if case .pendingRetry = current.content, case .aiLoading = next.content {
+            return AppTheme.Space.timelineUserToAI
+        }
+        // 3. 用户输入 → 对应 AI 结果 / 失败行：12pt（当前是用户输入）
+        if case .userBubble = current.content {
+            // N2 守卫：若用户输入紧跟另一个用户输入或待重试行（未闭环场景），按组间间距 28pt 对待
+            if case .userBubble = next.content {
+                return AppTheme.Space.timelineResultToNextInput
+            }
+            if case .pendingRetry = next.content {
+                return AppTheme.Space.timelineResultToNextInput
+            }
+            return AppTheme.Space.timelineUserToAI
+        }
+        // 4. AI 结果／失败行 → 下一次输入：28pt
+        return AppTheme.Space.timelineResultToNextInput
+    }
 }
 
 #Preview {
@@ -277,10 +320,13 @@ private struct Tab1LimitReachedContextPreview: View {
 
                 // 示例时间线内容
                 ScrollView {
-                    VStack(spacing: AppTheme.Space.paddingCard) {
+                    VStack(spacing: 0) {
                         sampleUserBubble("I was sitting by the window having my warm morning coffee.")
+                            .padding(.bottom, AppTheme.Space.timelineUserToAI)
                         sampleAIBubble("I was sitting by the window, sipping my hot morning coffee.")
+                            .padding(.bottom, AppTheme.Space.timelineResultToNextInput)
                         sampleUserBubble("How do I say '今天的会议推迟到下午三点' naturally?")
+                            .padding(.bottom, AppTheme.Space.timelineUserToAI)
                         sampleAIBubble("Today's meeting got pushed back to 3 PM.")
                     }
                     .padding(AppTheme.Space.paddingPage)
@@ -375,4 +421,59 @@ private struct Tab1HistoryLoadErrorContextPreview: View {
 
 #Preview("Tab1 · History load failed · Retrying", traits: .fixedLayout(width: 393, height: 852)) {
     Tab1HistoryLoadErrorContextPreview(isRetrying: true)
+}
+
+// MARK: - 全状态与极端场景专属目检画布预览（供 Xcode Canvas 直接目检）
+private struct Tab1EdgeCasesContextPreview: View {
+    @State private var inputText = ""
+    @State private var pendingImage: UIImage?
+
+    private let sampleEntries: [TimelineEntry] = [
+        TimelineEntry(id: UUID(), createdAt: .now, content: .dateSeparator("Today")),
+        TimelineEntry.userBubble(text: "晨光透过百叶窗照了进来，微风吹动着窗帘。", image: nil),
+        TimelineEntry.aiCard(AICard.card(CardContent(
+            granularity: "passage",
+            direction: "comprehend",
+            targetExpression: "Morning light filtered through the blinds.\nA cool breeze stirred the curtain.",
+            nativeMeaning: "晨光透过百叶窗洒了进来。\n一阵凉风吹拂着窗帘。",
+            passageLines: [
+                PassageLine(en: "Morning light filtered through the blinds.", zh: "晨光透过百叶窗洒了进来。"),
+                PassageLine(en: "A cool breeze stirred the curtain.", zh: "一阵凉风吹拂着窗帘。"),
+                PassageLine(en: "The city outside was slowly waking up.", zh: "外面的城市正缓缓苏醒。")
+            ]
+        ))),
+        TimelineEntry.userBubble(text: "Something unsafe or invalid format", image: nil),
+        TimelineEntry.aiCard(AICard.error(ErrorContent(errorType: "content_filter", message: "This content can't be processed. Try another one."))),
+        TimelineEntry.userBubble(text: "Can you send this photo while offline?", image: nil),
+        TimelineEntry(id: UUID(), createdAt: .now, content: .sendFailed(text: "Can you send this photo while offline?", image: nil, requestId: nil, bubbleEntryId: nil))
+    ]
+
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            AppTheme.Color.pageBg.ignoresSafeArea()
+
+            ScrollView {
+                VStack(spacing: 0) {
+                    ForEach(Array(sampleEntries.enumerated()), id: \.offset) { index, entry in
+                        TimelineRow(entry: entry)
+                            .id(entry.id)
+                            .padding(.bottom, TodayView.timelineSpacing(after: index, in: sampleEntries))
+                    }
+                }
+                .padding(AppTheme.Space.paddingPage)
+                .padding(.top, 40)
+                .padding(.bottom, 120)
+            }
+
+            InputBar(text: $inputText, image: $pendingImage, isLoading: false, onSend: {})
+                .background {
+                    VariableBlurBackdrop(extraExtend: 16)
+                        .ignoresSafeArea(.container, edges: .bottom)
+                }
+        }
+    }
+}
+
+#Preview("Tab1 · Edge Cases & Spacing", traits: .fixedLayout(width: 393, height: 852)) {
+    Tab1EdgeCasesContextPreview()
 }

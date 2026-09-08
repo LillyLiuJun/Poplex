@@ -196,6 +196,11 @@ struct ErrorContent: Decodable {
         errorType = try c.decode(String.self, forKey: .errorType)
         message    = try c.decodeIfPresent(String.self, forKey: .message)
     }
+
+    init(errorType: String = "server_error", message: String? = nil) {
+        self.errorType = errorType
+        self.message = message
+    }
 }
 
 // MARK: - AICard helpers

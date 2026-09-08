@@ -6989,4 +6989,270 @@ struct BottomWarmAuraSpecTests {
     }
 }
 
+// MARK: - Tab1 Timeline Spacing Tests（时间线外部与内部间距规范验收）
+
+@MainActor
+struct Tab1TimelineSpacingTests {
+
+    @Test func timelineSpacingTokensMatchSpecValues() {
+        // 1. 用户输入 → 对应 AI 结果：12pt
+        #expect(AppTheme.Space.timelineUserToAI == 12)
+        // 2. AI 结果／失败行 → 下一次输入：28pt
+        #expect(AppTheme.Space.timelineResultToNextInput == 28)
+        // 3. 上一组内容 → 日期胶囊：32pt
+        #expect(AppTheme.Space.timelineContentToDate == 32)
+        // 4. 日期胶囊 → 当天第一条输入：16pt
+        #expect(AppTheme.Space.timelineDateToFirstInput == 16)
+        // 5. 同次输入的图片 → 文字：8pt
+        #expect(AppTheme.Space.timelineImageToText == 8)
+    }
+
+    @Test func userInputToAIResultIs12pt() {
+        let entries: [TimelineEntry] = [
+            TimelineEntry.userBubble(text: "Hello", image: nil),
+            TimelineEntry.aiLoading(),
+            TimelineEntry.userBubble(text: "How are you", image: nil),
+            TimelineEntry.aiCard(AICard.card(CardContent(granularity: "word", direction: "comprehend", targetExpression: "hello", nativeMeaning: "你好"))),
+            TimelineEntry.userBubble(text: "Failed attempt", image: nil),
+            TimelineEntry(id: UUID(), createdAt: .now, content: .sendFailed(text: "Failed attempt", image: nil, requestId: nil, bubbleEntryId: nil))
+        ]
+
+        // 用户输入 -> loading: 12pt
+        #expect(TodayView.timelineSpacing(after: 0, in: entries) == 12)
+        // 用户输入 -> aiCard: 12pt
+        #expect(TodayView.timelineSpacing(after: 2, in: entries) == 12)
+        // 用户输入 -> sendFailed: 12pt
+        #expect(TodayView.timelineSpacing(after: 4, in: entries) == 12)
+    }
+
+    @Test func aiResultOrFailureToNextInputIs28pt() {
+        let dummyPendingRecord = PendingRetryRecord(
+            id: UUID(), source: .presetCard,
+            requestId: UUID(), presetCardId: nil,
+            presetImageName: nil, photoFileName: nil,
+            text: nil, createdAt: .now
+        )
+        let entries: [TimelineEntry] = [
+            TimelineEntry.aiCard(AICard.card(CardContent(granularity: "word", direction: "comprehend", targetExpression: "word", nativeMeaning: "单词"))),
+            TimelineEntry.userBubble(text: "next input", image: nil),
+            TimelineEntry(id: UUID(), createdAt: .now, content: .sendFailed(text: "err", image: nil, requestId: nil, bubbleEntryId: nil)),
+            TimelineEntry.userBubble(text: "retry input", image: nil),
+            TimelineEntry(id: UUID(), createdAt: .now, content: .userRejected(text: "blocked", wasImage: false)),
+            TimelineEntry.userBubble(text: "another input", image: nil),
+            TimelineEntry.aiCard(AICard.error(ErrorContent(errorType: "server_error", message: "Server error"))),
+            TimelineEntry.userBubble(text: "after error input", image: nil),
+            TimelineEntry.pendingRetry(dummyPendingRecord),
+            TimelineEntry.userBubble(text: "after pending input", image: nil)
+        ]
+
+        // aiCard -> 下一次输入: 28pt
+        #expect(TodayView.timelineSpacing(after: 0, in: entries) == 28)
+        // sendFailed -> 下一次输入: 28pt
+        #expect(TodayView.timelineSpacing(after: 2, in: entries) == 28)
+        // userRejected -> 下一次输入: 28pt
+        #expect(TodayView.timelineSpacing(after: 4, in: entries) == 28)
+        // aiError -> 下一次输入: 28pt
+        #expect(TodayView.timelineSpacing(after: 6, in: entries) == 28)
+        // pendingRetry -> 下一次输入: 28pt
+        #expect(TodayView.timelineSpacing(after: 8, in: entries) == 28)
+    }
+
+    @Test func previousContentToDateSeparatorIs32pt() {
+        let entries: [TimelineEntry] = [
+            TimelineEntry.aiCard(AICard.card(CardContent(granularity: "sentence", direction: "comprehend", targetExpression: "Yesterday's note", nativeMeaning: "昨天的笔记"))),
+            TimelineEntry(id: UUID(), createdAt: .now, content: .dateSeparator("Today")),
+            TimelineEntry.userBubble(text: "Today's input", image: nil)
+        ]
+
+        // 上一组内容 -> 日期胶囊: 32pt
+        #expect(TodayView.timelineSpacing(after: 0, in: entries) == 32)
+    }
+
+    @Test func dateSeparatorToFirstInputIs16pt() {
+        let entries: [TimelineEntry] = [
+            TimelineEntry(id: UUID(), createdAt: .now, content: .dateSeparator("Today")),
+            TimelineEntry.userBubble(text: "First input of today", image: nil)
+        ]
+
+        // 日期胶囊 -> 当天第一条输入: 16pt
+        #expect(TodayView.timelineSpacing(after: 0, in: entries) == 16)
+    }
+
+    @Test func pendingRetryToAiLoadingIs12pt() {
+        let dummyPendingRecord = PendingRetryRecord(
+            id: UUID(), source: .presetCard,
+            requestId: UUID(), presetCardId: nil,
+            presetImageName: nil, photoFileName: nil,
+            text: nil, createdAt: .now
+        )
+        let entries: [TimelineEntry] = [
+            TimelineEntry.pendingRetry(dummyPendingRecord),
+            TimelineEntry.aiLoading()
+        ]
+        // N1: pendingRetry 重试触发的 loading 属于同组延续 -> 12pt
+        #expect(TodayView.timelineSpacing(after: 0, in: entries) == 12)
+    }
+
+    @Test func userBubbleToNextInputOrPendingRetryIs28pt() {
+        let dummyPendingRecord = PendingRetryRecord(
+            id: UUID(), source: .presetCard,
+            requestId: UUID(), presetCardId: nil,
+            presetImageName: nil, photoFileName: nil,
+            text: nil, createdAt: .now
+        )
+        let entries: [TimelineEntry] = [
+            TimelineEntry.userBubble(text: "First input", image: nil),
+            TimelineEntry.userBubble(text: "Second input without AI response", image: nil),
+            TimelineEntry.pendingRetry(dummyPendingRecord)
+        ]
+        // N2: 用户输入接用户输入 -> 28pt
+        #expect(TodayView.timelineSpacing(after: 0, in: entries) == 28)
+        // N2: 用户输入接待重试行 -> 28pt
+        #expect(TodayView.timelineSpacing(after: 1, in: entries) == 28)
+    }
+
+    @Test func dateSeparatorToDateSeparatorIs16pt() {
+        let entries: [TimelineEntry] = [
+            TimelineEntry(id: UUID(), createdAt: .now, content: .dateSeparator("Yesterday")),
+            TimelineEntry(id: UUID(), createdAt: .now, content: .dateSeparator("Today")),
+            TimelineEntry.userBubble(text: "Today's input", image: nil)
+        ]
+        // N4: 两个日期胶囊相邻（空天）-> 16pt
+        #expect(TodayView.timelineSpacing(after: 0, in: entries) == 16)
+        // 日期胶囊到输入 -> 16pt
+        #expect(TodayView.timelineSpacing(after: 1, in: entries) == 16)
+    }
+
+    @Test func lastItemHasNoExtraBottomSpacing() {
+        let entries: [TimelineEntry] = [
+            TimelineEntry(id: UUID(), createdAt: .now, content: .dateSeparator("Today")),
+            TimelineEntry.userBubble(text: "Hello", image: nil),
+            TimelineEntry.aiCard(AICard.card(CardContent(granularity: "word", direction: "comprehend", targetExpression: "hello", nativeMeaning: "你好")))
+        ]
+
+        // 最后一项 -> 0
+        #expect(TodayView.timelineSpacing(after: 2, in: entries) == 0)
+        // 越界索引 -> 0
+        #expect(TodayView.timelineSpacing(after: 3, in: entries) == 0)
+    }
+
+    @Test func pureImageInputHasDescribeBubbleWith8ptAndBottomToResult12pt() {
+        // 纯图片输入由 ViewModel 构造气泡为 text: "Describe this image", image != nil
+        let bubble = TimelineEntry.userBubble(text: "Describe this image", image: UIImage())
+        let card = TimelineEntry.aiCard(AICard.card(CardContent(granularity: "sentence", direction: "express", targetExpression: "A cozy room", nativeMeaning: "温馨的房间")))
+        let entries = [bubble, card]
+
+        // 验证气泡底部到结果严格遵守 12pt
+        #expect(TodayView.timelineSpacing(after: 0, in: entries) == 12)
+        // 验证内部图片到文字气泡为 8pt
+        #expect(AppTheme.Space.timelineImageToText == 8)
+    }
+}
+
+// MARK: - AICardBody Spacing & Structure Tests（AI 卡片内部间距与结构优化验证）
+
+@MainActor
+struct AICardBodySpacingTests {
+
+    @Test func wordCardContentVariantsStructure() {
+        // 完整 Word 卡片
+        let fullWord = CardContent(
+            granularity: "word",
+            direction: "comprehend",
+            targetExpression: "procrastinate",
+            nativeMeaning: "拖延",
+            phonetic: "/prəˈkræstɪneɪt/",
+            pos: ["v."],
+            examples: [
+                BilingualExample(en: "Don't procrastinate.", zh: "别拖延。"),
+                BilingualExample(en: "I procrastinated all day.", zh: "我拖了一整天。")
+            ],
+            grammarNote: "Latin origin."
+        )
+        #expect(fullWord.isWord)
+        #expect(fullWord.phonetic != nil)
+        #expect(!fullWord.pos.isEmpty)
+        #expect(fullWord.examples.count == 2)
+        #expect(fullWord.displayableGrammarNote == "Latin origin.")
+
+        // 仅单条例句的 Word 卡片
+        let singleExampleWord = CardContent(
+            granularity: "word",
+            direction: "comprehend",
+            targetExpression: "serendipity",
+            nativeMeaning: "机缘巧合",
+            phonetic: nil,
+            pos: [],
+            examples: [BilingualExample(en: "It was pure serendipity.", zh: "纯属机缘巧合。")]
+        )
+        #expect(singleExampleWord.isWord)
+        #expect(singleExampleWord.phonetic == nil)
+        #expect(singleExampleWord.pos.isEmpty)
+        #expect(singleExampleWord.examples.count == 1)
+
+        // 无例句 Word 卡片
+        let noExampleWord = CardContent(
+            granularity: "word",
+            direction: "comprehend",
+            targetExpression: "ephemeral",
+            nativeMeaning: "短暂的",
+            examples: []
+        )
+        #expect(noExampleWord.examples.isEmpty)
+    }
+
+    @Test func sentenceRevisionVsNoRevisionStructure() {
+        // 修正态：有意义修正
+        let revised = CardContent(
+            granularity: "sentence",
+            direction: "comprehend",
+            revisionType: "error",
+            userOriginal: "I am very sleep today",
+            targetExpression: "I'm very sleepy today",
+            nativeMeaning: "我今天很困",
+            grammarNote: "sleepy is adjective"
+        )
+        #expect(revised.hasMeaningfulRevision)
+        #expect(revised.displayableGrammarNote != nil)
+
+        // 无修正态：正确句
+        let correct = CardContent(
+            granularity: "sentence",
+            direction: "comprehend",
+            userOriginal: "I'm heading out now.",
+            targetExpression: "I'm heading out now.",
+            nativeMeaning: "我现在出门了。"
+        )
+        #expect(!correct.hasMeaningfulRevision)
+
+        // Express 态：母语到目标语
+        let express = CardContent(
+            granularity: "sentence",
+            direction: "express",
+            userOriginal: "我想喝咖啡",
+            targetExpression: "I'd like to have a coffee.",
+            grammarNote: "express note should not show"
+        )
+        #expect(!express.hasMeaningfulRevision)
+        #expect(express.displayableGrammarNote == nil)
+    }
+
+    @Test func passageCardStructureAndLimit() {
+        let passage = CardContent(
+            granularity: "passage",
+            direction: "comprehend",
+            targetExpression: "Line 1\nLine 2\nLine 3",
+            grammarNote: "Passage note.",
+            passageLines: [
+                PassageLine(en: "First sentence.", zh: "第一句。"),
+                PassageLine(en: "Second sentence.", zh: "第二句。"),
+                PassageLine(en: "Third sentence.", zh: "第三句。")
+            ]
+        )
+        #expect(passage.isPassage)
+        #expect(passage.passageLines.count == 3)
+        #expect(passage.displayableGrammarNote == "Passage note.")
+    }
+}
+
 
