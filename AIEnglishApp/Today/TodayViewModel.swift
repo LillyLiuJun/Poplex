@@ -2,6 +2,51 @@ import Foundation
 import UIKit
 import CryptoKit
 
+/// 统一时间线滚动请求模型（单一真实源）
+struct TimelineScrollRequest: Equatable, Sendable {
+    enum Anchor: Equatable, Sendable {
+        case top
+        case center
+        case bottom
+    }
+
+    enum AnimationMode: Equatable, Sendable {
+        case instant
+        case animated
+    }
+
+    enum Reason: Equatable, Sendable {
+        case initialEntry        // 冷启动/首次进入页面对齐
+        case tabReturn           // 从 Tab2 切回 Tab1 对齐
+        case send                // 用户主动发消息
+        case retry               // 用户重试
+        case finalCardLayout     // loading 替换为卡片/失败行（高度落位）
+    }
+
+    let id: UUID
+    let targetEntryId: UUID
+    let anchor: Anchor
+    let animation: AnimationMode
+    let reason: Reason
+    let entrySessionId: UUID?
+
+    init(
+        id: UUID = UUID(),
+        targetEntryId: UUID,
+        anchor: Anchor,
+        animation: AnimationMode,
+        reason: Reason,
+        entrySessionId: UUID? = nil
+    ) {
+        self.id = id
+        self.targetEntryId = targetEntryId
+        self.anchor = anchor
+        self.animation = animation
+        self.reason = reason
+        self.entrySessionId = entrySessionId
+    }
+}
+
 @Observable
 /// @MainActor（审查发现 #5）：SwiftUI 只在主线程渲染 @Observable 状态，而 loadHistory /
 /// runGeneration 是非隔离 async——await 之后的续体默认跑在全局执行器上，后台线程改
@@ -36,30 +81,22 @@ final class TodayViewModel {
     /// 用户既看不到内容也没有任何重试入口（审查发现）。成功（哪怕解出 0 条记录，
     /// 那是真实的「新账号还没内容」，不是失败）会清掉这个标记。
     var historyLoadFailed = false
-    /// 视图滚动锚点：非空时视图滚到对应条目，且跳过「条目变化自动滚到最后一条」。
-    /// 重试期间置为气泡 id（留在原地），成功后置为卡片 id；下次 send / 历史替换时清空。
-    var scrollTargetId: UUID?
-    /// 常规发送的 loading 被最终卡片/失败行原位替换时，entries.count 与行 id 都不变，
-    /// 仅监听条目数量无法感知内容高度增长。这里显式发出一次“最终内容已落位”的底部
-    /// 滚动请求；视图收到后等待布局完成，再滚到该稳定行 id。
-    var bottomScrollTargetId: UUID?
-    /// 被动对齐中（loadHistory 内部对 entries 的任何改动：缓存首刷/正本替换/seed 与
-    /// 失败行注入）：视图不强制滚到底，只在用户已处于底部时跟随——进页面、下拉刷新、
-    /// 回前台时都不会把正在阅读的用户拽走。
-    /// 确定性约定（审查发现 #15）：只由三个动作写——loadHistory 入口置 true（被动）、
-    /// send / retryPending 置 false（主动）；不依赖任何时序复位。平时挂着 true 无害：
-    /// 被动分支只有用户已在底部才跟随，下次 loadHistory 重新置 true。
-    /// 视图在 onChange 里读取，不驱动渲染，故不参与观察。
-    @ObservationIgnored var isPassiveAlignment = false
-    /// 一次性标志：时间线首次从空到有内容（冷启动缓存首刷 / 无缓存首启的正本替换）时，
-    /// 请求视图无动画瞬间定位底部，避免「从顶部划到底部」的冷启动滑动。
-    @ObservationIgnored var instantJumpToBottomPending = false
+
+    /// 统一滚动请求：单一真实源驱动 TodayView 滚动容器执行确定性定位。
+    var pendingScrollRequest: TimelineScrollRequest?
+
+    /// 当前活动的进入首页对齐会话 ID。冷启动或切回 Tab1 时开启；服务器历史对齐完成或用户主动交互后失效。
+    private(set) var activeEntrySessionId: UUID?
+    /// 用户是否已在当前会话中主动滚动（主动翻看历史）。若为 true，后续服务器异步历史到达时不强拉到底部。
+    private(set) var hasUserScrolledInCurrentSession: Bool = false
+
     let session = ConversationSession()
 
     private let service: AIServicing
     private let historyDataLoader: (@Sendable () async throws -> Data)?
     private let historyTimeout: Duration
     private let isConnected: () -> Bool
+    private let localCache: LocalCache
     private var historyLoadCompletionWaiters: [CheckedContinuation<Void, Never>] = []
     private var inFlightHistoryShowsFailureHint = false
     private var hasLiveActivity = false   // 本次会话是否已产生实时对话（发过消息）
@@ -83,12 +120,79 @@ final class TodayViewModel {
          isConnected: (() -> Bool)? = nil,
          isConsentGranted: @escaping () -> Bool = {
              UserDefaults.standard.double(forKey: "ai_consent_accepted_at") > 0
-         }) {
+         },
+         localCache: LocalCache? = nil) {
         self.service = service ?? LiveAIService()
         self.historyDataLoader = historyDataLoader
         self.historyTimeout = historyTimeout
         self.isConnected = isConnected ?? { NetworkMonitor.shared.isConnected }
         self.isConsentGranted = isConsentGranted
+        self.localCache = localCache ?? .shared
+        startEntryAlignmentSession(reason: .initialEntry)
+    }
+
+    // MARK: - Entry Alignment Session & Scroll Requests
+
+    /// 开启进入首页对齐窗口（冷启动/切回 Tab1 调用）
+    func startEntryAlignmentSession(reason: TimelineScrollRequest.Reason = .initialEntry) {
+        let sessionId = UUID()
+        activeEntrySessionId = sessionId
+        hasUserScrolledInCurrentSession = false
+        if let last = entries.last {
+            postScrollRequest(TimelineScrollRequest(
+                targetEntryId: last.id,
+                anchor: .bottom,
+                animation: .instant,
+                reason: reason,
+                entrySessionId: sessionId
+            ))
+        }
+    }
+
+    /// 进入对齐会话检查并发送滚动定位（若会话仍有效、用户未滚动，且有 entries）
+    func postSessionFinalScrollIfEligible(reason: TimelineScrollRequest.Reason = .initialEntry, closeSession: Bool = false) {
+        guard let sessionId = activeEntrySessionId, !hasUserScrolledInCurrentSession, let last = entries.last else {
+            if closeSession { activeEntrySessionId = nil }
+            return
+        }
+        postScrollRequest(TimelineScrollRequest(
+            targetEntryId: last.id,
+            anchor: .bottom,
+            animation: .instant,
+            reason: reason,
+            entrySessionId: sessionId
+        ))
+        if closeSession {
+            activeEntrySessionId = nil
+        }
+    }
+
+    /// 用户主动垂直滚动或手势交互：立即取消当前进入对齐窗口，防止后续异步数据到达时强拉到底部。
+    func userDidScroll() {
+        hasUserScrolledInCurrentSession = true
+        activeEntrySessionId = nil
+    }
+
+    /// 用户点击/切回 Tab1 激活通知
+    func activateTab(token: UUID) {
+        startEntryAlignmentSession(reason: .tabReturn)
+    }
+
+    /// 发布统一滚动请求（新请求自然覆盖尚未执行的旧请求）
+    func postScrollRequest(_ request: TimelineScrollRequest) {
+        pendingScrollRequest = request
+    }
+
+    /// 视图消费/标记完成该滚动请求
+    func consumeScrollRequest(id: UUID) {
+        if pendingScrollRequest?.id == id {
+            pendingScrollRequest = nil
+        }
+    }
+
+    /// 取消进入对齐窗口（用户主动发消息、主动重试等场景）
+    private func cancelEntryAlignmentSession() {
+        activeEntrySessionId = nil
     }
 
     // MARK: - History
@@ -109,10 +213,6 @@ final class TodayViewModel {
 
         isLoadingHistory = true
         inFlightHistoryShowsFailureHint = showFailureHint
-        // 本次函数内所有 entries 改动都是「被动对齐」：视图只在用户已处于底部时跟随，
-        // 不会把正在阅读（或刚进页面）的用户拽到底部。窗口不在此复位（见属性注释，
-        // 审查发现 #15）：send / retryPending 会置 false，下次 loadHistory 重新置 true。
-        isPassiveAlignment = true
         // 解码出的服务端记录幂等键集合：供 seed 去重（D）与失败行/成功增量注入去重用。
         // defer 在函数任意出口执行，这里声明、成功解码后填充。
         var decodedRequestIds: Set<UUID> = []
@@ -146,27 +246,26 @@ final class TodayViewModel {
             injectPendingRetry(serverRequestIds: decodedRequestIds)
             // 本地成功增量：对齐已带回的清除；未被对齐冲掉的按幂等去重后不重复注入。
             injectLocalSuccesses(serverRequestIds: decodedRequestIds)
-            // 被动窗口不在此复位（审查发现 #15）：复位 = 依赖「视图 flush 先于下一个
-            // 主队列块」的时序假设，SwiftUI 没有 API 保证。已改为确定性约定（见属性
-            // 注释）：loadHistory 入口置 true、send / retryPending 置 false，无需复位。
+            // 最终结算：时间线全貌（服务端历史 + 本地重试与增量）全部注入落定后，
+            // 若对齐会话仍有效且用户未主动翻看历史，无动画定位到最终的 entries.last 并关闭会话。
+            postSessionFinalScrollIfEligible(reason: .initialEntry, closeSession: true)
             finishCurrentHistoryLoad()
         }
 
         // 1) 先读本地缓存并立即渲染——仅当时间线还空着、且本次会话未产生实时对话。
         //    有缓存 → 用户瞬间看到历史，不再是空白/骨架。
         if entries.isEmpty, !hasLiveActivity,
-           let cached = await LocalCache.shared.load(key: .messages),
+           let cached = await localCache.load(key: .messages),
            let records = try? Self.decodeRecords(from: cached) {
-            instantJumpToBottomPending = true   // 时间线首次有内容：瞬间定位底部，无动画
             entries = Self.buildEntries(from: records)
             // 缓存同样填充幂等键集合：离线首启时也按「服务端正本」去重
             // （缓存即上次成功同步的服务端历史）。
             decodedRequestIds = Set(records.compactMap(\.requestId))
+            postSessionFinalScrollIfEligible(reason: .initialEntry, closeSession: false)
         }
 
         // 2) S2 本地内容先拿出来：seed + 失败行 + 成功增量一律在缓存渲染后、
         //    网络请求前注入——「手里有的立刻看，没有的才打电话」。
-        let wasEmptyBeforeLocalInject = entries.isEmpty
         if Self.shouldInjectSeed(
             seedEntries: seed,
             seedRequestId: seedRequestId,
@@ -177,14 +276,20 @@ final class TodayViewModel {
         }
         injectPendingRetry(serverRequestIds: decodedRequestIds)
         injectLocalSuccesses(serverRequestIds: decodedRequestIds)
-        if wasEmptyBeforeLocalInject, !entries.isEmpty {
-            // 无缓存首启且本地内容即首次内容 → 同样瞬间定位底部，无动画
-            instantJumpToBottomPending = true
-        }
+        // 无论步骤 1 是否已用缓存渲染过 entries：本步注入的 seed / 失败行 / 本地
+        // 成功增量若按写作时刻排在原 entries.last 之后（如上次杀 app 前刚生成成功
+        // 但缓存文件还没来得及写入新内容），会成为新的真实底部——必须在这里重新
+        // 对齐一次，否则用户会先看到缓存渲染时的旧底部，要等网络请求返回、defer
+        // 兜底纠正才跳到真正的最新内容（表现为「刚进 App 不是最新内容，要等一下」）。
+        // postSessionFinalScrollIfEligible 内部已做全部必要 guard（会话仍开启、
+        // 用户未主动滚动、entries 非空）。即使目标未变也会发布一个新请求并覆盖尚未
+        // 消费的旧请求；这是为了让本步注入后的最终目标成为唯一待执行请求，并非 no-op。
+        postSessionFinalScrollIfEligible(reason: .initialEntry, closeSession: false)
 
         // 3) 后台向服务器请求最新数据，对齐正本（查新增/删除）
         if !isConnected() {
             historyLoadFailed = true
+            activeEntrySessionId = nil
             if inFlightHistoryShowsFailureHint {
                 offlineHint = Self.historyRefreshFailureMessage(isConnected: false)
             }
@@ -210,6 +315,7 @@ final class TodayViewModel {
             // 误判成离线——后端报错 / 超时时用户网络可能完全正常（例如刚成功生成过内容）。
             print("[TodayVM] loadHistory error (keeping cache):", error)
             historyLoadFailed = true
+            activeEntrySessionId = nil
             if inFlightHistoryShowsFailureHint {
                 offlineHint = Self.historyRefreshFailureMessage(isConnected: isConnected())
             }
@@ -222,6 +328,7 @@ final class TodayViewModel {
         } catch {
             // 手动刷新拿到无法解析的数据，也属于本次刷新失败；后台加载仍保持静默。
             historyLoadFailed = true
+            activeEntrySessionId = nil
             if inFlightHistoryShowsFailureHint {
                 offlineHint = Self.historyRefreshFailureMessage(isConnected: isConnected())
             }
@@ -230,9 +337,12 @@ final class TodayViewModel {
 
         // 解码成功——哪怕这批是 0 条记录，那也是「新账号还没内容」的真实状态，不是失败。
         historyLoadFailed = false
+        if records.isEmpty {
+            activeEntrySessionId = nil
+        }
 
         // 解码成功才更新缓存——防止服务器偶发坏数据污染本地缓存导致下次启动空屏
-        await LocalCache.shared.save(data, key: .messages)
+        await localCache.save(data, key: .messages)
         decodedRequestIds = Set(records.compactMap(\.requestId))
 
         // 本地成功副本会在下方历史确认时清理（含 Documents 中的原图），而服务器回放
@@ -248,11 +358,7 @@ final class TodayViewModel {
             displayedSuccessRequestIds: displayedSuccessRequestIds,
             serverRequestIds: decodedRequestIds
         ) else { return }
-        scrollTargetId = nil   // 历史重建后恢复默认的「自动滚到最后一条」
-        if entries.isEmpty {
-            // 无缓存、无本地内容的冷启动：网络正本就是时间线的首次内容 → 同样瞬间定位
-            instantJumpToBottomPending = true
-        }
+
         entries = Self.buildEntries(from: records)
         seedAlreadyShown = false   // 整列替换过：defer 兜底需重新评估本地注入
 
@@ -278,12 +384,7 @@ final class TodayViewModel {
         waiters.forEach { $0.resume() }
     }
 
-    /// 视图在 onChange 里调用：若挂着「瞬间定位底部」请求则消费并返回 true。
-    func takeInstantJumpFlag() -> Bool {
-        let flag = instantJumpToBottomPending
-        instantJumpToBottomPending = false
-        return flag
-    }
+
 
     /// 把历史记录重建为时间线（含按天插入日期分隔符）。
     /// 分组按含年份的 dayKey（跨年同 "MMM d" 文案不会误并成一组）；分隔符 ID 由
@@ -378,14 +479,7 @@ final class TodayViewModel {
         }
 
         hasLiveActivity = true   // 本次会话已有实时对话，后台历史刷新不得覆盖
-
-        // 用户主动发送 = 主动变化（审查发现 #1）：清掉被动对齐窗口，气泡/loading/卡片
-        // 照旧自动滚到底。否则冷启动历史还在拉取时发送，新内容全落在屏幕外、用户
-        // 看不到任何反馈（main 上是无条件滚动的，这是相对 main 的回归）。
-        isPassiveAlignment = false
-
-        scrollTargetId = nil   // 正常发送恢复默认滚动（追加到末尾 → 自动滚到底）
-        bottomScrollTargetId = nil
+        cancelEntryAlignmentSession()
 
         let textToSend: String? = trimmed.isEmpty ? nil : trimmed
 
@@ -395,6 +489,13 @@ final class TodayViewModel {
         let bubbleEntry = TimelineEntry.userBubble(text: bubbleText, image: image)
         entries.append(bubbleEntry)
         pendingImage = nil
+
+        postScrollRequest(TimelineScrollRequest(
+            targetEntryId: bubbleEntry.id,
+            anchor: .bottom,
+            animation: .animated,
+            reason: .send
+        ))
 
         // 本次尝试的幂等键：失败后重试复用同一个，服务端按 request_id 去重——
         // 超时重试只会拿回第一次已落库的内容，不会生成第二组（修复重复卡）。
@@ -426,10 +527,18 @@ final class TodayViewModel {
         // 防重入：生成期间（isLoading）连点 Retry 只发起一次，避免双 loading / 双卡。
         // InputBar 发送按钮同样被 isLoading 禁用，send 与 retry 也互斥。
         guard !isLoading else { return }
+        cancelEntryAlignmentSession()
         entries.removeAll { $0.id == failedEntryId }
 
-        // 重试期间把视图锚在原地：抑制「条目变化自动滚到最后」，生成动画也放在气泡正下方
-        scrollTargetId = bubbleEntryId
+        // 重试期间把视图锚在原地：生成动画也放在气泡正下方
+        if let bubbleId = bubbleEntryId {
+            postScrollRequest(TimelineScrollRequest(
+                targetEntryId: bubbleId,
+                anchor: .center,
+                animation: .animated,
+                reason: .retry
+            ))
+        }
 
         let bubble = bubbleEntryId.flatMap { id in entries.first(where: { $0.id == id }) }
         let card = await runGeneration(
@@ -440,7 +549,9 @@ final class TodayViewModel {
             insertCard: false,                   // 成功只移除 loading，卡片由本方法统一布置
             requestId: requestId,                // 复用原幂等键；不传 requiredDurableRequestId（那是断网待重试记录的持久化校验，Tab1 路径不需要）
             originalCreatedAt: bubble?.createdAt,  // 写作时刻：服务器按它落库，原位稳定
-            loadingAnchorId: bubbleEntryId       // 生成中动画出现在气泡正下方（原地），不是屏幕底部
+            loadingAnchorId: bubbleEntryId,      // 生成中动画出现在气泡正下方（原地），不是屏幕底部
+            finalAnchor: .center,
+            finalReason: .retry
         )
         guard let card else { return }
 
@@ -457,7 +568,12 @@ final class TodayViewModel {
         } else {
             entries.append(cardEntry)
         }
-        scrollTargetId = cardEntry.id   // 结果出现在原位；视图滚到卡片处
+        postScrollRequest(TimelineScrollRequest(
+            targetEntryId: cardEntry.id,
+            anchor: .center,
+            animation: .animated,
+            reason: .retry
+        ))
     }
 
     /// 把持久化记录注入时间线：
@@ -633,8 +749,7 @@ final class TodayViewModel {
     /// 「图片气泡 + 卡片」（与 Tab1 正常输入输出一致，图片不消失）；失败保留记录（用户可再试）。
     func retryPending(record: PendingRetryRecord) async {
         guard !isLoading else { return }
-        // 用户主动重试，同 send（审查发现 #1）：清被动窗口，结果变化自动滚到可见。
-        isPassiveAlignment = false
+        cancelEntryAlignmentSession()
         switch record.source {
         case .tab1:
             return   // 构造上不可达：tab1 记录以「气泡 + 失败行」注入，重试走 retrySend
@@ -700,7 +815,14 @@ final class TodayViewModel {
             return false
         }) else {
             entries.append(TimelineEntry.userBubble(text: "Describe this image", image: image))
-            entries.append(TimelineEntry.aiCard(card))
+            let cardEntry = TimelineEntry.aiCard(card)
+            entries.append(cardEntry)
+            postScrollRequest(TimelineScrollRequest(
+                targetEntryId: cardEntry.id,
+                anchor: .bottom,
+                animation: .animated,
+                reason: .finalCardLayout
+            ))
             return
         }
         let entryId = entries[idx].id
@@ -709,7 +831,14 @@ final class TodayViewModel {
             id: entryId, createdAt: createdAt,
             content: .userBubble(text: "Describe this image", image: image, imageUrl: nil, imageStableKey: nil)
         )
-        entries.insert(TimelineEntry(id: UUID(), createdAt: createdAt, content: .aiCard(card)), at: idx + 1)
+        let cardEntry = TimelineEntry(id: UUID(), createdAt: createdAt, content: .aiCard(card))
+        entries.insert(cardEntry, at: idx + 1)
+        postScrollRequest(TimelineScrollRequest(
+            targetEntryId: cardEntry.id,
+            anchor: .bottom,
+            animation: .animated,
+            reason: .finalCardLayout
+        ))
     }
 
     /// 生成失败时 loading 条目的处置方式。
@@ -737,7 +866,9 @@ final class TodayViewModel {
         requestId: UUID? = nil,
         requiredDurableRequestId: UUID? = nil,
         originalCreatedAt: Date? = nil,
-        loadingAnchorId: UUID? = nil
+        loadingAnchorId: UUID? = nil,
+        finalAnchor: TimelineScrollRequest.Anchor = .bottom,
+        finalReason: TimelineScrollRequest.Reason = .finalCardLayout
     ) async -> AICard? {
         let loadingEntry = TimelineEntry.aiLoading()
         if let anchorId = loadingAnchorId,
@@ -745,6 +876,14 @@ final class TodayViewModel {
             entries.insert(loadingEntry, at: anchorIdx + 1)
         } else {
             entries.append(loadingEntry)
+            // 普通发送路径（在末尾追加 loading）：立即将滚动目标推进到 loadingEntry，
+            // 确保生成中呼吸动画立刻进入视口，不被气泡挤出屏幕或被输入框遮挡。
+            postScrollRequest(TimelineScrollRequest(
+                targetEntryId: loadingEntry.id,
+                anchor: .bottom,
+                animation: .animated,
+                reason: .send
+            ))
         }
         isLoading = true
         defer { isLoading = false }
@@ -769,7 +908,12 @@ final class TodayViewModel {
             }
             if insertCard {
                 replace(loadingEntry.id, with: .aiCard(envelope.card))
-                bottomScrollTargetId = loadingEntry.id
+                postScrollRequest(TimelineScrollRequest(
+                    targetEntryId: loadingEntry.id,
+                    anchor: finalAnchor,
+                    animation: .animated,
+                    reason: finalReason
+                ))
             } else {
                 entries.removeAll { $0.id == loadingEntry.id }
             }
@@ -853,7 +997,12 @@ final class TodayViewModel {
                 // 失败行携带本次尝试的幂等键与气泡引用：重试复用同一 requestId，
                 // 且成功后能按 bubbleEntryId 把卡片放回气泡原位。
                 replace(loadingEntry.id, with: .sendFailed(text: text, image: image, requestId: requestId, bubbleEntryId: userBubbleEntryId))
-                bottomScrollTargetId = loadingEntry.id
+                postScrollRequest(TimelineScrollRequest(
+                    targetEntryId: loadingEntry.id,
+                    anchor: finalAnchor,
+                    animation: .animated,
+                    reason: finalReason
+                ))
             case .silent:
                 entries.removeAll { $0.id == loadingEntry.id }
             }

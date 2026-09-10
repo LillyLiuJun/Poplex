@@ -36,6 +36,7 @@ private enum Primitive {
     static let size44: CGFloat = 44
     static let size76: CGFloat = 76
     static let size84: CGFloat = 84
+    static let size360: CGFloat = 360
 
     // 圆角
     static let radius8: CGFloat  = 8
@@ -653,6 +654,13 @@ enum AppTheme {
         static let categoryBadge: CGFloat = Primitive.size36  // Topics 类别圆形徽章边长（浅橘底托类别图标）
         /// AI Consent 弹窗固定高度：文案精简自洽，不设展开档；消灭空旷下巴与过度拉伸。
         static let consentSheetHeight: CGFloat = 410
+        /// Tab1 Passage 卡片展开正文的外层时间线高度上限。超出部分在卡内滚动，
+        /// 避免单个动态行撑到数屏高，触发 LazyVStack 对后续消息的大幅几何纠正。
+        static let passageExpandedViewportMaxHeight: CGFloat = Primitive.size360
+        /// Passage 展开态为系统垂直滚动条保留的正文安全通道。
+        static let passageScrollIndicatorGutter: CGFloat = Primitive.space12
+        /// Passage 内部滚动视口上下缘的同色柔化高度。
+        static let passageScrollEdgeFadeHeight: CGFloat = Primitive.space24
         // brandMark（84pt 圆形 app-icon 报头直径）已随 Settings 删除品牌报头一并移除。
         // brandGlyph 在此之前就已无消费者，属既有债务，留待 token 体检时统一清理。
         static let brandGlyph: CGFloat = Primitive.size36  // 报头里 PoplexPShape 的字高
@@ -946,6 +954,9 @@ enum AppTheme {
         // 时间线被动对齐跟随（刷新带回新内容、用户已在底部时的小幅跟随）：
         // 短促 easeOut——跟上新内容但不拖沓，也不抢走阅读注意力
         static let timelinePassiveFollow: Animation = .easeOut(duration: 0.15)
+        // 时间线主动动作跟随（发消息、卡片生成完成、重试锚定）：
+        // 平滑阻尼弹簧，无多余晃动
+        static let timelineActiveFollow: Animation = .spring(response: 0.38, dampingFraction: 0.82)
         // 图片首次取得：连续、克制的细环；仅在本机没有可显示图片时启用。
         // 1.15 秒一圈：可感知正在加载，但不制造催促感。
         static let imageLoadingRotation: Animation = .linear(duration: 1.15).repeatForever(autoreverses: false)

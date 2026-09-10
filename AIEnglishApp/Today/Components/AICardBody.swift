@@ -1,5 +1,108 @@
 import SwiftUI
 
+enum PassageTimelineLayout {
+    static let topEdgeFadeFlag: UInt8 = 1 << 0
+    static let bottomEdgeFadeFlag: UInt8 = 1 << 1
+
+    static func expandedViewportHeight(contentHeight: CGFloat) -> CGFloat {
+        min(max(0, contentHeight), AppTheme.Size.passageExpandedViewportMaxHeight)
+    }
+
+    static func contentTrailingInset(isExpanded: Bool) -> CGFloat {
+        isExpanded ? AppTheme.Size.passageScrollIndicatorGutter : 0
+    }
+
+    enum ToggleMotion: Equatable {
+        case standard
+        case reduced
+
+        var animation: Animation {
+            switch self {
+            case .standard:
+                AppTheme.Motion.accordionToggle
+            case .reduced:
+                AppTheme.Motion.accordionReducedToggle
+            }
+        }
+    }
+
+    static func toggleMotion(reduceMotion: Bool) -> ToggleMotion {
+        reduceMotion ? .reduced : .standard
+    }
+
+    static func edgeVisibility(
+        contentMinY: CGFloat,
+        contentMaxY: CGFloat,
+        viewportHeight: CGFloat
+    ) -> UInt8 {
+        var visibility: UInt8 = 0
+        if contentMinY < -0.5 { visibility |= topEdgeFadeFlag }
+        if contentMaxY > viewportHeight + 0.5 { visibility |= bottomEdgeFadeFlag }
+        return visibility
+    }
+}
+
+enum PassageReadingLifecycle {
+    /// 空 viewport 代表外层时间线尚未完成首轮布局，此时不能误判为离开。
+    static func isCompletelyOutside(cardFrame: CGRect, viewport: CGRect) -> Bool {
+        guard viewport.width > 0, viewport.height > 0 else { return false }
+        return cardFrame.maxY <= viewport.minY || cardFrame.minY >= viewport.maxY
+    }
+}
+
+struct PassageResetSignal: Equatable {
+    let tabGeneration: Int
+    let visibilityGeneration: Int
+}
+
+private struct PassageScrollViewport<Content: View>: View {
+    let height: CGFloat
+    @ViewBuilder let content: () -> Content
+    @State private var edgeVisibility: UInt8 = 0
+
+    var body: some View {
+        ScrollView(.vertical) {
+            content()
+                .onGeometryChange(for: UInt8.self) { proxy in
+                    let frame = proxy.frame(in: .scrollView(axis: .vertical))
+                    return PassageTimelineLayout.edgeVisibility(
+                        contentMinY: frame.minY,
+                        contentMaxY: frame.maxY,
+                        viewportHeight: height
+                    )
+                } action: { newVisibility in
+                    edgeVisibility = newVisibility
+                }
+        }
+        .frame(height: height)
+        .scrollBounceBehavior(.basedOnSize)
+        .overlay(alignment: .top) {
+            PassageScrollEdgeScrim(edge: .top)
+                .opacity(edgeVisibility & PassageTimelineLayout.topEdgeFadeFlag != 0 ? 1 : 0)
+        }
+        .overlay(alignment: .bottom) {
+            PassageScrollEdgeScrim(edge: .bottom)
+                .opacity(edgeVisibility & PassageTimelineLayout.bottomEdgeFadeFlag != 0 ? 1 : 0)
+        }
+        .animation(AppTheme.Motion.timelinePassiveFollow, value: edgeVisibility)
+    }
+}
+
+private struct PassageScrollEdgeScrim: View {
+    let edge: VerticalEdge
+
+    var body: some View {
+        LinearGradient(
+            colors: [AppTheme.Color.cardBg, AppTheme.Color.cardBg.opacity(0)],
+            startPoint: edge == .top ? .top : .bottom,
+            endPoint: edge == .top ? .bottom : .top
+        )
+        .frame(height: AppTheme.Size.passageScrollEdgeFadeHeight)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
 /// 统一学习卡（Tab1 输入输出卡片设计交付 v2）
 /// · word 卡：大词条 → 音标+词性同行 → 释义 → 例句区块 → 形式说明区块（仅 comprehend）
 /// · sentence 卡：
@@ -9,9 +112,12 @@ import SwiftUI
 /// · passage 卡：逐行双语对照 + 折叠/展开 → 说明区块（仅 comprehend）
 /// · 说明区块（Note）在所有卡片类型中都排在最后
 struct AICardBody: View {
-    let content: CardContent
-    @State private var passageExpanded = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let content: CardContent
+    var onCollapse: (() -> Void)? = nil
+    var passageResetSignal = PassageResetSignal(tabGeneration: 0, visibilityGeneration: 0)
+    @State private var passageExpanded = false
+    @State private var expandedPassageContentHeight: CGFloat = 0
     @ScaledMetric(relativeTo: .caption2) private var expandArrowSize: CGFloat = 7
 
     var body: some View {
@@ -32,6 +138,14 @@ struct AICardBody: View {
         .padding(AppTheme.Space.paddingCard)
         .frame(maxWidth: .infinity, alignment: .leading)
         .surfaceCard(cornerRadius: AppTheme.Radius.large, fillColor: AppTheme.Color.cardBg)
+        .onChange(of: passageResetSignal) {
+            guard passageExpanded else { return }
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                passageExpanded = false
+            }
+        }
     }
 
     private var cardTypeLabel: String {
@@ -112,37 +226,35 @@ struct AICardBody: View {
     // 收起态最多预览的句子对数（min/max：≤ 此数则整段全展示、无按钮；> 此数只预览前 N 句 + 展开按钮）
     private let passageCollapsedLimit = 2
 
-    // 当前应渲染的行（收起态取前 passageCollapsedLimit 句，展开态取全部），带原始序号
-    private var visiblePassageLines: [(offset: Int, element: PassageLine)] {
-        let lines = content.passageLines
-        let slice = passageExpanded ? lines : Array(lines.prefix(passageCollapsedLimit))
-        return Array(slice.enumerated())
-    }
-
     // MARK: - Passage: 逐行双语对照 + 折叠/展开（无横线，16pt 留白分组）
     private var passageContent: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // 双语分句对之间 16pt，分句与对应译文 4pt
-            VStack(alignment: .leading, spacing: AppTheme.Space.paddingCard) {
-                ForEach(visiblePassageLines, id: \.offset) { _, line in
-                    VStack(alignment: .leading, spacing: AppTheme.Space.paddingXS) {
-                        Text(line.en)
-                            .font(AppTheme.Font.englishPrimary)
-                            .foregroundStyle(AppTheme.Color.textPrimary)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Text(line.zh)
-                            .font(AppTheme.Font.chineseBody)
-                            .foregroundStyle(AppTheme.Color.textMuted)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+            if passageExpanded {
+                PassageScrollViewport(height: PassageTimelineLayout.expandedViewportHeight(
+                    contentHeight: expandedPassageContentHeight
+                )) {
+                    passageLineList(content.passageLines)
+                        .padding(.trailing, PassageTimelineLayout.contentTrailingInset(isExpanded: true))
                 }
+            } else {
+                passageLineList(Array(content.passageLines.prefix(passageCollapsedLimit)))
+                    .padding(.trailing, PassageTimelineLayout.contentTrailingInset(isExpanded: false))
             }
 
             // 展开/收起按钮：仅当句子对数超过收起态预览上限时显示；正文到按钮 12pt
             if content.passageLines.count > passageCollapsedLimit {
                 Button {
-                    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
+                    let willCollapse = passageExpanded
+                    // onCollapse 现在直接同步调用 TodayView 里的 proxy.scrollTo（不再
+                    // 经 ViewModel 状态 + onChange 中转，理由见 TodayView 里 onCollapse
+                    // 闭包的注释）。放进和本地 passageExpanded 折叠同一个 withAnimation
+                    // 闭包内，两处状态变化共享同一个事务/曲线，折叠和滚动同帧起播——
+                    // 与 Tab2 分类手风琴（MineView.toggleExpand）的写法保持一致。
+                    withAnimation(PassageTimelineLayout.toggleMotion(reduceMotion: reduceMotion).animation) {
                         passageExpanded.toggle()
+                        if willCollapse {
+                            onCollapse?()
+                        }
                     }
                 } label: {
                     HStack(spacing: 4) {
@@ -157,6 +269,43 @@ struct AICardBody: View {
                 }
                 .buttonStyle(.plain)
                 .padding(.top, AppTheme.Space.paddingM)
+            }
+        }
+        .background(alignment: .topLeading) {
+            // 仅在可展开的收起态提前量出全文高度。background 不参与外层 VStack
+            // 的子项计数，因此不会凭空制造上下各一段可见间距；展开时复用已测高度，
+            // 也不再重复排版一份屏外全文。
+            if !passageExpanded, content.passageLines.count > passageCollapsedLimit {
+                passageLineList(content.passageLines)
+                    // 预量尺寸必须与展开态使用相同正文宽度，否则安全通道引起的
+                    // 换行差异会在展开后再次改变视口高度。
+                    .padding(.trailing, PassageTimelineLayout.contentTrailingInset(isExpanded: true))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .onGeometryChange(for: CGFloat.self) { proxy in
+                        proxy.size.height
+                    } action: { newHeight in
+                        expandedPassageContentHeight = newHeight
+                    }
+                    .hidden()
+            }
+        }
+    }
+
+    /// 双语分句对统一渲染：分句对之间 16pt、分句与译文 4pt（无横线）。
+    /// 展开态、收起态与隐藏高度测量共用同一实现，保证三者换行与高度一致。
+    private func passageLineList(_ lines: [PassageLine]) -> some View {
+        VStack(alignment: .leading, spacing: AppTheme.Space.paddingCard) {
+            ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
+                VStack(alignment: .leading, spacing: AppTheme.Space.paddingXS) {
+                    Text(line.en)
+                        .font(AppTheme.Font.englishPrimary)
+                        .foregroundStyle(AppTheme.Color.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(line.zh)
+                        .font(AppTheme.Font.chineseBody)
+                        .foregroundStyle(AppTheme.Color.textMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
     }

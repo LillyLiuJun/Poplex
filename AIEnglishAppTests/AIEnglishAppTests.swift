@@ -2,7 +2,35 @@ import Testing
 import Foundation
 import UIKit
 import SwiftUI
+import Observation
 @testable import AIEnglishApp
+
+@MainActor
+@Observable
+private final class SignedURLTestState {
+    var value: String
+
+    init(_ value: String) {
+        self.value = value
+    }
+}
+
+@MainActor
+private struct CachedRemoteImageRefreshFixture: View {
+    let signedURL: SignedURLTestState
+    let stableKey: String
+    let download: (URL) async throws -> Data
+
+    var body: some View {
+        var image = CachedRemoteImage(
+            signedUrl: signedURL.value,
+            stableKey: stableKey,
+            placeholder: Color.clear
+        )
+        image.download = download
+        return image
+    }
+}
 
 private actor Tab2RefreshGate {
     private var continuation: CheckedContinuation<Result<Data, any Error>, Never>?
@@ -1498,11 +1526,17 @@ struct TodayViewModelTests {
         )
     }
 
+    private func isolatedCache(suite: String) -> LocalCache {
+        LocalCache(directory: FileManager.default.temporaryDirectory
+            .appendingPathComponent("today-vm-tests-cache-\(suite)-\(UUID())", isDirectory: true))
+    }
+
     @Test func startingNewHistoryLoadClearsPreviousFailureHint() async {
         let vm = TodayViewModel(
             service: SuccessMock(),
             historyDataLoader: { Data() },
-            isConsentGranted: { true }
+            isConsentGranted: { true },
+            localCache: isolatedCache(suite: "clear-failure-hint")
         )
         vm.offlineHint = "Previous failure"
 
@@ -1519,7 +1553,8 @@ struct TodayViewModelTests {
             historyDataLoader: { try await gate.wait() },
             historyTimeout: .seconds(1),
             isConnected: { true },
-            isConsentGranted: { true }
+            isConsentGranted: { true },
+            localCache: isolatedCache(suite: "join-in-flight")
         )
 
         let automaticLoad = Task { await vm.loadHistory() }
@@ -1549,7 +1584,8 @@ struct TodayViewModelTests {
             service: SuccessMock(),
             historyDataLoader: { throw CancellationError() },
             isConnected: { true },
-            isConsentGranted: { true }
+            isConsentGranted: { true },
+            localCache: isolatedCache(suite: "cancelled-refresh")
         )
 
         await vm.loadHistory(showFailureHint: true)
@@ -1563,7 +1599,8 @@ struct TodayViewModelTests {
             service: SuccessMock(),
             historyDataLoader: { throw URLError(.networkConnectionLost) },
             isConnected: { false },
-            isConsentGranted: { true }
+            isConsentGranted: { true },
+            localCache: isolatedCache(suite: "offline-message")
         )
 
         await vm.loadHistory(showFailureHint: true)
@@ -1576,7 +1613,8 @@ struct TodayViewModelTests {
             service: SuccessMock(),
             historyDataLoader: { throw URLError(.timedOut) },
             isConnected: { true },
-            isConsentGranted: { true }
+            isConsentGranted: { true },
+            localCache: isolatedCache(suite: "connected-failure")
         )
 
         await vm.loadHistory(showFailureHint: true)
@@ -1589,7 +1627,8 @@ struct TodayViewModelTests {
             service: SuccessMock(),
             historyDataLoader: { Data("not-json".utf8) },
             isConnected: { true },
-            isConsentGranted: { true }
+            isConsentGranted: { true },
+            localCache: isolatedCache(suite: "invalid-manual")
         )
 
         await vm.loadHistory(showFailureHint: true)
@@ -1602,7 +1641,8 @@ struct TodayViewModelTests {
             service: SuccessMock(),
             historyDataLoader: { Data("not-json".utf8) },
             isConnected: { true },
-            isConsentGranted: { true }
+            isConsentGranted: { true },
+            localCache: isolatedCache(suite: "invalid-background")
         )
 
         await vm.loadHistory()
@@ -1620,7 +1660,8 @@ struct TodayViewModelTests {
             service: SuccessMock(),
             historyDataLoader: { throw URLError(.networkConnectionLost) },
             isConnected: { false },
-            isConsentGranted: { true }
+            isConsentGranted: { true },
+            localCache: isolatedCache(suite: "offline-cold-start")
         )
         vm.pendingRetryStore = pending
         vm.successStore = success
@@ -1639,7 +1680,8 @@ struct TodayViewModelTests {
             service: SuccessMock(),
             historyDataLoader: { Data("[]".utf8) },
             isConnected: { true },
-            isConsentGranted: { true }
+            isConsentGranted: { true },
+            localCache: isolatedCache(suite: "successful-load")
         )
         vm.pendingRetryStore = pending
         vm.successStore = success
@@ -1658,7 +1700,8 @@ struct TodayViewModelTests {
             service: SuccessMock(),
             historyDataLoader: { Data("not-json".utf8) },
             isConnected: { true },
-            isConsentGranted: { true }
+            isConsentGranted: { true },
+            localCache: isolatedCache(suite: "decode-failure")
         )
         vm.pendingRetryStore = pending
         vm.successStore = success
@@ -1679,7 +1722,8 @@ struct TodayViewModelTests {
                 return Data("[]".utf8)
             },
             isConnected: { true },
-            isConsentGranted: { true }
+            isConsentGranted: { true },
+            localCache: isolatedCache(suite: "retry-success")
         )
         vm.pendingRetryStore = pending
         vm.successStore = success
@@ -3330,6 +3374,58 @@ struct PendingRetryStoreTests {
 @Suite(.serialized)
 struct ImageCacheTests {
 
+    @Test(arguments: [false, true])
+    func refreshedSignedURLRetriesFailedHistoricalImageWithoutChangingRowIdentity(invalidImageData: Bool) async throws {
+        let key = "history-url-refresh-\(UUID())"
+        let expired = "https://example.com/photo?token=expired"
+        let refreshed = "https://example.com/photo?token=refreshed"
+        let signedURL = SignedURLTestState(expired)
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 2, height: 2)).image { context in
+            UIColor.red.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 2, height: 2))
+        }
+        let data = try #require(image.pngData())
+        var requests: [String] = []
+        let host = UIHostingController(rootView: CachedRemoteImageRefreshFixture(
+            signedURL: signedURL,
+            stableKey: key,
+            download: { requestedURL in
+                requests.append(requestedURL.absoluteString)
+                if requestedURL.absoluteString == expired {
+                    if invalidImageData { return Data("expired signature".utf8) }
+                    throw URLError(.userAuthenticationRequired)
+                }
+                return data
+            }
+        ))
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 100, height: 100))
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        host.view.layoutIfNeeded()
+        for _ in 0..<100 where requests.isEmpty {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(requests == [expired])
+        #expect(ImageCache.shared.get(key) == nil)
+
+        // 服务端正本替换缓存：宿主与视图身份保持不变，只更新签名 URL。
+        signedURL.value = refreshed
+        host.view.layoutIfNeeded()
+        for _ in 0..<100 where ImageCache.shared.get(key) == nil {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(requests == [expired, refreshed])
+        #expect(ImageCache.shared.get(key) != nil)
+
+        // 后续再次重签仍使用已有缓存；链接变化不能造成重复下载。
+        signedURL.value = "https://example.com/photo?token=third"
+        host.view.layoutIfNeeded()
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(requests == [expired, refreshed])
+        #expect(ImageCache.shared.get(key) != nil)
+    }
+
     private func makeLocalSuccessStore(suite: String) -> (LocalSuccessStore, URL, UserDefaults) {
         let defaults = UserDefaults(suiteName: suite)!
         defaults.removePersistentDomain(forName: suite)
@@ -3450,7 +3546,9 @@ struct ImageCacheTests {
         """.utf8)
         let vm = TodayViewModel(
             service: SuccessMock(), historyDataLoader: { response },
-            isConsentGranted: { true }
+            isConsentGranted: { true },
+            localCache: LocalCache(directory: FileManager.default.temporaryDirectory
+                .appendingPathComponent("confirmed-photo-history-cache-\(UUID())", isDirectory: true))
         )
         vm.successStore = store
         vm.pendingRetryStore = makePendingRetryStore(suite: "promote-confirmed-photo-pending")
@@ -6233,6 +6331,128 @@ struct Tab2MilestoneLifecycleTests {
 @MainActor
 struct TimelineStabilityTests {
 
+    // 回归点：长 Passage 展开后不能再把 LazyVStack 的单行高度撑到不可控。
+    // 删掉上限或直接返回 contentHeight 时，本测试必须失败。
+    @Test func longPassageUsesBoundedExpandedViewportHeight() {
+        let height = PassageTimelineLayout.expandedViewportHeight(contentHeight: 900)
+
+        #expect(height == AppTheme.Size.passageExpandedViewportMaxHeight)
+        #expect(height < 900)
+    }
+
+    // 短 Passage 不应为了稳定行高被强行撑大；只有超过上限的内容才在卡片内滚动。
+    @Test func shortPassageKeepsItsNaturalExpandedHeight() {
+        let height = PassageTimelineLayout.expandedViewportHeight(contentHeight: 180)
+
+        #expect(height == 180)
+    }
+
+    @Test func passageReservesScrollbarGutterOnlyWhenExpanded() {
+        #expect(PassageTimelineLayout.contentTrailingInset(isExpanded: false) == 0)
+        #expect(
+            PassageTimelineLayout.contentTrailingInset(isExpanded: true)
+                == AppTheme.Size.passageScrollIndicatorGutter
+        )
+    }
+
+    @Test func passageEdgeFadesFollowHiddenScrollableContent() {
+        let atTop = PassageTimelineLayout.edgeVisibility(
+            contentMinY: 0,
+            contentMaxY: 900,
+            viewportHeight: 360
+        )
+        let inMiddle = PassageTimelineLayout.edgeVisibility(
+            contentMinY: -100,
+            contentMaxY: 800,
+            viewportHeight: 360
+        )
+        let atBottom = PassageTimelineLayout.edgeVisibility(
+            contentMinY: -540,
+            contentMaxY: 360,
+            viewportHeight: 360
+        )
+
+        #expect(atTop == PassageTimelineLayout.bottomEdgeFadeFlag)
+        #expect(
+            inMiddle
+                == PassageTimelineLayout.topEdgeFadeFlag | PassageTimelineLayout.bottomEdgeFadeFlag
+        )
+        #expect(atBottom == PassageTimelineLayout.topEdgeFadeFlag)
+    }
+
+    @Test func passageReadingEndsOnlyAfterCardFullyLeavesViewport() {
+        let viewport = CGRect(x: 0, y: 0, width: 390, height: 700)
+
+        #expect(!PassageReadingLifecycle.isCompletelyOutside(
+            cardFrame: CGRect(x: 16, y: -699, width: 358, height: 700),
+            viewport: viewport
+        ))
+        #expect(PassageReadingLifecycle.isCompletelyOutside(
+            cardFrame: CGRect(x: 16, y: -700, width: 358, height: 700),
+            viewport: viewport
+        ))
+        #expect(!PassageReadingLifecycle.isCompletelyOutside(
+            cardFrame: CGRect(x: 16, y: 699, width: 358, height: 700),
+            viewport: viewport
+        ))
+        #expect(PassageReadingLifecycle.isCompletelyOutside(
+            cardFrame: CGRect(x: 16, y: 700, width: 358, height: 700),
+            viewport: viewport
+        ))
+    }
+
+    // 首屏定位必须发生在 ScrollView 的初始布局阶段：长列表挂载后的第一个稳定布局
+    // 已经位于最大可滚动偏移，不能依赖 onAppear 后再补一次 scrollTo。
+    @Test func initialBottomScrollViewLaysOutLongContentAtBottom() async throws {
+        let ids = (0..<12).map { _ in UUID() }
+        let host = UIHostingController(rootView:
+            InitialBottomScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(ids, id: \.self) { id in
+                        Color.clear
+                            .frame(height: 100)
+                            .id(id)
+                    }
+                }
+            }
+        )
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 500))
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        host.view.frame = window.bounds
+        host.view.setNeedsLayout()
+        host.view.layoutIfNeeded()
+
+        // SwiftUI 在当前 runloop 提交默认锚点的初始布局事务；不等待任何业务层
+        // DispatchQueue 补滚动，只让框架完成这一轮布局。
+        await Task.yield()
+        host.view.layoutIfNeeded()
+
+        let scrollView = try #require(Self.firstScrollView(in: host.view))
+        let maximumOffset = max(
+            0,
+            scrollView.contentSize.height
+                - scrollView.bounds.height
+                + scrollView.adjustedContentInset.bottom
+        )
+        #expect(maximumOffset > 0)
+        #expect(scrollView.contentOffset.y >= maximumOffset - 1)
+
+        window.isHidden = true
+    }
+
+    private static func firstScrollView(in view: UIView) -> UIScrollView? {
+        if let scrollView = view as? UIScrollView {
+            return scrollView
+        }
+        for subview in view.subviews {
+            if let match = firstScrollView(in: subview) {
+                return match
+            }
+        }
+        return nil
+    }
+
     // 与 TodayViewModel.decodeRecords 同策略的日期解码（ISO8601 带/不带小数秒）
     private static let decoder: JSONDecoder = {
         let d = JSONDecoder()
@@ -6307,16 +6527,23 @@ struct TimelineStabilityTests {
         #expect(separators.count == 1)
     }
 
-    // 瞬间定位标志是一次性的：消费一次后即复位，后续条目变化走正常滚动规则。
-    @Test func instantJumpFlagConsumedOnce() {
+    // 滚动请求消费是一次性的：消费后 pendingScrollRequest 清空
+    @Test func scrollRequestConsumedOnce() {
         let vm = TodayViewModel(service: SuccessMock(), isConsentGranted: { true })
-        vm.instantJumpToBottomPending = true
-        #expect(vm.takeInstantJumpFlag() == true)
-        #expect(vm.takeInstantJumpFlag() == false)
+        let id = UUID()
+        vm.postScrollRequest(TimelineScrollRequest(
+            id: id,
+            targetEntryId: UUID(),
+            anchor: .bottom,
+            animation: .instant,
+            reason: .initialEntry
+        ))
+        #expect(vm.pendingScrollRequest?.id == id)
+        vm.consumeScrollRequest(id: id)
+        #expect(vm.pendingScrollRequest == nil)
     }
 
-    // loading → 最终卡片是同 count、同 id 的原位替换；必须另发明确的底部滚动请求，
-    // 否则只监听 entries.count 的视图永远感知不到最终卡片高度增长。
+    // loading → 最终卡片是同 count、同 id 的原位替换；必须发明确的 finalCardLayout 滚动请求
     @Test func finalCardRequestsBottomScrollWithoutCountChange() async {
         let service = ControllableGenerationMock()
         let vm = TodayViewModel(service: service, isConsentGranted: { true })
@@ -6338,7 +6565,202 @@ struct TimelineStabilityTests {
 
         #expect(vm.entries.count == loadingCount)
         #expect(vm.entries.last?.id == loadingId)
-        #expect(vm.bottomScrollTargetId == loadingId)
+        #expect(vm.pendingScrollRequest?.targetEntryId == loadingId)
+        #expect(vm.pendingScrollRequest?.anchor == .bottom)
+        #expect(vm.pendingScrollRequest?.reason == .finalCardLayout)
+    }
+
+    // 边界 1：历史中部条目重试遭遇失败时，生成的失败行依然发出 .center / .retry 请求，绝不拉拽到底部
+    @Test func retryFailurePreservesCenterAnchorWithoutJumpingToBottom() async {
+        let failingService = AlwaysFailRecordingMock()
+        let vm = TodayViewModel(service: failingService, isConsentGranted: { true })
+        let bubble = TimelineEntry.userBubble(text: "middle message", image: nil)
+        let failedEntry = TimelineEntry(
+            id: UUID(),
+            createdAt: .now,
+            content: .sendFailed(text: "middle message", image: nil, requestId: UUID(), bubbleEntryId: bubble.id)
+        )
+        let tailEntry = TimelineEntry.userBubble(text: "tail message", image: nil)
+        vm.entries = [bubble, failedEntry, tailEntry]
+
+        await vm.retrySend(
+            text: "middle message",
+            image: nil,
+            failedEntryId: failedEntry.id,
+            requestId: UUID(),
+            bubbleEntryId: bubble.id
+        )
+
+        #expect(vm.pendingScrollRequest?.anchor == .center)
+        #expect(vm.pendingScrollRequest?.reason == .retry)
+        #expect(vm.pendingScrollRequest?.targetEntryId != tailEntry.id)
+    }
+
+    // 边界 2：普通发送消息时，runGeneration 追加 loading 后立即将滚动目标推进到 loadingEntry，确保呼吸动效可见
+    @Test func sendUpdatesScrollTargetToLoadingEntry() async {
+        let service = ControllableGenerationMock()
+        let vm = TodayViewModel(service: service, isConsentGranted: { true })
+        let sendTask = Task { await vm.send("hello") }
+        _ = await service.waitForStartedRequests(1)
+
+        // 此时已进入 runGeneration，loading 已挂载，且滚动目标已推进为 loadingEntry.id
+        let loadingEntry = vm.entries.last {
+            if case .aiLoading = $0.content { return true }
+            return false
+        }
+        #expect(loadingEntry != nil)
+        #expect(vm.pendingScrollRequest?.targetEntryId == loadingEntry?.id)
+        #expect(vm.pendingScrollRequest?.anchor == .bottom)
+        #expect(vm.pendingScrollRequest?.reason == .send)
+
+        sendTask.cancel()
+    }
+
+    // 边界 3：defer 中注入的本地成功增量，成为进入对齐会话的最终定位目标
+    @Test func deferInjectedLocalSuccessBecomesFinalScrollTarget() async throws {
+        let serverJson = """
+        [{"id": "11111111-2222-3333-4444-555555555501", "role": "user", "user_content": "server record", "created_at": "2026-08-22T09:00:00Z"}]
+        """
+        let serverData = serverJson.data(using: .utf8)!
+
+        let defaults = UserDefaults(suiteName: "defer-scroll-target-test")!
+        defaults.removePersistentDomain(forName: "defer-scroll-target-test")
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("defer-scroll-target-test", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+
+        let successStore = LocalSuccessStore(defaults: defaults, documentsDir: dir)
+        let localCard = AICard.card(CardContent(targetExpression: "Local target"))
+        let localReqId = UUID()
+        // 模拟本地生成的成功增量（时间晚于服务器历史）
+        try successStore.saveTab1(
+            text: "local text",
+            image: nil,
+            requestId: localReqId,
+            userMessageId: UUID(),
+            assistantMessageId: UUID(),
+            createdAt: Date(timeIntervalSince1970: 1800000000),
+            card: localCard
+        )
+
+        let vm = TodayViewModel(
+            service: SuccessMock(),
+            historyDataLoader: { serverData },
+            isConnected: { true },
+            isConsentGranted: { true },
+            localCache: LocalCache(directory: FileManager.default.temporaryDirectory
+                .appendingPathComponent("timeline-defer-cache-\(UUID())", isDirectory: true))
+        )
+        vm.successStore = successStore
+
+        await vm.loadHistory()
+
+        // 最终结算目标应为 defer 注入后的最新本地卡片，而不是服务器记录
+        let lastEntry = vm.entries.last
+        #expect(lastEntry != nil)
+        #expect(vm.pendingScrollRequest?.targetEntryId == lastEntry?.id)
+        #expect(vm.pendingScrollRequest?.anchor == .bottom)
+        #expect(vm.pendingScrollRequest?.animation == .instant)
+    }
+
+    // 真机复现路径：entries 已由本轮 loadHistory 之前的缓存渲染填充（例如上一次
+    // app 启动时的冷启动首刷），此次 loadHistory 的本地注入（S2：pendingRetry /
+    // localSuccess）追加了一条比缓存里最新一条更晚的记录——它才是真正的时间线
+    // 底部。回归点：旧代码只在“本次 loadHistory 是首次让 entries 从空变有”时才
+    // 重新对齐滚动目标；entries 已非空（本测试模拟缓存已渲染）时，S2 注入完全不
+    // 会更新 pendingScrollRequest，用户会先停在缓存渲染时的旧底部，直到网络请求
+    // 返回、defer 兜底才纠正——表现为「刚进 App 展示的不是最新内容，要等一下」。
+    // 用受控网关卡住网络请求，断言在网络完成前（S2 刚注入完）滚动目标已经正确。
+    @Test func localInjectionAfterPriorRenderImmediatelyUpdatesScrollTarget() async throws {
+        let gate = Tab2RefreshGate()
+        let defaults = UserDefaults(suiteName: "local-injection-scroll-target-test")!
+        defaults.removePersistentDomain(forName: "local-injection-scroll-target-test")
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("local-injection-scroll-target-test", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let pendingRetryStore = PendingRetryStore(defaults: defaults, documentsDir: dir)
+
+        let vm = TodayViewModel(
+            service: SuccessMock(),
+            historyDataLoader: { try await gate.wait() },
+            historyTimeout: .seconds(5),
+            isConnected: { true },
+            isConsentGranted: { true },
+            localCache: LocalCache(directory: FileManager.default.temporaryDirectory
+                .appendingPathComponent("timeline-injection-cache-\(UUID())", isDirectory: true))
+        )
+        vm.pendingRetryStore = pendingRetryStore
+
+        // 模拟「上一次冷启动缓存渲染」已把旧内容摆进时间线——本轮 loadHistory 的
+        // 步骤 1（读缓存）因 entries 非空会跳过，直接进入步骤 2。
+        let staleEntry = TimelineEntry.userBubble(text: "yesterday's cached message", image: nil)
+        vm.entries = [staleEntry]
+
+        // 一条比 staleEntry 更晚写作、尚未成功同步的失败发送记录——按写作时刻会被
+        // 插到 staleEntry 之后，成为新的真实时间线底部。
+        try pendingRetryStore.saveTab1(
+            text: "unsynced failed send", image: nil,
+            requestId: UUID(), createdAt: .now
+        )
+
+        let loadTask = Task { await vm.loadHistory() }
+        await waitUntil { vm.entries.count > 1 }   // S2 注入已完成，网络仍被 gate 卡住
+
+        let newLastEntry = vm.entries.last
+        #expect(newLastEntry?.id != staleEntry.id)
+        #expect(vm.pendingScrollRequest?.targetEntryId == newLastEntry?.id)
+        #expect(vm.pendingScrollRequest?.anchor == .bottom)
+        #expect(vm.pendingScrollRequest?.animation == .instant)
+
+        await gate.resolve(.success(Data("[]".utf8)))
+        await loadTask.value
+    }
+
+    private func waitUntil(_ condition: @escaping @MainActor () -> Bool) async {
+        for _ in 0..<100 {
+            if condition() { return }
+            try? await Task.sleep(for: .milliseconds(2))
+        }
+        Issue.record("Timed out waiting for local injection scroll target")
+    }
+
+    // 用户冷启动进入会话后主动滚动，会话立即失效，后续正本替换不再发布滚动请求
+    @Test func entryAlignmentSessionCancelsOnUserScroll() async {
+        let json = """
+        [{"id": "11111111-2222-3333-4444-555555555501", "role": "user", "user_content": "hello", "created_at": "2026-08-22T09:00:00Z"}]
+        """
+        let recordsData = json.data(using: .utf8)!
+        let vm = TodayViewModel(
+            service: SuccessMock(),
+            historyDataLoader: { recordsData },
+            isConnected: { true },
+            isConsentGranted: { true },
+            localCache: LocalCache(directory: FileManager.default.temporaryDirectory
+                .appendingPathComponent("timeline-scroll-cache-\(UUID())", isDirectory: true))
+        )
+        #expect(vm.activeEntrySessionId != nil)
+        #expect(vm.hasUserScrolledInCurrentSession == false)
+
+        // 用户主动拖拽/滚动
+        vm.userDidScroll()
+        #expect(vm.activeEntrySessionId == nil)
+        #expect(vm.hasUserScrolledInCurrentSession == true)
+
+        // 后台历史加载完成，由于用户已主动滚动，不强拉到底部
+        await vm.loadHistory()
+        #expect(vm.pendingScrollRequest == nil)
+    }
+
+    // 从 Tab2 切回 Tab1 触发 activateTab，开启新会话并发布无动画滚动请求
+    @Test func tabReturnActivatesSessionAndScrollsToLast() {
+        let vm = TodayViewModel(service: SuccessMock(), isConsentGranted: { true })
+        let entry = TimelineEntry.userBubble(text: "testing", image: nil)
+        vm.entries = [entry]
+
+        vm.activateTab(token: UUID())
+        #expect(vm.activeEntrySessionId != nil)
+        #expect(vm.pendingScrollRequest?.reason == .tabReturn)
+        #expect(vm.pendingScrollRequest?.animation == .instant)
+        #expect(vm.pendingScrollRequest?.targetEntryId == entry.id)
     }
 }
 
@@ -6682,16 +7104,17 @@ struct LocalSuccessInjectionTests {
 
     // MARK: - 代码审查修复回归测试（2026-08-23）
 
-    // #1：主动发送清掉被动对齐窗口——冷启动历史在途时发送，新内容也要自动滚到底
-    @Test func sendClearsPassiveAlignment() async throws {
+    // #1：主动发送清掉进入对齐会话——冷启动历史在途时发送，新内容也要自动滚到底
+    @Test func sendCancelsActiveEntrySession() async throws {
         let vm = TodayViewModel(service: SuccessMock(), isConsentGranted: { true })
         vm.successStore = makeStore(suite: "passive-clear").0
         vm.pendingRetryStore = makePendingStore(suite: "passive-clear-pending")
-        vm.isPassiveAlignment = true   // 模拟 loadHistory 网络在途的被动窗口
+        vm.startEntryAlignmentSession()   // 模拟冷启动或切回 Tab1 建立的对齐会话
+        #expect(vm.activeEntrySessionId != nil)
 
         await vm.send("hi")
 
-        #expect(!vm.isPassiveAlignment)   // 发送是主动动作：窗口清除，视图恢复自动滚动
+        #expect(vm.activeEntrySessionId == nil)   // 发送是主动动作：会话清除，视图按主动交互滚动
     }
 
     // #2：同 requestId 的失败记录与成功记录并存（杀进程窗口）→ 失败侧不注入，成功侧照常
@@ -7254,5 +7677,3 @@ struct AICardBodySpacingTests {
         #expect(passage.displayableGrammarNote == "Passage note.")
     }
 }
-
-

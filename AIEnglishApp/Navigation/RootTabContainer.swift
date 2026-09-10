@@ -88,6 +88,7 @@ struct RootTabContainer: View {
     #endif
     @State private var showSettings = false
     @State private var showUsageLimit = false
+    @State private var todayActivationToken = UUID()
     @State private var mineListResetToken = UUID()
     @State private var mineSwipeActionOpen = false
     @State private var mineDetailActive = false
@@ -192,12 +193,18 @@ struct RootTabContainer: View {
             if newTab == .mine {
                 mineListResetToken = UUID()
             }
+            // 切回 Tab1 时对齐最新（view 永远在 hierarchy，onAppear 不会重触发）
+            if newTab == .today && oldTab != .today {
+                todayActivationToken = UUID()
+            }
         }
     }
 
     private var contentArea: some View {
         ZStack {
             TodayView(
+                activationToken: todayActivationToken,
+                isActive: selectedTab == .today,
                 onImagePreview: { img, anchor in
                     previewAnchor = anchor
                     withAnimation(.spring(duration: 0.35)) { previewImage = img }

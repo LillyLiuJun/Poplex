@@ -3,9 +3,13 @@ import Combine
 
 struct TimelineRow: View {
     let entry: TimelineEntry
+    var timelineViewportFrame: CGRect = .zero
+    var passageTabResetGeneration = 0
     var onImageTap: ((UIImage, CGRect) -> Void)? = nil
     var onRetry: ((_ text: String?, _ image: UIImage?, _ entryId: UUID, _ requestId: UUID?, _ bubbleEntryId: UUID?) -> Void)? = nil
     var onRetryPending: ((PendingRetryRecord) -> Void)? = nil
+    var onCollapse: ((UUID) -> Void)? = nil
+    @State private var passageVisibilityResetGeneration = 0
 
     var body: some View {
         switch entry.content {
@@ -14,7 +18,23 @@ struct TimelineRow: View {
         case .aiLoading:
             AILoadingCard()
         case .aiCard(let card):
-            AICardView(card: card)
+            AICardView(
+                card: card,
+                passageResetSignal: PassageResetSignal(
+                    tabGeneration: passageTabResetGeneration,
+                    visibilityGeneration: passageVisibilityResetGeneration
+                ),
+                onCollapse: { onCollapse?(entry.id) }
+            )
+            .onGeometryChange(for: Bool.self) { proxy in
+                PassageReadingLifecycle.isCompletelyOutside(
+                    cardFrame: proxy.frame(in: .global),
+                    viewport: timelineViewportFrame
+                )
+            } action: { isOutside in
+                guard isOutside else { return }
+                passageVisibilityResetGeneration &+= 1
+            }
         case .aiError(let message):
             ErrorBanner(message: message)
         case .sendFailed(let text, let image, let requestId, let bubbleEntryId):
@@ -204,10 +224,17 @@ private struct UserBubble: View {
 // MARK: - Routes to the correct card view
 private struct AICardView: View {
     let card: AICard
+    var passageResetSignal = PassageResetSignal(tabGeneration: 0, visibilityGeneration: 0)
+    var onCollapse: (() -> Void)? = nil
 
     var body: some View {
         switch card {
-        case .card(let c):  AICardBody(content: c)
+        case .card(let c):
+            AICardBody(
+                content: c,
+                onCollapse: onCollapse,
+                passageResetSignal: passageResetSignal
+            )
         case .error(let c): ErrorBanner(message: c.message ?? "This content can't be processed. Try another one.")
         }
     }

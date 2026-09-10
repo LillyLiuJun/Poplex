@@ -7,6 +7,10 @@ struct CachedRemoteImage<Placeholder: View>: View {
     let signedUrl: String
     let stableKey: String
     let placeholder: Placeholder
+    var download: (URL) async throws -> Data = { url in
+        let (data, _) = try await URLSession.shared.data(from: url)
+        return data
+    }
 
     init(signedUrl: String, stableKey: String, placeholder: Placeholder) {
         self.signedUrl = signedUrl
@@ -27,7 +31,8 @@ struct CachedRemoteImage<Placeholder: View>: View {
     // "still loading": image stayed nil forever, placeholder kept spinning, no
     // way to tell the two apart (code review finding). MVP-only fix: show a
     // distinct static state instead of an infinitely spinning lie. It does not
-    // retry — reconnecting won't revive it until this view is torn down and
+    // retry on connectivity changes. A refreshed signed URL retries the load;
+    // otherwise it won't revive until this view is torn down and
     // rebuilt (e.g. scrolling off/back on, or leaving and reopening the tab).
     // Tap-to-retry and network-aware auto-retry are recorded in
     // 优化需求全量清单_v1.md, not built here.
@@ -45,7 +50,9 @@ struct CachedRemoteImage<Placeholder: View>: View {
                 placeholder
             }
         }
-        .task(id: stableKey) {
+        // 缓存身份仍是路径；下载身份还包含签名 URL。历史先展示本地缓存中的
+        // 过期链接，再收到同一路径的新签名时，必须取消旧任务并重新加载。
+        .task(id: [stableKey, signedUrl]) {
             // Reset both — not just didFail. This view's identity can outlive a
             // single stableKey (e.g. Tab2's HeroCollageView reuses the same grid
             // slot across a refresh with no .id()), so `image` from the PREVIOUS
@@ -84,7 +91,7 @@ struct CachedRemoteImage<Placeholder: View>: View {
             // real failure (code review finding).
             let data: Data
             do {
-                (data, _) = try await URLSession.shared.data(from: url)
+                data = try await download(url)
             } catch {
                 if !Task.isCancelled { didFail = true }
                 return

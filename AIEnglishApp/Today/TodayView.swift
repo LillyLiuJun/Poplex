@@ -4,27 +4,34 @@ import SwiftUI
 /// view init 里求值，init 必须是主线程隔离才能调用它的隔离构造器。
 @MainActor
 struct TodayView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var viewModel = TodayViewModel(service: LiveAIService())
-    /// 时间线末尾的 0 高锚点是否在视口内 → 用户是否处于（或接近）底部。
-    /// 被动对齐时只在底部跟随滚动；用户在阅读中部内容时不被拽走。
-    @State private var atBottomVisible = false
+
     /// InputBar 外层的实时渲染高度（含胶囊、缩略图/多行增长与底部 padding）。
     /// 首帧用单行基础态 52 + 8 = 60pt，实测回调随后接管；配合 32pt 内容净空，
     /// 基础态停靠线仍是此前验收过的 92pt。
     @State private var inputBarHeight = AppTheme.Size.inputBarMinHeight + AppTheme.Space.paddingS
     @State private var refreshHaptics = PullToRefreshHaptics()
+    @State private var timelineViewportFrame: CGRect = .zero
+    @State private var passageTabResetGeneration = 0
     /// 生成次数额度的共享展示状态：达标时 InputBar 锁输入 + 出 banner，数字从这读。
     /// 只有服务端裁决会把 isAllowed 置 false：429、refresh 的 allowed 字段，
     /// 以及成功响应的落账后裁决（方案 B——最后一次生成用完额度即锁定）。
     @State private var quotaStore = UsageQuotaStore.shared
+    var activationToken: UUID? = nil
+    var isActive = true
     var onImagePreview: ((UIImage, UnitPoint) -> Void)?
     /// 达标 banner 点击 → 打开额度 Sheet（由 RootTabContainer 呈现，顶栏仪表盘同款）。
     var onOpenUsageLimit: (() -> Void)?
     var topInset: CGFloat = 0
 
-    init(onImagePreview: ((UIImage, UnitPoint) -> Void)? = nil,
+    init(activationToken: UUID? = nil,
+         isActive: Bool = true,
+         onImagePreview: ((UIImage, UnitPoint) -> Void)? = nil,
          onOpenUsageLimit: (() -> Void)? = nil,
          topInset: CGFloat = 0) {
+        self.activationToken = activationToken
+        self.isActive = isActive
         self.onImagePreview = onImagePreview
         self.onOpenUsageLimit = onOpenUsageLimit
         self.topInset = topInset
@@ -100,6 +107,18 @@ struct TodayView: View {
                 // 不动旧裁决），不打扰用户。
                 await quotaStore.refresh()
             }
+            .onChange(of: activationToken) { _, token in
+                guard let token else { return }
+                viewModel.activateTab(token: token)
+            }
+            .onChange(of: isActive) { wasActive, isNowActive in
+                guard wasActive, !isNowActive else { return }
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    passageTabResetGeneration &+= 1
+                }
+            }
     }
 
     /// 空时间线和已有历史的时间线必须是两个独立的首次布局。
@@ -108,13 +127,11 @@ struct TodayView: View {
     /// 帧里先采用「空内容的顶部偏移」，随后才计算真实内容高度。此前再用 proxy 补一次
     /// scrollTo，便会形成用户看到的「先显示、再定位」；若补定位恰好错过布局，还可能
     /// 留在空白位置。这里先保留一个无内容的画布，等 entries 到位后才创建真正的
-    /// ScrollView——它首次出现时内容已经就位，`.onAppear` 里补的 `scrollTo` 因而是
-    /// 该次布局落定后的第一件事，不会有「先显示、再定位」的可见跳动。
+    /// ScrollView。历史列表创建时使用布局级的默认底部锚点，让 SwiftUI 在首次
+    /// 布局里就计算底部位置，而不是等 `.onAppear` 后再用 `scrollTo` 纠正。
     ///
-    /// 这里刻意不用 `.defaultScrollAnchor(.bottom)`：那是布局层面的容器锚点，内容不足
-    /// 一屏时它会把内容整体推到底部（顶上空出一大截），而不是让内容像其他消息一样自然
-    /// 贴顶——历史行数少的会话会看到顶部一大块空白（审查发现）。`scrollTo(id:anchor:)`
-    /// 只移动滚动位置：内容超过一屏时定位到底部，内容不足一屏时是无操作，天然贴顶。
+    /// `.defaultScrollAnchor(.bottom)` 单独使用会把不足一屏的内容整体推到底部。
+    /// 因此内容容器同时保持至少一个视口的高度：长列表初始在底部，短列表仍贴顶。
     @ViewBuilder
     private var timeline: some View {
         if !viewModel.entries.isEmpty {
@@ -134,12 +151,19 @@ struct TodayView: View {
 
     private var historyTimeline: some View {
         ScrollViewReader { proxy in
-            ScrollView {
+            InitialBottomScrollView(
+                topContentMargin: topInset,
+                bottomContentInset: inputBarHeight + AppTheme.Space.paddingSection
+            ) {
                 WarmRefreshControlHelper(haptics: refreshHaptics)
                     .frame(width: 0, height: 0)
                 LazyVStack(spacing: 0) {
                     ForEach(Array(viewModel.entries.enumerated()), id: \.element.id) { index, entry in
-                        TimelineRow(entry: entry, onImageTap: { img, frame in
+                        TimelineRow(
+                            entry: entry,
+                            timelineViewportFrame: timelineViewportFrame,
+                            passageTabResetGeneration: passageTabResetGeneration,
+                            onImageTap: { img, frame in
                             let screen = UIScreen.main.bounds.size
                             let anchor = UnitPoint(
                                 x: frame.midX / screen.width,
@@ -154,16 +178,24 @@ struct TodayView: View {
                                 return
                             }
                             Task { await viewModel.retryPending(record: record) }
+                        }, onCollapse: { entryId in
+                            // 直接用本作用域的 proxy 同步滚动，不走 ViewModel 中转 +
+                            // onChange 异步链路：篇章卡片折叠时视口对齐到卡片顶部这个
+                            // 动作，本质和 Tab2 分类手风琴展开时的滚动锚定
+                            // （MineView.toggleExpand，proxy 与状态翻转同函数内直接调用）
+                            // 是同一件事——之前改走「VM 状态 → onChange 反应」链路，
+                            // 状态变化虽然发生在同一个 withAnimation 事务里，但滚动动作
+                            // 本身要等下一次视图更新才触发，和 AICardBody 里本地的折叠
+                            // 动画不再保证同一帧起播，两个动画各播各的、观感上就是跳动。
+                            // proxy 在这里（ScrollViewReader 作用域）本来就可直接拿到，
+                            // 没有必要绕一圈。
+                            withAnimation(PassageTimelineLayout.toggleMotion(reduceMotion: reduceMotion).animation) {
+                                proxy.scrollTo(entryId, anchor: .top)
+                            }
                         })
                         .id(entry.id)
                         .padding(.bottom, Self.timelineSpacing(after: index, in: viewModel.entries))
                     }
-                    // 底部探针：出现在视口内 → 用户已处于（或接近）底部。
-                    // 0 高不占位、不影响布局；被动对齐的「底部跟随」判定全靠它。
-                    Color.clear
-                        .frame(height: 0)
-                        .onAppear { atBottomVisible = true }
-                        .onDisappear { atBottomVisible = false }
                 }
                 .padding(AppTheme.Space.paddingPage)
             }
@@ -175,6 +207,11 @@ struct TodayView: View {
                 // 后续重设计改变几何时，停靠线自动同步，不再依赖 92pt 经验常数。
                 Color.clear.frame(height: inputBarHeight + AppTheme.Space.paddingSection)
             }
+            .onGeometryChange(for: CGRect.self) { proxy in
+                proxy.frame(in: .global)
+            } action: { frame in
+                timelineViewportFrame = frame
+            }
             .scrollBounceBehavior(.always, axes: .vertical)
             .refreshable {
                 refreshHaptics.fire()
@@ -184,6 +221,18 @@ struct TodayView: View {
             .contentMargins(.top, topInset, for: .scrollContent)  // 可滚动进入的顶部 margin
             .topEdgeFade()
             .scrollDismissesKeyboard(.interactively)
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 10)
+                    .onChanged { value in
+                        // 严格判定垂直主导滚动（垂直位移 > 水平位移的 1.2 倍且位移 >= 10pt），
+                        // 避免把用户的轻微横向滑动手势（如 Tab 侧滑预备）误判为垂直阅读而误取消进入对齐会话
+                        let dy = abs(value.translation.height)
+                        let dx = abs(value.translation.width)
+                        if dy >= 10 && dy > dx * 1.2 {
+                            viewModel.userDidScroll()
+                        }
+                    }
+            )
             // simultaneousGesture instead of onTapGesture: lets InputBar buttons
             // (e.g. the thumbnail × button) handle the tap first without
             // the scroll view's gesture recognizer cancelling them.
@@ -191,68 +240,65 @@ struct TodayView: View {
                 UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
             })
             .onAppear {
-                // 冷启动/时间线首次有内容 → 无动画瞬间定位底部。entries 已经就位
-                // （由上方两段式挂载保证），先同步尝试，再延后一个 runloop tick 兜底一次，
-                // 防止这一帧的布局还没吃到最新内容；两次目标相同、无动画，视觉上幂等。
-                // 内容不足一屏时 scrollTo 是无操作，天然贴顶——不复用 defaultScrollAnchor
-                // 是因为它会把不足一屏的内容整体推到底部（顶部空出一大截，审查发现）。
-                guard viewModel.takeInstantJumpFlag(), let last = viewModel.entries.last else { return }
-                proxy.scrollTo(last.id, anchor: .bottom)
-                DispatchQueue.main.async {
-                    MainActor.assumeIsolated {
-                        proxy.scrollTo(last.id, anchor: .bottom)
+                if let request = viewModel.pendingScrollRequest {
+                    // 首次进入的底部位置已经由 InitialBottomScrollView 在第一轮布局中
+                    // 建立；这里只消费请求，避免再走一次「出现后纠正」的命令式滚动。
+                    if request.reason == .initialEntry {
+                        viewModel.consumeScrollRequest(id: request.id)
+                    } else {
+                        executeScrollRequest(request, with: proxy)
                     }
                 }
             }
-            .onChange(of: viewModel.entries.count) {
-                // 重试期间视图锚在原地（scrollTargetId 非空）：条目的原地增删
-                // 不触发「自动滚到最后一条」，否则用户会被拽离重试现场
-                guard viewModel.scrollTargetId == nil else { return }
-                // 最后一条 entry 是新增时已实例化的稳定目标。底部的 safeAreaInset
-                // 已把 InputBar 遮住的区域从滚动视口扣除，故 bottom 锚点就是用户
-                // 手动滚到底时的停靠线。
-                guard let last = viewModel.entries.last else { return }
-                // ① 冷启动/首启：时间线首次有内容 → 无动画瞬间定位底部，
-                //    没有「从顶部划到底部」的滑动（不包 withAnimation 即瞬间定格）。
-                //    审查发现 #10：同步 scrollTo 可能赶在本次更新的布局落定之前执行
-                //    （目标新位置尚未计算），flag 已消费无法重试 → 用户停在顶部。
-                //    先同步尝试（布局已就位时立即生效），再延后一个 runloop tick
-                //    兜底一次。两次目标相同、无动画，视觉上幂等。
-                if viewModel.takeInstantJumpFlag() {
-                    proxy.scrollTo(last.id, anchor: .bottom)
-                    DispatchQueue.main.async {
-                        MainActor.assumeIsolated {
-                            proxy.scrollTo(last.id, anchor: .bottom)
+            .onChange(of: viewModel.pendingScrollRequest) { _, newRequest in
+                guard let request = newRequest else { return }
+                executeScrollRequest(request, with: proxy)
+            }
+        }
+    }
+
+    private func executeScrollRequest(_ request: TimelineScrollRequest, with proxy: ScrollViewProxy) {
+        let target = request.targetEntryId
+        let anchor: UnitPoint = {
+            switch request.anchor {
+            case .top: return .top
+            case .center: return .center
+            case .bottom: return .bottom
+            }
+        }()
+
+        switch request.animation {
+        case .instant:
+            // 无动画瞬间定位：先立即执行一次；再延后一个 runloop tick 兜底补发一次，
+            // 确保首帧或更新后布局落定。两次目标相同且无动画，视觉上幂等。
+            proxy.scrollTo(target, anchor: anchor)
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    proxy.scrollTo(target, anchor: anchor)
+                    viewModel.consumeScrollRequest(id: request.id)
+                }
+            }
+        case .animated:
+            switch request.reason {
+            case .finalCardLayout:
+                // loading → 最终卡片是同 id 的原位替换，高度显著增长。
+                // 延后一个 runloop tick，等新卡片完成布局后再执行平滑滚动
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated {
+                        withAnimation(AppTheme.Motion.timelineActiveFollow) {
+                            proxy.scrollTo(target, anchor: anchor)
                         }
+                        viewModel.consumeScrollRequest(id: request.id)
                     }
-                    return
                 }
-                // ② 被动对齐（进页面/下拉刷新/回前台的 loadHistory 改动）：
-                //    只在用户已处于底部时跟随，正在阅读时不拽走；
-                //    用短促 easeOut（0.15s）跟随，新内容到达不拖沓
-                if viewModel.isPassiveAlignment {
-                    guard atBottomVisible else { return }
-                    withAnimation(AppTheme.Motion.timelinePassiveFollow) { proxy.scrollTo(last.id, anchor: .bottom) }
-                    return
+            default:
+                withAnimation(AppTheme.Motion.timelineActiveFollow) {
+                    proxy.scrollTo(target, anchor: anchor)
                 }
-                // ③ 主动变化（发送消息、待重试记录重试成功等）：照旧动画跟随到底
-                withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
-            }
-            .onChange(of: viewModel.bottomScrollTargetId) {
-                guard viewModel.scrollTargetId == nil,
-                      let target = viewModel.bottomScrollTargetId else { return }
-                // loading → 最终卡片是同 id、同 count 的原位替换，但高度会显著增长。
-                // 延后一个 runloop tick，等新卡片完成布局后再读取正确的底部位置；
-                // 否则 scrollTo 会按 loading 的旧高度计算，看起来像完全没有滚动。
                 DispatchQueue.main.async {
                     MainActor.assumeIsolated {
-                        withAnimation { proxy.scrollTo(target, anchor: .bottom) }
+                        viewModel.consumeScrollRequest(id: request.id)
                     }
-                }
-            }
-            .onChange(of: viewModel.scrollTargetId) {
-                if let target = viewModel.scrollTargetId {
-                    withAnimation { proxy.scrollTo(target, anchor: .center) }
                 }
             }
         }
@@ -298,6 +344,45 @@ struct TodayView: View {
         }
         // 4. AI 结果／失败行 → 下一次输入：28pt
         return AppTheme.Space.timelineResultToNextInput
+    }
+}
+
+/// 只负责历史时间线的首次摆放：长内容由布局系统直接从底部开始，不等
+/// `onAppear` 后再发 `scrollTo`。内容不足一屏时，最小高度把内容保持在顶部，不会被
+/// `.defaultScrollAnchor(.bottom)` 推到屏幕下方。后续发送、重试和卡片高度变化仍由外层
+/// ScrollViewReader 的显式滚动请求处理。
+struct InitialBottomScrollView<Content: View>: View {
+    private let topContentMargin: CGFloat
+    private let bottomContentInset: CGFloat
+    private let content: Content
+
+    init(
+        topContentMargin: CGFloat = 0,
+        bottomContentInset: CGFloat = 0,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.topContentMargin = max(0, topContentMargin)
+        self.bottomContentInset = max(0, bottomContentInset)
+        self.content = content()
+    }
+
+    var body: some View {
+        GeometryReader { geometry in
+            ScrollView {
+                content
+                    // 顶部 content margin 与底部 safe-area inset 都占用视口空间。
+                    // 若仍按完整视口高度撑开短内容，默认底部锚点会滚掉顶部 margin，
+                    // 使首行进入浮动顶栏。
+                    .frame(
+                        minHeight: max(
+                            0,
+                            geometry.size.height - topContentMargin - bottomContentInset
+                        ),
+                        alignment: .top
+                    )
+            }
+            .defaultScrollAnchor(.bottom)
+        }
     }
 }
 

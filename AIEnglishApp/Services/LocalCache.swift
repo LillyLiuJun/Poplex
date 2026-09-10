@@ -24,9 +24,9 @@ actor LocalCache {
 
     private let dir: URL
 
-    private init() {
+    init(directory: URL? = nil) {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        dir = base.appendingPathComponent("local_cache", isDirectory: true)
+        dir = directory ?? base.appendingPathComponent("local_cache", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         excludeFromBackup(dir)
     }
