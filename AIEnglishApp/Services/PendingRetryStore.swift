@@ -222,12 +222,15 @@ final class PendingRetryStore {
         }
     }
 
-    /// Tab1 重试成功后按幂等键清除持久化记录（含照片文件）。
-    /// 只清 .tab1 来源——onboarding 记录的移除由 retryPending 的按 id 移除负责。
-    func removeTab1ByRequestId(_ requestId: UUID) {
+    /// 按幂等键移除持久化记录（**任意来源**，含照片文件）。
+    /// 不筛 source：同一个 requestId 只可能对应一条记录，放宽筛选是安全的，
+    /// 且能覆盖 .photo 来源——它的被拒终态同样要清除持久化记录。
+    /// 调用场景：重试成功（服务器已落库）/ 被拒终态（内容拦截，本次尝试已终结）——
+    /// 两者都不该在下次启动被注入。
+    func removeByRequestId(_ requestId: UUID) {
         lock.withLock {
             var records = readRecords()
-            guard let idx = records.firstIndex(where: { $0.source == .tab1 && $0.requestId == requestId })
+            guard let idx = records.firstIndex(where: { $0.requestId == requestId })
             else { return }
             let fileName = records[idx].photoFileName
             records.remove(at: idx)

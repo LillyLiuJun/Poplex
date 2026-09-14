@@ -26,6 +26,7 @@ final class Tab2HomeViewModel {
     var isLoading = false
     var errorMessage: String?
     var toastMessage: String?
+    var toastIcon: String = "wifi"
     var milestonePresentations: [CategoryMilestonePresentation] = []
     /// 每次首页正本刷新成功后递增；手风琴用它淘汰刷新前的行内词条与在途请求。
     private(set) var categoryWordsRevision = 0
@@ -91,12 +92,12 @@ final class Tab2HomeViewModel {
         for presentations: [CategoryMilestonePresentation]
     ) -> String {
         guard presentations.count == 1, let presentation = presentations.first else {
-            return "\(presentations.count) topics reached \(PopsLabel.format(20))"
+            return "\(presentations.count) topics reached \(PopsLabel.format(20))."
         }
         let label = data?.categories.first {
             $0.id == presentation.categoryID
         }?.englishLabel ?? SceneCategory.from(presentation.categoryID).englishLabel
-        return "\(label) reached \(PopsLabel.format(20))"
+        return "'\(label)' reached \(PopsLabel.format(20))."
     }
 
     #if DEBUG
@@ -327,13 +328,14 @@ final class Tab2HomeViewModel {
         // 与 Tab1 一致：已明确离线时不启动一个注定失败的请求。
         // 手动刷新立即反馈；后台刷新有缓存则静默；首次无缓存则进入可重试错误态。
         guard isConnected() else {
+            toastIcon = "wifi"
             if data == nil {
                 errorMessage = "Failed to load"
                 if preservesInitialError {
-                    toastMessage = "You're offline. Check your connection and try again."
+                    toastMessage = "You're offline. Check your connection."
                 }
             } else if showFailureHint {
-                toastMessage = "You're offline. Check your connection and try again."
+                toastMessage = "You're offline. Check your connection."
             }
             return
         }
@@ -382,17 +384,18 @@ final class Tab2HomeViewModel {
             // 保留现有内容且不弹 Toast；真正的超时由 HomeLoadError.timedOut 进入下方分支。
         } catch {
             print("[Tab2HomeVM] load error (keeping cache):", error)
+            toastIcon = isConnected() ? "arrow.clockwise" : "wifi"
             if data == nil {
                 errorMessage = "Failed to load"
                 if preservesInitialError {
                     toastMessage = isConnected()
-                        ? "Unable to sync right now. Try again in a moment."
-                        : "You're offline. Check your connection and try again."
+                        ? "Couldn't refresh. Try again in a moment."
+                        : "You're offline. Check your connection."
                 }
             } else if inFlightShowsFailureHint {
                 toastMessage = isConnected()
-                    ? "Unable to sync right now. Pull to try again."
-                    : "You're offline. Check your connection and try again."
+                    ? "Couldn't refresh. Try again in a moment."
+                    : "You're offline. Check your connection."
             }
         }
     }

@@ -4,7 +4,7 @@
 //       同时将可提取的素材写入 materials 表（两阶段：内容写入 + 分类打标）。
 // 安全：GEMINI_API_KEY 只存在于这里的环境变量，绝不下发到 App。
 
-import { SCENE_CATEGORIES } from "../_shared/constants.ts";
+import { normalizeSceneCategory, SCENE_CATEGORIES } from "../_shared/constants.ts";
 import {
   getTier,
   LEXICON_STOPWORDS,
@@ -583,10 +583,10 @@ async function deleteImage(path: string | null): Promise<void> {
 // Material extraction — 纯函数从 rawContent.ts 导入，便于单元测试。
 // ──────────────────────────────────────────────────────
 
-// Stage 2: 分类（scene_category）+ 子场景（scene_detail），一次 Gemini 调用。
-// 返回 {category, subScene}；失败时 category 兜底"其他"，subScene 兜底 null。
-// TODO: 写入前与该用户该分类下的已有 scene_detail 比较归并（设计方案 §2.3.1）。
-//       MVP 先直写，用兜底合并作业处理碎片化。
+// Stage 2: classify scene_category + sub_scene in one Gemini call.
+// Returns {category, subScene}; on failure category falls back to "Other", subScene to null.
+// TODO: before writing, merge with existing scene_detail for this user+category (design §2.3.1).
+//       MVP writes directly; dedup job handles fragmentation.
 async function classifyScene(
   targetText: string,
   nativeText: string,
@@ -597,9 +597,14 @@ async function classifyScene(
       `Classify this daily-life scene into ONE category. Reply in JSON ONLY.
 
 Categories:
-家庭与人际、工作与学业、日常起居、饮食、购物消费、出行交通、运动健康、休闲娱乐、科技数码、天气环境、情绪社交、其他
+Home & Family, Work & Study, Daily Routine, Food & Drink, Shopping,
+Travel & Commute, Health & Fitness, Hobbies & Leisure, Digital & Tech,
+Weather & Nature, Social & Feelings, Other
 
-Note: watching sport/film/show → 休闲娱乐; playing/training sport yourself → 运动健康
+Notes:
+- Watching sport / film / show → Hobbies & Leisure
+- Playing or training sport yourself → Health & Fitness
+- Personal emotions or mood vented alone → Social & Feelings
 
 Scene: "${targetText}"${userOriginal ? `\nContext: "${userOriginal}"` : ""}
 
@@ -658,27 +663,24 @@ Watching a show / Working / Studying / Shopping / Chores / Catching up`;
     )?.text ?? "").trim();
     console.log("[classifyScene] raw:", raw, "| parts count:", parts.length);
     const parsed = JSON.parse(raw);
-    const category =
-      (SCENE_CATEGORIES as readonly string[]).includes(parsed.category)
-        ? parsed.category
-        : "其他";
+    const category = normalizeSceneCategory(parsed.category) ?? "Other";
     const subScene = validateSubScene(parsed.sub_scene);
     return { category, subScene };
   } catch (e) {
     console.error("[classifyScene] failed:", e);
-    return { category: "其他", subScene: null };
+    return { category: "Other", subScene: null };
   }
 }
 
-// 词卡分类：按该词最高频的日常使用场景归类，不允许留空。
+// Vocab card classification: pick the category where this word is most commonly used in daily life.
 async function classifyVocabCategory(wordText: string): Promise<string | null> {
   try {
-    const categories = SCENE_CATEGORIES.filter((c) => c !== "其他").join("、");
+    const categories = SCENE_CATEGORIES.filter((c) => c !== "Other").join(", ");
     const prompt =
       `In everyday life, which category do people most often encounter or use this word/phrase?
 Categories: ${categories}
 Word/phrase: "${wordText}"
-You MUST pick exactly one category from the list above — do not reply 其他 or anything else.
+You MUST pick exactly one category from the list above — do not reply "Other" or anything not in the list.
 Reply with the category name ONLY.`;
 
     const res = await fetch(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
@@ -686,7 +688,13 @@ Reply with the category name ONLY.`;
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: { maxOutputTokens: 20 },
+        generationConfig: {
+          maxOutputTokens: 20,
+          // Gemini 3.7 Flash defaults to emitting thinking parts on free-text
+          // requests; without this the answer text lands inside a thought part
+          // and the parsing below reads an empty string (unmatched "" → Other).
+          thinkingConfig: { thinkingBudget: 0 },
+        },
         safetySettings: [
           {
             category: "HARM_CATEGORY_HARASSMENT",
@@ -713,20 +721,28 @@ Reply with the category name ONLY.`;
       );
     }
     const data = await res.json();
-    // 去掉末尾标点（Gemini 偶尔在分类名后附加标点）
-    const raw = (data?.candidates?.[0]?.content?.parts?.find((
-      p: { thought?: boolean; text?: string },
-    ) => !p.thought)?.text ?? "").trim();
-    const result = raw.replace(/[，。！？,.!?、；;：:]+$/, "").trim();
-    if ((SCENE_CATEGORIES as readonly string[]).includes(result)) return result;
-    // AI 未能匹配已知分类 → 兜底为「其他」，词条仍可进 Tab2
-    console.warn(
-      `[classifyVocabCategory] unmatched "${raw}" for "${wordText}", fallback→其他`,
+    // 取最后一个非空 text：thinkingBudget:0 下 parts 只有一个正文 part，
+    // 即便模型仍发出 thought parts，答案文本也会被收集而不是读到空串。
+    const parts: Array<{ thought?: boolean; text?: string }> =
+      data?.candidates?.[0]?.content?.parts ?? [];
+    const texts = parts.map((p) => p.text?.trim() ?? "").filter((t) =>
+      t.length > 0
     );
-    return "其他";
+    // 标点/大小写/中文旧值等漂移由 normalizeSceneCategory 统一归一化
+    const raw = texts.length > 0 ? texts[texts.length - 1] : "";
+    const category = normalizeSceneCategory(raw);
+    if (category) return category;
+    // AI returned an unrecognised category → fall back to "Other" so the entry still enters Tab2
+    console.warn(
+      `[classifyVocabCategory] unmatched "${raw}" for "${wordText}", fallback→Other` +
+        ` | parts=[${parts.map((p) =>
+          `thought:${p.thought ?? false},len:${p.text?.length ?? 0}`
+        ).join("; ")}]`,
+    );
+    return "Other";
   } catch (e) {
     console.error(`[classifyVocabCategory] error for "${wordText}":`, e);
-    return "其他";
+    return "Other";
   }
 }
 

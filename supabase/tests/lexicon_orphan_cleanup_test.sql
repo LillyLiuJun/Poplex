@@ -29,6 +29,9 @@ select set_config('request.jwt.claim.sub', 'a0000000-0000-0000-0000-00000000000a
 
 -- Two materials for user A. "commute" appears in both; "espresso" only in the
 -- first, so deleting the first must zero espresso but only decrement commute.
+-- (scene_category values passed below are placeholders; since 20260910000000
+-- the CHECK allows only the 12 canonical English keys + 12 legacy Chinese
+-- values, so placeholders must come from the canonical set.)
 insert into public.materials (id, user_id, material_type, source, raw_content) values
   ('11110000-0000-0000-0000-000000000001'::uuid, 'a0000000-0000-0000-0000-00000000000a'::uuid,
    'scene', 'onboarding', '{"user_original":"first"}'::jsonb),
@@ -39,13 +42,13 @@ set local role service_role;
 select record_lexicon_material_units(
   'a0000000-0000-0000-0000-00000000000a'::uuid,
   '11110000-0000-0000-0000-000000000001'::uuid,
-  'commute', null, 'native', 'zh', 'sentence', 'express', null, null, 'first sample',
+  'Travel & Commute', null, 'native', 'zh', 'sentence', 'express', null, null, 'first sample',
   '[{"lemma":"commute","entry_kind":"word"},{"lemma":"espresso","entry_kind":"word"}]'::jsonb
 );
 select record_lexicon_material_units(
   'a0000000-0000-0000-0000-00000000000a'::uuid,
   '11110000-0000-0000-0000-000000000002'::uuid,
-  'commute', null, 'native', 'zh', 'sentence', 'express', null, null, 'second sample',
+  'Travel & Commute', null, 'native', 'zh', 'sentence', 'express', null, null, 'second sample',
   '[{"lemma":"commute","entry_kind":"word"}]'::jsonb
 );
 
@@ -105,7 +108,7 @@ set local role service_role;
 select record_lexicon_material_units(
   'a0000000-0000-0000-0000-00000000000a'::uuid,
   '11110000-0000-0000-0000-000000000003'::uuid,
-  'cafe', null, 'native', 'zh', 'sentence', 'express', null, null, 'third sample',
+  'Food & Drink', null, 'native', 'zh', 'sentence', 'express', null, null, 'third sample',
   '[{"lemma":"espresso","entry_kind":"word"}]'::jsonb
 );
 
@@ -123,7 +126,7 @@ select is(
   record_lexicon_material_units(
     'a0000000-0000-0000-0000-00000000000a'::uuid,
     '11110000-0000-0000-0000-000000000001'::uuid,   -- deleted in section 1
-    'commute', null, 'native', 'zh', 'sentence', 'express', null, null, 'late sample',
+    'Travel & Commute', null, 'native', 'zh', 'sentence', 'express', null, null, 'late sample',
     '[{"lemma":"commute","entry_kind":"word"}]'::jsonb
   ),
   0,
@@ -142,7 +145,7 @@ select is(
   record_lexicon_material_units(
     'b0000000-0000-0000-0000-00000000000b'::uuid,   -- wrong owner
     '11110000-0000-0000-0000-000000000002'::uuid,   -- user A's material
-    'commute', null, 'native', 'zh', 'sentence', 'express', null, null, 'cross-user',
+    'Travel & Commute', null, 'native', 'zh', 'sentence', 'express', null, null, 'cross-user',
     '[{"lemma":"commute","entry_kind":"word"}]'::jsonb
   ),
   0,
@@ -162,7 +165,7 @@ set local role service_role;
 select record_lexicon_material_units(
   'b0000000-0000-0000-0000-00000000000b'::uuid,
   '22220000-0000-0000-0000-000000000001'::uuid,
-  'commute', null, 'native', 'zh', 'sentence', 'express', null, null, 'other user sample',
+  'Travel & Commute', null, 'native', 'zh', 'sentence', 'express', null, null, 'other user sample',
   '[{"lemma":"commute","entry_kind":"word"}]'::jsonb
 );
 
@@ -209,7 +212,7 @@ select record_lexicon_material_units(
   (select id from public.materials
     where user_id = 'a0000000-0000-0000-0000-00000000000a'::uuid
       and request_id = 'dd000000-0000-0000-0000-000000000001'::uuid),
-  'harbour', null, 'native', 'zh', 'sentence', 'express', null, null, 'attempt one sample',
+  'Travel & Commute', null, 'native', 'zh', 'sentence', 'express', null, null, 'attempt one sample',
   '[{"lemma":"harbour","entry_kind":"word"}]'::jsonb
 );
 
@@ -255,7 +258,7 @@ set local role service_role;
 select record_lexicon_material_units(
   'a0000000-0000-0000-0000-00000000000a'::uuid,
   '44440000-0000-0000-0000-000000000001'::uuid,
-  'office', null, 'native', 'zh', 'sentence', 'express', null, null, 'tier sample',
+  'Work & Study', null, 'native', 'zh', 'sentence', 'express', null, null, 'tier sample',
   '[{"lemma":"take","entry_kind":"word","tier":"framework"},
     {"lemma":"invoice","entry_kind":"word","tier":"domain"},
     {"lemma":"garbled","entry_kind":"word","tier":"not-a-tier"}]'::jsonb
@@ -291,7 +294,7 @@ update public.lexicon_entries set tier = null
 select record_lexicon_material_units(
   'a0000000-0000-0000-0000-00000000000a'::uuid,
   '44440000-0000-0000-0000-000000000001'::uuid,
-  'office', null, 'native', 'zh', 'sentence', 'express', null, null, 'tier sample again',
+  'Work & Study', null, 'native', 'zh', 'sentence', 'express', null, null, 'tier sample again',
   '[{"lemma":"take","entry_kind":"word","tier":"framework"}]'::jsonb
 );
 

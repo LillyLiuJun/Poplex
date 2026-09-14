@@ -96,19 +96,22 @@ struct MineView: View {
                 guard !Task.isCancelled, isActive else { return }
                 vm.finishMilestonePresentations(presentations)
             }
-            .toast(
+            .appToast(
                 message: Binding(get: { vm.toastMessage }, set: { vm.toastMessage = $0 }),
-                systemImage: "exclamationmark.triangle",
+                systemImage: vm.toastIcon,
+                semantic: .blocked,
                 extraBottomOffset: toastExtraBottomOffset
             )
-            .toast(
+            .appToast(
                 message: $comingSoonToast,
                 systemImage: "clock",
+                semantic: .blocked,
                 extraBottomOffset: toastExtraBottomOffset
             )
-            .toast(
+            .appToast(
                 message: $milestoneToast,
                 systemImage: "sparkles",
+                semantic: .positive,
                 lifetime: AppTheme.Motion.milestoneToastLifetime,
                 extraBottomOffset: toastExtraBottomOffset
             )
@@ -164,7 +167,7 @@ struct MineView: View {
                 if FeatureFlags.conversationEnabled {
                     path.append(.conversation(sceneCategory: cat))
                 } else {
-                    comingSoonToast = "Coming soon"
+                    comingSoonToast = "Speaking mode will be available soon."
                 }
             }
         )
@@ -657,8 +660,11 @@ private struct Tab2UnlockedView: View {
 
                             // 只作用于已解锁页面：最后一个可见卡片（Hero 或 Topics）
                             contentSections(proxy)
+                                .fixedSize(horizontal: false, vertical: true)
 
-                            // 页面底部收尾宣言
+                            // 页面底部收尾宣言：短内容自适应推底（与底部暖光贴合），长列表收缩为 72pt 呼吸断层随动
+                            Spacer(minLength: footerTopSpace)
+
                             footerSignoff
                                 .padding(.bottom, footerBottomSpace)
                         }
@@ -789,7 +795,6 @@ private struct Tab2UnlockedView: View {
                 .foregroundStyle(AppTheme.Color.textMuted.opacity(0.85))
         }
         .frame(maxWidth: .infinity)
-        .padding(.top, footerTopSpace)
     }
 
     /// 目标语言动态解耦（MVP 默认 English，未来支持多语种无缝扩展）

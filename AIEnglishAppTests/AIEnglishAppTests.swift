@@ -184,7 +184,7 @@ struct Tab2RefreshLifecycleTests {
 
         let completedAfterLoad = await completion.isComplete
         #expect(completedAfterLoad)
-        #expect(vm.toastMessage == "Unable to sync right now. Pull to try again.")
+        #expect(vm.toastMessage == "Couldn't refresh. Try again in a moment.")
         #expect(vm.isLoading == false)
     }
 
@@ -239,7 +239,7 @@ struct Tab2RefreshLifecycleTests {
         await vm.load(showFailureHint: true)
 
         #expect(vm.data?.inputCount == 2)
-        #expect(vm.toastMessage == "Unable to sync right now. Pull to try again.")
+        #expect(vm.toastMessage == "Couldn't refresh. Try again in a moment.")
         #expect(vm.errorMessage == nil)
         #expect(vm.isLoading == false)
         #expect(vm.categoryWordsRevision == 0)
@@ -286,7 +286,7 @@ struct Tab2RefreshLifecycleTests {
         await vm.load(showFailureHint: true)
 
         #expect(vm.data?.inputCount == 2)
-        #expect(vm.toastMessage == "You're offline. Check your connection and try again.")
+        #expect(vm.toastMessage == "You're offline. Check your connection.")
         #expect(vm.errorMessage == nil)
         #expect(vm.isLoading == false)
     }
@@ -303,7 +303,7 @@ struct Tab2RefreshLifecycleTests {
 
         #expect(vm.data == nil)
         #expect(vm.errorMessage == "Failed to load")
-        #expect(vm.toastMessage == "You're offline. Check your connection and try again.")
+        #expect(vm.toastMessage == "You're offline. Check your connection.")
         #expect(vm.isLoading == false)
     }
 
@@ -319,7 +319,7 @@ struct Tab2RefreshLifecycleTests {
 
         #expect(vm.data == nil)
         #expect(vm.errorMessage == "Failed to load")
-        #expect(vm.toastMessage == "Unable to sync right now. Try again in a moment.")
+        #expect(vm.toastMessage == "Couldn't refresh. Try again in a moment.")
         #expect(vm.isLoading == false)
     }
 
@@ -1495,6 +1495,27 @@ private struct ContentBlockedMock: AIServicing {
     }
 }
 
+/// 第一次抛断网、之后抛 contentBlocked——模拟「断网发送失败 → 联网重试撞内容拦截」
+/// 的完整链路（被拒修复的回归场景：重试被拒后持久化失败行必须清除）。
+private final class FailOnceThenBlockedMock: AIServicing {
+    private var callCount = 0
+    func generate(text: String?, image: UIImage?, context: ContextTurn?,
+                  presetCardId: String?, requestId: UUID?, source: String?, originalCreatedAt: Date?) async throws -> AIEnvelope {
+        callCount += 1
+        if callCount == 1 { throw URLError(.notConnectedToInternet) }
+        throw AIServiceError.contentBlocked
+    }
+}
+
+/// 隔离的被拒备忘 store（防污染 .shared——contentBlocked 路径会写入备忘，
+/// 而所有 loadHistory 测试都会读取 rejectedContentStore；共享单例一旦被写脏，
+/// 其余测试的 entries 断言会间歇性全红）。
+private func makeRejectedContentStore(suite: String) -> RejectedContentStore {
+    let defaults = UserDefaults(suiteName: suite)!
+    defaults.removePersistentDomain(forName: suite)
+    return RejectedContentStore(defaults: defaults)
+}
+
 // MARK: - TodayViewModel tests
 
 // TodayViewModel 已标 @MainActor（审查发现 #5）：实例状态与方法的访问必须在主线程隔离。
@@ -1575,7 +1596,7 @@ struct TodayViewModelTests {
         await manualRefresh.value
 
         #expect(await completion.isComplete)
-        #expect(vm.offlineHint == "Unable to sync right now. Pull to try again.")
+        #expect(vm.offlineHint == "Couldn't refresh. Try again in a moment.")
         #expect(vm.isLoadingHistory == false)
     }
 
@@ -1605,7 +1626,7 @@ struct TodayViewModelTests {
 
         await vm.loadHistory(showFailureHint: true)
 
-        #expect(vm.offlineHint == "You're offline. Check your connection and try again.")
+        #expect(vm.offlineHint == "You're offline. Check your connection.")
     }
 
     @Test func manualHistoryRefreshUsesGenericMessageForConnectedFailure() async {
@@ -1619,7 +1640,7 @@ struct TodayViewModelTests {
 
         await vm.loadHistory(showFailureHint: true)
 
-        #expect(vm.offlineHint == "Unable to sync right now. Pull to try again.")
+        #expect(vm.offlineHint == "Couldn't refresh. Try again in a moment.")
     }
 
     @Test func invalidManualHistoryResponseShowsGenericFailure() async {
@@ -1633,7 +1654,7 @@ struct TodayViewModelTests {
 
         await vm.loadHistory(showFailureHint: true)
 
-        #expect(vm.offlineHint == "Unable to sync right now. Pull to try again.")
+        #expect(vm.offlineHint == "Couldn't refresh. Try again in a moment.")
     }
 
     @Test func invalidBackgroundHistoryResponseRemainsSilent() async {
@@ -2180,6 +2201,244 @@ struct TodayViewModelTests {
             #expect(vm.entries.contains { if case .pendingRetry(let value) = $0.content { return value.id == record.id }; return false })
             #expect(vm.entries.contains { if case .aiCard = $0.content { return true }; return false } == false)
         }
+    }
+
+    // 待重试照片重试撞内容拦截：记录按幂等键清除（含照片文件）、行就地转被拒——
+    // 不追加第二行，杀 app 重启不再复活被拒照片（诈尸 bug 修复）。
+    @Test func retryPendingPhotoContentBlockedClearsRecordAndConvertsRowInPlace() async throws {
+        let store = makePendingRetryStore(suite: "retry-photo-content-blocked")
+        let rejected = makeRejectedContentStore(suite: "retry-photo-content-blocked-rejected")
+        let requestId = UUID(uuidString: "11111111-2222-3333-4444-555555555558")!
+        try store.savePhoto(UIImage(systemName: "photo")!, requestId: requestId)
+        let record = store.load()[0]
+
+        let vm = TodayViewModel(service: ContentBlockedMock(), isConsentGranted: { true })
+        vm.pendingRetryStore = store
+        vm.rejectedContentStore = rejected
+        vm.entries = [TimelineEntry.pendingRetry(record)]
+
+        await vm.retryPending(record: record)
+
+        #expect(store.load().isEmpty)                 // 持久化记录清除：重启不再注入
+        #expect(store.photoImage(for: record) == nil) // 违规照片文件一并删除
+        #expect(vm.entries.count == 1)                // 就地转换：不追加第二行
+        #expect(vm.entries.contains { if case .pendingRetry = $0.content { return true }; return false } == false)
+        #expect(vm.entries.contains { if case .userRejected(let _, let wasImage) = $0.content { return wasImage }; return false })
+        #expect(vm.entries.contains { if case .aiLoading = $0.content { return true }; return false } == false)
+        #expect(vm.isLoading == false)
+        #expect(rejected.load().count == 1)           // 备忘写入立即可读（同实例往返）
+        guard let written = rejected.load().first else {
+            Issue.record("Expected rejected memo written")
+            return
+        }
+        #expect(written.wasImage == true)             // 只记「曾含图片」这一事实
+    }
+
+    // 杀 app 重启语义：被拒终态后待重试清单不再注入照片 + 失败行，但备忘注入
+    // 一条被拒行还原「这里发生过一次拦截」——只留事实（占位块），无真实像素、无文字。
+    @Test func contentBlockedPhotoNotInjectedAfterRestart() async throws {
+        let (pending, success) = isolatedStores(suite: "blocked-no-resurrect")
+        let rejected = makeRejectedContentStore(suite: "blocked-no-resurrect-rejected")
+        let requestId = UUID(uuidString: "11111111-2222-3333-4444-555555555559")!
+        try pending.savePhoto(UIImage(systemName: "photo")!, requestId: requestId)
+        let record = pending.load()[0]
+
+        let vm = TodayViewModel(service: ContentBlockedMock(), isConsentGranted: { true })
+        vm.pendingRetryStore = pending
+        vm.successStore = success
+        vm.rejectedContentStore = rejected
+        vm.entries = [TimelineEntry.pendingRetry(record)]
+        await vm.retryPending(record: record)
+        #expect(pending.load().isEmpty)
+        #expect(rejected.load().count == 1)
+
+        // 新 VM + 同一持久化 store = 杀 app 重启
+        let restarted = TodayViewModel(service: SuccessMock(), isConsentGranted: { true })
+        restarted.pendingRetryStore = pending
+        restarted.successStore = success
+        restarted.rejectedContentStore = rejected
+        restarted.injectPendingRetry()
+        restarted.injectRejectedContentMemos()
+
+        let rejectedRows = restarted.entries.filter { if case .userRejected = $0.content { return true }; return false }
+        #expect(rejectedRows.count == 1)   // 有且仅有一条被拒行（备忘注入，日期标题不算）
+        guard rejectedRows.count == 1, case .userRejected(let rText, let rWasImage) = rejectedRows[0].content else {
+            Issue.record("Expected exactly one userRejected row")
+            return
+        }
+        #expect(rWasImage == true)         // 还原「曾含图片」事实
+        #expect(rText == nil)              // 不存内容：重启后不复述被拒文字
+        #expect(restarted.entries.contains { if case .pendingRetry = $0.content { return true }; return false } == false)  // 无待重试行
+        #expect(restarted.entries.contains { if case .userBubble = $0.content { return true }; return false } == false)     // 无照片气泡
+        #expect(restarted.entries.contains { if case .aiCard = $0.content { return true }; return false } == false)         // 无卡片
+    }
+
+    // Tab1 失败行重试撞内容拦截：持久化记录清除、气泡就地转被拒——
+    // retrySend 的 `guard let card` 提前返回不再吞掉清理（原来记录永不删除）。
+    @Test func retrySendContentBlockedClearsPersistedTab1Record() async {
+        let store = makePendingRetryStore(suite: "retry-send-content-blocked")
+        let rejectedStore = makeRejectedContentStore(suite: "retry-send-content-blocked-rejected")
+        let vm = TodayViewModel(service: FailOnceThenBlockedMock(), isConsentGranted: { true })
+        vm.pendingRetryStore = store
+        vm.rejectedContentStore = rejectedStore
+
+        // 第一次发送断网失败：sendFailed 行 + 持久化记录
+        await vm.send("blocked text")
+        #expect(store.load().count == 1)
+        guard let failed = vm.entries.first(where: { if case .sendFailed = $0.content { return true }; return false }),
+              case .sendFailed(let text, let image, let requestId, let bubbleEntryId) = failed.content else {
+            Issue.record("Expected sendFailed row after offline failure")
+            return
+        }
+        #expect(requestId != nil)
+
+        // 联网重试 → 撞内容拦截
+        await vm.retrySend(text: text, image: image, failedEntryId: failed.id, requestId: requestId, bubbleEntryId: bubbleEntryId)
+
+        #expect(store.load().isEmpty)        // 持久化记录清除：重启不再注入失败行
+        #expect(hasSendFailed(vm) == false)  // 失败行已移除，不残留
+        #expect(vm.entries.contains { if case .userBubble = $0.content { return true }; return false } == false)  // 气泡就地转被拒
+        let rejectedCount = vm.entries.filter { if case .userRejected = $0.content { return true }; return false }.count
+        #expect(rejectedCount == 1)          // 只此一行，无重复
+        let rejected = vm.entries.first { if case .userRejected = $0.content { return true }; return false }
+        guard case .userRejected(let rText, let rWasImage) = rejected?.content else {
+            Issue.record("Expected userRejected row")
+            return
+        }
+        #expect(rText == "blocked text")
+        #expect(rWasImage == false)
+        #expect(vm.entries.contains { if case .aiLoading = $0.content { return true }; return false } == false)
+        #expect(vm.isLoading == false)
+        #expect(rejectedStore.load().count == 1)          // 纯文本被拒也留备忘
+        guard let memo = rejectedStore.load().first else {
+            Issue.record("Expected rejected memo written")
+            return
+        }
+        #expect(memo.wasImage == false)
+    }
+
+    // 纯文本被拒的备忘注入：重启后只剩说明行（text == nil），不复述用户写过的文字。
+    @Test func textBlockedMemoInjectsBareInfoLine() {
+        let rejected = makeRejectedContentStore(suite: "text-blocked-memo")
+        let memoId = UUID()
+        rejected.save(id: memoId, wasImage: false, createdAt: .now)
+
+        let vm = TodayViewModel(service: SuccessMock(), isConsentGranted: { true })
+        vm.rejectedContentStore = rejected
+        vm.injectRejectedContentMemos()
+
+        let rejectedRows = vm.entries.filter { if case .userRejected = $0.content { return true }; return false }
+        #expect(rejectedRows.count == 1)
+        guard rejectedRows.count == 1, case .userRejected(let rText, let rWasImage) = rejectedRows[0].content else {
+            Issue.record("Expected exactly one userRejected row")
+            return
+        }
+        #expect(rText == nil)     // 不存内容：跨重启文字被丢弃，只留事实
+        #expect(rWasImage == false)
+    }
+
+    // 幂等：备忘 id 已在时间线（本会话就地转换）→ 跳过，不重复注入。
+    @Test func memoAlreadyInTimelineIsNotReinjected() {
+        let rejected = makeRejectedContentStore(suite: "memo-idempotent")
+        let memoId = UUID()
+        rejected.save(id: memoId, wasImage: true, createdAt: .now)
+
+        let vm = TodayViewModel(service: SuccessMock(), isConsentGranted: { true })
+        vm.rejectedContentStore = rejected
+        vm.entries = [TimelineEntry(id: memoId, createdAt: .now, content: .userRejected(text: "blocked text", wasImage: true))]
+        vm.injectRejectedContentMemos()
+
+        #expect(vm.entries.count == 1)
+        guard case .userRejected(let rText, _) = vm.entries[0].content else {
+            Issue.record("Expected userRejected row")
+            return
+        }
+        #expect(rText == "blocked text")   // 本会话内仍显示真实文字（就地转换的行原样保留）
+    }
+
+    // 3 天保留期：过期备忘在 load() 里惰性清理，注入时不再产生行，且磁盘记录同步清掉。
+    @Test func expiredMemoIsNotInjectedAndPurged() {
+        let rejected = makeRejectedContentStore(suite: "expired-memo")
+        rejected.save(id: UUID(), wasImage: true,
+                      createdAt: Date.now.addingTimeInterval(-31 * 24 * 60 * 60))
+
+        let vm = TodayViewModel(service: SuccessMock(), isConsentGranted: { true })
+        vm.rejectedContentStore = rejected
+        vm.injectRejectedContentMemos()
+
+        #expect(vm.entries.isEmpty)
+        #expect(rejected.load().isEmpty)   // 清理写回：同实例再读也为空
+    }
+
+    // 集成测试（真实接入点）：备忘经 loadHistory 的网络前注入轮注入——
+    // 确保备忘不是「函数存在但没人调」的挂空档。断网冷启动 + 无缓存。
+    @Test func loadHistoryInjectsRejectedMemoOffline() async throws {
+        let (pending, success) = isolatedStores(suite: "memo-loadhistory-offline")
+        let rejected = makeRejectedContentStore(suite: "memo-loadhistory-offline-rejected")
+        let memoId = UUID()
+        rejected.save(id: memoId, wasImage: true, createdAt: .now)
+
+        let vm = TodayViewModel(
+            service: SuccessMock(),
+            historyDataLoader: { throw URLError(.networkConnectionLost) },
+            isConnected: { false },
+            isConsentGranted: { true }
+        )
+        vm.pendingRetryStore = pending
+        vm.successStore = success
+        vm.rejectedContentStore = rejected
+
+        await vm.loadHistory()
+
+        #expect(vm.entries.contains { $0.id == memoId })
+        guard let row = vm.entries.first(where: { $0.id == memoId }),
+              case .userRejected(let rText, let rWasImage) = row.content else {
+            Issue.record("Expected injected userRejected row for memo")
+            return
+        }
+        #expect(rText == nil)
+        #expect(rWasImage == true)
+        #expect(vm.entries.contains { if case .pendingRetry = $0.content { return true }; return false } == false)
+    }
+
+    // 集成测试（defer 兜底轮）：网络对齐整列替换后（被拒条目不在服务器历史里），
+    // defer 兜底轮按备忘重新注入被拒行。
+    @Test func loadHistoryReinjectsMemoAfterNetworkReplacement() async throws {
+        let (pending, success) = isolatedStores(suite: "memo-loadhistory-reinject")
+        let rejected = makeRejectedContentStore(suite: "memo-loadhistory-reinject-rejected")
+        let memoId = UUID()
+        rejected.save(id: memoId, wasImage: false, createdAt: .now)
+
+        let userMessageId = UUID()
+        let response = Data("""
+        [{
+          "id": "\(userMessageId.uuidString)",
+          "role": "user",
+          "input_type": "text",
+          "user_content": "server history",
+          "request_id": "\(UUID().uuidString)",
+          "created_at": "2026-08-28T12:00:00.000Z"
+        }]
+        """.utf8)
+        let vm = TodayViewModel(
+            service: SuccessMock(), historyDataLoader: { response },
+            isConsentGranted: { true }
+        )
+        vm.pendingRetryStore = pending
+        vm.successStore = success
+        vm.rejectedContentStore = rejected
+
+        await vm.loadHistory()
+
+        #expect(vm.entries.contains { $0.id == userMessageId })  // 服务器历史已替换整列
+        #expect(vm.entries.contains { $0.id == memoId })         // 备忘在替换后重注入（只能来自 defer 轮）
+        guard let row = vm.entries.first(where: { $0.id == memoId }),
+              case .userRejected(let rText, let rWasImage) = row.content else {
+            Issue.record("Expected injected userRejected row for memo")
+            return
+        }
+        #expect(rText == nil)
+        #expect(rWasImage == false)
     }
 
     // 旧记录首次 Retry 先持久升级 request ID；失败与 app 重启后仍复用同一 ID。
@@ -2780,6 +3039,7 @@ struct AIConsentGateTests {
     // 图片被拒：userBubble 就地转 userRejected(wasImage: true)、loading 移除、不再有弹窗字段
     @Test func contentBlockedImageConvertsBubbleToRejected() async {
         let vm = TodayViewModel(service: ContentBlockedMock(), isConsentGranted: { true })
+        vm.rejectedContentStore = makeRejectedContentStore(suite: "consent-blocked-image-rejected")
         vm.pendingImage = UIImage(systemName: "photo")!
         await vm.send("")
 
@@ -2796,6 +3056,7 @@ struct AIConsentGateTests {
     // 文本被拒：气泡文本原样保留、wasImage == false
     @Test func contentBlockedTextKeepsBubbleTextAsRejected() async {
         let vm = TodayViewModel(service: ContentBlockedMock(), isConsentGranted: { true })
+        vm.rejectedContentStore = makeRejectedContentStore(suite: "consent-blocked-text-rejected")
         await vm.send("something the filter rejects")
 
         let r = rejectedEntry(vm)
@@ -2810,6 +3071,7 @@ struct AIConsentGateTests {
     // 图文混合被拒：文本原样 + wasImage == true
     @Test func contentBlockedMixedKeepsTextAndMarksImage() async {
         let vm = TodayViewModel(service: ContentBlockedMock(), isConsentGranted: { true })
+        vm.rejectedContentStore = makeRejectedContentStore(suite: "consent-blocked-mixed-rejected")
         vm.pendingImage = UIImage(systemName: "photo")!
         await vm.send("check this photo")
 
@@ -3338,6 +3600,46 @@ struct PendingRetryStoreTests {
         #expect(reloaded.photoImage(for: record) == nil)
     }
 
+    // removeByRequestId：任意来源按幂等键清除（含照片文件），新实例读回为空（杀 app 语义）
+    @Test func removeByRequestIdClearsPhotoRecordAndFile() throws {
+        let (store, dir, defaults) = makeStore(suite: "pending-retry-remove-by-request-id")
+        let requestId = UUID(uuidString: "11111111-2222-3333-4444-555555555556")!
+        try store.savePhoto(UIImage(systemName: "photo")!, requestId: requestId)
+        let record = store.load()[0]
+        #expect(record.source == .photo)
+        #expect(store.photoImage(for: record) != nil)
+
+        store.removeByRequestId(requestId)
+
+        let reloaded = PendingRetryStore(defaults: defaults, documentsDir: dir)
+        #expect(reloaded.load().isEmpty)
+        #expect(reloaded.photoImage(for: record) == nil)   // 违规照片文件一并删除
+    }
+
+    // removeByRequestId 不筛来源：.tab1 记录同样按幂等键清除
+    @Test func removeByRequestIdClearsTab1Record() throws {
+        let (store, dir, defaults) = makeStore(suite: "pending-retry-remove-by-request-id-tab1")
+        let requestId = UUID(uuidString: "11111111-2222-3333-4444-555555555557")!
+        try store.saveTab1(text: "hello", image: UIImage(systemName: "photo")!, requestId: requestId, createdAt: Date())
+        #expect(store.load().count == 1)
+
+        store.removeByRequestId(requestId)
+
+        #expect(PendingRetryStore(defaults: defaults, documentsDir: dir).load().isEmpty)
+    }
+
+    // 无匹配幂等键：no-op，现有记录与照片文件原样保留
+    @Test func removeByRequestIdNoMatchIsNoOp() throws {
+        let (store, _, _) = makeStore(suite: "pending-retry-remove-by-request-id-nomatch")
+        try store.savePhoto(UIImage(systemName: "photo")!, requestId: UUID())
+        let before = store.load()
+
+        store.removeByRequestId(UUID())
+
+        #expect(store.load().count == before.count)
+        #expect(store.photoImage(for: before[0]) != nil)
+    }
+
     // 旧版本 JSON 没有 requestId：升级后仍能读取，身份留空等待后续 Retry 升级。
     @Test func legacyRecordWithoutRequestIdStillDecodes() {
         let (store, _, defaults) = makeStore(suite: "pending-retry-legacy")
@@ -3357,6 +3659,73 @@ struct PendingRetryStoreTests {
 
         #expect(records.count == 1)
         #expect(records[0].requestId == nil)
+    }
+}
+
+// MARK: - RejectedContentStore tests
+
+struct RejectedContentStoreTests {
+
+    private func makeStore(suite: String) -> (RejectedContentStore, UserDefaults) {
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        return (RejectedContentStore(defaults: defaults), defaults)
+    }
+
+    @Test func saveAndLoadRoundTrip() {
+        let (store, defaults) = makeStore(suite: "rejected-round-trip")
+        let id = UUID()
+        // 必须落在 3 天保留期内——load() 会过滤过期备忘，用旧固定时间戳会被滤掉
+        let createdAt = Date.now
+        store.save(id: id, wasImage: true, createdAt: createdAt)
+
+        let reloaded = RejectedContentStore(defaults: defaults)   // 新实例 = 冷启动语义
+        let memos = reloaded.load()
+
+        #expect(memos.count == 1)
+        guard memos.count == 1 else {
+            Issue.record("Expected exactly one memo after round trip")
+            return
+        }
+        #expect(memos[0].id == id)
+        #expect(memos[0].wasImage == true)
+        #expect(memos[0].createdAt == createdAt)
+    }
+
+    @Test func saveIsIdempotentPerId() {
+        let (store, _) = makeStore(suite: "rejected-idempotent")
+        let id = UUID()
+        store.save(id: id, wasImage: false, createdAt: .now)
+        store.save(id: id, wasImage: false, createdAt: .now)
+
+        #expect(store.load().count == 1)
+    }
+
+    @Test func loadPurgesExpiredMemosPersistently() {
+        let (store, defaults) = makeStore(suite: "rejected-expiry")
+        store.save(id: UUID(), wasImage: true,
+                   createdAt: Date.now.addingTimeInterval(-31 * 24 * 60 * 60))
+        store.save(id: UUID(), wasImage: false, createdAt: .now)
+
+        let live = store.load()
+
+        #expect(live.count == 1)
+        guard live.count == 1 else {
+            Issue.record("Expected exactly one live memo after expiry purge")
+            return
+        }
+        #expect(live[0].wasImage == false)
+        // 新实例读回：清理写回了磁盘，不只是本次内存态
+        #expect(RejectedContentStore(defaults: defaults).load().count == 1)
+    }
+
+    @Test func clearAllRemovesEverything() {
+        let (store, defaults) = makeStore(suite: "rejected-clear-all")
+        store.save(id: UUID(), wasImage: true, createdAt: .now)
+        store.save(id: UUID(), wasImage: false, createdAt: .now)
+
+        #expect(store.clearAll() == 0)
+        #expect(RejectedContentStore(defaults: defaults).load().isEmpty)
     }
 }
 
@@ -4496,7 +4865,7 @@ struct Tab2WordEntryBadgeTests {
         return try JSONDecoder().decode(Tab2WordEntry.self, from: data)
     }
 
-    // 分类型图标家族：查词→放大镜；句中单词→衬线 A；短语→text.quote；习语/俚语→bubble.left。
+    // 分类型图标家族：查词→放大镜；对话→声波；句中单词→book.closed；短语/搭配→link 双环搭扣；习语/俚语→quoteBlock 垂直引语线。
 
     // 主动查词 (.word sourceTag) → 放大镜
     @Test func lookupWordUsesMagnifier() throws {
@@ -4510,30 +4879,30 @@ struct Tab2WordEntryBadgeTests {
         #expect(e.badgeGlyph == .symbol("waveform"))
     }
 
-    // 句子/段落里的单词 → 衬线字母 A
-    @Test func sentenceWordUsesSerifLetter() throws {
-        #expect(try entry(granularity: "sentence", entryKind: "word").badgeGlyph == .serifLetter("A"))
-        #expect(try entry(granularity: "passage", entryKind: "word").badgeGlyph == .serifLetter("A"))
+    // 句子/段落里的单词 → 闭合书本 (book.closed)
+    @Test func sentenceWordUsesBookClosed() throws {
+        #expect(try entry(granularity: "sentence", entryKind: "word").badgeGlyph == .symbol("book.closed"))
+        #expect(try entry(granularity: "passage", entryKind: "word").badgeGlyph == .symbol("book.closed"))
     }
 
-    // 短语 / 搭配 / 句型 → text.quote
-    @Test func phraseKindUsesTextQuote() throws {
+    // 短语 / 搭配 / 句型 → link (双环搭扣)
+    @Test func phraseKindUsesLink() throws {
         for kind in ["phrase", "collocation", "pattern"] {
-            #expect(try entry(entryKind: kind).badgeGlyph == .symbol("text.quote"))
+            #expect(try entry(entryKind: kind).badgeGlyph == .symbol("link"))
         }
     }
 
-    // 习语 / 俚语 → bubble.left
-    @Test func idiomSlangUsesBubble() throws {
+    // 习语 / 俚语 → quoteBlock (垂直引用树线)
+    @Test func idiomSlangUsesQuoteBlock() throws {
         for kind in ["idiom", "slang"] {
-            #expect(try entry(entryKind: kind).badgeGlyph == .symbol("bubble.left"))
+            #expect(try entry(entryKind: kind).badgeGlyph == .quoteBlock)
         }
     }
 
-    // 未知 entryKind / nil → 默认 text.quote（当短语处理）
-    @Test func unknownOrNilKindDefaultsTextQuote() throws {
-        #expect(try entry(entryKind: "unknown_future_kind").badgeGlyph == .symbol("text.quote"))
-        #expect(try entry(entryKind: nil).badgeGlyph == .symbol("text.quote"))
+    // 未知 entryKind / nil → 默认 link（当短语处理）
+    @Test func unknownOrNilKindDefaultsLink() throws {
+        #expect(try entry(entryKind: "unknown_future_kind").badgeGlyph == .symbol("link"))
+        #expect(try entry(entryKind: nil).badgeGlyph == .symbol("link"))
     }
 }
 
@@ -4541,11 +4910,26 @@ struct Tab2WordEntryBadgeTests {
 
 struct SceneCategoryMapTests {
 
-    @Test func knownCategoryMapsToCorrectCase() {
+    // New English keys → direct rawValue match
+    @Test func newEnglishKeyMapsToCorrectCase() {
+        #expect(SceneCategory.from("Work & Study")      == .workStudy)
+        #expect(SceneCategory.from("Food & Drink")      == .food)
+        #expect(SceneCategory.from("Home & Family")     == .homeFamily)
+        #expect(SceneCategory.from("Hobbies & Leisure") == .leisure)
+        #expect(SceneCategory.from("Social & Feelings") == .social)
+        #expect(SceneCategory.from("Travel & Commute")  == .gettingAround)
+        #expect(SceneCategory.from("Other")             == .other)
+    }
+
+    // Legacy Chinese keys → legacyMap compat path
+    @Test func legacyChineseKeyMapsToCorrectCase() {
         #expect(SceneCategory.from("工作与学业") == .workStudy)
-        #expect(SceneCategory.from("饮食") == .food)
+        #expect(SceneCategory.from("饮食")       == .food)
         #expect(SceneCategory.from("家庭与人际") == .homeFamily)
-        #expect(SceneCategory.from("休闲娱乐") == .leisure)
+        #expect(SceneCategory.from("休闲娱乐")   == .leisure)
+        #expect(SceneCategory.from("情绪社交")   == .social)
+        #expect(SceneCategory.from("出行交通")   == .gettingAround)
+        #expect(SceneCategory.from("其他")       == .other)
     }
 
     @Test func nilRawValueFallsToOther() {
@@ -4556,12 +4940,15 @@ struct SceneCategoryMapTests {
         #expect(SceneCategory.from("不存在的分类") == .other)
     }
 
+    // englishLabel == rawValue (the English key IS the display label)
     @Test func englishLabelsMatchExpected() {
-        #expect(SceneCategory.workStudy.englishLabel == "Work & study")
-        #expect(SceneCategory.food.englishLabel == "Food")
-        #expect(SceneCategory.homeFamily.englishLabel == "Home & people")
-        #expect(SceneCategory.other.englishLabel == "Other")
-        #expect(SceneCategory.leisure.englishLabel == "Leisure")
+        #expect(SceneCategory.workStudy.englishLabel   == "Work & Study")
+        #expect(SceneCategory.food.englishLabel        == "Food & Drink")
+        #expect(SceneCategory.homeFamily.englishLabel  == "Home & Family")
+        #expect(SceneCategory.other.englishLabel       == "Other")
+        #expect(SceneCategory.leisure.englishLabel     == "Hobbies & Leisure")
+        #expect(SceneCategory.social.englishLabel      == "Social & Feelings")
+        #expect(SceneCategory.gettingAround.englishLabel == "Travel & Commute")
     }
 }
 
@@ -4606,7 +4993,7 @@ struct Tab2HomeDataDecodeTests {
         #expect(cat.wordCount == 8)
         #expect(cat.unlocked == true)
         #expect(cat.lastMaterialAt != nil)
-        #expect(cat.englishLabel == "Work & study")
+        #expect(cat.englishLabel == "Work & Study")
         #expect(cat.previewWords.map(\.lemma) == ["overtime", "deadline"])
 
         let scene = cat.subScenes[0]
@@ -5748,6 +6135,48 @@ struct CategoryMilestoneTrackerTests {
         #expect(userBFirstObservation.isEmpty)
     }
 
+    @Test func legacyChineseKeyAchievementDoesNotReplayUnderEnglishKey() {
+        let defaults = makeDefaults()
+        defer { clear(defaults) }
+        let tracker = CategoryMilestoneTracker(defaults: defaults)
+
+        // 英文 Key 改造前：中文键「工作与学业」已解锁（achieved 里存的是中文键）
+        _ = tracker.observeBatch(
+            [CategoryMilestoneSnapshot(categoryID: "工作与学业", count: 20)],
+            userID: "user-a"
+        )
+        // 改造后同一分类以英文键观察：不得重放庆祝
+        let replay = tracker.observeBatch(
+            [CategoryMilestoneSnapshot(categoryID: "Work & Study", count: 21)],
+            userID: "user-a"
+        )
+
+        #expect(replay.isEmpty)
+    }
+
+    @Test func legacyChineseKeyBelowThresholdStillCelebratesOnceAfterKeyMigration() {
+        let defaults = makeDefaults()
+        defer { clear(defaults) }
+        let tracker = CategoryMilestoneTracker(defaults: defaults)
+
+        // 英文 Key 改造前：中文键「饮食」= 19，尚未解锁
+        _ = tracker.observeBatch(
+            [CategoryMilestoneSnapshot(categoryID: "饮食", count: 19)],
+            userID: "user-a"
+        )
+        // 改造后达线：应正常庆祝一次，且以英文键呈现
+        let presentations = tracker.observeBatch(
+            [CategoryMilestoneSnapshot(categoryID: "Food & Drink", count: 20)],
+            userID: "user-a"
+        )
+
+        #expect(presentations == [CategoryMilestonePresentation(
+            categoryID: "Food & Drink",
+            previousCount: 19,
+            currentCount: 20
+        )])
+    }
+
     private func makeDefaults() -> UserDefaults {
         let suiteName = "CategoryMilestoneTrackerTests.\(UUID().uuidString)"
         return UserDefaults(suiteName: suiteName)!
@@ -5760,9 +6189,9 @@ struct CategoryMilestoneTrackerTests {
 
 struct CategoryWordsLoadingStateTests {
 
-    @Test func offlineAndGenericFailuresUseDistinctSingleLineCopy() {
-        #expect(CategoryWordsLoadFailure.offline.message == "You're offline.")
-        #expect(CategoryWordsLoadFailure.unavailable.message == "Couldn't load these words.")
+    @Test func offlineAndGenericFailuresUseDistinctCardCopy() {
+        #expect(CategoryWordsLoadFailure.offline.displayMessage == "Check your connection and try again.")
+        #expect(CategoryWordsLoadFailure.unavailable.displayMessage == "Couldn't load these words. Try again.")
     }
 
     @Test func offlineNetworkErrorsAreClassifiedAsOffline() {
@@ -6173,34 +6602,66 @@ struct Tab2MilestoneLifecycleTests {
         #expect(AppTheme.Motion.milestoneToastLifetime < AppTheme.Motion.toastLifetime)
     }
 
-    @Test func onboardingPhotoToastLifetimeSitsBetweenMilestoneAndReadingFeedback() {
+    @Test func onboardingPhotoToastLifetimeMatchesStandardToastLifetime() {
         #expect(
             AppTheme.Motion.milestoneToastLifetime
-                < AppTheme.Motion.onboardingPhotoToastLifetime
+                < AppTheme.Motion.toastLifetime
         )
         #expect(
             AppTheme.Motion.onboardingPhotoToastLifetime
-                < AppTheme.Motion.toastLifetime
+                == AppTheme.Motion.toastLifetime
         )
+    }
+
+    @Test func appToastDualSemanticColorTokensAreDistinctAndConsistent() {
+        // Positive 积极确认：暖橙晨曦底、炭黑墨水文字、柔暖橙图标
+        let positive = AppToastSemantic.positive
+        #expect(positive.backgroundColor == AppTheme.Color.toastPositiveBg)
+        #expect(positive.textColor == AppTheme.Color.textPrimary)
+        #expect(positive.iconColor == AppTheme.Color.brandStrong.opacity(0.88))
+
+        // Blocked 动作受阻：沉静暖纸灰底、炭黑文字、柔和素铅灰图标
+        let blocked = AppToastSemantic.blocked
+        #expect(blocked.backgroundColor == AppTheme.Color.toastBlockedBg)
+        #expect(blocked.textColor == AppTheme.Color.textPrimary)
+        #expect(blocked.iconColor == AppTheme.Color.textSecondary.opacity(0.72))
+
+        #expect(positive != blocked)
+    }
+
+    @Test func appToastItemInitializationDefaults() {
+        let item = AppToastItem(message: "Couldn't refresh. Try again in a moment.")
+        #expect(item.message == "Couldn't refresh. Try again in a moment.")
+        #expect(item.semantic == .blocked)
+        #expect(item.systemImage == nil)
+        #expect(item.lifetime == AppTheme.Motion.toastLifetime)
+    }
+
+    @Test func onboardingPhotoAspectValidatorDistinguishesBranches() {
+        #expect(OnboardingPhotoAspectValidator.validate(imageSize: .zero) == .invalid)
+        #expect(OnboardingPhotoAspectValidator.validate(imageSize: CGSize(width: -10, height: 100)) == .invalid)
+        #expect(OnboardingPhotoAspectValidator.validate(imageSize: CGSize(width: 100, height: 100)) == .accepted)
+        #expect(OnboardingPhotoAspectValidator.validate(imageSize: CGSize(width: 100, height: 226)) == .tooTall)
+        #expect(OnboardingPhotoAspectValidator.validate(imageSize: CGSize(width: 226, height: 100)) == .tooWide)
     }
 
     @Test func milestoneToastDescribesReachedCategory() {
         let vm = Tab2HomeViewModel()
         vm.data = Tab2HomeData(unlocked: true, inputCount: 20, categories: [
             Tab2CategoryData(
-                sceneCategory: "出行交通",
+                sceneCategory: "Travel & Commute",
                 wordCount: 20,
                 unlocked: true
             )
         ])
 
         let message = vm.milestoneToastMessage(for: [CategoryMilestonePresentation(
-            categoryID: "出行交通",
+            categoryID: "Travel & Commute",
             previousCount: 19,
             currentCount: 20
         )])
 
-        #expect(message == "Getting around reached 20 pops")
+        #expect(message == "'Travel & Commute' reached 20 pops.")
     }
 
     @Test func milestoneToastAggregatesSimultaneousTopicsAtThreshold() {
@@ -6218,7 +6679,7 @@ struct Tab2MilestoneLifecycleTests {
             )
         ])
 
-        #expect(message == "2 topics reached 20 pops")
+        #expect(message == "2 topics reached 20 pops.")
     }
 
     @Test func pendingPresentationRemainsUntilMatchingPresentationFinishes() {

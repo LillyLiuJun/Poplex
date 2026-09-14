@@ -21,7 +21,7 @@ struct InputBarLimitBanner: View {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(AppTheme.Color.brandInk)
 
-                Text("Daily limit reached (\(usedCount)/\(dailyLimit)) · Request invite code")
+                Text("Daily limit reached (\(usedCount)/\(dailyLimit))")
                     .font(AppTheme.Font.statusNote)
                     .foregroundStyle(AppTheme.Color.textPrimary)
                     .lineLimit(1)

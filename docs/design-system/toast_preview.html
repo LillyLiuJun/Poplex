@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>AppToast 统一固定宽度与文案规范全景画板</title>
+  <style>
+    :root {
+      --bg-page: #F5F3EF;
+      --brand-wash: #FFF5EE;
+      --brand-border: rgba(194, 65, 12, 0.18);
+      --brand-strong: #FF7622;
+      --brand-soft-orange: #FF8533;
+      --pill-neutral-bg: #EFECE6;
+      --neutral-border: #E2DDD4;
+      --text-primary: #211811;
+      --text-secondary: #7C7773;
+      --icon-muted: #8E8984;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+      background-color: var(--bg-page);
+      color: var(--text-primary);
+      margin: 0;
+      padding: 40px 24px 80px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 780px;
+    }
+
+    h1 {
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 8px;
+    }
+
+    .subhead {
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+      margin-bottom: 28px;
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 14px 20px;
+      background: white;
+      border: 1px solid var(--neutral-border);
+      border-radius: 10px;
+      margin-bottom: 30px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.02);
+    }
+    .toolbar-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+    .btn-group {
+      display: inline-flex;
+      background: #F0EDE8;
+      padding: 3px;
+      border-radius: 7px;
+      gap: 2px;
+    }
+    .btn-toggle {
+      border: none;
+      background: transparent;
+      padding: 5px 12px;
+      border-radius: 5px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .btn-toggle.active {
+      background: white;
+      color: var(--text-primary);
+      font-weight: 600;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+
+    .section {
+      background: white;
+      border: 1px solid var(--neutral-border);
+      border-radius: 14px;
+      padding: 24px;
+      margin-bottom: 24px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+    }
+
+    .section-title {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .section-desc {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 20px;
+      line-height: 1.5;
+    }
+
+    /* Toast 统一物理规范容器 */
+    .toast-card {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      line-height: 18px;
+      white-space: nowrap;
+      transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+      box-sizing: border-box;
+    }
+
+    /* 模式：固定宽度 (默认推荐：328px) */
+    .mode-fixed .toast-card {
+      width: 328px;
+    }
+    /* 模式：自适应内容 */
+    .mode-hug .toast-card {
+      width: auto;
+      display: inline-flex;
+    }
+
+    /* 对齐模式：居中 vs 靠左 */
+    .align-center .toast-card {
+      justify-content: center;
+    }
+    .align-left .toast-card {
+      justify-content: flex-start;
+    }
+
+    .toast-card:hover {
+      transform: translateY(-1px);
+    }
+
+    /* 积极态 Positive */
+    .toast-positive {
+      background-color: var(--brand-wash);
+      border: 0.6px solid var(--brand-border);
+      color: var(--text-primary);
+      box-shadow: 0 3px 8px rgba(255, 118, 34, 0.06);
+    }
+    .toast-positive .toast-icon {
+      color: var(--brand-soft-orange);
+      opacity: 0.92;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* 受阻态 Blocked */
+    .toast-blocked {
+      background-color: var(--pill-neutral-bg);
+      border: 0.6px solid var(--neutral-border);
+      color: var(--text-primary);
+      box-shadow: 0 3px 8px rgba(0, 0, 0, 0.04);
+    }
+    .toast-blocked .toast-icon {
+      color: var(--icon-muted);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* 纸飞机专享：向上昂扬 -10° 仰角 */
+    .plane-tilt {
+      transform: rotate(-10deg);
+      display: inline-flex;
+    }
+
+    /* 网格平铺陈列 */
+    .all-toasts-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .toast-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 18px;
+      background: #F9F8F5;
+      border-radius: 12px;
+      transition: background 0.15s ease;
+    }
+    .toast-row:hover {
+      background: #F2EFE9;
+    }
+
+    .toast-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      max-width: 320px;
+    }
+    .toast-meta-num {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .toast-meta-scene {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+    .toast-meta-loc {
+      font-size: 11px;
+      color: #9C968F;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    /* 文案对比表格 */
+    .spec-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      margin-top: 16px;
+    }
+    .spec-table th, .spec-table td {
+      border: 1px solid var(--neutral-border);
+      padding: 10px 12px;
+      text-align: left;
+    }
+    .spec-table th {
+      background: #F2EFE9;
+      font-weight: 600;
+    }
+    .old-text {
+      color: #8C827A;
+      text-decoration: line-through;
+    }
+    .new-text {
+      color: #166534;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body class="mode-fixed align-center">
+  <div class="container">
+    <h1>全 App 8 款 Toast 统一固定宽度与文案规范全景画板</h1>
+    <div class="subhead">
+      针对你的优化需求落地：① <strong>固定统一底框宽度（328pt）</strong>，彻底消除长短不一与忽大忽小的不稳定感；<br>
+      ② <strong>全面肃清口语随意与标点缺失</strong>，落实严谨优雅的 Warm Editorial 标点与句式规范；<br>
+      ③ <strong>纸飞机仰角、正向对称 WiFi、细线星芒 sparkles</strong> 全系温润极简统一。
+    </div>
+
+    <!-- 交互控制器：直观对比固定宽度 vs 伸缩宽度，居中 vs 靠左 -->
+    <div class="toolbar">
+      <span class="toolbar-label">底框宽度模式：</span>
+      <div class="btn-group">
+        <button class="btn-toggle active" onclick="setWidthMode('mode-fixed', this)">统一固定宽度 (328pt ✨推荐)</button>
+        <button class="btn-toggle" onclick="setWidthMode('mode-hug', this)">自适应伸缩 (原 Hug Content)</button>
+      </div>
+
+      <span class="toolbar-label" style="margin-left: auto;">内容对齐：</span>
+      <div class="btn-group">
+        <button class="btn-toggle active" onclick="setAlignMode('align-center', this)">居中对称 (Center ✨)</button>
+        <button class="btn-toggle" onclick="setAlignMode('align-left', this)">靠左对齐 (Left)</button>
+      </div>
+    </div>
+
+    <!-- 8 款全量平铺陈列 -->
+    <div class="section">
+      <div class="section-title">📦 全 App 全部 8 款 Toast（统一底框宽度 + 严整标点文案）</div>
+      <div class="section-desc">所有底框尺寸严丝合缝统一为 328pt · R8 微圆角藏书票形态 · 严整结尾标点 · 炭黑墨水字 · 纯粹两元语义：</div>
+
+      <div class="all-toasts-grid">
+        <!-- 1 -->
+        <div class="toast-row">
+          <div class="toast-meta">
+            <span class="toast-meta-num">Toast #01 · 积极确认 (Positive)</span>
+            <span class="toast-meta-scene">意见反馈提交成功</span>
+            <span class="toast-meta-loc">来自: SettingsView / FeedbackView / 额度 Sheet</span>
+          </div>
+          <div class="toast-card toast-positive">
+            <span class="toast-icon plane-tilt">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+            </span>
+            <span>Thank you for your feedback.</span>
+          </div>
+        </div>
+
+        <!-- 2 -->
+        <div class="toast-row">
+          <div class="toast-meta">
+            <span class="toast-meta-num">Toast #02 · 动作受阻 (Blocked)</span>
+            <span class="toast-meta-scene">离线 / 下拉刷新受阻</span>
+            <span class="toast-meta-loc">来自: TodayViewModel / Tab2HomeViewModel</span>
+          </div>
+          <div class="toast-card toast-blocked">
+            <span class="toast-icon">
+              <!-- 正向垂直对称 WiFi -->
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M5 8.5C9 5 15 5 19 8.5"/>
+                <path d="M8.5 12.5C10.8 10.5 13.2 10.5 15.5 12.5"/>
+                <circle cx="12" cy="17" r="1.2" fill="currentColor" stroke="none"/>
+              </svg>
+            </span>
+            <span>You're offline. Check your connection.</span>
+          </div>
+        </div>
+
+        <!-- 3 -->
+        <div class="toast-row">
+          <div class="toast-meta">
+            <span class="toast-meta-num">Toast #03 · 动作受阻 (Blocked)</span>
+            <span class="toast-meta-scene">服务端拉取受阻 / 刷新重试</span>
+            <span class="toast-meta-loc">来自: TodayViewModel / Tab2HomeViewModel</span>
+          </div>
+          <div class="toast-card toast-blocked">
+            <span class="toast-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.19"/>
+              </svg>
+            </span>
+            <span>Unable to sync. Pull to try again.</span>
+          </div>
+        </div>
+
+        <!-- 4 -->
+        <div class="toast-row">
+          <div class="toast-meta">
+            <span class="toast-meta-num">Toast #04 · 动作受阻 (Blocked)</span>
+            <span class="toast-meta-scene">相机拍照异常（中途打断/无响应）</span>
+            <span class="toast-meta-loc">来自: CameraCaptureView</span>
+          </div>
+          <div class="toast-card toast-blocked">
+            <span class="toast-icon">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                <circle cx="12" cy="13" r="3.2"/>
+              </svg>
+            </span>
+            <span>Camera unavailable. Please try again.</span>
+          </div>
+        </div>
+
+        <!-- 5 -->
+        <div class="toast-row">
+          <div class="toast-meta">
+            <span class="toast-meta-num">Toast #05 · 动作受阻 (Blocked)</span>
+            <span class="toast-meta-scene">相机拍照超时</span>
+            <span class="toast-meta-loc">来自: CameraCaptureView</span>
+          </div>
+          <div class="toast-card toast-blocked">
+            <span class="toast-icon">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="13" r="8"/>
+                <path d="M12 9v4l2.5 2.5"/>
+                <path d="M10 2h4"/>
+              </svg>
+            </span>
+            <span>Capture timed out. Please try again.</span>
+          </div>
+        </div>
+
+        <!-- 6a -->
+        <div class="toast-row">
+          <div class="toast-meta">
+            <span class="toast-meta-num">Toast #06a · 动作受阻 (Blocked)</span>
+            <span class="toast-meta-scene">选图比例过高（高度过长）</span>
+            <span class="toast-meta-loc">来自: OnboardingCaptureView</span>
+          </div>
+          <div class="toast-card toast-blocked">
+            <span class="toast-icon">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="4"/>
+                <circle cx="8.5" cy="8.5" r="1.5" fill="currentColor"/>
+                <path d="M21 15l-5-5L5 21"/>
+              </svg>
+            </span>
+            <span>Photo is too tall. Try another.</span>
+          </div>
+        </div>
+
+        <!-- 6b -->
+        <div class="toast-row">
+          <div class="toast-meta">
+            <span class="toast-meta-num">Toast #06b · 动作受阻 (Blocked)</span>
+            <span class="toast-meta-scene">选图比例过宽（宽度过长）</span>
+            <span class="toast-meta-loc">来自: OnboardingCaptureView</span>
+          </div>
+          <div class="toast-card toast-blocked">
+            <span class="toast-icon">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="4"/>
+                <circle cx="8.5" cy="8.5" r="1.5" fill="currentColor"/>
+                <path d="M21 15l-5-5L5 21"/>
+              </svg>
+            </span>
+            <span>Photo is too wide. Try another.</span>
+          </div>
+        </div>
+
+        <!-- 6c -->
+        <div class="toast-row">
+          <div class="toast-meta">
+            <span class="toast-meta-num">Toast #06c · 动作受阻 (Blocked)</span>
+            <span class="toast-meta-scene">图片损坏或零尺寸无法读取</span>
+            <span class="toast-meta-loc">来自: OnboardingCaptureView</span>
+          </div>
+          <div class="toast-card toast-blocked">
+            <span class="toast-icon">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="4"/>
+                <circle cx="8.5" cy="8.5" r="1.5" fill="currentColor"/>
+                <path d="M21 15l-5-5L5 21"/>
+              </svg>
+            </span>
+            <span>Couldn't read this photo. Try another.</span>
+          </div>
+        </div>
+
+        <!-- 7: 方案 A 规范化 Sparkles 细线星芒 -->
+        <div class="toast-row">
+          <div class="toast-meta">
+            <span class="toast-meta-num">Toast #07 · 积极确认 (Positive)</span>
+            <span class="toast-meta-scene">Tab2 主题词汇达标解锁（20 pops 里程碑）</span>
+            <span class="toast-meta-loc">来自: MineView / Tab2HomeViewModel</span>
+          </div>
+          <div class="toast-card toast-positive">
+            <span class="toast-icon">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9.5 2C9.5 6 6 9.5 2 9.5C6 9.5 9.5 13 9.5 17C9.5 13 13 9.5 17 9.5C13 9.5 9.5 6 9.5 2Z"/>
+                <path d="M19 13C19 15.2 17.2 17 15 17C17.2 17 19 18.8 19 21C19 18.8 20.8 17 23 17C20.8 17 19 15.2 19 13Z"/>
+              </svg>
+            </span>
+            <span>'Transport' reached 20 pops.</span>
+          </div>
+        </div>
+
+        <!-- 8: 功能未就绪候选预览 -->
+        <div class="toast-row">
+          <div class="toast-meta">
+            <span class="toast-meta-num">Toast #08 · 动作受阻 (Blocked)</span>
+            <span class="toast-meta-scene">点击 Talk 按钮未开启对话时的提示</span>
+            <span class="toast-meta-loc">来自: MineView (onTalk 点击)</span>
+          </div>
+          <div class="toast-card toast-blocked">
+            <span class="toast-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="9"/>
+                <path d="M12 7v5l3 2"/>
+              </svg>
+            </span>
+            <span id="toast08Text">Speaking mode will be available soon.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Toast #08 候选文案 4 套设计方案即时对比 -->
+      <div style="margin-top: 24px; padding: 20px; background: #F9F8F5; border-radius: 12px; border: 1px solid var(--neutral-border);">
+        <div style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px;">
+          🎯 Toast #08（点击 Talk 暂未开放）4 组文案选项即时对比
+        </div>
+        <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 16px;">
+          点击下方选项，直接在上方 Toast #08 中实时预览视觉效果：
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+          <div onclick="selectToast08('Conversations coming soon.', this)" style="background: white; border: 1.5px solid var(--brand-strong); border-radius: 8px; padding: 12px; cursor: pointer;" class="opt-card active-opt">
+            <div style="font-size: 12px; font-weight: 700; color: var(--brand-strong); margin-bottom: 4px;">选项 1 · 对话场景化（推荐 ✨）</div>
+            <div style="font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">“Conversations coming soon.”</div>
+            <div style="font-size: 11px; color: var(--text-secondary); line-height: 1.4;">告别冷冰冰的“Feature”，直击用户要用的“对话”能力，符合自然人话。</div>
+          </div>
+
+          <div onclick="selectToast08('Coming soon.', this)" style="background: white; border: 1px solid var(--neutral-border); border-radius: 8px; padding: 12px; cursor: pointer;" class="opt-card">
+            <div style="font-size: 12px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">选项 2 · 极致克制（纯粹无赘字）</div>
+            <div style="font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">“Coming soon.”</div>
+            <div style="font-size: 11px; color: var(--text-secondary); line-height: 1.4;">Apple 最经典的纯粹提示，在 328pt 底框内配合时钟居中，极具呼吸感。</div>
+          </div>
+
+          <div onclick="selectToast08('Practice mode coming soon.', this)" style="background: white; border: 1px solid var(--neutral-border); border-radius: 8px; padding: 12px; cursor: pointer;" class="opt-card">
+            <div style="font-size: 12px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">选项 3 · 练习诉求呼应</div>
+            <div style="font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">“Practice mode coming soon.”</div>
+            <div style="font-size: 11px; color: var(--text-secondary); line-height: 1.4;">直接强调用户期待的“口语练习模式”，给用户明确的心理锚点。</div>
+          </div>
+
+          <div onclick="selectToast08('Almost ready. Coming soon.', this)" style="background: white; border: 1px solid var(--neutral-border); border-radius: 8px; padding: 12px; cursor: pointer;" class="opt-card">
+            <div style="font-size: 12px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">选项 4 · 温润陪伴双短句</div>
+            <div style="font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">“Almost ready. Coming soon.”</div>
+            <div style="font-size: 11px; color: var(--text-secondary); line-height: 1.4;">双短句节奏典雅，传递出“正在精心打磨、就差一点点”的温度。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 文案深度打磨与标点对照表 -->
+    <div class="section">
+      <div class="section-title">📝 文案优化对照表（剔除口语随意、补齐严整标点）</div>
+      <div class="section-desc">对比原先的随意表述与最新优化方案，全面消除语法疏漏与不严谨：</div>
+
+      <table class="spec-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>场景</th>
+            <th>修改前（随意、漏标点）</th>
+            <th>优化后（严整标点、温润沉静）</th>
+            <th>打磨理由</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>01</td>
+            <td>反馈成功</td>
+            <td><span class="old-text">Thank you! We'll be in touch soon</span></td>
+            <td><span class="new-text">Thank you for your feedback.</span></td>
+            <td>选用 1A：去除轻浮的“很快联系你”等过度承诺，真诚、克制、体面。</td>
+          </tr>
+          <tr>
+            <td>02</td>
+            <td>离线受阻</td>
+            <td><span class="old-text">You're offline. Check your connection.</span></td>
+            <td><span class="new-text">You're offline. Check your connection.</span></td>
+            <td>保留经典双句客观陈述，标点完备。</td>
+          </tr>
+          <tr>
+            <td>03</td>
+            <td>刷新受阻</td>
+            <td><span class="old-text">Couldn't refresh. Pull to try again.</span></td>
+            <td><span class="new-text">Unable to sync. Pull to try again.</span></td>
+            <td>3A 瘦身版：彻底避开 Couldn't 消极句式，瘦身单行呼吸感极佳，绝不截断折行。</td>
+          </tr>
+          <tr>
+            <td>04</td>
+            <td>相机故障</td>
+            <td><span class="old-text">Couldn't take that photo. Try again.</span></td>
+            <td><span class="new-text">Camera unavailable. Please try again.</span></td>
+            <td>选用 4A：彻底避开 Couldn't；系统级客观中性陈述，提示重试。</td>
+          </tr>
+          <tr>
+            <td>05</td>
+            <td>相机超时</td>
+            <td><span class="old-text">That took too long. Try again.</span></td>
+            <td><span class="new-text">Capture timed out. Please try again.</span></td>
+            <td>剔除带有负面抱怨情绪的 "That took too long"，改为客观描述超时事实。</td>
+          </tr>
+          <tr>
+            <td>06a</td>
+            <td>选图过高</td>
+            <td><span class="old-text">Photo is too tall — use 1:2.25 to 2.25:1.</span></td>
+            <td><span class="new-text">Photo is too tall. Try another.</span></td>
+            <td>剔除生硬技术比例公式与破折号，保留精准高度归因，操作指引清晰。</td>
+          </tr>
+          <tr>
+            <td>06b</td>
+            <td>选图过宽</td>
+            <td><span class="old-text">Photo is too wide — use 1:2.25 to 2.25:1.</span></td>
+            <td><span class="new-text">Photo is too wide. Try another.</span></td>
+            <td>剔除生硬技术比例公式与破折号，保留精准宽度归因，操作指引清晰。</td>
+          </tr>
+          <tr>
+            <td>06c</td>
+            <td>无法读取</td>
+            <td><span class="old-text">Couldn't read this photo. Choose another.</span></td>
+            <td><span class="new-text">Couldn't read this photo. Try another.</span></td>
+            <td>统一全站受阻操作指引为 "Try another."，保持系统一致性。</td>
+          </tr>
+          <tr>
+            <td>07</td>
+            <td>达成解锁</td>
+            <td><span class="old-text">Transport reached 20 pops</span></td>
+            <td><span class="new-text">'Transport' reached 20 pops.</span></td>
+            <td>选用 7A：分类名使用单引号包裹界定，避免句首词性混淆；无感叹号事实呈现。</td>
+          </tr>
+          <tr>
+            <td>08</td>
+            <td>敬请期待</td>
+            <td><span class="old-text">Coming soon</span></td>
+            <td><span class="new-text">Speaking mode will be available soon.</span></td>
+            <td>选用 8C：彻底去除轻浮俏皮的 Hang tight，严肃克制、展现产品正规排期体面感。</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    function setWidthMode(mode, btn) {
+      document.body.classList.remove('mode-fixed', 'mode-hug');
+      document.body.classList.add(mode);
+      btn.parentElement.querySelectorAll('.btn-toggle').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    }
+    function setAlignMode(align, btn) {
+      document.body.classList.remove('align-center', 'align-left');
+      document.body.classList.add(align);
+      btn.parentElement.querySelectorAll('.btn-toggle').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    }
+    function selectToast08(text, card) {
+      document.getElementById('toast08Text').textContent = text;
+      document.querySelectorAll('.opt-card').forEach(c => {
+        c.style.borderColor = 'var(--neutral-border)';
+      });
+      card.style.borderColor = 'var(--brand-strong)';
+    }
+  </script>
+</body>
+</html>

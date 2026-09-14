@@ -99,8 +99,7 @@ struct RootTabContainer: View {
     // Fullscreen image preview — lifted to root so it covers the top bar
     @State private var previewImage: UIImage?
     @State private var previewAnchor: UnitPoint = .center
-    @State private var globalToast: String?
-    @State private var globalToastImage: String?
+    @State private var globalToastItem: AppToastItem?
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -167,21 +166,14 @@ struct RootTabContainer: View {
         }
         .sheet(isPresented: $showUsageLimit) {
             UsageLimitSheet(onFeedbackSubmitted: {
-                globalToastImage = "paperplane.fill"
-                globalToast = FeedbackView.successToastMessage
+                globalToastItem = AppToastItem(
+                    message: FeedbackView.successToastMessage,
+                    systemImage: "paperplane.fill",
+                    semantic: .positive
+                )
             })
         }
-        .toast(
-            message: $globalToast,
-            systemImage: globalToastImage,
-            placement: .bottom
-        )
-        .onReceive(NotificationCenter.default.publisher(for: .showAppToast)) { note in
-            if let payload = note.object as? AppToastPayload {
-                globalToastImage = payload.systemImage
-                globalToast = payload.message
-            }
-        }
+        .appToast(item: $globalToastItem, placement: .bottom)
         .onChange(of: selectedTab) { oldTab, newTab in
             if oldTab != newTab {
                 UISelectionFeedbackGenerator().selectionChanged()

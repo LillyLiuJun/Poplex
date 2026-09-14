@@ -57,6 +57,11 @@ struct ImageLoadingPlaceholder: View {
 /// 复用与 `ImageLoadingPlaceholder` 相同的底色，只换成静止的感叹号图标，
 /// 让"失败"读起来像同一类占位的另一种状态，而不是一个突兀的新样式。
 struct ImageLoadFailedPlaceholder: View {
+    /// 无障碍标签覆盖：默认「Image failed to load」（真实下载失败场景）。
+    /// 内容审核拦截等语义不同的场景传入专属标签（如 "Content blocked"），
+    /// 避免读屏暗示「可重试」——拦截是终态，重试无意义。
+    var accessibilityLabelOverride: String? = nil
+
     var body: some View {
         RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
             .fill(AppTheme.Color.imageLoadingPlaceholderBg)
@@ -65,7 +70,7 @@ struct ImageLoadFailedPlaceholder: View {
                     .font(.system(size: 16))
                     .foregroundStyle(AppTheme.Color.imageLoadingIndicator)
             }
-            .accessibilityLabel("Image failed to load")
+            .accessibilityLabel(accessibilityLabelOverride ?? "Image failed to load")
     }
 }
 

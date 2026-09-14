@@ -12,6 +12,8 @@ const SUPABASE_SVC_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const GEMINI_API_KEY   = Deno.env.get("GEMINI_API_KEY") ?? "";
 const GEMINI_URL       = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.7-flash:generateContent";
 
+import { normalizeDialogueSceneCategory } from "./sceneCategory.ts";
+
 // ─────────────────────────────────────────────────────────────
 // CORS
 // ─────────────────────────────────────────────────────────────
@@ -173,20 +175,36 @@ see the schema supplied with the request. No prose outside the JSON.`;
 
 // ─────────────────────────────────────────────────────────────
 // Category label mapping (mirrors SceneCategoryMap.swift)
+// New records use English keys directly. Legacy Chinese keys from old DB
+// rows are also mapped here so existing data renders correctly.
 // ─────────────────────────────────────────────────────────────
 
 const CATEGORY_LABELS: Record<string, string> = {
-  "家庭与人际": "Home & people",
-  "工作与学业": "Work & study",
-  "日常起居":   "Daily routines",
-  "饮食":       "Food",
+  // ── New English keys (used by all new records) ──────────────
+  "Home & Family":     "Home & Family",
+  "Work & Study":      "Work & Study",
+  "Daily Routine":     "Daily Routine",
+  "Food & Drink":      "Food & Drink",
+  "Shopping":          "Shopping",
+  "Travel & Commute":  "Travel & Commute",
+  "Health & Fitness":  "Health & Fitness",
+  "Hobbies & Leisure": "Hobbies & Leisure",
+  "Digital & Tech":    "Digital & Tech",
+  "Weather & Nature":  "Weather & Nature",
+  "Social & Feelings": "Social & Feelings",
+  "Other":             "Other",
+  // ── Legacy Chinese keys (existing DB rows — kept for compat) ─
+  "家庭与人际": "Home & Family",
+  "工作与学业": "Work & Study",
+  "日常起居":   "Daily Routine",
+  "饮食":       "Food & Drink",
   "购物消费":   "Shopping",
-  "出行交通":   "Getting around",
-  "运动健康":   "Health & fitness",
-  "休闲娱乐":   "Leisure",
-  "科技数码":   "Tech & gadgets",
-  "天气环境":   "Weather",
-  "情绪社交":   "Social",
+  "出行交通":   "Travel & Commute",
+  "运动健康":   "Health & Fitness",
+  "休闲娱乐":   "Hobbies & Leisure",
+  "科技数码":   "Digital & Tech",
+  "天气环境":   "Weather & Nature",
+  "情绪社交":   "Social & Feelings",
   "其他":       "Other",
 };
 
@@ -346,8 +364,13 @@ async function assembleLedger(userId: string, sceneCategory: string): Promise<Le
 // action = "start"
 // ─────────────────────────────────────────────────────────────
 
-async function handleStart(userId: string, sceneCategory: string): Promise<Response> {
-  if (!sceneCategory) return json({ error: "missing_scene_category" }, 400);
+async function handleStart(userId: string, rawSceneCategory: string): Promise<Response> {
+  if (!rawSceneCategory) return json({ error: "missing_scene_category" }, 400);
+  // 写入防线（评审 #1）：归一化到英文 key（中文 legacy 映射、'Work' 特例归位），
+  // 无效值显式 400 拒收——dialogue_sessions.scene_category 无 CHECK 约束，
+  // 原样落库会让脏值静默分裂分类（线上实测迁移后仍有 'Work' 新写入）。
+  const sceneCategory = normalizeDialogueSceneCategory(rawSceneCategory);
+  if (!sceneCategory) return json({ error: "invalid_scene_category" }, 400);
 
   // 1. Create session
   const sessionRows = await dbPost("dialogue_sessions", {

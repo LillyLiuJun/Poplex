@@ -168,7 +168,8 @@ struct OnboardingCaptureView: View {
                         },
                         set: { if $0 == nil { viewModel.errorKind = nil } }
                     ),
-                    systemImage: "exclamationmark.triangle",
+                    systemImage: "hand.raised.slash",
+                    semantic: .blocked,
                     lifetime: AppTheme.Motion.toastLifetime
                 )
                 // 浮于底部 Continue 之上：原来错用 barControl(44) 当 CTA 高度，
@@ -205,11 +206,11 @@ struct OnboardingCaptureView: View {
             // 选中后样例图条消失，同步清掉屏蔽区，避免旧 frame 残留误伤该区域的返回手势
             carouselFrame = nil
         case .tooTall:
-            photoValidationMessage = "Photo is too tall — use 1:2.25 to 2.25:1."
+            photoValidationMessage = "Photo is too tall. Try another."
         case .tooWide:
-            photoValidationMessage = "Photo is too wide — use 1:2.25 to 2.25:1."
+            photoValidationMessage = "Photo is too wide. Try another."
         case .invalid:
-            photoValidationMessage = "Couldn't read this photo. Choose another."
+            photoValidationMessage = "Couldn't read this photo. Try another."
         }
     }
 
@@ -289,7 +290,8 @@ struct OnboardingCaptureView: View {
                     VStack(spacing: AppTheme.Space.paddingCard) {
                         AutoDismissingAppToast(
                             message: $photoValidationMessage,
-                            systemImage: "exclamationmark.triangle",
+                            systemImage: "photo",
+                            semantic: .blocked,
                             lifetime: AppTheme.Motion.onboardingPhotoToastLifetime
                         )
 

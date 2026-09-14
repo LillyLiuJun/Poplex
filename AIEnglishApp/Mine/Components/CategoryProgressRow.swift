@@ -4,10 +4,12 @@ enum CategoryWordsLoadFailure: Error, Equatable {
     case offline
     case unavailable
 
-    var message: String {
+    /// 手风琴展开失败态的用户文案：区分断网与服务不可用两种成因。
+    /// 无底框重试按钮的新视觉自带 "Try again"，因此文案本身不再带重试提示。
+    var displayMessage: String {
         switch self {
-        case .offline: "You're offline."
-        case .unavailable: "Couldn't load these words."
+        case .offline: "Check your connection and try again."
+        case .unavailable: "Couldn't load these words. Try again."
         }
     }
 
@@ -335,8 +337,8 @@ struct CategoryProgressRow: View {
             ShimmerWordSkeletonList()
                 .transition(.opacity)
         } else if let loadFailure = wordsLoader.failure {
+            // haptic 已下沉到 Tab2AccordionNetworkErrorView 组件内部（可复用单元自带触感反馈）
             CategoryWordsFailureView(failure: loadFailure) {
-                UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 wordsLoader.retry(loadWords: loadWords)
             }
                 .transition(.opacity)
@@ -368,18 +370,10 @@ private struct CategoryWordsFailureView: View {
     let onRetry: () -> Void
 
     var body: some View {
-        HStack(spacing: AppTheme.Space.paddingM) {
-            Text(failure.message)
-                .font(AppTheme.Font.statusNote)
-                .foregroundStyle(AppTheme.Color.textMuted)
-
-            Button("Try again", action: onRetry)
-                .font(AppTheme.Font.statusNote)
-                .foregroundStyle(AppTheme.Color.brandInk)
-                .buttonStyle(.plain)
-        }
-        .frame(maxWidth: .infinity, alignment: .center)
-        .padding(.vertical, AppTheme.Space.paddingM)
+        Tab2AccordionNetworkErrorView(
+            message: failure.displayMessage,
+            onRetry: onRetry
+        )
     }
 }
 
@@ -533,7 +527,7 @@ private struct WordEntryRow: View {
         }
     }
 
-    // 类型图标：描边 SF Symbol，或衬线字母（句中单词）。均走暖灰 muted、退后作弱提示。
+    // 类型图标：描边 SF Symbol、垂直引用树线（习语/俚语）或衬线字母。均走暖灰 muted、退后作弱提示。
     @ViewBuilder
     private var badgeGlyphView: some View {
         switch entry.badgeGlyph {
@@ -541,11 +535,29 @@ private struct WordEntryRow: View {
             Image(systemName: name)
                 .font(.system(size: AppTheme.Size.entryBadgeGlyph, weight: .regular))
                 .foregroundStyle(AppTheme.Color.textMuted)
-        case .serifLetter(let letter):
-            Text(letter)
-                .font(AppTheme.Font.iconBadgeLetter)
-                .foregroundStyle(AppTheme.Color.textMuted)
+        case .quoteBlock:
+            quoteBlockGlyphView
         }
+    }
+
+    /// 垂直引用树线 + 文本行 (Markdown Quote Block) · 专用于习语/俚语
+    private var quoteBlockGlyphView: some View {
+        HStack(alignment: .center, spacing: 3.5) {
+            Capsule(style: .continuous)
+                .fill(AppTheme.Color.textMuted)
+                .frame(width: 1.8, height: 13)
+
+            VStack(alignment: .leading, spacing: 3.2) {
+                Capsule(style: .continuous)
+                    .fill(AppTheme.Color.textMuted)
+                    .frame(width: 8.5, height: 1.8)
+
+                Capsule(style: .continuous)
+                    .fill(AppTheme.Color.textMuted)
+                    .frame(width: 5.5, height: 1.8)
+            }
+        }
+        .frame(width: AppTheme.Size.entryBadgeGlyph, height: AppTheme.Size.entryBadgeGlyph)
     }
 }
 

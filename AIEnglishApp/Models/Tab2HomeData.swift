@@ -336,9 +336,9 @@ struct Tab2WordEntry: Decodable, Identifiable {
 
 // MARK: - Badge glyph (类型图标：SF Symbol 描边 / 衬线字母 两种呈现)
 
-enum Tab2BadgeGlyph: Equatable {
+enum Tab2BadgeGlyph: Equatable, Hashable {
     case symbol(String)       // SF Symbol 描边图标
-    case serifLetter(String)  // 衬线字母（句中单词，呼应品牌衬线）
+    case quoteBlock           // 地道引语垂直树线 (专供习语/俚语)
 }
 
 // MARK: - Badge & image helpers (internal for testability)
@@ -351,9 +351,10 @@ extension Tab2WordEntry {
     }
 
     /// 词条类型图标（统一细线家族）。按捕获方式优先，再按表达类型细分：
-    ///   · 查词（.word）→ 放大镜；对话（.dialogue，未上线）→ 声波
-    ///   · 句子/段落里的单词 → 衬线字母 A（呼应品牌衬线）
-    ///   · 短语/搭配/句型 → text.quote 引用文本线；习语/俚语 → bubble.left 对话气泡
+    ///   · 查词（.word）→ magnifyingglass 放大镜；对话（.dialogue，未上线）→ waveform 声波
+    ///   · 句子/段落里的单词 → book.closed 纯净极简小书本
+    ///   · 习语/俚语 → quoteBlock 垂直引语线
+    ///   · 短语/搭配/句型 → link 词语双环搭扣
     /// 图片走 imageUrl，不经此。
     var badgeGlyph: Tab2BadgeGlyph {
         switch sourceTag {
@@ -361,9 +362,9 @@ extension Tab2WordEntry {
         case .dialogue: return .symbol("waveform")
         case .sentence, .passage:
             switch entryKind {
-            case "word":            return .serifLetter("A")
-            case "idiom", "slang":  return .symbol("bubble.left")
-            default:                return .symbol("text.quote")  // phrase/collocation/pattern/未知
+            case "word":            return .symbol("book.closed")
+            case "idiom", "slang":  return .quoteBlock
+            default:                return .symbol("link")
             }
         }
     }

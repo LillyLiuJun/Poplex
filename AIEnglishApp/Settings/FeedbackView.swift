@@ -65,7 +65,7 @@ struct FeedbackView: View {
     /// 各自在 onSuccess 里弹自己的 toast）：FeedbackView 只发触觉反馈并关闭，
     /// 不再自行发全局 toast——否则与宿主的 toast 叠加出现两次（审计发现 ④）。
     /// 文案收敛为一个常量，避免多处复制（清单 C4 同源问题）。
-    static let successToastMessage = "Thank you! We'll be in touch soon"
+    static let successToastMessage = "Thank you for your feedback."
 
     @Environment(\.dismiss) private var dismiss
 

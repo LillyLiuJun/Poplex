@@ -67,9 +67,9 @@ struct PendingRetryRow: View {
 
             Button(action: onRetry) {
                 HStack(spacing: AppTheme.Space.paddingXS) {
-                    Image(systemName: "exclamationmark.arrow.circlepath")
-                        .imageScale(.small)
-                    Text("You were offline, so this wasn't generated. Tap to retry.")
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 11, weight: .semibold))
+                    Text("Check your connection and try again.")
                         .font(AppTheme.Font.chineseFaint)
                 }
                 .foregroundStyle(AppTheme.Color.danger)
@@ -88,7 +88,13 @@ private struct UserRejectedRow: View {
     private let imageSize = UIScreen.main.bounds.width * 0.3   // 与 UserBubble 同尺寸，保持时间线节奏
 
     var body: some View {
+        // 与正常 UserBubble 视觉节奏一致：图（占位）在上、文字气泡在下
         VStack(alignment: .trailing, spacing: AppTheme.Space.paddingS) {
+            if wasImage {
+                ImageLoadFailedPlaceholder(accessibilityLabelOverride: "Content blocked")
+                    .frame(width: imageSize, height: imageSize)
+            }
+
             if let text, !text.isEmpty {
                 Text(text)
                     .font(AppTheme.Font.englishBody)
@@ -98,30 +104,14 @@ private struct UserRejectedRow: View {
                     .background(AppTheme.Color.bubbleUserBg, in: RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
             }
 
-            if wasImage {
-                RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
-                    .fill(AppTheme.Color.imagePlaceholderBg)
-                    .frame(width: imageSize, height: imageSize)
-                    .overlay(
-                        VStack(spacing: AppTheme.Space.paddingS) {
-                            Image(systemName: "exclamationmark.triangle")
-                                .font(.system(size: 22, weight: .medium))
-                                .foregroundStyle(AppTheme.Color.textMuted)
-                            Text("Content blocked")
-                                .font(AppTheme.Font.statusNote)
-                                .foregroundStyle(AppTheme.Color.textMuted)
-                        }
-                    )
-            }
-
             HStack(spacing: AppTheme.Space.paddingXS) {
                 Image(systemName: "info.circle")
                     .imageScale(.small)
-                Text("This content can't be processed. Try another one.")
+                Text("This content can't be processed.")
                     .font(AppTheme.Font.chineseFaint)
             }
             .foregroundStyle(AppTheme.Color.textMuted)
-            .frame(maxWidth: .infinity, alignment: .center)
+            .frame(maxWidth: .infinity, alignment: .trailing)
         }
     }
 }
@@ -133,9 +123,9 @@ private struct SendFailedRow: View {
     var body: some View {
         Button(action: onRetry) {
             HStack(spacing: AppTheme.Space.paddingXS) {
-                Image(systemName: "exclamationmark.arrow.circlepath")
-                    .imageScale(.small)
-                Text("No connection — tap to retry.")
+                Image(systemName: "arrow.clockwise")
+                    .font(.system(size: 11, weight: .semibold))
+                Text("Check your connection and try again.")
                     .font(AppTheme.Font.chineseFaint)
             }
             .foregroundStyle(AppTheme.Color.danger)

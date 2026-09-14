@@ -13,6 +13,7 @@ struct Tab2HeroCard: View {
             cardContent
         }
         .buttonStyle(HeroCardPressStyle())
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     private var cardContent: some View {

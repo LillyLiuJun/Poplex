@@ -102,6 +102,8 @@ private enum Primitive {
     // danger(#B0392A) 只有 11° 色相，会让两个按钮一起像在报警；
     // brandStrong(#FF7622) 分得开但白底仅 2.6:1。近黑两头都不占，是 PM 拍板的取舍。
     static let neutral950 = Color(hex: 0x17120C)
+    /// Toast 浮层受阻专用纯实色沉静暖纸灰（坚决不透底，确保浮层清晰遮蔽底层内容）
+    static let toastPaperGray = Color(hex: 0xEFECE6)
 
     // Warning — 金黄（黄色系物理上做不出高对比度深色，只作浅底 + 深色文字用）
     static let warning50  = Color(hex: 0xFAF8EC)
@@ -411,6 +413,12 @@ enum AppTheme {
         // 半轻灰胶囊底（计数 + chevron 合并单元）：暖近黑极低透明，中性、不引入橙
         static let pillNeutralBg    = Primitive.neutral900.opacity(0.06)
 
+        // Toast 浮层专用实色背景（坚决不透底，确保浮层能完全遮蔽底层列表与卡片内容）
+        /// Toast 积极确认底色（#FFF3EB 晨曦暖橙实色）
+        static let toastPositiveBg  = Primitive.primary100
+        /// Toast 动作受阻底色（#EFECE6 沉静暖纸灰实色，100% 不透明）
+        static let toastBlockedBg   = Primitive.toastPaperGray
+
         // 下拉刷新 / 弱加载指示器（极淡浅暖灰，轻盈温润、不抢视觉重心）
         static let refreshIndicator = Primitive.neutral300
 
@@ -438,7 +446,7 @@ enum AppTheme {
         // 英文主内容 / 词条大标题走衬线（Warm Editorial：内容用 Newsreader；
         // 暂以系统衬线 New York 顶位，待打包 Newsreader 后仅换 design/family）。
         static let englishPrimary = SwiftUI.Font.system(.body, design: .serif)                    // 英文主内容（内容衬线，规则用 .body 保 Dynamic Type）
-        static let wordTitle      = SwiftUI.Font.system(.title2, design: .serif, weight: .semibold) // 词条大标题（内容衬线，半粗以有分量不过重）
+        static let wordTitle      = SwiftUI.Font.system(.title3, design: .serif, weight: .semibold) // 词条大标题（内容衬线，半粗以有分量不过重）
         static let englishBody    = SwiftUI.Font.system(.body)                        // 英文例句
         // Onboarding 拼贴里的示意微文案（照片注脚 / 语音转写 / 便签正文）。
         // 尺寸：15（比 englishBody 17 降一档）——这些字是「让人认出这是什么输入」的示意，
@@ -458,13 +466,13 @@ enum AppTheme {
         // 辅助信息走。此前这三处都挪用了 pos，改版权衡时会互相牵制。
         static let metaNote       = SwiftUI.Font.system(.caption2)
         static let popsCount      = SwiftUI.Font.system(.caption, weight: .medium)    // Topics 进度行 pops 计数（配 .monospacedDigit()）
-        static let iconBadgeLetter = SwiftUI.Font.system(.subheadline, design: .serif, weight: .semibold) // 词条类型徽章里的衬线字母（句中单词 A）
         static let sectionLabel   = SwiftUI.Font.system(.caption2, weight: .semibold) // 区块小标（例句 / 说明，11/600）
         static let statusNote     = SwiftUI.Font.system(.footnote)                     // 加载态 / 空态 / 系统提示性短句
         static let statusNoteSerif = SwiftUI.Font.system(.footnote, design: .serif)     // 衬线小字状态提示（如手风琴展开 loading "Gathering words…"）
         static let growthStatus   = SwiftUI.Font.system(.footnote, weight: .semibold)  // 成长线状态（如「0 pops so far」）
         static let actionNote     = SwiftUI.Font.system(.footnote)                     // 操作项的补充说明（如拍照入口副文案）
         static let compactActionLabel = SwiftUI.Font.system(.subheadline, weight: .medium) // 上传胶囊动作（Camera / Gallery）：无图标时用中等字重建立操作重量
+        static let inlineActionLabel = SwiftUI.Font.system(.footnote, weight: .semibold) // 无底框行内动作按钮文字（错误态 Try again，13/600，随 Dynamic Type 缩放）
         static let feedbackChipLabel = SwiftUI.Font.system(.subheadline, weight: .regular) // 反馈分类标签：常规细字重，保持视觉轻柔收敛
         static let chineseFaint   = SwiftUI.Font.system(.footnote)                    // 中文原文弱化
         static let chineseBody    = SwiftUI.Font.system(.subheadline)                 // 中文翻译（=参考稿 content-zh 14px 灰）
@@ -692,6 +700,11 @@ enum AppTheme {
         static let rowLabelToProgress: CGFloat   = 10    // 分类行首行（标题+胶囊）→ 进度条间距
         static let wordEntrySpacing: CGFloat     = 2     // 词条行词 + 释义纵向间距
         static let wordListLoadingVPad: CGFloat  = 14    // 词列表加载态垂直内边距
+        static let inlineActionIconGlyph: CGFloat = 11   // 行内动作按钮图标字号（错误态 Try again ↻，与 inlineActionLabel 光学配对）
+
+        // ── AppToast 双模自适应（component-private，仅 toast 使用）──────────
+        static let toastFixedWidth: CGFloat = 328          // 普通字号固定卡宽（藏书票等宽条）
+        static let toastAccessibilityVPad: CGFloat = 10   // AX 大字号档垂直内边距（行高变大，8→10 留呼吸）
 
         // ── Tab2 空状态 ──────────────────────────────────────────────────
         static let emptyStateCaptureIconGlyph: CGFloat      = 19  // 空态 CTA 描边相机图标
@@ -992,8 +1005,8 @@ enum AppTheme {
         static let accordionToggle: Animation = .spring(response: 0.36, dampingFraction: 0.82)
         static let accordionReducedToggle: Animation = .easeInOut(duration: 0.25)
 
-        // 普通 toast 为整句阅读预留 4s；Onboarding 图片校验 3s；里程碑短句 2.2s。
-        static let toastLifetime: Duration = .seconds(4)
+        // 普通 toast 悬停 3s（微圆角藏书票便签）；里程碑短句 2.2s。
+        static let toastLifetime: Duration = .seconds(3)
         static let onboardingPhotoToastLifetime: Duration = .seconds(3)
         static let milestoneToastLifetime: Duration = .milliseconds(2200)
 

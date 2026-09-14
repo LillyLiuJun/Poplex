@@ -186,6 +186,7 @@ struct CameraCaptureView: View {
     // resolving after the shutter has already been unlocked for a retry.
     @State private var activeCaptureToken: UUID?
     @State private var captureIssue: String?
+    @State private var captureIssueIcon: String = "camera.badge.ellipsis"
 
     var body: some View {
         ZStack {
@@ -214,7 +215,8 @@ struct CameraCaptureView: View {
                 .overlay(alignment: .bottom) {
                     AutoDismissingAppToast(
                         message: $captureIssue,
-                        systemImage: "exclamationmark.triangle",
+                        systemImage: captureIssueIcon,
+                        semantic: .blocked,
                         lifetime: AppTheme.Motion.toastLifetime
                     )
                     .padding(.bottom, toastBottomInset)
@@ -283,7 +285,8 @@ struct CameraCaptureView: View {
             } else {
                 // No active connection (interruption mid-session) — stay on the
                 // camera and unlock the shutter instead of silently closing empty.
-                captureIssue = "Couldn't take that photo. Try again."
+                captureIssueIcon = "camera.badge.ellipsis"
+                captureIssue = "Camera unavailable. Please try again."
             }
         }
 
@@ -295,7 +298,8 @@ struct CameraCaptureView: View {
             guard activeCaptureToken == token else { return }
             activeCaptureToken = nil
             isCapturing = false
-            captureIssue = "That took too long. Try again."
+            captureIssueIcon = "timer"
+            captureIssue = "Capture timed out. Please try again."
         }
     }
 }

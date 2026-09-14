@@ -80,9 +80,14 @@ struct SettingsView: View {
             .onChange(of: showAboutAI) { _, new in if new { scrollToTopToken += 1 } }
             .onChange(of: showFeedback) { _, new in if new { scrollToTopToken += 1 } }
         }
-        .toast(message: $feedbackToast, systemImage: "paperplane.fill", placement: .bottom)
+        .appToast(
+            message: $feedbackToast,
+            systemImage: "paperplane.fill",
+            semantic: .positive,
+            placement: .bottom
+        )
         #if DEBUG
-        .toast(message: $debugToast)
+        .appToast(message: $debugToast, semantic: .blocked)
         #endif
         // 挂在 NavigationStack **之外**：二级页推上来后关闭键依然浮着
         .overlay(alignment: .top) { closeButton }

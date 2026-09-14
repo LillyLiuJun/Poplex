@@ -69,10 +69,14 @@ final class TodayViewModel {
     /// 本地成功增量存储（可注入，便于单测）：生成成功的「气泡 + 卡片」底稿，
     /// 冷启动先展示、网络全量对齐后按幂等键清除。
     var successStore = LocalSuccessStore.shared
+    /// 被拒终态备忘存储（可注入，便于单测）：只读事实（wasImage + 时刻），
+    /// 3 天内重启后还原「这里发生过一次拦截」。与 pendingRetryStore 完全隔离。
+    var rejectedContentStore = RejectedContentStore.shared
     /// 预设卡落库（可注入，便于单测 presetCard Retry 分支）。
     var presetCardSaver: PresetCardSaving = LivePresetCardSaver()
     /// 无网点 Retry 等场景的轻提示（视图挂 toast，自动消失）。
     var offlineHint: String?
+    var offlineHintIcon: String = "wifi"
     /// 生成次数额度的共享展示状态：成功响应的 usage 字段、429 裁决都写这里，
     /// Sheet / InputBar 达标态从这读。可注入（单测隔离，不污染全局 shared）。
     var quotaStore = UsageQuotaStore.shared
@@ -246,6 +250,12 @@ final class TodayViewModel {
             injectPendingRetry(serverRequestIds: decodedRequestIds)
             // 本地成功增量：对齐已带回的清除；未被对齐冲掉的按幂等去重后不重复注入。
             injectLocalSuccesses(serverRequestIds: decodedRequestIds)
+            // 被拒终态备忘：网络对齐整列替换会冲掉会话内就地转换的被拒行
+            // （被拒条目不在服务器历史里），兜底在这里按备忘重新注入。
+            injectRejectedContentMemos()
+            // 被动窗口不在此复位（审查发现 #15）：复位 = 依赖「视图 flush 先于下一个
+            // 主队列块」的时序假设，SwiftUI 没有 API 保证。已改为确定性约定（见属性
+            // 注释）：loadHistory 入口置 true、send / retryPending 置 false，无需复位。
             // 最终结算：时间线全貌（服务端历史 + 本地重试与增量）全部注入落定后，
             // 若对齐会话仍有效且用户未主动翻看历史，无动画定位到最终的 entries.last 并关闭会话。
             postSessionFinalScrollIfEligible(reason: .initialEntry, closeSession: true)
@@ -276,6 +286,7 @@ final class TodayViewModel {
         }
         injectPendingRetry(serverRequestIds: decodedRequestIds)
         injectLocalSuccesses(serverRequestIds: decodedRequestIds)
+        injectRejectedContentMemos()
         // 无论步骤 1 是否已用缓存渲染过 entries：本步注入的 seed / 失败行 / 本地
         // 成功增量若按写作时刻排在原 entries.last 之后（如上次杀 app 前刚生成成功
         // 但缓存文件还没来得及写入新内容），会成为新的真实底部——必须在这里重新
@@ -292,6 +303,7 @@ final class TodayViewModel {
             activeEntrySessionId = nil
             if inFlightHistoryShowsFailureHint {
                 offlineHint = Self.historyRefreshFailureMessage(isConnected: false)
+                offlineHintIcon = Self.historyRefreshFailureIcon(isConnected: false)
             }
             return
         }
@@ -318,6 +330,7 @@ final class TodayViewModel {
             activeEntrySessionId = nil
             if inFlightHistoryShowsFailureHint {
                 offlineHint = Self.historyRefreshFailureMessage(isConnected: isConnected())
+                offlineHintIcon = Self.historyRefreshFailureIcon(isConnected: isConnected())
             }
             return
         }
@@ -331,6 +344,7 @@ final class TodayViewModel {
             activeEntrySessionId = nil
             if inFlightHistoryShowsFailureHint {
                 offlineHint = Self.historyRefreshFailureMessage(isConnected: isConnected())
+                offlineHintIcon = Self.historyRefreshFailureIcon(isConnected: isConnected())
             }
             return
         }
@@ -558,7 +572,7 @@ final class TodayViewModel {
         // 重试成功：清除该幂等键的持久化失败行（含照片文件）。
         // 服务器已落库，重启后从历史回放，无需再注入失败行。
         if let requestId {
-            pendingRetryStore.removeTab1ByRequestId(requestId)
+            pendingRetryStore.removeByRequestId(requestId)
         }
 
         let cardEntry = TimelineEntry.aiCard(card)
@@ -660,7 +674,7 @@ final class TodayViewModel {
                     requestId: record.requestId, bubbleEntryId: bubbleId
                 )
             )
-            insertChronologically(bubble: bubble, companion: failed, at: record.createdAt)
+            insertChronologically([bubble, failed], at: record.createdAt)
         }
     }
 
@@ -710,14 +724,34 @@ final class TodayViewModel {
                 id: record.assistantMessageId ?? UUID(), createdAt: record.createdAt,
                 content: .aiCard(card)
             )
-            insertChronologically(bubble: bubble, companion: cardEntry, at: record.createdAt)
+            insertChronologically([bubble, cardEntry], at: record.createdAt)
         }
     }
 
-    /// 把「气泡 + 伴生行」对按写作时刻插入时间线（失败行/成功卡共用）：
+    /// 被拒终态备忘注入：把 3 天内的「这里发生过一次拦截」还原为被拒行，按时刻归位。
+    /// 与 injectPendingRetry / injectLocalSuccesses 平级但更薄：备忘永不出现在服务器
+    /// 历史里，无需 serverRequestIds 去重；只有「id 已在时间线就跳过」一层幂等
+    /// （本会话内就地转换过的条目 id 与备忘相同，两轮注入都命中这层守卫）。
+    /// 渲染为 .userRejected(text: nil)：不复述被拒内容，只留事实——
+    /// wasImage == true 给占位块（图标+文案，不含真实像素），纯文本被拒只剩说明行。
+    func injectRejectedContentMemos() {
+        let memos = rejectedContentStore.load().sorted { $0.createdAt < $1.createdAt }
+        for memo in memos {
+            guard !entries.contains(where: { $0.id == memo.id }) else { continue }
+            insertChronologically(
+                [TimelineEntry(
+                    id: memo.id, createdAt: memo.createdAt,
+                    content: .userRejected(text: nil, wasImage: memo.wasImage)
+                )],
+                at: memo.createdAt
+            )
+        }
+    }
+
+    /// 把一条或多条条目按写作时刻插入时间线（失败行/成功卡/被拒备忘共用）：
     /// 插入点 = 第一条 createdAt 晚于写作时刻的条目之前；正撞上同一天的日期标题时
     /// 插到标题之下；插入点前没有该日标题则补一个（确定性 ID），保持按天分组。
-    private func insertChronologically(bubble: TimelineEntry, companion: TimelineEntry, at date: Date) {
+    private func insertChronologically(_ items: [TimelineEntry], at date: Date) {
         let key = Self.dayKey(for: date)
         var insertAt = entries.firstIndex(where: { $0.createdAt > date }) ?? entries.count
         if insertAt < entries.count,
@@ -740,7 +774,7 @@ final class TodayViewModel {
                 content: .dateSeparator(Self.dayLabel(for: date))
             ))
         }
-        toInsert.append(contentsOf: [bubble, companion])
+        toInsert.append(contentsOf: items)
         entries.insert(contentsOf: toInsert, at: insertAt)
     }
 
@@ -762,6 +796,12 @@ final class TodayViewModel {
                 return
             }
             guard let requestId = retryRecord.requestId else { return }
+            // 待重试行的时间线条目 id：被拒终态按它就地转 userRejected（contentBlocked
+            // catch），而不是兜底追加第二行——「待重试行 + 被拒行」两行重复。
+            let pendingEntryId = entries.first(where: {
+                if case .pendingRetry(let r) = $0.content { return r.id == record.id }
+                return false
+            })?.id
             // runGeneration 自行管理 isLoading（期间刷新被 guard 挡住，不替换时间线）
             let card = await runGeneration(
                 text: nil,
@@ -770,7 +810,8 @@ final class TodayViewModel {
                 failureMode: .silent,
                 insertCard: false,
                 requestId: requestId,
-                requiredDurableRequestId: requestId
+                requiredDurableRequestId: requestId,
+                pendingRetryEntryId: pendingEntryId
             )
             if let card {
                 // S1 成功增量由 runGeneration 统一写入（requestId 非空即写，本路径已带），
@@ -856,6 +897,8 @@ final class TodayViewModel {
     /// `insertCard: false` 时成功只移除 loading 并返回卡片，由调用方就地插入
     /// （重试与待重试记录路径：气泡与卡片就地落到原记录位置）。
     /// `loadingAnchorId` 非空时 loading 插到该条目之后（重试原地），否则追加末尾。
+    /// `pendingRetryEntryId` 非空时（待重试记录重试路径），被拒终态按它把
+    /// pendingRetry 行**就地**转 userRejected，而不是兜底追加第二行。
     @discardableResult
     private func runGeneration(
         text: String?,
@@ -867,6 +910,7 @@ final class TodayViewModel {
         requiredDurableRequestId: UUID? = nil,
         originalCreatedAt: Date? = nil,
         loadingAnchorId: UUID? = nil,
+        pendingRetryEntryId: UUID? = nil,
         finalAnchor: TimelineScrollRequest.Anchor = .bottom,
         finalReason: TimelineScrollRequest.Reason = .finalCardLayout
     ) async -> AICard? {
@@ -955,9 +999,20 @@ final class TodayViewModel {
             quotaStore.applyServerVerdict(used: used, limit: limit, allowed: false)
             return nil
         } catch AIServiceError.contentBlocked {
-            // 内容被安全过滤拦截：移除 loading，按 id 定位对应的用户气泡就地转为「被拒」形态
+            // 内容被安全过滤拦截：本次尝试已终结。先按幂等键清除持久化待重试记录
+            // （含违规照片文件）——被拒的尝试没有写入服务端，injectPendingRetry 的
+            // stale 判定救不了它，兜底 pending 分支会在杀 app 重启后把它复活为
+            // 「照片 + 失败行」（诈尸 bug）。任一来源共用此 catch，一处堵住
+            // retrySend / retryPending 两个入口。
+            if let requestId {
+                pendingRetryStore.removeByRequestId(requestId)
+            }
+            // 移除 loading，按 id 定位对应的用户气泡就地转为「被拒」形态
             // （图片 → 占位块；文本 → 原样），不再弹窗、不保留原图。
+            // 三分支先算出被拒条目的 (id, wasImage, createdAt)，统一写终态备忘——
+            // 备忘只存事实不存内容：重启后据此还原拦截提示，不复述被拒的文字/图片。
             entries.removeAll { $0.id == loadingEntry.id }
+            let rejected: (id: UUID, wasImage: Bool, createdAt: Date)
             if let bubbleId = userBubbleEntryId,
                let idx = entries.firstIndex(where: { $0.id == bubbleId }),
                case .userBubble(let bubbleText, let bubbleImage, let bubbleImageUrl, _) = entries[idx].content {
@@ -969,10 +1024,40 @@ final class TodayViewModel {
                         wasImage: bubbleImage != nil || bubbleImageUrl != nil
                     )
                 )
+                rejected = (
+                    entries[idx].id,
+                    bubbleImage != nil || bubbleImageUrl != nil,
+                    entries[idx].createdAt
+                )
+            } else if let pendingId = pendingRetryEntryId,
+                      let idx = entries.firstIndex(where: { $0.id == pendingId }),
+                      case .pendingRetry(let record) = entries[idx].content {
+                // 待重试行就地转被拒（保留原行 createdAt）：不再出现
+                // 「待重试行 + 新增被拒行」两行并存的重复展示。
+                entries[idx] = TimelineEntry(
+                    id: entries[idx].id,
+                    createdAt: entries[idx].createdAt,
+                    content: .userRejected(
+                        text: record.text,
+                        wasImage: record.photoFileName != nil || record.presetImageName != nil
+                    )
+                )
+                rejected = (
+                    entries[idx].id,
+                    record.photoFileName != nil || record.presetImageName != nil,
+                    entries[idx].createdAt
+                )
             } else {
-                // 兜底：按 id 找不到气泡（异常路径）时补一条被拒条目
-                entries.append(TimelineEntry.userRejected(text: text, wasImage: image != nil))
+                // 兜底：按 id 找不到气泡（异常路径）时补一条被拒条目。
+                // 注意：这里拿不到原始写作时刻，备忘落 .now（重试时刻）——
+                // 异常路径的可接受不对称，注释在此免得以后被当 bug。
+                let fallback = TimelineEntry.userRejected(text: text, wasImage: image != nil)
+                entries.append(fallback)
+                rejected = (fallback.id, image != nil, fallback.createdAt)
             }
+            try? rejectedContentStore.save(
+                id: rejected.id, wasImage: rejected.wasImage, createdAt: rejected.createdAt
+            )
             return nil
         } catch {
             // 失败（含断网）：常规发送路径保留用户气泡、换成可点击重试的提示，原始输入随 entry 带着以便重发；
@@ -1074,8 +1159,12 @@ final class TodayViewModel {
     /// 把原始字节解码成记录——网络回来的和缓存读出来的走完全相同的这条路径
     nonisolated static func historyRefreshFailureMessage(isConnected: Bool) -> String {
         isConnected
-            ? "Unable to sync right now. Pull to try again."
-            : "You're offline. Check your connection and try again."
+            ? "Couldn't refresh. Try again in a moment."
+            : "You're offline. Check your connection."
+    }
+
+    nonisolated static func historyRefreshFailureIcon(isConnected: Bool) -> String {
+        isConnected ? "arrow.clockwise" : "wifi"
     }
 
     private nonisolated static func decodeRecords(from data: Data) throws -> [MessageRecord] {

@@ -121,16 +121,21 @@ struct AICardBody: View {
     @ScaledMetric(relativeTo: .caption2) private var expandArrowSize: CGFloat = 7
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Space.paddingCard) {
+        VStack(alignment: .leading, spacing: 0) {
             CardTypeChip(label: cardTypeLabel)
+                .padding(.bottom, content.isWord ? AppTheme.Space.paddingM : AppTheme.Space.paddingCard)
 
             if content.isWord {
-                wordMainBlock
-                if !content.examples.isEmpty { examplesSection }
-                if let note = content.displayableGrammarNote { noteSection(note: note) }
+                VStack(alignment: .leading, spacing: AppTheme.Space.paddingCard) {
+                    wordMainBlock
+                    if !content.examples.isEmpty { examplesSection }
+                    if let note = content.displayableGrammarNote { noteSection(note: note) }
+                }
             } else if content.isPassage {
-                passageContent
-                if let note = content.displayableGrammarNote { noteSection(note: note) }
+                VStack(alignment: .leading, spacing: AppTheme.Space.paddingCard) {
+                    passageContent
+                    if let note = content.displayableGrammarNote { noteSection(note: note) }
+                }
             } else {
                 sentenceContent
             }

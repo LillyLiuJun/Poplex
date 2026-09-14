@@ -75,6 +75,7 @@ enum LocalUserData {
         // 3. 未完成与已完成的本地生成记录（索引层）
         leftovers += PendingRetryStore.shared.clearAll()
         leftovers += LocalSuccessStore.shared.clearAll()
+        leftovers += RejectedContentStore.shared.clearAll()   // 被拒终态备忘（拦截事实，不存内容）
 
         // 4. 照片文件层兜底。两个 store 的 `remove(id:)` 先写元数据、再 `try?` 删文件，
         //    所以「索引已清空但 JPEG 还在」完全可能——只回读索引会**谎报清理成功**。

@@ -73,10 +73,11 @@ struct TodayView: View {
                     .ignoresSafeArea(.container, edges: .bottom)
             }
 
-            // 轻提示（如无网点 Retry）：底部浮出，4s 自动消失
+            // 轻提示（如无网点 Retry）：底部浮出，3s 自动消失
             AutoDismissingAppToast(
                 message: $vm.offlineHint,
-                systemImage: "wifi.slash"
+                systemImage: vm.offlineHintIcon,
+                semantic: .blocked
             )
             .padding(.bottom, AppTheme.Space.paddingHero)
         }
@@ -174,7 +175,8 @@ struct TodayView: View {
                             Task { await viewModel.retrySend(text: text, image: image, failedEntryId: entryId, requestId: requestId, bubbleEntryId: bubbleEntryId) }
                         }, onRetryPending: { record in
                             guard NetworkMonitor.shared.isConnected else {
-                                viewModel.offlineHint = "You're offline. Check your connection and try again."
+                                viewModel.offlineHint = "You're offline. Check your connection."
+                                viewModel.offlineHintIcon = "wifi"
                                 return
                             }
                             Task { await viewModel.retryPending(record: record) }
