@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sentence 句子卡片 · 字体排印 ABC 探索画板</title>
+  <style>
+    :root {
+      --page-bg: #FCF8F3;
+      --card-surface: #FFFDF8;
+      --text-primary: #211811;
+      --text-secondary: #594C43;
+      --text-muted: #7C7773;
+      --brand-strong: #FF7622;
+      --brand-ink: #C2410C;
+      --border-card: rgba(230, 225, 218, 0.4);
+      --card-shadow: 0 2px 6px rgba(33, 24, 17, 0.04), 0 8px 20px rgba(46, 40, 32, 0.03);
+
+      --font-serif: "New York", ui-serif, "Iowan Old Style", "Newsreader", Charter, Georgia, serif;
+      --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif;
+      --font-mono: "SF Mono", "JetBrains Mono", Menlo, monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-font-smoothing: antialiased; }
+    body {
+      background: #EDE7E0;
+      font-family: var(--font-sans);
+      color: var(--text-primary);
+      padding: 36px 24px 80px;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .container {
+      max-width: 1280px;
+      width: 100%;
+    }
+
+    /* 顶部说明标头 */
+    .header {
+      margin-bottom: 32px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .kicker {
+      font-size: 11.5px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--brand-ink);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+    .title {
+      font-family: var(--font-serif);
+      font-size: 32px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+    .subtitle {
+      font-size: 14.5px;
+      color: var(--text-secondary);
+      margin-top: 6px;
+      max-width: 680px;
+      line-height: 1.55;
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 8px;
+    }
+    .toggle-btn {
+      padding: 8px 16px;
+      border-radius: 999px;
+      border: 1px solid rgba(89, 76, 67, 0.2);
+      background: #FFFDF8;
+      color: var(--text-secondary);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.16s ease;
+    }
+    .toggle-btn:hover {
+      border-color: var(--brand-strong);
+      color: var(--brand-ink);
+    }
+    .toggle-btn.active {
+      background: var(--text-primary);
+      color: #fff;
+      border-color: var(--text-primary);
+    }
+
+    /* 三列卡片布局 */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(320px, 1fr));
+      gap: 24px;
+      align-items: start;
+    }
+
+    .column {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .scheme-badge {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 4px;
+    }
+    .scheme-name {
+      font-family: var(--font-serif);
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+    .scheme-tag {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 999px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .tag-a { background: rgba(124, 119, 115, 0.12); color: var(--text-secondary); }
+    .tag-b { background: rgba(255, 118, 34, 0.14); color: var(--brand-ink); }
+    .tag-c { background: rgba(138, 74, 32, 0.14); color: #8A4A20; }
+
+    /* 真实的卡片外壳 (100% 生产 353pt 宽度等比映射) */
+    .card {
+      background: var(--card-surface);
+      border-radius: 20px;
+      padding: 16px;
+      border: 0.5px solid var(--border-card);
+      box-shadow: var(--card-shadow);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      position: relative;
+    }
+
+    /* 方案 A 样式：生产现状 */
+    .scheme-a .original-en {
+      font-family: var(--font-serif);
+      font-size: 17px;
+      color: var(--text-muted);
+      line-height: 1.35;
+    }
+    .scheme-a .original-zh {
+      font-size: 15px;
+      color: var(--text-muted);
+      margin-top: 4px;
+      line-height: 1.4;
+    }
+    .scheme-a .target-en {
+      font-family: var(--font-serif);
+      font-size: 17px;
+      color: var(--text-primary);
+      line-height: 1.35;
+      margin-top: 4px;
+    }
+    .scheme-a .note-text {
+      font-size: 15px;
+      color: var(--text-secondary);
+      line-height: 1.45;
+      margin-top: 4px;
+    }
+
+    /* 方案 B 样式：学习第一（主角挺拔 + 中文收敛） */
+    .scheme-b .orig-wrap {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      margin-bottom: 2px;
+    }
+    .scheme-b .orig-tag {
+      font-family: var(--font-mono);
+      font-size: 9.5px;
+      font-weight: 700;
+      color: var(--text-muted);
+      letter-spacing: 0.05em;
+    }
+    .scheme-b .original-en {
+      font-size: 14px;
+      color: var(--text-muted);
+      text-decoration: line-through;
+      text-decoration-color: rgba(124, 119, 115, 0.4);
+    }
+    .scheme-b .target-en {
+      font-family: var(--font-serif);
+      font-size: 18.5px;
+      font-weight: 500;
+      color: var(--text-primary);
+      line-height: 1.35;
+      letter-spacing: -0.015em;
+    }
+    .scheme-b .target-zh {
+      font-size: 13.5px;
+      color: var(--text-muted);
+      margin-top: 6px;
+      line-height: 1.4;
+    }
+    .scheme-b .note-kicker {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--brand-ink);
+      letter-spacing: 0.06em;
+      margin-bottom: 4px;
+    }
+    .scheme-b .note-text {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    /* 方案 C 样式：现代刊物级（Warm Editorial） */
+    .scheme-c .original-en {
+      font-family: var(--font-serif);
+      font-size: 14.5px;
+      color: var(--text-muted);
+      line-height: 1.35;
+    }
+    .scheme-c .original-zh {
+      font-size: 12.5px;
+      color: rgba(124, 119, 115, 0.85);
+      margin-top: 2px;
+    }
+    .scheme-c .target-en {
+      font-family: var(--font-serif);
+      font-size: 18px;
+      font-weight: 400;
+      color: var(--text-primary);
+      line-height: 1.55; /* 严密 28px 行盒 */
+      letter-spacing: -0.01em;
+      margin-top: 6px;
+    }
+    .scheme-c .highlight {
+      font-weight: 600;
+      color: #000;
+    }
+    .scheme-c .target-zh {
+      font-size: 14px;
+      color: var(--text-secondary);
+      margin-top: 6px;
+      line-height: 1.45;
+    }
+    .scheme-c .note-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 4px;
+    }
+    .scheme-c .dot {
+      width: 4px;
+      height: 4px;
+      background: var(--brand-strong);
+      border-radius: 50%;
+    }
+    .scheme-c .note-title {
+      font-size: 10.5px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      color: var(--text-secondary);
+    }
+    .scheme-c .note-text {
+      font-size: 13.5px;
+      color: var(--text-secondary);
+      line-height: 1.55;
+    }
+
+    /* 通用区块小标 */
+    .section-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 4px;
+    }
+
+    /* 诊断分析卡片 */
+    .analysis-box {
+      background: #FFFDF8;
+      border-radius: 16px;
+      padding: 14px 16px;
+      border: 1px solid rgba(89, 76, 67, 0.1);
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--text-secondary);
+    }
+    .analysis-title {
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+
+    /* 辅助网格 */
+    body.show-grid .card {
+      background-image: linear-gradient(to bottom, rgba(255, 118, 34, 0.06) 1px, transparent 1px);
+      background-size: 100% 4px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <header class="header">
+      <div>
+        <div class="kicker">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          <span>Typography Sandbox · Field #01</span>
+        </div>
+        <h1 class="title">Sentence 句子卡片排印 ABC 对照画板</h1>
+        <p class="subtitle">
+          聚焦核心矛盾：<strong>主角英文对比度</strong>、<strong>中文视觉面积膨胀（方块字面比西文大 38%）</strong>以及<strong>多行长句的 4px 行盒垂直呼吸节奏</strong>。
+        </p>
+      </div>
+      <div class="btn-group">
+        <button class="toggle-btn" onclick="toggleGrid(this)">切换 4px 基线网格线</button>
+      </div>
+    </header>
+
+    <main class="grid">
+
+      <!-- 列 1：方案 A -->
+      <div class="column">
+        <div class="scheme-badge">
+          <span class="scheme-name">方案 A · 生产基准</span>
+          <span class="scheme-tag tag-a">Baseline</span>
+        </div>
+
+        <div class="card scheme-a">
+          <!-- 1. 原文与译文 -->
+          <div>
+            <div class="original-en">I am very sleep today, because too much meeting.</div>
+            <div class="original-zh">我今天很困，因为会议太多。</div>
+          </div>
+
+          <!-- 2. 润色主角 -->
+          <div>
+            <div class="section-label">Polish</div>
+            <div class="target-en">I’m completely snowed under with meetings today and feeling exhausted.</div>
+          </div>
+
+          <!-- 3. Note -->
+          <div>
+            <div class="section-label">Note</div>
+            <div class="note-text">用 "snowed under with" 形象描述被大量工作压得透不过气；修饰人困倦疲惫要用形容词 sleepy 或 exhausted，而非动词原形 sleep。</div>
+          </div>
+        </div>
+
+        <div class="analysis-box">
+          <div class="analysis-title">现状诊断点：</div>
+          • <strong>主角不够突出</strong>：原句与润色句同为 17pt 衬线，仅依靠深浅灰度区分，扫读时视觉锚点较平。<br>
+          • <strong>中文释义抢戏</strong>：15pt 中文字面大，视觉分量与 17pt 英文相当。<br>
+          • <strong>行距略紧</strong>：三行长句时两行紧贴，缺少透气感。
+        </div>
+      </div>
+
+      <!-- 列 2：方案 B -->
+      <div class="column">
+        <div class="scheme-badge">
+          <span class="scheme-name">方案 B · 学习第一</span>
+          <span class="scheme-tag tag-b">English First</span>
+        </div>
+
+        <div class="card scheme-b">
+          <!-- 1. 原句极弱化 -->
+          <div>
+            <div class="orig-wrap">
+              <span class="orig-tag">ORIGINAL</span>
+              <span class="original-en">I am very sleep today, because too much meeting.</span>
+            </div>
+          </div>
+
+          <!-- 2. 挺拔主角 -->
+          <div>
+            <div class="target-en">I’m completely snowed under with meetings today and feeling exhausted.</div>
+            <div class="target-zh">我今天被各种会议彻底淹没了，精疲力竭。</div>
+          </div>
+
+          <!-- 3. Note -->
+          <div>
+            <div class="note-kicker">WHY IT MATTERS</div>
+            <div class="note-text">用 "snowed under with" 形象描述被大量工作压得透不过气；修饰人困倦疲惫要用形容词 sleepy 或 exhausted，而非动词原形 sleep。</div>
+          </div>
+        </div>
+
+        <div class="analysis-box">
+          <div class="analysis-title">优化逻辑：</div>
+          • <strong>英文主角极度明确</strong>：字号增至 18.5pt + Medium 500 字重，第一眼 100% 锁定地道表达。<br>
+          • <strong>中文彻底收敛</strong>：中文降至 13.5pt 浅灰，退化为辅助拐杖，彻底解决方块字抢戏问题。<br>
+          • <strong>原句轻量化</strong>：改为 14pt + 细删除线，对比强烈。
+        </div>
+      </div>
+
+      <!-- 列 3：方案 C -->
+      <div class="column">
+        <div class="scheme-badge">
+          <span class="scheme-name">方案 C · 现代刊物</span>
+          <span class="scheme-tag tag-c">Warm Editorial</span>
+        </div>
+
+        <div class="card scheme-c">
+          <!-- 1. 原句轻量行 -->
+          <div>
+            <div class="original-en">I am very sleep today, because too much meeting.</div>
+            <div class="original-zh">我今天很困，因为会议太多。</div>
+          </div>
+
+          <!-- 2. 典雅出版主角 -->
+          <div>
+            <div class="section-label">Polish</div>
+            <div class="target-en">
+              I’m completely <span class="highlight">snowed under with</span> meetings today and feeling exhausted.
+            </div>
+            <div class="target-zh">我今天被各种会议彻底淹没了，精疲力竭。</div>
+          </div>
+
+          <!-- 3. Note -->
+          <div>
+            <div class="note-badge">
+              <div class="dot"></div>
+              <span class="note-title">NOTE</span>
+            </div>
+            <div class="note-text">用 "snowed under with" 形象描述被大量工作压得透不过气；修饰人困倦疲惫要用形容词 sleepy 或 exhausted，而非动词原形 sleep。</div>
+          </div>
+        </div>
+
+        <div class="analysis-box">
+          <div class="analysis-title">优化逻辑：</div>
+          • <strong>4px 严密行盒</strong>：18pt 衬线匹配 28px 松弛行距（1.55x），带来出版书籍般的从容与呼吸感。<br>
+          • <strong>关键短语高光</strong>：核心地道表达微加黑，学习点一眼击穿。<br>
+          • <strong>1.3:1 经典出版比</strong>：中文 14pt 与英文 18pt 形成黄金阅读比例。
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <script>
+    function toggleGrid(btn) {
+      document.body.classList.toggle('show-grid');
+      btn.classList.toggle('active');
+    }
+  </script>
+</body>
+</html>

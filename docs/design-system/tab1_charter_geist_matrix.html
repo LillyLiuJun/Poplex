@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tab 1 · Charter + Geist + 中文字族全景画板</title>
+  <!-- 引入 Geist 官方字体、思源黑体、思源宋体 -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500&family=Noto+Serif+SC:wght@400;600&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --page-bg: #FCF8F3;
+      --card-surface: #FFFDF8;
+      --text-primary: #211811;
+      --text-secondary: #594C43;
+      --text-muted: #7C7773;
+      --brand-strong: #FF7622;
+      --brand-ink: #C2410C;
+      --border-card: rgba(230, 225, 218, 0.45);
+      --card-shadow: 0 1.5px 4px rgba(33, 24, 17, 0.035), 0 4px 10px rgba(46, 40, 32, 0.025);
+
+      /* 核心字体定义 */
+      --font-charter: "Charter", "Bitstream Charter", Georgia, serif;
+      --font-geist: "Geist", -apple-system, sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-font-smoothing: antialiased; }
+    body {
+      background: #EAE4DC;
+      color: var(--text-primary);
+      padding: 36px 20px 80px;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      font-family: var(--font-geist);
+    }
+
+    .container {
+      max-width: 1200px;
+      width: 100%;
+    }
+
+    .header {
+      margin-bottom: 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .kicker {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--brand-ink);
+      margin-bottom: 4px;
+    }
+    .title {
+      font-size: 28px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      font-family: var(--font-charter);
+    }
+    .subtitle {
+      font-size: 14px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+    }
+
+    /* 顶部中文字体切换控制器 */
+    .controls-bar {
+      background: #FFFDF8;
+      border-radius: 16px;
+      padding: 12px 18px;
+      border: 1px solid rgba(89, 76, 67, 0.12);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 28px;
+      flex-wrap: wrap;
+    }
+    .control-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+    .btn-group {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .ctrl-btn {
+      padding: 6px 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(89, 76, 67, 0.2);
+      background: transparent;
+      color: var(--text-secondary);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.16s ease;
+    }
+    .ctrl-btn:hover {
+      border-color: var(--brand-strong);
+      color: var(--brand-ink);
+    }
+    .ctrl-btn.active {
+      background: var(--text-primary);
+      color: #fff;
+      border-color: var(--text-primary);
+    }
+
+    /* 卡片列表 */
+    .card-list {
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+      max-width: 580px;
+      margin: 0 auto;
+    }
+
+    .card {
+      background: var(--card-surface);
+      border-radius: 20px;
+      padding: 16px;
+      border: 0.5px solid var(--border-card);
+      box-shadow: var(--card-shadow);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* 字体绑定规则：西文一律使用 Charter，标签一律使用 Geist */
+    .en-charter { font-family: var(--font-charter); }
+    .label-geist {
+      font-family: var(--font-geist);
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* 中文字体动态切换类 */
+    body.zh-songti .zh-text { font-family: "Songti SC", "Noto Serif SC", serif; }
+    body.zh-hiragino .zh-text { font-family: "Hiragino Sans GB", "冬青黑体简体中文", sans-serif; }
+    body.zh-noto .zh-text { font-family: "Noto Sans SC", "Source Han Sans SC", sans-serif; }
+    body.zh-pingfang .zh-text { font-family: "PingFang SC", sans-serif; }
+
+    /* 各卡片具体排版 */
+    .word-title { font-size: 24px; font-weight: 700; color: var(--text-primary); }
+    .ipa-row { display: flex; gap: 8px; align-items: baseline; }
+    .ipa-text { font-family: "SF Mono", Menlo, monospace; font-size: 13px; color: var(--text-muted); }
+    .pos-text { font-size: 11px; color: var(--text-muted); }
+
+    .sentence-lead { font-size: 17px; line-height: 1.35; color: var(--text-primary); }
+    .sentence-dim { font-size: 17px; line-height: 1.35; color: var(--text-muted); }
+    .zh-meaning { font-size: 15px; line-height: 1.4; color: var(--text-secondary); }
+    .zh-dim { font-size: 15px; line-height: 1.4; color: var(--text-muted); }
+    .note-text { font-size: 14px; line-height: 1.45; color: var(--text-secondary); }
+
+    .passage-item { display: flex; flex-direction: column; gap: 3px; }
+  </style>
+</head>
+<body class="zh-songti">
+
+  <div class="container">
+    <header class="header">
+      <div>
+        <div class="kicker">Geist + Charter Pairing Matrix</div>
+        <h1 class="title">Tab 1 场景流 · Charter 英文 + Geist 标签 + 中文字体盲测</h1>
+        <p class="subtitle">英文衬线锁死 <strong>Charter</strong>，界面标签采用 <strong>Geist</strong>，点击下方切换中文字族感受视觉气场变化。</p>
+      </div>
+    </header>
+
+    <!-- 中文字体即时切换栏 -->
+    <div class="controls-bar">
+      <span class="control-label">切换中文字体：</span>
+      <div class="btn-group">
+        <button class="ctrl-btn active" onclick="setZhFont('zh-songti', this)">1. 宋体 (Songti SC · 文库墨香)</button>
+        <button class="ctrl-btn" onclick="setZhFont('zh-hiragino', this)">2. 冬青黑 (Hiragino · 清雅通透)</button>
+        <button class="ctrl-btn" onclick="setZhFont('zh-noto', this)">3. 思源黑 (Noto Sans · 人文舒展)</button>
+        <button class="ctrl-btn" onclick="setZhFont('zh-pingfang', this)">4. 苹方 (PingFang SC · 笨重对照)</button>
+      </div>
+    </div>
+
+    <main class="card-list">
+
+      <!-- 1. Word 单词卡 -->
+      <div class="card">
+        <div>
+          <div class="word-title en-charter">ephemeral</div>
+          <div class="ipa-row" style="margin-top: 4px;">
+            <span class="ipa-text">/ɪˈfemərəl/</span>
+            <span class="pos-text label-geist">ADJ. / N.</span>
+          </div>
+          <div class="zh-text zh-meaning" style="margin-top: 6px;">短暂的，转瞬即逝的；朝生暮死的生命</div>
+        </div>
+
+        <div>
+          <div class="label-geist">Examples</div>
+          <div style="margin-top: 6px; display: flex; flex-direction: column; gap: 8px;">
+            <div class="passage-item">
+              <div class="en-charter" style="font-size: 15px;">Fame in the digital age is increasingly ephemeral.</div>
+              <div class="zh-text zh-dim" style="font-size: 13.5px;">数字时代的名气越来越转瞬即逝。</div>
+            </div>
+            <div class="passage-item">
+              <div class="en-charter" style="font-size: 15px;">The ephemeral bloom of spring cherry blossoms draws millions every year.</div>
+              <div class="zh-text zh-dim" style="font-size: 13.5px;">春天樱花那短暂灿烂的盛开每年吸引数百万人观赏。</div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="label-geist">Note</div>
+          <div class="zh-text note-text" style="margin-top: 4px;">
+            文学与散文高频书面词，多用于形容时光、美景、名声等不可长久保留的事物；词源来自希腊语 ephemeros（仅存在一天）。
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. Sentence Polish 润色卡 -->
+      <div class="card">
+        <div>
+          <div class="en-charter sentence-dim">I am very sleep today, because too much meeting.</div>
+          <div class="zh-text zh-dim" style="margin-top: 3px;">我今天很困，因为会议太多。</div>
+        </div>
+
+        <div>
+          <div class="label-geist">Polish</div>
+          <div class="en-charter sentence-lead" style="margin-top: 4px;">
+            I’m completely snowed under with meetings today and feeling exhausted.
+          </div>
+          <div class="zh-text zh-meaning" style="margin-top: 4px;">
+            我今天被各种会议彻底淹没了，精疲力竭。
+          </div>
+        </div>
+
+        <div>
+          <div class="label-geist">Note</div>
+          <div class="zh-text note-text" style="margin-top: 4px;">
+            用 "snowed under with" 形象描述被大量工作压得透不过气；修饰人困倦疲惫要用形容词 sleepy 或 exhausted，而非动词原形 sleep。
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. Sentence Express 场景点单卡 -->
+      <div class="card">
+        <div>
+          <div class="zh-text zh-dim">麻烦来一杯燕麦奶拿铁，额外加一份浓缩。</div>
+          <div class="en-charter sentence-lead" style="margin-top: 6px;">
+            Could I get an oat milk latte with an extra shot, please?
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. Passage 篇章长文卡 -->
+      <div class="card">
+        <div class="label-geist">A Cup of Coffee in Modern Life</div>
+
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <div class="passage-item">
+            <div class="en-charter" style="font-size: 16px;">Coffee culture is not merely about caffeine; it has evolved into a quiet daily ritual of modern urban life.</div>
+            <div class="zh-text zh-dim" style="font-size: 14px;">咖啡文化不仅关乎咖啡因，它已演进为现代都市人的一种日常仪式。</div>
+          </div>
+          <div class="passage-item">
+            <div class="en-charter" style="font-size: 16px;">From early morning commute to late-night contemplation, a warm cup offers both solitude and connection.</div>
+            <div class="zh-text zh-dim" style="font-size: 14px;">从清晨的匆忙通勤到深夜的沉静思索，一杯温热的咖啡既给予独处的安宁，也维系着与外界的连接。</div>
+          </div>
+        </div>
+
+        <div>
+          <div class="label-geist">Note</div>
+          <div class="zh-text note-text" style="margin-top: 4px;">
+            长句结构层层递进，适合晨间朗读。重点体会 not merely... but... 的递进语调与连读顿挫。
+          </div>
+        </div>
+      </div>
+
+      <!-- 5. Sentence No Revision 正确句卡 -->
+      <div class="card">
+        <div>
+          <div class="en-charter sentence-lead">I’m heading out for lunch now, back in thirty minutes.</div>
+          <div class="zh-text zh-dim" style="margin-top: 4px;">我现在出去吃午饭，半小时后回来。</div>
+        </div>
+
+        <div>
+          <div class="label-geist">Note</div>
+          <div class="zh-text note-text" style="margin-top: 4px;">
+            "heading out" 极为自然地道；"back in" 准确表达在特定时间长度后返回。
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <script>
+    function setZhFont(className, btn) {
+      document.body.className = className;
+      document.querySelectorAll('.ctrl-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    }
+  </script>
+</body>
+</html>

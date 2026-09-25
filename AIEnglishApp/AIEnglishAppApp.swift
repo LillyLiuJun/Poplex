@@ -88,9 +88,13 @@ struct RootView: View {
 
     var body: some View {
         Group {
-            if showSplash {
+            if previewMode {
+                // 刀 6 验收用：`simctl launch <udid> <bundle> -tab2Preview` 直达
+                // Tab2 视觉全形态页（DEBUG-only，不进 Release，不影响首屏路由）。
+                Tab2Knife6PreviewView()
+            } else if showSplash {
                 SplashScreenView { splashAnimationDone = true }
-            } else if onboardingCompletedAt > 0 {
+            } else if onboardingCompletedAt > 0 || skipOnboardingForUITests {
                 ContentView()
             } else {
                 OnboardingView {
@@ -111,6 +115,29 @@ struct RootView: View {
             retryPendingOnboardingSyncIfNeeded()
         }
     }
+
+    /// 刀 6 视觉验收预览模式（DEBUG-only）。Release 恒 false。
+    #if DEBUG
+    private var previewMode: Bool {
+        ProcessInfo.processInfo.arguments.contains("-tab2Preview")
+    }
+    #else
+    private var previewMode: Bool { false }
+    #endif
+
+    /// UI 测试专用 onboarding 绕过（DEBUG-only，Release 恒 false）。只改路由判断，
+    /// 不写 `onboardingCompletedAt`——避免污染模拟器持久状态，让后续测试的起始
+    /// 条件不可预测。`xcodebuild test` 每次全新安装，`onboardingCompletedAt` 必为
+    /// 0，此前测试里挂在 `MineView`（真实 `ContentView → RootTabContainer` 子树）
+    /// 上的探针因此从未被挂载过；这个开关让走 `ContentView` 分支的判断额外接受
+    /// 这一个环境变量，不影响 App Store 构建。
+    #if DEBUG
+    private var skipOnboardingForUITests: Bool {
+        ProcessInfo.processInfo.environment["UITEST_SKIP_ONBOARDING"] == "1"
+    }
+    #else
+    private var skipOnboardingForUITests: Bool { false }
+    #endif
 
     private var accountNoticePresented: Binding<Bool> {
         Binding(

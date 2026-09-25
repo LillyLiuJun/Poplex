@@ -121,12 +121,14 @@ final class CategoryWordsLoader {
 }
 
 /// 分类进度行 — 待解锁态 AREAS 区与已解锁态 Still filling up 区共用。
-/// isHighlighted=true 时进度条用品牌橙（最接近达标的分类）；否则中性灰。
+/// 刀 6 起**恒中性**：进度条、类别名、词数胶囊全部走中性 token——暖橙只表示
+/// 「今天有新东西」，只出现在 Hero 理由胶囊上（§一）。原「最接近解锁转橙」的
+/// isHot / isHighlighted 机制整体删除；里程碑演出保留（数字滚动、scale 强调、
+/// 进度更新动画——这些不涉及颜色）。
 /// 展开状态由父视图统一持有（单开手风琴）：`isExpanded` 传入、点击回调 `onToggle`。
 /// 展开时按需调用 loadWords 拉取全量词条。
 struct CategoryProgressRow: View {
     let category: Tab2CategoryData
-    let isHighlighted: Bool
     let isExpanded: Bool
     let onToggle: () -> Void
     let loadWords: () async throws -> [Tab2WordEntry]
@@ -140,8 +142,7 @@ struct CategoryProgressRow: View {
 
     private let targetCount = 20
 
-    // 进度条承担「连续性」（全部走橙），数字与 icon 承担「里程碑」（只在 hot 时转橙）。
-    // hot = 最接近解锁 / 已达标。
+    // 里程碑演出只动数字与 scale（不转色——刀 6 全中性）。
     private var isPresentingMilestone: Bool {
         milestonePresentation != nil
     }
@@ -175,43 +176,6 @@ struct CategoryProgressRow: View {
         return milestoneRevealed
             ? milestonePresentation.currentCount
             : milestonePresentation.previousCount
-    }
-
-    private var isHot: Bool {
-        Self.isHot(
-            isPresentingMilestone: isPresentingMilestone,
-            milestoneRevealed: milestoneRevealed,
-            unlocked: category.unlocked,
-            wordCount: category.wordCount,
-            targetCount: targetCount,
-            isHighlighted: isHighlighted
-        )
-    }
-
-    /// 分类行是否处于「点亮」态（品牌橙徽标 / 满格进度 / 橙色计数）。
-    ///
-    /// **点亮 ≠ 已达标。** 三个独立来源都会点亮，注意别把它读成「达标指示器」：
-    /// - `unlocked` —— 已解锁的分类常驻点亮。即使 `wordCount` 因口径调整回落到
-    ///   `targetCount` 以下也不回退：已解锁不该「变回没解锁的样子」。
-    /// - `wordCount >= targetCount` —— 达标。
-    /// - `isHighlighted` —— 调用方指定的「最接近解锁」那一行
-    ///   （`MineView` 传 `cat.id == closestCategory?.id`），**尚未达标也会橙**，
-    ///   用意是把注意力引到「差一点就能开」的那条上。
-    ///
-    /// 里程碑演出期间**只**听动画的揭示节拍，压过上述全部条件——
-    /// 否则一个已达标的分类会在数字还没跑完时就抢先点亮，动效失去意义。
-    ///
-    /// 抽成静态纯函数是为了可测：条件顺序错一次就会在动画途中提前点亮。
-    static func isHot(
-        isPresentingMilestone: Bool,
-        milestoneRevealed: Bool,
-        unlocked: Bool,
-        wordCount: Int,
-        targetCount: Int,
-        isHighlighted: Bool
-    ) -> Bool {
-        if isPresentingMilestone { return milestoneRevealed }
-        return unlocked || wordCount >= targetCount || isHighlighted
     }
 
     var body: some View {
@@ -269,40 +233,41 @@ struct CategoryProgressRow: View {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             onToggle()   // 展开/收起 + 滚动锚定由父视图统一处理（单开手风琴）
         } label: {
-            VStack(alignment: .leading, spacing: AppTheme.Size.rowLabelToProgress) {
-                // 第一行：类别图标徽章 + 标题 + 半轻灰胶囊（pops 计数 + 展开箭头合并单元）
-                HStack(alignment: .center, spacing: AppTheme.Space.paddingM) {
-                    categoryBadge
+            // 🌟 双列水平咬合架构：Icon 自然下移至整行垂直居中，消灭左下角悬空凹槽
+            HStack(alignment: .center, spacing: AppTheme.Size.categoryRowContentSpacing) {
+                categoryBadge
 
-                    Text(category.englishLabel)
-                        .font(AppTheme.Font.categoryLabel(isHot: isHot))
-                        .foregroundStyle(AppTheme.Color.textPrimary)
+                VStack(alignment: .leading, spacing: AppTheme.Size.rowLabelToProgress) {
+                    // 首行：类别标题 + 幽灵半透胶囊（词数 + 展开箭头合并单元）
+                    HStack(alignment: .center) {
+                        Text(category.englishLabel)
+                            .font(AppTheme.Font.tab2TopicLabel)
+                            .foregroundStyle(AppTheme.Color.textPrimary)
 
-                    Spacer()
+                        Spacer()
 
-                    PopsPill(
-                        count: displayedCount,
-                        isHot: isHot,
-                        isExpanded: isExpanded
-                    )
-                    .scaleEffect(milestoneScale)
+                        WordsPill(
+                            count: displayedCount,
+                            isExpanded: isExpanded
+                        )
+                        .scaleEffect(milestoneScale)
+                    }
+
+                    // 第二行：超纤细 1.5pt 微轨（自然从文字左缘展开）
+                    progressBar
                 }
-
-                // 第二行：通栏进度条（从徽章左缘拉满，参考 Cleo Spending 行式）
-                progressBar
             }
             .padding(.vertical, AppTheme.Space.listRowVertical)
         }
         .buttonStyle(.plain)
     }
 
-    // MARK: - Category badge（描边字形 · hot 时转 brandInk，非 hot 走 textMuted）
-    // 填充变体（.fill）保留给「激活态」当状态信号，不再当风格选择。
+    // MARK: - Category badge（描边字形 · 15pt medium · 20×20 纯线条垂直居中）
 
     private var categoryBadge: some View {
         Image(systemName: SceneCategory.from(category.sceneCategory).iconName)
-            .font(.system(size: AppTheme.Size.categoryIconGlyph))
-            .foregroundStyle(isHot ? AppTheme.Color.brandStrong : AppTheme.Color.textMuted)
+            .font(.system(size: AppTheme.Size.categoryIconGlyph, weight: .medium))
+            .foregroundStyle(AppTheme.Color.textMuted)
             .frame(width: AppTheme.Size.categoryBadge, height: AppTheme.Size.categoryBadge)
             .scaleEffect(milestoneScale)
     }
@@ -311,16 +276,15 @@ struct CategoryProgressRow: View {
 
     private var progressBar: some View {
         let progress = min(CGFloat(displayedCount) / CGFloat(targetCount), 1.0)
-        // hot（细线≤24pt 例外）走满饱和 brandStrong；非 hot 改用中性 progressFill。
-        // 注意 hot 不等于达标——已解锁、达标、或被调用方标为「最接近解锁」都算
-        // （见 isHot 文档）。中性色表达的是「这一行现在不需要你注意」，
-        // 把橙留给真正要引导视线的少数几行，橙才还有对比度。
+        // 刀 6 起恒中性 progressFill（#CFC7BC）——「这一行不需要你注意」，
+        // 暖橙只留给 Hero 理由胶囊（§一）。进度条已完整表达解锁进度，
+        // 不再叠加文字门槛（v11 去掉 "7 / 20"）。
         return Capsule()
-            .fill(AppTheme.Color.progressTrack)
+            .fill(AppTheme.Color.progressTrack.opacity(0.8))
             .frame(height: AppTheme.Size.progressBarHeight)
             .overlay(alignment: .leading) {
                 Capsule()
-                    .fill(isHot ? AppTheme.Color.brandStrong : AppTheme.Color.progressFill)
+                    .fill(AppTheme.Color.progressFill)
                     .scaleEffect(x: displayedCount > 0 ? max(progress, 0.02) : 0, anchor: .leading)
                     .animation(
                         isPresentingMilestone ? nil : AppTheme.Motion.categoryProgressUpdate,
@@ -383,12 +347,7 @@ private struct CategoryAccordionPreview: View {
     private let category = Tab2CategoryData(
         sceneCategory: "工作与学业",
         wordCount: 12,
-        unlocked: false,
-        previewWords: [
-            Tab2PreviewWord(lemma: "deadline"),
-            Tab2PreviewWord(lemma: "catch up"),
-            Tab2PreviewWord(lemma: "wrap up")
-        ]
+        unlocked: false
     )
 
     private let words = [
@@ -418,7 +377,6 @@ private struct CategoryAccordionPreview: View {
         VStack(spacing: 0) {
             CategoryProgressRow(
                 category: category,
-                isHighlighted: true,
                 isExpanded: isExpanded,
                 onToggle: {
                     withAnimation(AppTheme.Motion.accordionToggle) {
@@ -440,23 +398,22 @@ private struct CategoryAccordionPreview: View {
     CategoryAccordionPreview()
 }
 
-// MARK: - Pops pill (半轻灰胶囊：pops 计数 + 展开箭头合并成一个整体单元)
+// MARK: - Words pill (半轻灰胶囊：词数 + 展开箭头合并成一个整体单元)
 
-private struct PopsPill: View {
+private struct WordsPill: View {
     let count: Int
-    /// 最接近解锁 / 已达标的 hot 行 —— 计数走品牌橙，其余暖灰 muted，控制橙的用量。
-    let isHot: Bool
     let isExpanded: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(spacing: AppTheme.Size.pillHSpacing) {
-            // 数字承担「里程碑」：只在 hot 时转 brandInk（橙文字合规出口 5.09:1），其余暖灰 muted。
-            Text(PopsLabel.format(count))
-                .font(AppTheme.Font.popsCount)
+            // 刀 6 §六：pops → words 文案（"7 pops" → "7 words"），恒 textSecondary。
+            // 不写解锁门槛（不要 "7 / 20"）——进度条已在表达它。
+            Text(Tab2CardLabels.words(count))
+                .font(AppTheme.Font.tab2ProgressCount)
                 .monospacedDigit()
                 .contentTransition(reduceMotion ? .identity : .numericText())
-                .foregroundStyle(isHot ? AppTheme.Color.brandStrong : AppTheme.Color.textMuted)
+                .foregroundStyle(AppTheme.Color.textSecondary)
 
             // 展开三角（arrowtriangle.down.fill）：随展开旋转 180°
             Image(systemName: "arrowtriangle.down.fill")
@@ -466,7 +423,8 @@ private struct PopsPill: View {
         }
         .padding(.horizontal, AppTheme.Size.pillHPad)
         .padding(.vertical, AppTheme.Size.pillVPad)
-        .background(AppTheme.Color.pillNeutralBg, in: Capsule())
+        .background(AppTheme.Color.tab2ProgressPillBg, in: Capsule())
+        .overlay(Capsule().strokeBorder(AppTheme.Color.tab2ProgressPillBorder, lineWidth: 0.5))
     }
 }
 
@@ -482,12 +440,12 @@ private struct WordEntryRow: View {
             // 词 + 释义纵向排：释义移到词下方，长词不再把释义挤成右侧空药丸
             VStack(alignment: .leading, spacing: AppTheme.Size.wordEntrySpacing) {
                 Text(entry.displayForm ?? entry.lemma)
-                    .font(.system(.subheadline, design: .serif, weight: .semibold))
+                    .font(AppTheme.Font.tab2WordEntryTitle)
                     .foregroundStyle(AppTheme.Color.textPrimary)
                     .lineLimit(1)
                 if let meaning = entry.nativeMeaning, !meaning.isEmpty {
                     Text(meaning)
-                        .font(.system(.caption))
+                        .font(AppTheme.Font.tab2WordEntryMeaning)
                         .foregroundStyle(AppTheme.Color.textMuted)
                         .lineLimit(1)
                 }

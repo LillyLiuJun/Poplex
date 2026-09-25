@@ -552,7 +552,9 @@ async function handleTurn(
   // 9. Persist turns + update session (errors here don't fail the response)
   try {
     const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
-    await dbPost("dialogue_turns", {
+    // last_turn_at 用插入行返回的 DB 侧 created_at：与 turn 行时间完全一致
+    // （不用客户端时钟），且用户轮次插入失败时天然不更新（undefined 被 JSON 丢弃）。
+    const userTurnRows = await dbPost("dialogue_turns", {
       turn_id: turnId || null,
       session_id: sessionId,
       user_id: userId,
@@ -566,7 +568,10 @@ async function handleTurn(
       role: "assistant",
       text: reply,
     });
-    const updateBody: Record<string, unknown> = { turn_count: (session.turn_count ?? 0) + 1 };
+    const updateBody: Record<string, unknown> = {
+      turn_count: (session.turn_count ?? 0) + 1,
+      last_turn_at: (userTurnRows[0] as Record<string, unknown> | undefined)?.created_at,
+    };
     if (newSceneDetail !== null) updateBody.scene_detail = newSceneDetail;
     await dbPatch(`dialogue_sessions?id=eq.${sessionId}`, updateBody);
   } catch (e) {

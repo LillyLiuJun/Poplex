@@ -1055,7 +1055,8 @@ final class TodayViewModel {
                 entries.append(fallback)
                 rejected = (fallback.id, image != nil, fallback.createdAt)
             }
-            try? rejectedContentStore.save(
+            // save 不抛错（内部 try? writeRecords 已静默吞错），这里不需要 try?
+            rejectedContentStore.save(
                 id: rejected.id, wasImage: rejected.wasImage, createdAt: rejected.createdAt
             )
             return nil

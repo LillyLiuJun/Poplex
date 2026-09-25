@@ -22,7 +22,10 @@ import {
   resolveCommittedRequest,
 } from "./reliableCommit.ts";
 import { resolveUsageContext, UsageContext } from "./usageContext.ts";
-import { validateSubScene } from "./subScene.ts";
+import {
+  classifyScene,
+  fetchExistingSceneLabels,
+} from "../_shared/classifyScene.ts";
 
 function environmentValue(name: string): string {
   try {
@@ -583,96 +586,7 @@ async function deleteImage(path: string | null): Promise<void> {
 // Material extraction — 纯函数从 rawContent.ts 导入，便于单元测试。
 // ──────────────────────────────────────────────────────
 
-// Stage 2: classify scene_category + sub_scene in one Gemini call.
-// Returns {category, subScene}; on failure category falls back to "Other", subScene to null.
-// TODO: before writing, merge with existing scene_detail for this user+category (design §2.3.1).
-//       MVP writes directly; dedup job handles fragmentation.
-async function classifyScene(
-  targetText: string,
-  nativeText: string,
-  userOriginal?: string,
-): Promise<{ category: string; subScene: string | null }> {
-  try {
-    const prompt =
-      `Classify this daily-life scene into ONE category. Reply in JSON ONLY.
-
-Categories:
-Home & Family, Work & Study, Daily Routine, Food & Drink, Shopping,
-Travel & Commute, Health & Fitness, Hobbies & Leisure, Digital & Tech,
-Weather & Nature, Social & Feelings, Other
-
-Notes:
-- Watching sport / film / show → Hobbies & Leisure
-- Playing or training sport yourself → Health & Fitness
-- Personal emotions or mood vented alone → Social & Feelings
-
-Scene: "${targetText}"${userOriginal ? `\nContext: "${userOriginal}"` : ""}
-
-JSON: {"category":"<from list above>","sub_scene":"<recurring activity, never null>"}
-
-sub_scene: the recurring activity this scene belongs to — a broad label that
-many similar scenes can share, not a description of this one occasion.
-Write it in the TARGET LANGUAGE only; never echo the native language, even
-when the Scene or Context above is written in it.
-Strip qualifiers and specifics: "Cooking", not "Cooking dinner tonight";
-"Fixing a device", not "Helping mum set up her new phone".
-Aim for this level of abstraction:
-Cooking / Eating out / Commuting / Driving / Running / Watching sports /
-Watching a show / Working / Studying / Shopping / Chores / Catching up`;
-
-    const res = await fetch(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: {
-          responseMimeType: "application/json",
-          maxOutputTokens: 100,
-          thinkingConfig: { thinkingBudget: 0 },
-        },
-        safetySettings: [
-          {
-            category: "HARM_CATEGORY_HARASSMENT",
-            threshold: "BLOCK_MEDIUM_AND_ABOVE",
-          },
-          {
-            category: "HARM_CATEGORY_HATE_SPEECH",
-            threshold: "BLOCK_MEDIUM_AND_ABOVE",
-          },
-          {
-            category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-            threshold: "BLOCK_MEDIUM_AND_ABOVE",
-          },
-          {
-            category: "HARM_CATEGORY_DANGEROUS_CONTENT",
-            threshold: "BLOCK_MEDIUM_AND_ABOVE",
-          },
-        ],
-      }),
-    });
-    if (!res.ok) {
-      throw new Error(
-        `classifyScene failed with ${res.status}: ${await res.text()}`,
-      );
-    }
-    const data = await res.json();
-    // thinkingBudget:0 suppresses thought parts, but defensively skip any thought:true parts
-    const parts = data?.candidates?.[0]?.content?.parts ?? [];
-    const raw = (parts.find((p: { thought?: boolean; text?: string }) =>
-      !p.thought
-    )?.text ?? "").trim();
-    console.log("[classifyScene] raw:", raw, "| parts count:", parts.length);
-    const parsed = JSON.parse(raw);
-    const category = normalizeSceneCategory(parsed.category) ?? "Other";
-    const subScene = validateSubScene(parsed.sub_scene);
-    return { category, subScene };
-  } catch (e) {
-    console.error("[classifyScene] failed:", e);
-    return { category: "Other", subScene: null };
-  }
-}
-
-// Vocab card classification: pick the category where this word is most commonly used in daily life.
+// Vocab card classification: pick the category where this word is most commonly used in daily life; never empty.
 async function classifyVocabCategory(wordText: string): Promise<string | null> {
   try {
     const categories = SCENE_CATEGORIES.filter((c) => c !== "Other").join(", ");
@@ -689,13 +603,17 @@ Reply with the category name ONLY.`;
       body: JSON.stringify({
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         generationConfig: {
-          maxOutputTokens: 20,
-          // Gemini 3.7 Flash defaults to emitting thinking parts on free-text
-          // requests; without this the answer text lands inside a thought part
-          // and the parsing below reads an empty string (unmatched "" → Other).
+          maxOutputTokens: 500,
+          // Gemini 3.7 Flash 对 free-text 请求默认吐 thinking part；不设 thinkingConfig
+          // 时答案文本会落在 thought part 里，下面的解析读到空串（unmatched "" → Other）。
+          // 但 thinkingBudget:0 并【不能】把思考完全压到零——与 _shared/classifyScene.ts
+          // 同一份实测（刀1 回填：设了它 100 仍被吃到只剩 "{"，67/96 次截断），
+          // 预算必须给思考留余量。20→200 之后线上仍间歇性返回空 parts（parts=[]，
+          // 模型一个 part 都没吐，如 "corn"）——英文类名（最长 "Hobbies & Leisure"
+          // 16 字符）下 200 处在爆与不爆的边缘。500 与 _shared/classifyScene.ts 对齐；
+          // Gemini 按实际生成计费，提高上限不增加成本。
           thinkingConfig: { thinkingBudget: 0 },
-        },
-        safetySettings: [
+        },        safetySettings: [
           {
             category: "HARM_CATEGORY_HARASSMENT",
             threshold: "BLOCK_MEDIUM_AND_ABOVE",
@@ -733,8 +651,12 @@ Reply with the category name ONLY.`;
     const category = normalizeSceneCategory(raw);
     if (category) return category;
     // AI returned an unrecognised category → fall back to "Other" so the entry still enters Tab2
+    // finishReason 与 parts 一起记：parts=[] 可能是 MAX_TOKENS（预算耗尽→提上限）
+    // 或 SAFETY（触发安全拦截，药方相反），日志必须能分开两种病因。
+    const finishReason = data?.candidates?.[0]?.finishReason ?? "none";
     console.warn(
       `[classifyVocabCategory] unmatched "${raw}" for "${wordText}", fallback→Other` +
+        ` | finishReason:${finishReason}` +
         ` | parts=[${parts.map((p) =>
           `thought:${p.thought ?? false},len:${p.text?.length ?? 0}`
         ).join("; ")}]`,
@@ -885,11 +807,21 @@ async function enrichCommittedMaterial(
       const nativeText = rawContent.native_meaning ??
         rawContent.user_original ?? "";
       const userOriginal = rawContent.user_original ?? undefined;
-      const { category, subScene } = await classifyScene(
+      const existingLabels = await fetchExistingSceneLabels(userId);
+      const { category, subScene, failed } = await classifyScene(
         targetText,
         nativeText,
         userOriginal,
+        existingLabels,
       );
+      if (failed) {
+        // classifyScene 内部已经打过一条带 raw 的 error 日志；这里补 materialId，
+        // 因为调用点是唯一知道"这次 Other 是哪条素材产生的"的地方——不补的话，
+        // failed 这个字段算出来后就直接被下面的解构丢掉，白算了。
+        console.warn(
+          `[generate] classifyScene failed for material ${materialId}, falling back to Other`,
+        );
+      }
       sceneCategory = category;
       sceneDetail = subScene;
 

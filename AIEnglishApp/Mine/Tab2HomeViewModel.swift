@@ -8,8 +8,10 @@ import Foundation
 enum Tab2Defaults {
     static let permanentlyUnlocked = "tab2_permanently_unlocked"
     static let firstUnlockShown    = "tab2_first_unlock_shown"
-    static let heroMaterialID      = "tab2_hero_material_id"
-    static let heroKnownMoments    = "tab2_hero_known_moments"
+    /// 刀 4b：轮换记账 = [类别ID: 上次被选中日(yyyy-MM-dd 本地自然日)]。
+    /// 没有记录 = 从未被选中 = 最久（§12 补充规则）。旧键 heroMaterialID /
+    /// heroKnownMoments 随刀 3 过渡态语义一并退役。
+    static let heroLastSelectedDays = "tab2_hero_last_selected_days"
 }
 
 private let kUnlockedKey         = Tab2Defaults.permanentlyUnlocked
@@ -92,12 +94,15 @@ final class Tab2HomeViewModel {
         for presentations: [CategoryMilestonePresentation]
     ) -> String {
         guard presentations.count == 1, let presentation = presentations.first else {
-            return "\(presentations.count) topics reached \(PopsLabel.format(20))."
+            // 刀 6 §六：pops → words 文案（PopsLabel 随全局改名退役，复用 words()）。
+            // 引号/句号来自 main 的 toast 重设计 #64（rebase 合并时保留，分支无此改动）。
+            return "\(presentations.count) topics reached \(Tab2CardLabels.words(20))."
         }
         let label = data?.categories.first {
             $0.id == presentation.categoryID
         }?.englishLabel ?? SceneCategory.from(presentation.categoryID).englishLabel
-        return "'\(label)' reached \(PopsLabel.format(20))."
+        // 引号/句号来自 main 的 toast 重设计 #64（rebase 合并时保留，分支无此改动）。
+        return "'\(label)' reached \(Tab2CardLabels.words(20))."
     }
 
     #if DEBUG
@@ -142,78 +147,122 @@ final class Tab2HomeViewModel {
     }
     #endif
 
-    // MARK: - Hero 选取
+    // MARK: - Hero 选取（刀 4b · §10.5 ①②③）
 
-    /// 从已解锁分类里选出稳定的 hero。排序：有 featured 的按 moment 数
-    /// （ranked：7 天新近桶 → moment 数 → featured 时间 → id），都没有
-    /// featured 时按词数。稳定规则：没有新 moment 出现时复用上次的
-    /// heroMaterialID。不读词条级 spoken_count、不跟踪「聊过」。
-    func heroCategory(excluding excludedCategoryIDs: Set<String> = []) -> Tab2CategoryData? {
+    /// 每次「进入页面」求值一次并由 MineView 持有结果（@State），
+    /// 一次浏览之内不因数据刷新换 Hero。三条规则，①优先于②优先于③：
+    /// ① 今天已确定过 → 冻结，即使期间有分类冒出新素材也不重新判定②/③
+    ///    （必须在②③分支之外、对全体候选统一检查一次，否则冻结形同虚设）
+    /// ② newMaterialCount ≥ 1 的类中取 lastMaterialAt 最新；平局三级键：
+    ///    newMaterialCount 降序 → activityCount 降序 → id 升序（§12 拍板）
+    /// ③ 全为 0 → 按自然日轮换：持久化 类别ID → 上次选中日 字典。
+    ///    没有记录 = 从未被选中 = 最久，排在所有有记录的类前面（§12 补充）；
+    ///    同久组内按 §10.5 排序取第一个。确定后写一次当天日期。
+    /// word_count 不参与 Hero 选取（只在 lastMaterialAt = null 组的组内排序里出现）。
+    func selectHero(
+        excluding excludedCategoryIDs: Set<String> = [],
+        now: Date? = nil,
+        calendar: Calendar = .current
+    ) -> Tab2CategoryData? {
         guard let cats = data?.categories else { return nil }
-        let unlocked = cats.filter {
+        let candidates = cats.filter {
             $0.unlocked && !excludedCategoryIDs.contains($0.id)
         }
-        guard !unlocked.isEmpty else { return nil }
+        guard !candidates.isEmpty else { return nil }
 
-        let currentMoments = Set(unlocked.flatMap { $0.subScenes.map(\.sceneDetail) })
-        let knownMoments = Set(defaults.stringArray(forKey: Tab2Defaults.heroKnownMoments) ?? [])
-        let hasNewMoment = !currentMoments.subtracting(knownMoments).isEmpty
-
-        if !hasNewMoment,
-           let storedMaterialID = defaults.string(forKey: Tab2Defaults.heroMaterialID),
-           let stable = unlocked.first(where: {
-               $0.featured?.materialId == storedMaterialID
-           }) {
-            return stable
-        }
-
+        let referenceDate = now ?? self.now()
+        let todayKey = Self.dayKey(for: referenceDate, calendar: calendar)
+        let records = lastSelectedDays()
         let selected: Tab2CategoryData?
-        if let best = ranked(
-            unlocked.filter { $0.featured != nil },
-            momentCount: { $0.subScenes.count }
-        ).first {
-            selected = best
+
+        // ① 今天已有记录且该类别仍是候选 → 冻结，不进②③重新判定
+        if let todaysPick = candidates.first(where: { records[$0.id] == todayKey }) {
+            selected = todaysPick
         } else {
-            selected = Self.sortedByWordCountDescending(unlocked).first
+            let fresh = candidates.filter { $0.newMaterialCount >= 1 }
+            if !fresh.isEmpty {
+                // ② 今天有新素材的类：lastMaterialAt 最新优先
+                //    （fresh 内 lastMaterialAt 恒非空——new_material_count ≥ 1 必产生
+                //      MAX(created_at)，.distantPast 仅为防御性兜底）
+                selected = fresh.sorted {
+                    if $0.lastMaterialAt != $1.lastMaterialAt {
+                        return ($0.lastMaterialAt ?? .distantPast) > ($1.lastMaterialAt ?? .distantPast)
+                    }
+                    if $0.newMaterialCount != $1.newMaterialCount {
+                        return $0.newMaterialCount > $1.newMaterialCount
+                    }
+                    if $0.activityCount != $1.activityCount {
+                        return $0.activityCount > $1.activityCount
+                    }
+                    return $0.id < $1.id
+                }.first
+            } else {
+                // ③ 轮换（到这里已确定今天无人被冻结，无需再查 records[id] == todayKey）
+                selected = candidates.sorted { lhs, rhs in
+                    switch (records[lhs.id], records[rhs.id]) {
+                    case (nil, _?): return true        // 从未被选中 = 最久
+                    case (_?, nil): return false
+                    case let (l?, r?) where l != r: return l < r  // 选中日更旧排前
+                    default: break
+                    }
+                    // 同为从未选中 / 同日被选 → 按 §10.5 列表排序
+                    return Self.isEarlierInRecencyOrder(lhs, rhs)
+                }.first
+            }
         }
 
-        if let materialID = selected?.featured?.materialId {
-            defaults.set(materialID, forKey: Tab2Defaults.heroMaterialID)
-        } else {
-            defaults.removeObject(forKey: Tab2Defaults.heroMaterialID)
+        if let selected {
+            setLastSelectedDay(todayKey, for: selected.id)
         }
-        defaults.set(Array(currentMoments).sorted(), forKey: Tab2Defaults.heroKnownMoments)
         return selected
     }
 
-    private func ranked(
-        _ categories: [Tab2CategoryData],
-        momentCount: (Tab2CategoryData) -> Int
-    ) -> [Tab2CategoryData] {
-        let recentCutoff = now().addingTimeInterval(-7 * 24 * 60 * 60)
-        return categories.sorted { lhs, rhs in
-            let lhsRecent = (lhs.featured?.createdAt ?? .distantPast) >= recentCutoff
-            let rhsRecent = (rhs.featured?.createdAt ?? .distantPast) >= recentCutoff
-            if lhsRecent != rhsRecent { return lhsRecent }
-
-            let lhsCount = momentCount(lhs)
-            let rhsCount = momentCount(rhs)
-            if lhsCount != rhsCount { return lhsCount > rhsCount }
-
-            let lhsCreatedAt = lhs.featured?.createdAt ?? .distantPast
-            let rhsCreatedAt = rhs.featured?.createdAt ?? .distantPast
-            if lhsCreatedAt != rhsCreatedAt { return lhsCreatedAt > rhsCreatedAt }
-
-            return lhs.id < rhs.id
-        }
+    /// 刀 4b（§10.5）：候选集统一排序——lastMaterialAt 降序；null 排最后、
+    /// 组内按 wordCount 降序；最后 id 升序兜底保证稳定可复现。
+    static func recencySorted(_ categories: [Tab2CategoryData]) -> [Tab2CategoryData] {
+        categories.sorted(by: isEarlierInRecencyOrder)
     }
 
-    // MARK: - More 选取
+    private static func isEarlierInRecencyOrder(
+        _ lhs: Tab2CategoryData,
+        _ rhs: Tab2CategoryData
+    ) -> Bool {
+        switch (lhs.lastMaterialAt, rhs.lastMaterialAt) {
+        case let (l?, r?):
+            if l != r { return l > r }
+        case (_?, nil):
+            return true
+        case (nil, _?):
+            return false
+        case (nil, nil):
+            if lhs.wordCount != rhs.wordCount { return lhs.wordCount > rhs.wordCount }
+        }
+        return lhs.id < rhs.id
+    }
 
-    /// 从已解锁分类里选出 hero 之外的 More 列表（§4）。两组组间有序、组内各自排序：
-    /// 组 1 有 featured（ranked：7 天新近桶 → moment 数 → featured 时间 → id）
-    /// → 组 2 纯查词（wordCount 降序）。不读词条级 spokenCount、不用 lastMaterialAt、
-    /// 不跟踪「聊过」——所有行一律按未聊过呈现。
+    /// 本地自然日键（yyyy-MM-dd）——轮换记账的「同一天」判定单位。
+    private static func dayKey(for date: Date, calendar: Calendar) -> String {
+        let comps = calendar.dateComponents([.year, .month, .day], from: date)
+        return String(
+            format: "%04d-%02d-%02d",
+            comps.year ?? 0, comps.month ?? 0, comps.day ?? 0
+        )
+    }
+
+    private func lastSelectedDays() -> [String: String] {
+        defaults.dictionary(forKey: Tab2Defaults.heroLastSelectedDays) as? [String: String] ?? [:]
+    }
+
+    private func setLastSelectedDay(_ day: String, for categoryID: String) {
+        var records = lastSelectedDays()
+        records[categoryID] = day
+        defaults.set(records, forKey: Tab2Defaults.heroLastSelectedDays)
+    }
+
+    // MARK: - More 选取（刀 4b · §10.5）
+
+    /// 候选集 = 已解锁 − 排除集 − hero，保持 §10.5 排序
+    /// （lastMaterialAt 降序，null 最后内部 wordCount 降序）。
     func moreCategories(
         excluding excludedCategoryIDs: Set<String> = [],
         hero: Tab2CategoryData?
@@ -224,23 +273,7 @@ final class Tab2HomeViewModel {
                 && !excludedCategoryIDs.contains($0.id)
                 && $0.id != hero?.id
         }
-
-        let withFeatured = candidates.filter { $0.featured != nil }
-        let lookedUpOnly = candidates.filter { $0.featured == nil }
-
-        return ranked(withFeatured, momentCount: { $0.subScenes.count })
-            + Self.sortedByWordCountDescending(lookedUpOnly)
-    }
-
-    /// 无 featured 时的兜底顺序：`heroCategory` 的 fallback 分支与 `moreCategories`
-    /// 的纯查词组共用同一条规则——词多的排前，词数打平时按 id 稳定兜底。
-    private static func sortedByWordCountDescending(
-        _ categories: [Tab2CategoryData]
-    ) -> [Tab2CategoryData] {
-        categories.sorted {
-            if $0.wordCount != $1.wordCount { return $0.wordCount > $1.wordCount }
-            return $0.id < $1.id
-        }
+        return Self.recencySorted(candidates)
     }
 
     // MARK: - 解锁判定
@@ -378,6 +411,14 @@ final class Tab2HomeViewModel {
             categoryWordsRevision &+= 1
             lastLoadedAt = Date()
             toastMessage = nil
+            #if DEBUG
+            // 【toast-probe】TOAST_PROBE_BLOCKED=1：load 成功后触发一次 vm.toastMessage
+            // 的 blocked toast（"You're offline. Check your connection." 正是其正常文案），
+            // 供 toast 全链路时序验收。用法见 CLAUDE.md「Debug Probes」。
+            if ProcessInfo.processInfo.environment["TOAST_PROBE_BLOCKED"] == "1" {
+                toastMessage = "You're offline. Check your connection."
+            }
+            #endif
             // isReadyToUnlock is computed — no manual trigger needed
         } catch is CancellationError {
             // `.refreshable` 随所属视图生命周期取消属于正常控制流，不代表网络失败。
@@ -483,8 +524,33 @@ final class Tab2HomeViewModel {
         }
     }
 
+    /// 刀 4a：Tab2 首页请求 URL——追加 day_start = 本地当日 00:00 对应的 UTC 时刻
+    /// （§10.6 方案 B：传时刻，不传偏移；存偏移数字的方案每年夏令时会错两次）。
+    /// ISO8601DateFormatter 默认按 UTC 输出，故「本地零点」这个 Date 瞬间
+    /// 序列化出来天然就是对应的 UTC 时刻。抽成纯函数供单测锁定换算行为。
+    static func tab2HomeRequestURL(
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> URL? {
+        var components = URLComponents(
+            url: SupabaseConfig.getTab2HomeFunctionURL,
+            resolvingAgainstBaseURL: false
+        )
+        let dayStart = calendar.startOfDay(for: now)
+        components?.queryItems = [
+            URLQueryItem(
+                name: "day_start",
+                value: ISO8601DateFormatter().string(from: dayStart)
+            )
+        ]
+        return components?.url
+    }
+
     private static func fetchHomeData() async throws -> Data {
-        var req = URLRequest(url: SupabaseConfig.getTab2HomeFunctionURL)
+        guard let url = tab2HomeRequestURL() else {
+            throw URLError(.badURL)
+        }
+        var req = URLRequest(url: url)
         req.httpMethod = "GET"
         req.timeoutInterval = 8.0
         try await SupabaseManager.setAuthHeaders(on: &req)

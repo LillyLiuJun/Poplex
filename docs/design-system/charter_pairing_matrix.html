@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Charter 黄金搭配方案对照 (Charter + Sans + CJK Pairings)</title>
+  <!-- 引入思源黑体、思源宋体、Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Noto+Sans+SC:wght@400;500&family=Noto+Serif+SC:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --page-bg: #FCF8F3;
+      --card-surface: #FFFDF8;
+      --text-primary: #211811;
+      --text-secondary: #594C43;
+      --text-muted: #7C7773;
+      --border-card: rgba(230, 225, 218, 0.45);
+      --card-shadow: 0 1.5px 4px rgba(33, 24, 17, 0.035), 0 4px 10px rgba(46, 40, 32, 0.025);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-font-smoothing: antialiased; }
+    body {
+      background: #E8E2D9;
+      color: var(--text-primary);
+      padding: 40px 24px 80px;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      font-family: -apple-system, sans-serif;
+    }
+
+    .container {
+      max-width: 1320px;
+      width: 100%;
+    }
+
+    .header {
+      margin-bottom: 32px;
+    }
+    .kicker {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #C2410C;
+      margin-bottom: 4px;
+    }
+    .title {
+      font-size: 28px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+    .subtitle {
+      font-size: 14.5px;
+      color: var(--text-secondary);
+      margin-top: 6px;
+      line-height: 1.5;
+    }
+
+    /* 3 组方案横向网格 */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(320px, 1fr));
+      gap: 24px;
+      align-items: start;
+    }
+
+    .column {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .scheme-badge {
+      padding: 0 4px;
+    }
+    .scheme-num {
+      font-size: 11px;
+      font-weight: 700;
+      color: #C2410C;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .scheme-name {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-top: 2px;
+    }
+    .stack-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 6px;
+    }
+    .stack-pill {
+      font-family: "SF Mono", Menlo, monospace;
+      font-size: 11px;
+      background: rgba(33, 24, 17, 0.06);
+      padding: 2px 7px;
+      border-radius: 4px;
+      color: var(--text-secondary);
+    }
+
+    /* 
+      100% 绝对锁死卡片结构与尺寸：
+      字号 17pt/15pt/11pt，间距 16pt/4pt 全部不变！
+    */
+    .card {
+      background: var(--card-surface);
+      border-radius: 20px;
+      padding: 16px;
+      border: 0.5px solid var(--border-card);
+      box-shadow: var(--card-shadow);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* 内部通用尺寸 */
+    .orig-box { display: flex; flex-direction: column; gap: 4px; }
+    .orig-en { font-size: 17px; color: var(--text-muted); line-height: 1.35; }
+    .orig-zh { font-size: 15px; color: var(--text-muted); line-height: 1.4; }
+
+    .target-box { display: flex; flex-direction: column; gap: 4px; }
+    .label { font-size: 11px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; }
+    .target-en { font-size: 17px; color: var(--text-primary); line-height: 1.35; }
+    .target-zh { font-size: 15px; color: var(--text-secondary); line-height: 1.4; }
+
+    .note-box { display: flex; flex-direction: column; gap: 4px; }
+    .note-text { font-size: 15px; color: var(--text-secondary); line-height: 1.45; }
+
+    /* ── 组合 1：【学院文库双衬线】Charter + Gill Sans + 宋体 (Songti SC) ── */
+    .combo-1 .orig-en,
+    .combo-1 .target-en {
+      font-family: "Charter", "Bitstream Charter", serif;
+    }
+    .combo-1 .label {
+      font-family: "Gill Sans", "Gill Sans MT", "Avenir Next", sans-serif;
+    }
+    .combo-1 .orig-zh,
+    .combo-1 .target-zh,
+    .combo-1 .note-text {
+      font-family: "Songti SC", "Noto Serif SC", "STSong", serif;
+    }
+
+    /* ── 组合 2：【通透人文】Charter + Avenir Next + 冬青黑 (Hiragino) ── */
+    .combo-2 .orig-en,
+    .combo-2 .target-en {
+      font-family: "Charter", "Bitstream Charter", serif;
+    }
+    .combo-2 .label {
+      font-family: "Avenir Next", "Avenir", sans-serif;
+      letter-spacing: 0.06em;
+    }
+    .combo-2 .orig-zh,
+    .combo-2 .target-zh,
+    .combo-2 .note-text {
+      font-family: "Hiragino Sans GB", "冬青黑体简体中文", "Noto Sans SC", sans-serif;
+    }
+
+    /* ── 组合 3：【精英学术】Charter + Inter + 思源黑体 (Noto Sans SC) ── */
+    .combo-3 .orig-en,
+    .combo-3 .target-en {
+      font-family: "Charter", "Bitstream Charter", serif;
+    }
+    .combo-3 .label {
+      font-family: "Inter", -apple-system, sans-serif;
+    }
+    .combo-3 .orig-zh,
+    .combo-3 .target-zh,
+    .combo-3 .note-text {
+      font-family: "Noto Sans SC", "Source Han Sans SC", sans-serif;
+    }
+
+    /* 气质点评卡 */
+    .review-box {
+      background: #FFFDF8;
+      border-radius: 14px;
+      padding: 14px 16px;
+      border: 1px solid rgba(89, 76, 67, 0.1);
+      font-size: 13px;
+      line-height: 1.55;
+      color: var(--text-secondary);
+    }
+    .review-title {
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+
+    /* 字模特写 */
+    .specimen-card {
+      margin-top: 36px;
+      background: #FFFDF8;
+      border-radius: 20px;
+      padding: 24px;
+      border: 0.5px solid var(--border-card);
+      box-shadow: var(--card-shadow);
+    }
+    .specimen-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+    }
+    .spec-item {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .spec-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: #C2410C;
+      text-transform: uppercase;
+    }
+    .spec-preview-en {
+      font-size: 28px;
+      color: var(--text-primary);
+      line-height: 1.2;
+    }
+    .spec-preview-zh {
+      font-size: 20px;
+      color: var(--text-secondary);
+      line-height: 1.3;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <header class="header">
+      <div class="kicker">Charter Foundation · Typeface Pairing Benchmark</div>
+      <h1 class="title">Charter + 非衬线 + 中文字体 3 组黄金搭配</h1>
+      <p class="subtitle">
+        英文衬线已锁定 <strong>Charter</strong>（硬朗权威、词典感）。摒弃苹方后，分别以 <strong>宋体（文库感）</strong>、<strong>冬青黑（雅致通透）</strong>、<strong>思源黑（人文舒展）</strong> 进行完整搭配测试。
+      </p>
+    </header>
+
+    <main class="grid">
+
+      <!-- 组合 1 -->
+      <div class="column">
+        <div class="scheme-badge">
+          <div class="scheme-num">组合 01 · 学院文库双衬线</div>
+          <div class="scheme-name">Charter + Gill Sans + 宋体</div>
+          <div class="stack-pills">
+            <span class="stack-pill">Charter</span>
+            <span class="stack-pill">Gill Sans</span>
+            <span class="stack-pill">Songti SC (宋体)</span>
+          </div>
+        </div>
+
+        <div class="card combo-1">
+          <div class="orig-box">
+            <div class="orig-en">I am very sleep today, because too much meeting.</div>
+            <div class="orig-zh">我今天很困，因为会议太多。</div>
+          </div>
+          <div class="target-box">
+            <div class="label">Polish</div>
+            <div class="target-en">I’m completely snowed under with meetings today and feeling exhausted.</div>
+            <div class="target-zh">我今天被各种会议彻底淹没了，精疲力竭。</div>
+          </div>
+          <div class="note-box">
+            <div class="label">Note</div>
+            <div class="note-text">用 "snowed under with" 形象描述被大量工作压得透不过气；修饰人困倦疲惫要用形容词 sleepy 或 exhausted，而非动词原形 sleep。</div>
+          </div>
+        </div>
+
+        <div class="review-box">
+          <div class="review-title">气质评价：典雅精装书感</div>
+          • <strong>中文宋体</strong>带有经典的印刷墨香，与英文 Charter 的古典粗衬线血脉天生相连。<br>
+          • 彻底摆脱了现代 App 的数字塑料感，像翻阅一本精装译林经典。<br>
+          • 标签采用经典的英伦人文无衬线 <strong>Gill Sans</strong>，点缀利落。
+        </div>
+      </div>
+
+      <!-- 组合 2 -->
+      <div class="column">
+        <div class="scheme-badge">
+          <div class="scheme-num">组合 02 · 雅致通透人文</div>
+          <div class="scheme-name">Charter + Avenir + 冬青黑</div>
+          <div class="stack-pills">
+            <span class="stack-pill">Charter</span>
+            <span class="stack-pill">Avenir Next</span>
+            <span class="stack-pill">Hiragino (冬青黑)</span>
+          </div>
+        </div>
+
+        <div class="card combo-2">
+          <div class="orig-box">
+            <div class="orig-en">I am very sleep today, because too much meeting.</div>
+            <div class="orig-zh">我今天很困，因为会议太多。</div>
+          </div>
+          <div class="target-box">
+            <div class="label">Polish</div>
+            <div class="target-en">I’m completely snowed under with meetings today and feeling exhausted.</div>
+            <div class="target-zh">我今天被各种会议彻底淹没了，精疲力竭。</div>
+          </div>
+          <div class="note-box">
+            <div class="label">Note</div>
+            <div class="note-text">用 "snowed under with" 形象描述被大量工作压得透不过气；修饰人困倦疲惫要用形容词 sleepy 或 exhausted，而非动词原形 sleep。</div>
+          </div>
+        </div>
+
+        <div class="review-box">
+          <div class="review-title">气质评价：清雅通透、不显拥挤</div>
+          • <strong>冬青黑（Hiragino）</strong>字面率较小（89%），字腔疏朗透气，完全没有苹方的笨重感。<br>
+          • <strong>Avenir Next</strong> 拥有极其优雅舒展的人文几何美感，标签极为高级。<br>
+          • iOS 内置原生支持（零额外打包体积）。
+        </div>
+      </div>
+
+      <!-- 组合 3 -->
+      <div class="column">
+        <div class="scheme-badge">
+          <div class="scheme-num">组合 03 · 现代精英学术</div>
+          <div class="scheme-name">Charter + Inter + 思源黑</div>
+          <div class="stack-pills">
+            <span class="stack-pill">Charter</span>
+            <span class="stack-pill">Inter</span>
+            <span class="stack-pill">Noto Sans SC (思源黑)</span>
+          </div>
+        </div>
+
+        <div class="card combo-3">
+          <div class="orig-box">
+            <div class="orig-en">I am very sleep today, because too much meeting.</div>
+            <div class="orig-zh">我今天很困，因为会议太多。</div>
+          </div>
+          <div class="target-box">
+            <div class="label">Polish</div>
+            <div class="target-en">I’m completely snowed under with meetings today and feeling exhausted.</div>
+            <div class="target-zh">我今天被各种会议彻底淹没了，精疲力竭。</div>
+          </div>
+          <div class="note-box">
+            <div class="label">Note</div>
+            <div class="note-text">用 "snowed under with" 形象描述被大量工作压得透不过气；修饰人困倦疲惫要用形容词 sleepy 或 exhausted，而非动词原形 sleep。</div>
+          </div>
+        </div>
+
+        <div class="review-box">
+          <div class="review-title">气质评价：极高清晰度与现代感</div>
+          • <strong>思源黑体</strong>是国际公认的人文无衬线标杆，比苹方更开阔耐读。<br>
+          • <strong>Inter</strong> 具有顶级字形消歧（1/l/I），与词典衬线 Charter 形成经典的“主角沉着 + 界面利落”。
+        </div>
+      </div>
+
+    </main>
+
+    <!-- 中英文混排对照特写 -->
+    <section class="specimen-card">
+      <div class="specimen-grid">
+        <div class="spec-item combo-1">
+          <div class="spec-title">01. 学院宋体混排</div>
+          <div class="spec-preview-en">Snowed under</div>
+          <div class="spec-preview-zh">精疲力竭 · 彻底淹没</div>
+        </div>
+        <div class="spec-item combo-2">
+          <div class="spec-title">02. 冬青黑通透混排</div>
+          <div class="spec-preview-en">Snowed under</div>
+          <div class="spec-preview-zh">精疲力竭 · 彻底淹没</div>
+        </div>
+        <div class="spec-item combo-3">
+          <div class="spec-title">03. 思源黑舒展混排</div>
+          <div class="spec-preview-en">Snowed under</div>
+          <div class="spec-preview-zh">精疲力竭 · 彻底淹没</div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+</body>
+</html>

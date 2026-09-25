@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tab2 字段变更 · 后端审查稿</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Charis+SIL:wght@400;700&family=Geist:wght@400;500;600;700&display=swap">
+<style>
+  :root{
+    --bg:#F6F5F3; --panel:#FFFFFF; --panel-2:#FBFAF8;
+    --ink:#24211C; --ink-2:#5A544B; --ink-3:#8C857A;
+    --line:#E3E0D9; --line-2:#EFEDE8;
+    --accent:#C2410C;
+    --keep:#3F6F55;  --keep-bg:#EAF1EC;
+    --new:#1F5E86;   --new-bg:#E6EFF5;
+    --drop:#A33D2C;  --drop-bg:#F8EBE7;
+    --warn:#9A5B14;  --warn-bg:#F7EFE3;
+    --sans:"Geist",ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --serif:"Charis SIL",Charter,Georgia,serif;
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+    --bg:#16150F; --panel:#1F1D16; --panel-2:#1A1912;
+    --ink:#EDE9E0; --ink-2:#B3ADA1; --ink-3:#837C70;
+    --line:#322E25; --line-2:#272419; --accent:#E8763C;
+    --keep:#7FB99A; --keep-bg:#1E2A22;
+    --new:#7FAECD;  --new-bg:#182632;
+    --drop:#E0806E; --drop-bg:#2E1E1A;
+    --warn:#D5A45C; --warn-bg:#2C2418;
+  }}
+  :root[data-theme="dark"]{
+    --bg:#16150F; --panel:#1F1D16; --panel-2:#1A1912;
+    --ink:#EDE9E0; --ink-2:#B3ADA1; --ink-3:#837C70;
+    --line:#322E25; --line-2:#272419; --accent:#E8763C;
+    --keep:#7FB99A; --keep-bg:#1E2A22;
+    --new:#7FAECD;  --new-bg:#182632;
+    --drop:#E0806E; --drop-bg:#2E1E1A;
+    --warn:#D5A45C; --warn-bg:#2C2418;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+       font-size:15px;line-height:1.65;-webkit-font-smoothing:antialiased}
+  img{max-width:100%}
+  .wrap{max-width:900px;margin:0 auto;padding:52px 24px 110px}
+  .kicker{font-size:11px;font-weight:600;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3)}
+  h1{font-family:var(--serif);font-size:clamp(28px,4.4vw,38px);font-weight:700;line-height:1.15;margin:10px 0 14px}
+  .lede{font-size:17px;color:var(--ink-2);margin:0;max-width:64ch}
+  .meta{display:flex;flex-wrap:wrap;gap:0 26px;margin-top:22px;padding-top:16px;
+        border-top:1px solid var(--line);font-size:13px;color:var(--ink-3)}
+  .meta b{color:var(--ink);font-weight:500}
+  section{margin-top:54px}
+  h2{font-family:var(--serif);font-size:24px;font-weight:700;margin:0 0 8px}
+  h2 .num{color:var(--ink-3);font-size:17px;margin-right:10px;font-family:var(--sans);font-weight:600}
+  .sub{color:var(--ink-2);margin:0 0 22px;max-width:66ch}
+  h3{font-size:15px;font-weight:600;margin:28px 0 10px}
+  p{max-width:68ch}
+  code{font-family:var(--mono);font-size:.87em;color:var(--ink-2);background:var(--line-2);padding:1px 5px;border-radius:4px}
+  pre{background:var(--panel);border:1px solid var(--line);border-radius:9px;
+      padding:15px 17px;overflow-x:auto;font-family:var(--mono);font-size:12.5px;
+      line-height:1.6;color:var(--ink-2)}
+  pre b{color:var(--accent);font-weight:600}
+  pre s{color:var(--drop)}
+  .tw{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
+  table{border-collapse:collapse;width:100%;min-width:660px;font-size:13.5px}
+  th,td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--line-2);vertical-align:top}
+  th{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);
+     font-weight:600;border-bottom:1px solid var(--line)}
+  tr:last-child td{border-bottom:0}
+  td .m{font-family:var(--mono);font-size:12.5px}
+  .tag{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.04em;
+       padding:2px 8px;border-radius:5px;white-space:nowrap}
+  .tag.keep{color:var(--keep);background:var(--keep-bg)}
+  .tag.new{color:var(--new);background:var(--new-bg)}
+  .tag.drop{color:var(--drop);background:var(--drop-bg)}
+  .tag.warn{color:var(--warn);background:var(--warn-bg)}
+  .trap{background:var(--drop-bg);border:1px solid var(--line);border-left:3px solid var(--drop);
+        border-radius:0 10px 10px 0;padding:18px 22px;margin-top:6px}
+  .trap h3{margin-top:0}
+  .note{background:var(--warn-bg);border:1px solid var(--line);border-left:3px solid var(--warn);
+        border-radius:0 10px 10px 0;padding:16px 20px}
+  .qs{display:flex;flex-direction:column;gap:13px}
+  .q{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+     padding:16px 19px;display:flex;gap:14px}
+  .q .n{flex:none;width:24px;height:24px;border-radius:50%;background:var(--accent);
+        color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;
+        justify-content:center;margin-top:2px}
+  .q h4{margin:0 0 5px;font-size:15px;font-weight:600}
+  .q p{margin:0;font-size:13.5px;color:var(--ink-2)}
+  .src{display:block;margin-top:9px;font-family:var(--mono);font-size:12px;color:var(--ink-3)}
+  ul.plain{padding-left:20px;color:var(--ink-2)}
+  ul.plain li{margin-bottom:7px;max-width:66ch}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="kicker">Poplex · get_tab2_home · 后端审查稿</div>
+  <h1>Tab2 话题卡字段变更</h1>
+  <p class="lede">
+    本稿只覆盖 RPC 字段与 SQL 层的改动。产品取舍与 UI 已定，不在审查范围内。
+    请重点看聚合正确性、新增 CTE 的成本、字段删除的连带影响，以及口径定义有无歧义。
+  </p>
+  <div class="meta">
+    <span>目标 <b>get_tab2_home(uuid)</b></span>
+    <span>基线 <b>20260831061214_get_tab2_home_hero_v4</b></span>
+    <span>连带 <b>Edge Function · 客户端模型</b></span>
+    <span>待确认 <b>8 项</b></span>
+  </div>
+</header>
+
+<section>
+  <h2><span class="num">01</span>变更方向</h2>
+  <p class="sub">一句话：<strong>复活 <code>sub_scenes</code>，退休 <code>featured</code>。</strong></p>
+  <p>
+    <code>featured</code> 的语义是「整个类别挑一条样本素材」；新卡面需要的是
+    「该类别下各个复现活动，每个带自己的次数和图」——正是 <code>sub_scenes</code> 的形状。
+  </p>
+  <div class="note">
+    <strong>注意方向是反的。</strong> 第 2 刀（<code>20260812020000</code>）曾用 <code>featured</code> 替代
+    <code>sub_scenes</code>，migration 中 <code>sub_scenes</code> 标注为
+    「旧结构，§9.5 并行保留；前端切新字段后的清理刀再删」。<strong>本次取消那次清理，反向执行。</strong>
+    若当初该设计有本稿未理解的意图，请指出。
+  </div>
+</section>
+
+<section>
+  <h2><span class="num">02</span>字段变更总表</h2>
+  <p class="sub">按 RPC 返回结构组织。<span class="tag keep">保留</span> 表示本次完全不动。</p>
+  <div class="tw">
+  <table>
+    <thead><tr><th>字段</th><th>动作</th><th>来源 / 理由</th></tr></thead>
+    <tbody>
+      <tr><td class="m">scene_category</td><td><span class="tag keep">保留</span></td><td>主键</td></tr>
+      <tr><td class="m">unlocked</td><td><span class="tag keep">保留</span></td><td>解锁判定</td></tr>
+      <tr><td class="m">word_count</td><td><span class="tag keep">保留</span></td><td>仅从话题卡卡面移除；<code>CategoryProgressRow</code> / Topics 排序仍在消费</td></tr>
+      <tr><td class="m">not_spoken_count</td><td><span class="tag new">新增</span></td><td><code>cat_words</code> CTE 加聚合，见 §3.1。<strong>有正确性陷阱，见 §4</strong></td></tr>
+      <tr><td class="m">last_talked_at</td><td><span class="tag new">新增</span></td><td>新 CTE 取 <code>dialogue_sessions</code> 的 <code>MAX(created_at)</code>，见 §3.2</td></tr>
+      <tr><td class="m">moment_count → activity_count</td><td><span class="tag warn">改名</span></td><td><strong>仅改名，取值与算法不变</strong></td></tr>
+      <tr><td class="m">sub_scenes → activities</td><td><span class="tag warn">改名+收窄</span></td><td>见 §3.3</td></tr>
+      <tr><td class="m">sub_scenes[].quote</td><td><span class="tag drop">删</span></td><td>卡面不再展示句子</td></tr>
+      <tr><td class="m">sub_scenes[].target_expression</td><td><span class="tag drop">删</span></td><td>同上</td></tr>
+      <tr><td class="m">activities[].cover.material_id</td><td><span class="tag new">新增</span></td><td>图片缓存 stableKey 需要；<code>Tab2SubScene</code> 当前缺此字段</td></tr>
+      <tr><td class="m">featured（整个对象）</td><td><span class="tag drop">删</span></td><td>含 12 个子字段，见 §3.4</td></tr>
+      <tr><td class="m">hero_photos</td><td><span class="tag drop">删</span></td><td>按 <code>created_at DESC</code> 取最近 5 张，与卡面点名的活动无关</td></tr>
+      <tr><td class="m">last_material_at</td><td><span class="tag drop">删</span></td><td>客户端零消费；且是<strong>存素材</strong>时间，易被误用作「最后对话时间」</td></tr>
+      <tr><td class="m">preview_words</td><td><span class="tag warn">待定</span></td><td>改造后归零消费（两个消费点都是本次改的卡面）。删或留一版，见 §7 待确认 8</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section>
+  <h2><span class="num">03</span>SQL 改动点</h2>
+  <p class="sub">逐 CTE 说明。基线为 <code>get_tab2_home_hero_v4</code>。</p>
+
+  <h3>3.1 <code>cat_words</code> —— 加 not_spoken_count，删 last_material_at</h3>
+<pre>cat_words AS (
+  SELECT
+    lo.scene_category,
+    COUNT(DISTINCT lo.entry_id)::int AS word_count,
+<b>    COUNT(DISTINCT lo.entry_id) FILTER (WHERE le.spoken_count = 0)::int
+                                     AS not_spoken_count,</b>
+<s>--  MAX(lo.created_at)               AS last_material_at,   -- 删</s>
+    ( ... preview_words 子查询，去留见 §7-8 ... )
+  FROM   lexicon_occurrences lo
+  JOIN   lexicon_entries     le ON le.id = lo.entry_id
+  WHERE  lo.user_id = p_user_id
+    AND  lo.scene_category IS NOT NULL
+    AND  le.status = 'active'
+  GROUP  BY lo.scene_category
+)</pre>
+
+  <h3>3.2 <code>last_talked</code> —— 新 CTE</h3>
+<pre><b>last_talked AS (
+  SELECT scene_category, MAX(created_at) AS last_talked_at
+  FROM   dialogue_sessions
+  WHERE  user_id = p_user_id
+    AND  scene_category IS NOT NULL
+    -- 口径待确认，见 §7-2 / §7-3
+  GROUP  BY scene_category
+)</b></pre>
+  <p>
+    最终 <code>LEFT JOIN</code> 到 category 上；无行 → <code>last_talked_at = null</code>，
+    客户端渲染为 <code>Never talked</code>。
+  </p>
+
+  <h3>3.3 <code>activities</code> —— 由 sub_scenes 收窄改造</h3>
+  <p>
+    保留 <code>scene_detail</code> + <code>occurrence_count</code>；
+    删 <code>quote</code> / <code>target_expression</code>；
+    <code>image_url</code> 改为嵌套的 <code>cover</code> 对象并补 <code>material_id</code>。
+  </p>
+<pre>activities AS (
+  SELECT
+    sc.scene_category,
+    jsonb_agg(
+      jsonb_build_object(
+        'scene_detail',     sc.scene_detail,
+        'occurrence_count', sc.occurrence_count,
+<b>        'cover',            cover.obj          -- null 表示该活动无带图素材</b>
+      )
+      ORDER BY sc.occurrence_count DESC, cover.latest_at DESC NULLS LAST
+    ) AS items
+  FROM scene_counts sc
+  LEFT JOIN LATERAL (
+<b>    -- 每个活动取「最新的一条带图 material」作封面
+    SELECT jsonb_build_object('material_id', m.id, 'image_url',
+             m.raw_content-&gt;&gt;'source_image_path') AS obj,
+           m.created_at AS latest_at
+    FROM   lexicon_occurrences lo
+    JOIN   materials m ON m.id = lo.source_id
+    WHERE  lo.user_id        = p_user_id
+      AND  lo.scene_category = sc.scene_category
+      AND  lo.scene_detail   = sc.scene_detail
+      AND  m.raw_content-&gt;&gt;'source_image_path' IS NOT NULL
+    ORDER  BY m.created_at DESC
+    LIMIT  1</b>
+  ) cover ON true
+  WHERE sc.occurrence_count &gt; 0
+  GROUP BY sc.scene_category
+)</pre>
+  <div class="note">
+    <strong>排序 tiebreak 需确认。</strong><code>occurrence_count</code> 相同时用封面时间兜底，
+    但无封面的活动会因 <code>NULLS LAST</code> 永远排在同分组末尾——这是否可接受？
+    另一选项是用 <code>MAX(lo.created_at)</code>（该活动最后一次出现），与有无图无关，顺序更稳定。见 §7-5。
+  </div>
+
+  <h3>3.4 <code>featured</code> / <code>hero_photos</code> —— 整段删除</h3>
+  <p>
+    <code>featured</code> CTE 的三层排序（照片优先 → 方向×粒度 → 意图明确度 → 场景高频 → created_at）
+    全部移除。<code>hero_photos</code> CTE 及其 <code>ROW_NUMBER() OVER (PARTITION BY ...)</code> 窗口一并移除。
+  </p>
+  <p>
+    删除后 <code>featured</code> 的 12 个子字段全部消失，其中
+    <code>input_lang</code> / <code>source_direction</code> / <code>source_granularity</code> / <code>spoken_count</code>
+    仅服务于该 CTE 的排序，无其他消费者。
+  </p>
+</section>
+
+<section>
+  <h2><span class="num">04</span>正确性陷阱（重点）</h2>
+  <div class="trap">
+    <h3><code>not_spoken_count</code> 必须 DISTINCT，否则虚高</h3>
+    <p>
+      <code>cat_words</code> 的 FROM 是 <code>lexicon_occurrences JOIN lexicon_entries</code>，
+      按 <code>scene_category</code> 分组——<strong>一个词条在多条 occurrence 里出现就会被数多次。</strong>
+      写成 <code>COUNT(*) FILTER (WHERE le.spoken_count = 0)</code> 会得到「出现次数」而非「词条数」。
+    </p>
+    <p>
+      必须是 <code>COUNT(DISTINCT lo.entry_id) FILTER (...)</code>，与旁边 <code>word_count</code> 的写法一致。
+    </p>
+    <p>
+      <strong>同一个坑本项目已中过一次：</strong><code>scene_counts</code> CTE 的注释写着
+      「修正点：旧为 <code>COUNT(*)</code>（词条行数，<strong>虚高</strong>）→ 现为
+      <code>COUNT(DISTINCT source_id) FILTER (非 word)</code>」。请在 review 时专门确认这一行。
+    </p>
+    <span class="src">20260831061214_get_tab2_home_hero_v4.sql · scene_counts CTE 注释</span>
+  </div>
+</section>
+
+<section>
+  <h2><span class="num">05</span>连带影响</h2>
+
+  <h3>5.1 Edge Function 的图片签名链路必须同步改</h3>
+  <p>
+    <code>signImagePaths()</code> 现在从三处收集 Storage 路径：
+    <code>sub_scenes[].image_url</code>、<code>featured.image_url</code>、<code>hero_photos[].image_url</code>。
+    改造后路径只存在于 <code>activities[].cover.image_url</code>（<strong>多一层嵌套</strong>）。
+  </p>
+  <p>
+    收集与回写两段都要改。<strong>漏改的后果是静默的</strong>：签名 map 命中不到，
+    <code>sign()</code> 返回 <code>null</code>，客户端拿到无图的 cover，页面全量退兜底图但不报错。
+  </p>
+  <span class="src">supabase/functions/get-tab2-home/index.ts · signImagePaths</span>
+
+  <h3>5.2 客户端模型</h3>
+  <p>
+    删除 <code>Tab2FeaturedMoment</code> / <code>Tab2HeroPhoto</code>；
+    <code>Tab2SubScene</code> 改造为 <code>Tab2Activity</code> + 嵌套 <code>Cover</code>。
+    <code>Tab2CategoryData</code> 的 <code>init(from:)</code> 中相关 <code>decodeIfPresent</code> 分支一并调整。
+  </p>
+
+  <h3>5.3 老客户端兼容 —— 静默降级，不崩</h3>
+  <p>
+    <code>Tab2MomentRow.swift:11</code> 以 <code>featured == nil</code> 判 <code>isWordsOnly</code>。
+    移除 <code>featured</code> 后旧版 App 全量走该分支，展示纯查词行——<strong>不崩溃，但内容为空</strong>。
+  </p>
+  <p>
+    需与强制更新同期发布，或过渡期一版内同时返回新旧字段。请后端确认倾向哪种。
+  </p>
+</section>
+
+<section>
+  <h2><span class="num">06</span>性能与索引</h2>
+  <ul class="plain">
+    <li><strong>不需要新建索引。</strong><code>idx_lexicon_entries_user_spoken</code>
+        <span class="m">(user_id, spoken_count)</span> 与
+        <code>idx_dialogue_sessions_user_created</code>
+        <span class="m">(user_id, created_at DESC)</span> 均已存在。</li>
+    <li><strong>净变化预计为负（更快）。</strong>删掉的 <code>featured</code>（多列排序的
+        <code>DISTINCT ON</code>）与 <code>hero_photos</code>（窗口函数 + 嵌套 <code>DISTINCT ON</code>）
+        成本高于新增的一个 <code>MAX</code> 聚合。</li>
+    <li><strong>新增成本集中在 <code>activities</code> 的 LATERAL 子查询</strong>：
+        每个 <code>scene_detail</code> 一次。按现有 prompt 的抽象度，单类别通常 3–5 个活动，
+        单用户全类别约 30–60 次。<strong>请评估这个量级是否需要改写为窗口函数一次算完。</strong></li>
+    <li><code>last_talked</code> 的分组走 <span class="m">(user_id, created_at DESC)</span> 索引取 user 分区后聚合，
+        <code>scene_category</code> 上无索引。当前数据量下应可接受，请确认。</li>
+    <li>权限不变：RPC 仍为 <code>SECURITY DEFINER</code>，已
+        <code>REVOKE FROM PUBLIC, anon, authenticated</code> / <code>GRANT TO service_role</code>。</li>
+  </ul>
+</section>
+
+<section>
+  <h2><span class="num">07</span>需要后端确认的 8 项</h2>
+  <p class="sub">纯技术口径与实现选择，不含产品取舍。</p>
+  <div class="qs">
+
+    <div class="q"><span class="n">1</span><div>
+      <h4><code>not_spoken_count</code> 的 DISTINCT 写法</h4>
+      <p>见 §4。请确认最终 SQL 用的是 <code>COUNT(DISTINCT lo.entry_id) FILTER</code> 而非 <code>COUNT(*)</code>。</p>
+    </div></div>
+
+    <div class="q"><span class="n">2</span><div>
+      <h4>「聊过」的口径：进行中的 session 算不算？</h4>
+      <p>
+        <code>dialogue_sessions.ended_at IS NULL</code> 表示进行中。
+        <code>last_talked_at</code> 是否应只统计已结束的 session？
+        若统计进行中的，用户点进去又立刻退出也会被记为「聊过」。
+      </p>
+    </div></div>
+
+    <div class="q"><span class="n">3</span><div>
+      <h4>空 session 算不算「聊过」？</h4>
+      <p>
+        <code>turn_count = 0</code> 的 session（建了但一句没说）是否应排除？
+        建议 <code>turn_count &gt; 0</code>，请确认是否有反例。
+      </p>
+    </div></div>
+
+    <div class="q"><span class="n">4</span><div>
+      <h4><code>dialogue_sessions.scene_category</code> 的取值与 lexicon 侧是否严格一致</h4>
+      <p>
+        两侧都是中文枚举 text 且均 nullable，但没有外键或 CHECK 约束保证一致。
+        若曾出现过枚举漂移，<code>LEFT JOIN</code> 会静默失配（表现为「永远 Never talked」）。
+      </p>
+    </div></div>
+
+    <div class="q"><span class="n">5</span><div>
+      <h4><code>activities</code> 的 tiebreak 用封面时间还是活动最后出现时间</h4>
+      <p>
+        见 §3.3 的 note。用封面时间会让无图活动在同分数段永远垫底；
+        用 <code>MAX(lo.created_at)</code> 与有无图解耦，顺序更稳定。
+      </p>
+    </div></div>
+
+    <div class="q"><span class="n">6</span><div>
+      <h4><code>activities</code> 返回条数上限</h4>
+      <p>
+        卡面只用前 3 条。建议返回前 5 条（为无图时的兜底查找留余量）+ <code>activity_count</code> 全量计数，
+        避免 payload 随使用时长线性膨胀。请确认这个截断放在 SQL 还是 Edge Function。
+      </p>
+    </div></div>
+
+    <div class="q"><span class="n">7</span><div>
+      <h4>「<code>其他</code> 类别排除在 Hero 候选之外」放在服务端还是客户端</h4>
+      <p>
+        <code>classifyScene</code> 失败时兜底写 <code>其他</code>，该类别是垃圾桶，会长期「欠账最多」而反复被选为 Hero。
+        排除规则是写进 RPC，还是留给客户端选取逻辑？
+      </p>
+    </div></div>
+
+    <div class="q"><span class="n">8</span><div>
+      <h4><code>preview_words</code> 立刻删还是留一版</h4>
+      <p>
+        改造后归零消费，且它是 <code>cat_words</code> 里一个带 <code>DISTINCT ON</code> 的相关子查询，有成本。
+        留一版的风险是它像 <code>sub_scenes</code> 一样以「并行保留」之名长期滞留。
+      </p>
+    </div></div>
+
+  </div>
+</section>
+
+<section>
+  <h2><span class="num">08</span>上线顺序</h2>
+  <p class="sub">存在硬依赖，不可乱序。</p>
+  <ul class="plain">
+    <li><strong>① 先改 <code>classifyScene</code> prompt</strong>——把该用户该分类已有的
+        <code>scene_detail</code> 喂回 prompt、要求命中时逐字复用（即该函数上方那条 TODO）。
+        <strong>不做这一步就上后面的，卡面展示的 <code>×N</code> 会因标签漂移而碎裂，比现状更糟。</strong>
+        本步独立于 RPC，可先单独上线观察。</li>
+    <li>② 改 RPC（本稿全部内容）</li>
+    <li>③ 改 Edge Function 的 <code>signImagePaths</code>（与 ② 同发，见 §5.1）</li>
+    <li>④ 改客户端模型与卡片组件</li>
+    <li>⑤ 确认零消费后删 <code>preview_words</code></li>
+  </ul>
+</section>
+
+</div>
+</body>
+</html>

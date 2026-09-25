@@ -242,9 +242,12 @@ private struct ToastPresentationModifier: ViewModifier {
             .task(id: taskId) {
                 try? await Task.sleep(for: lifetime)
                 guard !Task.isCancelled else { return }
-                withAnimation(.easeInOut(duration: 0.25)) {
-                    onClear()
-                }
+                // 2026-09-16 刀「toast 动画收敛」：这里不再包 withAnimation。
+                // 移除动画的唯一来源是上面的 .transition（removal 侧自带
+                // .easeInOut 0.25）——此前同一移除动作上有三个动画源
+                // （withAnimation + transition 自带 + 外层 ZStack 的 .animation），
+                // 多层作用域叠加是「状态清了视图搁浅」的温床。
+                onClear()
             }
     }
 }
@@ -278,7 +281,9 @@ private struct ToastItemModifier: ViewModifier {
                 .zIndex(999)
             }
         }
-        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: item != nil)
+        // 动画收敛：不再在包着整页 content 的 ZStack 上挂 .animation(value:)——
+        // 那会把整页圈进隐式动画作用域。出现/消失动画只由 toast 视图自己的
+        // .transition 提供（见 ToastPresentationModifier）。
     }
 }
 
@@ -314,6 +319,7 @@ private struct ToastStringModifier: ViewModifier {
                 .zIndex(999)
             }
         }
-        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: message != nil)
+        // 动画收敛：同 ToastItemModifier——整页 ZStack 不再挂 .animation(value:)，
+        // 出现/消失动画只由 toast 视图自己的 .transition 提供。
     }
 }

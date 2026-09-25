@@ -1,0 +1,840 @@
+<title>Tab2 视觉调整稿</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Charis+SIL:ital,wght@0,400;0,700&family=Geist:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --doc-bg:#F6F5F3; --doc-panel:#FFFFFF; --doc-ink:#24211C; --doc-ink-2:#5A544B;
+    --doc-ink-3:#8C857A; --doc-line:#E3E0D9; --doc-line-2:#EFEDE8; --accent:#C2410C;
+    --sans:"Geist",ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --serif:"Charis SIL",Charter,"Bitstream Charter",Georgia,serif;
+  }
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+    --doc-bg:#16150F; --doc-panel:#1F1D16; --doc-ink:#EDE9E0; --doc-ink-2:#B3ADA1;
+    --doc-ink-3:#837C70; --doc-line:#322E25; --doc-line-2:#272419; --accent:#E8763C;
+  }}
+  :root[data-theme="dark"]{
+    --doc-bg:#16150F; --doc-panel:#1F1D16; --doc-ink:#EDE9E0; --doc-ink-2:#B3ADA1;
+    --doc-ink-3:#837C70; --doc-line:#322E25; --doc-line-2:#272419; --accent:#E8763C;
+  }
+  *{box-sizing:border-box}
+  body{background:var(--doc-bg);color:var(--doc-ink);font-family:var(--sans);
+    font-size:15px;line-height:1.6;margin:0;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1220px;margin:0 auto;padding:52px 24px 96px}
+
+  .eyebrow{font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--doc-ink-3)}
+  h1{font-family:var(--serif);font-size:clamp(28px,4vw,40px);font-weight:700;line-height:1.15;
+    margin:10px 0 12px;text-wrap:balance}
+  .standfirst{font-size:16.5px;color:var(--doc-ink-2);max-width:66ch;margin:0}
+  h2{font-family:var(--serif);font-size:23px;font-weight:700;margin:0}
+  .sec{margin-top:58px}
+  .sec-head{padding-bottom:13px;border-bottom:1px solid var(--doc-line);margin-bottom:24px}
+  .sec-head p{margin:6px 0 0;color:var(--doc-ink-2);max-width:68ch}
+  .note{margin-top:18px;font-size:13px;color:var(--doc-ink-3);border-left:2px solid var(--doc-line);
+    padding-left:13px;max-width:68ch}
+  .note strong{color:var(--doc-ink)}
+  code{font-family:ui-monospace,Menlo,monospace;font-size:12.5px;color:var(--doc-ink-2)}
+
+  .cols{display:grid;gap:34px;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));align-items:start}
+  .colhead{display:flex;align-items:baseline;gap:9px;margin-bottom:13px}
+  .colhead strong{font-size:15px;font-weight:600}
+  .colhead span{font-size:12.5px;color:var(--doc-ink-3)}
+
+  /* ── 手机：App 浅色暖纸真值 ── */
+  .phone{
+    --pageBg:#FCF8F3; --card:#FFFDFB; --ink:#211811; --ink2:#4B4640;
+    --muted:#7C7773; --faint:#C7C3BD; --line:#E6E1DA; --btn:#17120C;
+    background:var(--pageBg);color:var(--ink);
+    border:1px solid var(--doc-line);border-radius:28px;padding:20px 14px 26px;
+    box-shadow:0 1px 3px rgba(20,15,10,.05),0 10px 30px rgba(20,15,10,.06);
+  }
+  .phone *{color-scheme:light}
+  .bare{padding:0;border:0;border-radius:0;box-shadow:none;background:transparent}
+  .navtabs{display:flex;justify-content:center;gap:6px;padding:2px 0 20px}
+  .navtabs span{font-size:13px;font-weight:500;color:var(--muted);padding:5px 13px}
+  .navtabs span.on{color:var(--ink);background:var(--card);border-radius:999px;
+    box-shadow:0 1px 2px rgba(20,15,10,.06)}
+
+  .h1t{font-family:var(--serif);font-size:24px;font-weight:700;letter-spacing:-.01em;
+    color:var(--ink);padding:0 4px 12px}
+  .h2t{font-family:var(--sans);font-size:12px;font-weight:600;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--muted);padding:24px 4px 10px}
+
+  /* ── Hero ── */
+  .hero{background:var(--card);border:.5px solid var(--line);border-radius:20px;overflow:hidden;
+    box-shadow:0 1.5px 4px rgba(33,24,17,.035),0 4px 8px rgba(46,40,32,.025)}
+  .art{height:150px;position:relative}
+  .art.closet{background:linear-gradient(155deg,#B9B2A6 0%,#8E8B84 42%,#D8D3C9 78%,#6F6B63 100%)}
+  .chip{position:absolute;left:12px;top:12px;font-family:var(--sans);font-size:11.5px;
+    font-weight:600;color:#fff;background:rgba(20,14,10,.44);padding:5px 10px;border-radius:8px;
+    backdrop-filter:blur(8px);font-variant-numeric:tabular-nums;letter-spacing:.005em}
+  .chip .dim{font-weight:400;color:rgba(255,255,255,.78)}
+  .pillrow{display:flex;margin:0 0 9px}
+  .chipR{position:absolute;right:12px;top:12px;font-family:var(--sans);font-size:11.5px;
+    font-weight:500;color:rgba(255,255,255,.92);background:rgba(20,14,10,.38);padding:5px 10px;
+    border-radius:8px;backdrop-filter:blur(8px);font-variant-numeric:tabular-nums}
+  .hbody{padding:16px 18px 18px}
+  .reason{font-family:var(--sans);font-size:12px;color:var(--muted);margin:0 0 9px}
+  /* 活动块：固定两行高度，不足两行也占两行 → 卡高恒定 */
+  .acts{font-family:var(--serif);font-size:21px;font-weight:400;line-height:1.3;
+    letter-spacing:-.005em;margin:0 0 7px;color:var(--ink);
+    min-height:calc(21px * 1.3 * 2);
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .acts .x{font-family:var(--sans);font-size:11px;color:var(--muted);
+    font-variant-numeric:tabular-nums;vertical-align:.42em;margin-left:1px}
+  .acts .sep{color:var(--faint)}
+  .acts .rest{font-family:var(--sans);font-size:13px;color:var(--faint)}
+  .words{font-size:13px;color:var(--muted);margin:0;font-variant-numeric:tabular-nums}
+  .ctarow{display:flex;justify-content:flex-end;margin-top:16px}
+  .footrow{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:16px}
+  .hhead{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:6px}
+  .hcat{font-family:var(--sans);font-size:12px;font-weight:600;color:var(--ink2)}
+  .hreason{font-family:var(--sans);font-size:11.5px;color:var(--muted);white-space:nowrap}
+  .hmeta{font-family:var(--sans);font-size:12px;font-weight:600;color:var(--ink2);
+    font-variant-numeric:tabular-nums;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .hmeta .dim{font-weight:400;color:var(--muted)}
+  /* 暖橙态＝今天有新东西（primary100 底 / primaryAmberDark 字 / primaryDeep 点） */
+  .rpill{font-family:var(--sans);font-size:11.5px;font-weight:500;color:#9E4A1C;
+    background:#FFF3EB;border-radius:999px;padding:4px 10px 4px 8px;white-space:nowrap;flex:none;
+    display:inline-flex;align-items:center;gap:6px}
+  .rpill i{width:6px;height:6px;border-radius:50%;background:#C2410C;flex:none}
+  /* 中性态＝久未触碰 */
+  .rpill.quiet{color:var(--muted);background:#F1ECE5;font-weight:400}
+  .rpill.quiet i{background:#CFC7BC}
+  .ctafull{display:flex;margin-top:14px}
+  .ctafull .cta{flex:1;justify-content:center}
+  .scrim{position:absolute;left:0;right:0;bottom:0;padding:26px 14px 11px;
+    background:linear-gradient(to top,rgba(18,13,9,.62),transparent);
+    font-family:var(--sans);font-size:12px;color:rgba(255,255,255,.94)}
+  .cta{display:inline-flex;align-items:center;gap:8px;background:var(--btn);color:#FCF8F3;
+    font-size:15px;font-weight:600;padding:12px 22px;border-radius:999px}
+
+  /* ── More 行 ── */
+  .rows{display:flex;flex-direction:column;gap:12px}
+  .row{display:flex;background:var(--card);border:.5px solid var(--line);border-radius:20px;
+    overflow:hidden;box-shadow:0 1.5px 4px rgba(33,24,17,.035),0 4px 8px rgba(46,40,32,.025)}
+  .thumb{width:76px;flex:none}
+  .t-key{background:linear-gradient(155deg,#3A3A40,#111114 55%,#6E6A62)}
+  .t-alb{background:linear-gradient(160deg,#E8B7C6,#C2748F)}
+  .t-sea{background:linear-gradient(170deg,#7FC4DA 0%,#3E8FB0 38%,#E4D9BE 62%,#CFC2A4 100%)}
+  .t-pot{background:linear-gradient(155deg,#C9C3BA,#8B857C 60%,#A8998A)}
+  .t-mark{background:#F3EDE6;display:flex;align-items:center;justify-content:center}
+  .t-mark svg{width:26px;height:26px;stroke:#B0A79C;stroke-width:1.5;fill:none}
+  .t-shot{background:#F6E4DA;padding:5px 4px;display:flex;flex-direction:column;gap:3px}
+  .t-shot i{display:block;height:9px;border-radius:2px;background:rgba(180,150,130,.34)}
+  .t-shot i:nth-child(2n){background:rgba(180,150,130,.2)}
+
+  .rbody{padding:12px 10px 12px 14px;flex:1;min-width:0}
+  .rtop{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+  .rcat{font-family:var(--sans);font-size:12px;font-weight:600;color:var(--ink2);
+    letter-spacing:.01em;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .rtime{font-size:11.5px;color:var(--faint);white-space:nowrap;flex:none;
+    display:inline-flex;align-items:center;gap:5px}
+  /* 活动块：同样固定两行 */
+  .racts{font-family:var(--serif);font-size:16px;line-height:1.32;color:var(--ink);
+    margin:4px 0 0;letter-spacing:-.005em;
+    min-height:calc(16px * 1.32 * 2);
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .racts .x{font-family:var(--sans);font-size:11px;color:var(--muted);
+    font-variant-numeric:tabular-nums;vertical-align:.42em;margin-left:1px}
+  .racts .sep{color:var(--faint)}
+  .racts .rest{font-family:var(--sans);font-size:12px;color:var(--faint)}
+  .rwords{font-size:12px;color:var(--muted);margin:5px 0 0;font-variant-numeric:tabular-nums}
+  .arrow{display:flex;align-items:center;padding-right:14px;color:var(--muted);font-size:15px}
+
+  /* ── Topics in progress ── */
+  .tip{background:var(--card);border:.5px solid var(--line);border-radius:20px;overflow:hidden;
+    box-shadow:0 1.5px 4px rgba(33,24,17,.035)}
+  .tiprow{padding:13px 15px}
+  .tipmain{display:flex;align-items:center;gap:11px}
+  .tipmain svg{width:19px;height:19px;stroke:var(--ink2);stroke-width:1.5;fill:none;flex:none}
+  .tipmain b{flex:1;font-size:15px;font-weight:500}
+  .pill{font-size:12px;color:var(--ink2);background:#F1ECE5;border-radius:999px;padding:4px 10px;
+    font-variant-numeric:tabular-nums}
+  .bar{height:2px;background:#EFEAE2;border-radius:2px;margin-top:11px;overflow:hidden}
+  .bar i{display:block;height:100%;background:#CFC7BC}
+
+  /* 现状（旧样式，仅左栏用） */
+  .o-h2{font-family:var(--serif);font-size:24px;font-weight:700;color:var(--ink);padding:22px 4px 12px}
+  .o-reason{font-size:13px;font-weight:600;color:#C2410C;margin:0 0 6px}
+  .o-acts{font-family:var(--serif);font-size:21px;font-weight:700;line-height:1.3;margin:0 0 5px}
+  .o-x{font-family:var(--sans);font-size:13px;font-weight:600;color:#C2410C;font-variant-numeric:tabular-nums}
+  .o-badge{font-size:13px;font-weight:600;color:#C2410C;font-variant-numeric:tabular-nums}
+  .o-racts{font-family:var(--serif);font-size:15px;color:#4B4640;margin:0 0 3px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .o-x2{font-family:var(--sans);font-size:12px;font-weight:600;color:#C2410C;font-variant-numeric:tabular-nums}
+  .o-time{font-size:12px;color:#C7C3BD;margin:0}
+  .o-rest{font-family:var(--sans);font-size:12px;color:#C7C3BD}
+
+  .opts{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(268px,1fr))}
+  .opt{background:var(--doc-panel);border:1px solid var(--doc-line);border-radius:12px;padding:16px}
+  .opt.pick{border-color:var(--accent)}
+  .opt .lk{display:block;font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--doc-ink-3);margin-bottom:11px}
+  .opt.pick .lk{color:var(--accent)}
+  .opt p{margin:11px 0 0;font-size:13px;color:var(--doc-ink-2);line-height:1.55}
+
+  table{border-collapse:collapse;width:100%;font-size:14px;min-width:620px}
+  .tablewrap{overflow-x:auto;border:1px solid var(--doc-line);border-radius:10px;background:var(--doc-panel)}
+  th,td{text-align:left;padding:12px 15px;border-bottom:1px solid var(--doc-line-2);vertical-align:top}
+  th{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--doc-ink-3);
+    font-weight:600;border-bottom:1px solid var(--doc-line)}
+  tr:last-child td{border-bottom:0}
+  td strong{color:var(--doc-ink)}
+</style>
+
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">Poplex · Library · 刀 6 视觉稿 v11</div>
+  <h1>活动是内容，类别是场地</h1>
+  <p class="standfirst">
+    这一版按你定的三条重画：<strong>activity 升为主角</strong>、
+    <strong>Hero 与 More 的活动块都固定两行</strong>、<strong><code>+N</code> 收进这两行之内</strong>。
+    字段一个没删。两行是<strong>固定高度</strong>——不足两行也占两行，
+    所以卡高与行高恒定，这一列仍然能被扫视比较。
+  </p>
+</header>
+
+<!-- ══ 整页对比 ══ -->
+<section class="sec">
+  <div class="sec-head">
+    <h2>整页：现状 &amp; 方案</h2>
+    <p>内容取自 2026-09-10 真机截图，逐字未改；照片位以色块近似。</p>
+  </div>
+
+  <div class="cols">
+
+    <!-- ─── 现状 ─── -->
+    <div>
+      <div class="colhead"><strong>现状</strong><span>真机复刻</span></div>
+      <div class="phone">
+        <div class="navtabs"><span>Today</span><span class="on">Library</span></div>
+
+        <div class="h1t">Talk about today</div>
+        <div class="hero">
+          <div class="art closet"><span class="chip">Daily routines <span class="dim">· 47 words</span></span></div>
+          <div style="padding:14px 16px 16px">
+            <p class="o-reason">You added something new today</p>
+            <p class="o-acts">Chores <span class="o-x">×4</span> · Sleeping <span class="o-x">×2</span></p>
+            <p class="words">47 words</p>
+            <div class="ctarow"><span class="cta">Start talking →</span></div>
+          </div>
+        </div>
+
+        <div class="o-h2">More to talk about</div>
+        <div class="rows">
+          <div class="row">
+            <div class="thumb t-shot"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+            <div class="rbody">
+              <div class="rtop"><b style="font-size:15px;font-weight:600">Tech &amp; gadgets</b>
+                <span class="o-badge">37 words</span></div>
+              <p class="o-racts" style="margin-top:3px">Using an app <span class="o-x2">×4</span> · Taking photos</p>
+              <p class="o-time">Added today</p>
+            </div>
+            <div class="arrow">→</div>
+          </div>
+          <div class="row">
+            <div class="thumb t-key"></div>
+            <div class="rbody">
+              <div class="rtop"><b style="font-size:15px;font-weight:600">Work &amp; study</b>
+                <span class="o-badge">53 words</span></div>
+              <p class="o-racts" style="margin-top:3px">Working <span class="o-x2">×7</span> · Studying
+                <span class="o-x2">×5</span> <span class="o-rest">+1 more</span></p>
+              <p class="o-time">Added yesterday</p>
+            </div>
+            <div class="arrow">→</div>
+          </div>
+          <div class="row">
+            <div class="thumb t-alb"></div>
+            <div class="rbody">
+              <div class="rtop"><b style="font-size:15px;font-weight:600">Social</b>
+                <span class="o-badge">27 words</span></div>
+              <p class="o-racts" style="margin-top:3px">Sharing thoughts <span class="o-x2">×12</span> · Catching…</p>
+              <p class="o-time">Added 3 days ago</p>
+            </div>
+            <div class="arrow">→</div>
+          </div>
+          <div class="row">
+            <div class="thumb t-pot"></div>
+            <div class="rbody">
+              <div class="rtop"><b style="font-size:15px;font-weight:600">Food</b>
+                <span class="o-badge">40 words</span></div>
+              <p class="o-racts" style="margin-top:3px">Cooking <span class="o-x2">×5</span> · Eating at ho…
+                <span class="o-rest">+4 more</span></p>
+              <p class="o-time">Added 2 weeks ago</p>
+            </div>
+            <div class="arrow">→</div>
+          </div>
+        </div>
+
+        <div class="o-h2">Topics in progress</div>
+        <div class="tip">
+          <div class="tiprow">
+            <div class="tipmain">
+              <svg viewBox="0 0 24 24"><circle cx="13" cy="4.5" r="2"/><path d="M9 21l2.5-5 3-2-1-5-3.5 2.5L8 14"/><path d="M14.5 9l3 2 3-.5"/></svg>
+              <b>Health &amp; fitness</b><span class="pill">7 pops ▾</span></div>
+            <div class="bar"><i style="width:35%"></i></div>
+          </div>
+          <div class="tiprow">
+            <div class="tipmain">
+              <svg viewBox="0 0 24 24"><path d="M4 8h16l-1.2 12H5.2z"/><path d="M9 8V6a3 3 0 016 0v2"/></svg>
+              <b>Shopping</b><span class="pill">4 pops ▾</span></div>
+            <div class="bar"><i style="width:20%"></i></div>
+          </div>
+        </div>
+      </div>
+      <p class="note">
+        红色八处；三个标题同档；活动名被截断（<code>Eating at ho…</code>）而 <code>+4 more</code> 却完整占位；
+        类别名是行里最大的字，可它每个用户都一样。
+      </p>
+    </div>
+
+    <!-- ─── 方案 ─── -->
+    <div>
+      <div class="colhead"><strong>方案 v4</strong><span>活动主 · 两行 · 红色归零</span></div>
+      <div class="phone">
+        <div class="navtabs"><span>Today</span><span class="on">Library</span></div>
+
+        <div class="h1t">Talk about today</div>
+        <div class="hero">
+          <div class="art closet"><span class="chip">Daily routines <span class="dim">· 47 words</span></span></div>
+          <div class="hbody">
+            <div class="pillrow"><span class="rpill"><i></i>Added something new today</span></div>
+            <p class="acts">Chores<span class="x">4</span> <span class="sep">·</span>
+               Sleeping<span class="x">2</span> <span class="sep">·</span>
+               Getting up<span class="x">2</span> <span class="rest">+3 more</span></p>
+            <div class="ctarow"><span class="cta">Start talking →</span></div>
+          </div>
+        </div>
+
+        <div class="h2t">More to talk about</div>
+        <div class="rows">
+          <div class="row">
+            <div class="thumb t-mark">
+              <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M8 20h8"/><path d="M12 16v4"/></svg>
+            </div>
+            <div class="rbody">
+              <div class="rtop"><span class="rcat">Tech &amp; gadgets</span>
+                <span class="rtime">Added today</span></div>
+              <p class="racts">Using an app<span class="x">4</span> <span class="sep">·</span>
+                 Taking photos<span class="x">3</span> <span class="sep">·</span>
+                 Charging devices<span class="x">2</span> <span class="rest">+2 more</span></p>
+              <p class="rwords">37 words</p>
+            </div>
+            <div class="arrow">→</div>
+          </div>
+          <div class="row">
+            <div class="thumb t-key"></div>
+            <div class="rbody">
+              <div class="rtop"><span class="rcat">Work &amp; study</span>
+                <span class="rtime">Added yesterday</span></div>
+              <p class="racts">Working<span class="x">7</span> <span class="sep">·</span>
+                 Studying<span class="x">5</span> <span class="sep">·</span>
+                 Meetings<span class="x">2</span> <span class="rest">+1 more</span></p>
+              <p class="rwords">53 words</p>
+            </div>
+            <div class="arrow">→</div>
+          </div>
+          <div class="row">
+            <div class="thumb t-alb"></div>
+            <div class="rbody">
+              <div class="rtop"><span class="rcat">Social</span>
+                <span class="rtime">3 days ago</span></div>
+              <p class="racts">Sharing thoughts<span class="x">12</span> <span class="sep">·</span>
+                 Catching up<span class="x">3</span> <span class="sep">·</span>
+                 Texting<span class="x">2</span> <span class="rest">+9 more</span></p>
+              <p class="rwords">27 words</p>
+            </div>
+            <div class="arrow">→</div>
+          </div>
+          <div class="row">
+            <div class="thumb t-pot"></div>
+            <div class="rbody">
+              <div class="rtop"><span class="rcat">Food</span>
+                <span class="rtime">2 weeks ago</span></div>
+              <p class="racts">Cooking<span class="x">5</span> <span class="sep">·</span>
+                 Eating at home<span class="x">3</span> <span class="sep">·</span>
+                 Making coffee<span class="x">2</span> <span class="rest">+3 more</span></p>
+              <p class="rwords">40 words</p>
+            </div>
+            <div class="arrow">→</div>
+          </div>
+        </div>
+
+        <div class="h2t">Topics in progress</div>
+        <div class="tip">
+          <div class="tiprow">
+            <div class="tipmain">
+              <svg viewBox="0 0 24 24"><circle cx="13" cy="4.5" r="2"/><path d="M9 21l2.5-5 3-2-1-5-3.5 2.5L8 14"/><path d="M14.5 9l3 2 3-.5"/></svg>
+              <b>Health &amp; fitness</b><span class="pill">7 words ▾</span></div>
+            <div class="bar"><i style="width:35%"></i></div>
+          </div>
+          <div class="tiprow">
+            <div class="tipmain">
+              <svg viewBox="0 0 24 24"><path d="M4 8h16l-1.2 12H5.2z"/><path d="M9 8V6a3 3 0 016 0v2"/></svg>
+              <b>Shopping</b><span class="pill">4 words ▾</span></div>
+            <div class="bar"><i style="width:20%"></i></div>
+          </div>
+        </div>
+      </div>
+      <p class="note">
+        红色归零——<strong>照片和图标成了整页唯一的色彩来源</strong>。
+        活动名是每行最大的字，类别与词数并成一顶小帽子，时间升到与它们同排。
+        Hero 因为两行放得下，从 2 条活动增加到 <strong>3 条</strong>。
+      </p>
+    </div>
+
+  </div>
+</section>
+
+<!-- ══ 色彩 ══ -->
+<section class="sec">
+  <div class="sec-head">
+    <h2>暖橙留下来，但只说一件事</h2>
+    <p>
+      上一版我把品牌色收成了中性米灰，页面确实安静了，
+      <strong>但也丢掉了这个 App 的暖度——变得像个后台工具</strong>。
+      问题从来不是「橙色」，是<strong>一整句话染色 + 一屏八处</strong>。
+      所以橙色回来，但立一条规矩：<strong>它只标记「今天有新东西」这一个状态，
+      而且只出现在 Hero 的理由胶囊上——整屏一处。</strong>
+      （More 行也铺一遍这个信号的方案已撤回：一列六七行都带彩色，规矩就又破了。）
+    </p>
+  </div>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th style="min-width:130px">用途</th><th>取色</th><th>出现处</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>今天有新东西</strong></td>
+          <td><code>primary100 #FFF3EB</code> 底 · <code>primaryAmberDark #9E4A1C</code> 字 ·
+              <code>primaryDeep #C2410C</code> 点</td>
+          <td><strong>仅 Hero 理由胶囊</strong></td>
+        </tr>
+        <tr>
+          <td>久未触碰</td>
+          <td>中性 <code>#F1ECE5</code> 底 · <code>textMuted</code> 字 · <code>#CFC7BC</code> 点</td>
+          <td>同上位置，同一形体，只换颜色</td>
+        </tr>
+        <tr>
+          <td>危险动作</td><td><code>primaryDeep #C2410C</code></td><td>Settings 的 Delete account（不变）</td>
+        </tr>
+        <tr>
+          <td colspan="3" style="color:var(--doc-ink-3)">
+            以下一律中性：<code>×N</code> 次数、词数、<code>+N more</code>、类别名、章节标题、箭头
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div style="margin-top:22px" class="opts">
+    <div class="opt">
+      <span class="lk">今天有新东西</span>
+      <div class="phone bare"><div class="hero"><div class="hbody" style="padding:14px 16px">
+        <div class="pillrow" style="margin:0"><span class="rpill"><i></i>Added something new today</span></div>
+      </div></div></div>
+      <p>暖橙底、暖橙点。一眼看到的是「这里有动静」。</p>
+    </div>
+    <div class="opt">
+      <span class="lk">久未触碰</span>
+      <div class="phone bare"><div class="hero"><div class="hbody" style="padding:14px 16px">
+        <div class="pillrow" style="margin:0"><span class="rpill quiet"><i></i>Nothing new in 3 weeks</span></div>
+      </div></div></div>
+      <p>同一个胶囊换成中性。<strong>形体不变、颜色变</strong>——这才是颜色在做事。</p>
+    </div>
+    
+  </div>
+
+  <p class="note">
+    这条规矩的价值在于<strong>颜色第一次有了唯一的含义</strong>：
+    看见暖橙 = 今天有新东西。不是「这个数字重要」，也不是「这里是个标题」。
+    <br><br>
+    同样是橙色，现状那屏有八处、含义各不相同（理由、次数、词数），
+    所以哪一处都不算数；这一版一屏最多两三处、含义只有一个，
+    <strong>它才真的在指路。</strong>
+  </p>
+</section>
+
+<!-- ══ Hero 的头与尾 ══ -->
+<section class="sec">
+  <div class="sec-head">
+    <h2>Hero：元信息上图，理由留在文字区首行</h2>
+    <p>
+      <code>Daily routines · 47 words</code> 压回照片左上角——它们都是「这是什么、有多少」，
+      属于图。理由行留在文字区第一行、左对齐（原来的位置），
+      只是从一句灰字变成有形体的东西。三种处理：
+    </p>
+  </div>
+
+  <div class="opts">
+    <div class="opt">
+      <span class="lk">A · 纯文字</span>
+      <div class="phone bare">
+        <div class="hero">
+          <div class="art closet" style="height:96px"><span class="chip">Daily routines <span class="dim">· 47 words</span></span></div>
+          <div class="hbody">
+            <p class="reason">Added something new today</p>
+            <p class="acts">Chores<span class="x">4</span> <span class="sep">·</span>
+               Sleeping<span class="x">2</span> <span class="rest">+4 more</span></p>
+            <div class="ctarow"><span class="cta">Start talking →</span></div>
+          </div>
+        </div>
+      </div>
+      <p>最轻。但它孤零零悬在活动块上方，<strong>看起来像被忘在那儿的一行注释</strong>。</p>
+    </div>
+
+    <div class="opt pick">
+      <span class="lk">B · 胶囊 + 状态点（推荐）</span>
+      <div class="phone bare">
+        <div class="hero">
+          <div class="art closet" style="height:96px"><span class="chip">Daily routines <span class="dim">· 47 words</span></span></div>
+          <div class="hbody">
+            <div class="pillrow"><span class="rpill"><i></i>Added something new today</span></div>
+            <p class="acts">Chores<span class="x">4</span> <span class="sep">·</span>
+               Sleeping<span class="x">2</span> <span class="rest">+4 more</span></p>
+            <div class="ctarow"><span class="cta">Start talking →</span></div>
+          </div>
+        </div>
+      </div>
+      <p>浅底胶囊 + 5px 实心点。<strong>点是「有没有新东西」的信号</strong>：
+         暖褐＝今天有，浅灰＝很久没碰。形体让它一眼是个状态标记，不是半句话。</p>
+    </div>
+
+    <div class="opt">
+      <span class="lk">C · 胶囊，无点</span>
+      <div class="phone bare">
+        <div class="hero">
+          <div class="art closet" style="height:96px"><span class="chip">Daily routines <span class="dim">· 47 words</span></span></div>
+          <div class="hbody">
+            <div class="pillrow"><span class="rpill" style="padding-left:9px">Added something new today</span></div>
+            <p class="acts">Chores<span class="x">4</span> <span class="sep">·</span>
+               Sleeping<span class="x">2</span> <span class="rest">+4 more</span></p>
+            <div class="ctarow"><span class="cta">Start talking →</span></div>
+          </div>
+        </div>
+      </div>
+      <p>只要形体、不要信号。更安静，但「今天有新东西」和「三周没碰了」看起来完全一样——
+         <strong>少了一个不用读字就能懂的层次</strong>。</p>
+    </div>
+  </div>
+
+  <p class="note">
+    <strong>选 B。</strong>那个点是整页唯一一处不用读字就能懂的信号，
+    <strong>它承担的正是我们从红色那里收回来的活儿</strong>，但只有 5px，不喧宾夺主。
+  </p>
+
+  <div style="margin-top:26px">
+    <div class="colhead"><strong>点的两种状态</strong><span>同一个位置，两种语气</span></div>
+    <div class="opts">
+      <div class="opt">
+        <span class="lk">今天有新东西</span>
+        <div class="phone bare"><div class="hero"><div class="hbody" style="padding:14px 16px">
+          <div class="pillrow" style="margin:0"><span class="rpill"><i></i>Added something new today</span></div>
+        </div></div></div>
+      </div>
+      <div class="opt">
+        <span class="lk">久未触碰</span>
+        <div class="phone bare"><div class="hero"><div class="hbody" style="padding:14px 16px">
+          <div class="pillrow" style="margin:0"><span class="rpill quiet"><i></i>Nothing new in 3 weeks</span></div>
+        </div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top:30px">
+    <div class="colhead"><strong><code>47 words</code> 放哪</strong><span>CTA 回到右对齐之后，左边又空出来了</span></div>
+    <div class="opts">
+      <div class="opt pick">
+        <span class="lk">① 跟在类别名后（当前）</span>
+        <div class="phone bare">
+          <div class="hero">
+            <div class="art closet" style="height:90px">
+              <span class="chip">Daily routines <span class="dim">· 47 words</span></span></div>
+            <div class="hbody">
+              <div class="pillrow"><span class="rpill"><i></i>Added something new today</span></div>
+              <p class="acts">Chores<span class="x">4</span> <span class="sep">·</span>
+                 Sleeping<span class="x">2</span> <span class="rest">+4 more</span></p>
+              <div class="ctarow"><span class="cta">Start talking →</span></div>
+            </div>
+          </div>
+        </div>
+        <p>元信息聚成一块。<strong>代价：按钮左边空着。</strong></p>
+      </div>
+
+      <div class="opt">
+        <span class="lk">② 照片右上角，与类别分列两端</span>
+        <div class="phone bare">
+          <div class="hero">
+            <div class="art closet" style="height:90px">
+              <span class="chip">Daily routines</span><span class="chipR">47 words</span></div>
+            <div class="hbody">
+              <div class="pillrow"><span class="rpill"><i></i>Added something new today</span></div>
+              <p class="acts">Chores<span class="x">4</span> <span class="sep">·</span>
+                 Sleeping<span class="x">2</span> <span class="rest">+4 more</span></p>
+              <div class="ctarow"><span class="cta">Start talking →</span></div>
+            </div>
+          </div>
+        </div>
+        <p>两个角各一个，照片顶部有了平衡感；类别名也不再被后缀拖长。
+           代价：<strong>照片上多一处遮挡</strong>。</p>
+      </div>
+
+      <div class="opt">
+        <span class="lk">③ 按钮左侧同一行</span>
+        <div class="phone bare">
+          <div class="hero">
+            <div class="art closet" style="height:90px">
+              <span class="chip">Daily routines</span></div>
+            <div class="hbody">
+              <div class="pillrow"><span class="rpill"><i></i>Added something new today</span></div>
+              <p class="acts">Chores<span class="x">4</span> <span class="sep">·</span>
+                 Sleeping<span class="x">2</span> <span class="rest">+4 more</span></p>
+              <div class="footrow"><span class="words">47 words</span>
+                <span class="cta">Start talking →</span></div>
+            </div>
+          </div>
+        </div>
+        <p><strong>排版上这个最优</strong>：填掉按钮左边的空当，照片只留一个标签。
+           代价：词数和别的元信息分了家。</p>
+      </div>
+    </div>
+    <p class="note">
+      你问有没有更好的位置——<strong>单看排版，③ 最好</strong>：它同时解决了「按钮左边空着」
+      和「照片上遮挡两处」。但它把词数从元信息里拆了出来，
+      语义上不如 ① 干净。
+      <br><br>
+      <strong>按你说的先用 ①。</strong>①的空当其实可以接受——
+      右对齐的动作按钮在 iOS 里本来就常常独占一行，
+      而这张卡的照片够高，底部留白不至于显得塌。
+      ② 是折中，如果你觉得 <code>Daily routines · 47 words</code> 这个标签太长，
+      它值得试一下。
+    </p>
+  </div>
+</section>
+
+<!-- ══ 条数与折叠 ══ -->
+<section class="sec">
+  <div class="sec-head">
+    <h2>显示几条：装得下几条就几条</h2>
+    <p>
+      之前定的「Hero 3 条 / More 2 条」是<strong>单行时代的上限</strong>——再多一条必然折行，
+      而当时不许折行。现在活动块是固定两行，规则可以更简单：
+      <strong>不设条数上限，两行能排下几条就显示几条</strong>，剩下的进 <code>+N more</code>。
+    </p>
+  </div>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th style="min-width:110px">规则</th><th>定义</th></tr></thead>
+      <tbody>
+        <tr><td>候选条数</td><td>后端每类返回最多 5 条（已按次数降序排好），客户端原序取用，不重排</td></tr>
+        <tr><td>显示条数</td>
+            <td><strong>两行排得下几条就几条</strong>，最多 5 条。名字短时能塞 4–5 条，名字长时可能只有 1–2 条</td></tr>
+        <tr><td><code>+N more</code></td>
+            <td><code>activity_count</code> 减去实际显示条数。<strong>随文流排在最后一条活动之后</strong>，
+                <code>N = 0</code> 时不渲染</td></tr>
+        <tr><td>让位</td>
+            <td>两行装不下时<strong>减少显示的活动条数</strong>，不截断活动名、不截断 <code>+N more</code>。
+                少显示一条，<code>N</code> 自动加一，总数永远对得上</td></tr>
+        <tr><td>高度</td>
+            <td>两行是<strong>固定高度</strong>：只排下 1 条也占两行的高。卡高与行高因此恒定</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="note">
+    <strong>最实在的收益：活动名再也不会出现省略号。</strong>
+    要么完整显示，要么整条进折叠数。
+    对比现状——<code>Eating at ho…</code> 被砍掉一半，旁边却完整写着 <code>+4 more</code>：
+    <strong>被砍的是内容，保住的是计数，正好反了。</strong>
+    <br><br>
+    这条规则也让「显示几条」不再是个需要拍板的数字，而是排版的自然结果。
+  </p>
+</section>
+
+<!-- ══ 溢出四态 ══ -->
+<section class="sec">
+  <div class="sec-head">
+    <h2>四种情况</h2>
+    <p>真实数据里活动名最长 24 字符（<code>Organizing daily necessities</code>），单类活动最多见过 12 个。四行高度完全相同。</p>
+  </div>
+
+  <div class="opts">
+    <div class="opt">
+      <span class="lk">① 短名 · 排下 4 条</span>
+      <div class="phone bare">
+        <div class="row">
+          <div class="thumb t-key"></div>
+          <div class="rbody">
+            <div class="rtop"><span class="rcat">Work &amp; study</span><span class="rtime">Added yesterday</span></div>
+            <p class="racts">Working<span class="x">7</span> <span class="sep">·</span>
+               Studying<span class="x">5</span> <span class="sep">·</span>
+               Meetings<span class="x">2</span> <span class="sep">·</span> Emails<span class="x">2</span></p>
+            <p class="rwords">53 words</p>
+          </div>
+          <div class="arrow">→</div>
+        </div>
+      </div>
+      <p>名字短，两行塞进 4 条，正好排完 → <code>+N</code> 为 0 不渲染。</p>
+    </div>
+
+    <div class="opt pick">
+      <span class="lk">② 长名 · 自动让位</span>
+      <div class="phone bare">
+        <div class="row">
+          <div class="thumb t-mark">
+            <svg viewBox="0 0 24 24"><path d="M4 20V9l8-5 8 5v11"/><path d="M9 20v-6h6v6"/></svg>
+          </div>
+          <div class="rbody">
+            <div class="rtop"><span class="rcat">Daily routines</span><span class="rtime">Added today</span></div>
+            <p class="racts">Organizing daily necessities<span class="x">3</span>
+               <span class="sep">·</span> Getting up<span class="x">2</span>
+               <span class="rest">+4 more</span></p>
+            <p class="rwords">47 words</p>
+          </div>
+          <div class="arrow">→</div>
+        </div>
+      </div>
+      <p>第一条就占掉一整行，两行只放得下 2 条 → 其余 4 条进 <code>+4 more</code>。
+         <strong>两个名字都是完整的，没有省略号。</strong></p>
+    </div>
+
+    <div class="opt">
+      <span class="lk">③ 活动很多</span>
+      <div class="phone bare">
+        <div class="row">
+          <div class="thumb t-alb"></div>
+          <div class="rbody">
+            <div class="rtop"><span class="rcat">Social</span><span class="rtime">3 days ago</span></div>
+            <p class="racts">Sharing thoughts<span class="x">12</span> <span class="sep">·</span>
+               Catching up<span class="x">3</span> <span class="sep">·</span> Texting<span class="x">2</span>
+               <span class="rest">+9 more</span></p>
+            <p class="rwords">27 words</p>
+          </div>
+          <div class="arrow">→</div>
+        </div>
+      </div>
+      <p>12 个活动，两行排下 3 条，其余进 <code>+9 more</code>。行高与上下完全一致。</p>
+    </div>
+
+    <div class="opt">
+      <span class="lk">④ 只有一条 · 只发生过一次</span>
+      <div class="phone bare">
+        <div class="row">
+          <div class="thumb t-sea"></div>
+          <div class="rbody">
+            <div class="rtop"><span class="rcat">Getting around</span><span class="rtime">4 days ago</span></div>
+            <p class="racts">Waiting for the bus</p>
+            <p class="rwords">22 words</p>
+          </div>
+          <div class="arrow">→</div>
+        </div>
+      </div>
+      <p>次数为 1 不显示数字，<code>+N</code> 为 0 不渲染。第二行空着，
+         <strong>高度照占</strong>——不需要凑字。</p>
+    </div>
+  </div>
+
+  <div style="margin-top:24px" class="cols">
+    <div>
+      <div class="colhead"><strong>Hero 的两行</strong><span>长名 + 多活动同时发生</span></div>
+      <div class="phone bare">
+        <div class="hero" style="max-width:370px">
+          <div class="art closet" style="height:118px"><span class="chip">Daily routines <span class="dim">· 47 words</span></span></div>
+          <div class="hbody">
+            <div class="pillrow"><span class="rpill"><i></i>Added something new today</span></div>
+            <p class="acts">Organizing daily necessities<span class="x">3</span>
+               <span class="sep">·</span> Chores<span class="x">4</span>
+               <span class="rest">+4 more</span></p>
+            <div class="ctarow"><span class="cta">Start talking →</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <p class="note" style="margin-top:34px">
+        Hero 用同一条规则，只是字号大（21px），两行通常排 2–3 条。
+        两行是固定高度，所以无论排下几条，<strong>Hero 卡总高恒定</strong>——
+        从 <code>Talk about today</code> 到 <code>More to talk about</code> 之间的距离每天都一样。
+        <br><br>
+        <code>47 words</code> 独占一行，位置不受上面几行影响；
+        <code>Start talking</code> 因此也永远在同一个高度。
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ══ 改动清单 ══ -->
+<section class="sec">
+  <div class="sec-head">
+    <h2>逐项改了什么</h2>
+    <p>字段、点击行为、后端一律未动。</p>
+  </div>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th style="min-width:112px">位置</th><th>现状</th><th>方案</th><th>为什么</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>行的主角</td><td>类别名 15px 粗，最大</td>
+          <td><strong>活动名 16px 衬线，最大</strong>；类别 12px 帽子，词数独占末行</td>
+          <td>12 个类别名每个用户都一样；活动名是这一页唯一能证明「系统认识我」的东西。</td>
+        </tr>
+        <tr>
+          <td>活动块</td><td>单行，超出省略</td>
+          <td><strong>固定两行</strong>，装得下几条就几条（最多 5），不足两行也占两行</td>
+          <td>两行装得下完整的名字；固定高度让行仍可扫视比较。</td>
+        </tr>
+        <tr>
+          <td><code>+N more</code></td><td>行尾固定块 <code>+4 more</code></td><td>随文流排在末条活动之后；放不下就让活动条数减一</td>
+          <td>活动名从此不出现省略号——要么完整，要么进折叠数。</td>
+        </tr>
+        <tr>
+          <td>次数</td><td><code>×7</code> 红色粗体等大</td><td><code>7</code> 上标灰</td>
+          <td><code>×</code> 念不出来，不该占一个词的宽度。上标后行里剩两个名词。</td>
+        </tr>
+        <tr>
+          <td>时间</td><td>第三行，最浅</td><td>升到首行右端，与类别同排</td>
+          <td>它是排序轴，藏在最后一行等于把顺序的理由藏起来。</td>
+        </tr>
+        <tr>
+          <td>Hero CTA</td><td>右对齐</td><td>右对齐（不变）</td>
+          <td>按你的意见保留——全宽版本按钮太长。</td>
+        </tr>
+        <tr>
+          <td>Hero 类别名</td><td>没有</td>
+          <td><strong>照片左上角标签：<code>Daily routines · 47 words</code></strong></td>
+          <td>点进去聊的是整个类别，卡上必须写明是哪一类；与词数同属元信息，合在一起。</td>
+        </tr>
+        <tr>
+          <td>Hero 理由行</td><td>13px 粗体 · 红色整句</td><td>文字区首行（原位）· 浅底胶囊 + 5px 状态点 · 句首大写</td>
+          <td>整句染红像报错，而这是好消息。胶囊给它形体，点承担「不用读字就能懂」那一层。</td>
+        </tr>
+        <tr>
+          <td>Hero 词数</td><td>活动块与按钮之间，独占一行</td>
+          <td><strong>并入照片上的标签，跟在类别名后面</strong></td>
+          <td>原来那行既不属于上面也不属于下面。「是什么、有多少」都属于图。</td>
+        </tr>
+        <tr>
+          <td>预设缩略图</td><td>App 界面截图</td><td>浅底 + 类别线性图标</td>
+          <td>有照片 = 存过东西；有图标 = 还没画面。两者不该互相冒充。</td>
+        </tr>
+        <tr>
+          <td>章节标题</td><td>三个同档 24px 衬线粗</td>
+          <td>页面级保留；<code>More</code> / <code>Topics</code> 降为 12px 大写分区档</td>
+          <td>它们不是三个并列的页面标题。</td>
+        </tr>
+        <tr>
+          <td>Topics 量词</td><td><code>7 pops</code></td><td><code>7 words</code></td>
+          <td>同屏两套词说同一个量。</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="note">
+    <strong>没有动：</strong>返回字段一个不删；<code>×1</code> 不显示数字的规则不变；
+    <code>+N</code> 的基数仍是 <code>activity_count</code> 减已显示条数；
+    Hero 选取与排序不变；点击仍传分类；<code>Start talking</code> 仍弹 Coming soon；后端与 RPC 未碰。
+  </p>
+</section>
+
+</div>

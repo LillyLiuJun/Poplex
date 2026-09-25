@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sentence 纯字体方案对照 (Pure Font-Family Matrix)</title>
+  <!-- 引入顶级 Web 字体 Newsreader 与 Inter 进行真实渲染 -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=Lora:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --page-bg: #FCF8F3;
+      --card-surface: #FFFDF8;
+      --text-primary: #211811;
+      --text-secondary: #594C43;
+      --text-muted: #7C7773;
+      --border-card: rgba(230, 225, 218, 0.45);
+      --card-shadow: 0 1.5px 4px rgba(33, 24, 17, 0.035), 0 4px 10px rgba(46, 40, 32, 0.025);
+      --ui-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-font-smoothing: antialiased; }
+    body {
+      background: #EAE4DC;
+      font-family: var(--ui-sans);
+      color: var(--text-primary);
+      padding: 40px 24px 80px;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .container {
+      max-width: 1320px;
+      width: 100%;
+    }
+
+    .header {
+      margin-bottom: 32px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .kicker {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #C2410C;
+      margin-bottom: 4px;
+    }
+    .title {
+      font-size: 28px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+    .subtitle {
+      font-size: 14px;
+      color: var(--text-secondary);
+      margin-top: 6px;
+      line-height: 1.5;
+    }
+
+    /* 方案卡片网格：4 套纯字体方案 */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(280px, 1fr));
+      gap: 20px;
+      align-items: start;
+    }
+
+    .column {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .scheme-header {
+      padding: 0 4px;
+    }
+    .scheme-num {
+      font-size: 11px;
+      font-weight: 700;
+      color: #C2410C;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .scheme-name {
+      font-size: 17px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-top: 2px;
+    }
+    .font-stack-tag {
+      display: inline-block;
+      font-family: "SF Mono", Menlo, monospace;
+      font-size: 11px;
+      background: rgba(33, 24, 17, 0.06);
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+    }
+
+    /* 
+      100% 绝对锁死结构与尺寸：
+      全部方案使用完全相同的 17pt、15pt、11pt 字号与 16pt 间距！
+      唯一的区别就是字族 (font-family)！
+    */
+    .card {
+      background: var(--card-surface);
+      border-radius: 20px;
+      padding: 16px;
+      border: 0.5px solid var(--border-card);
+      box-shadow: var(--card-shadow);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* 内部排版通用尺度 (全部锁定) */
+    .orig-box { display: flex; flex-direction: column; gap: 4px; }
+    .orig-en { font-size: 17px; color: var(--text-muted); line-height: 1.35; }
+    .orig-zh { font-size: 15px; color: var(--text-muted); line-height: 1.4; font-family: var(--ui-sans); }
+
+    .target-box { display: flex; flex-direction: column; gap: 4px; }
+    .label { font-size: 11px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; font-family: var(--ui-sans); }
+    .target-en { font-size: 17px; color: var(--text-primary); line-height: 1.35; }
+
+    .note-box { display: flex; flex-direction: column; gap: 4px; }
+    .note-text { font-size: 15px; color: var(--text-secondary); line-height: 1.45; font-family: var(--ui-sans); }
+
+    /* ── 方案 1：Apple New York (iOS 系统原生衬线) ── */
+    .font-newyork .orig-en,
+    .font-newyork .target-en {
+      font-family: "New York", ui-serif, serif;
+    }
+
+    /* ── 方案 2：Newsreader (高阶文学出版刊物衬线 · 规范预设) ── */
+    .font-newsreader .orig-en,
+    .font-newsreader .target-en {
+      font-family: "Newsreader", "Iowan Old Style", Georgia, serif;
+    }
+
+    /* ── 方案 3：Charter (硬朗权威学术词典 · iOS 原生内置) ── */
+    .font-charter .orig-en,
+    .font-charter .target-en {
+      font-family: "Charter", "Bitstream Charter", serif;
+    }
+
+    /* ── 方案 4：Georgia (温润通俗亲和屏读 · iOS 原生内置) ── */
+    .font-georgia .orig-en,
+    .font-georgia .target-en {
+      font-family: "Georgia", serif;
+    }
+
+    /* 气质解读框 */
+    .traits-box {
+      background: #FFFDF8;
+      border-radius: 14px;
+      padding: 12px 14px;
+      border: 1px solid rgba(89, 76, 67, 0.1);
+      font-size: 12.5px;
+      line-height: 1.5;
+      color: var(--text-secondary);
+    }
+    .traits-box strong { color: var(--text-primary); }
+
+    /* 单独放大字形观察行 */
+    .specimen-box {
+      margin-top: 36px;
+      background: #FFFDF8;
+      border-radius: 20px;
+      padding: 24px;
+      border: 0.5px solid var(--border-card);
+      box-shadow: var(--card-shadow);
+    }
+    .specimen-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .specimen-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 20px;
+    }
+    .specimen-col {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding-right: 12px;
+      border-right: 1px solid rgba(124, 119, 115, 0.15);
+    }
+    .specimen-col:last-child { border-right: none; }
+    .specimen-name { font-size: 12px; font-weight: 600; color: var(--text-muted); }
+    .specimen-big { font-size: 38px; color: var(--text-primary); line-height: 1.1; }
+    .specimen-detail { font-size: 12px; color: var(--text-muted); line-height: 1.4; margin-top: 4px; }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <header class="header">
+      <div>
+        <div class="kicker">Pure Typeface Matrix · Zero Layout Changes</div>
+        <h1 class="title">Sentence 4 组纯字族方案横向盲测</h1>
+        <p class="subtitle">
+          <strong>严格锁死全部字号（17pt/15pt）、行距与间距</strong>，排版完全一致。唯一的变量就是<strong>西文字体本身的气质与笔触</strong>。
+        </p>
+      </div>
+    </header>
+
+    <main class="grid">
+
+      <!-- 方案 1: New York -->
+      <div class="column">
+        <div class="scheme-header">
+          <div class="scheme-num">方案 01 · 苹果原生</div>
+          <div class="scheme-name">New York</div>
+          <div class="font-stack-tag">System Serif</div>
+        </div>
+
+        <div class="card font-newyork">
+          <div class="orig-box">
+            <div class="orig-en">I am very sleep today, because too much meeting.</div>
+            <div class="orig-zh">我今天很困，因为会议太多。</div>
+          </div>
+          <div class="target-box">
+            <div class="label">Polish</div>
+            <div class="target-en">I’m completely snowed under with meetings today and feeling exhausted.</div>
+          </div>
+          <div class="note-box">
+            <div class="label">Note</div>
+            <div class="note-text">用 "snowed under with" 形象描述被大量工作压得透不过气；修饰人困倦疲惫要用形容词 sleepy 或 exhausted，而非动词原形 sleep。</div>
+          </div>
+        </div>
+
+        <div class="traits-box">
+          <strong>气质特征：</strong>现代、清脆、数字原生。<br>
+          Apple 专为高分屏打磨的过渡衬线体，笔触克制，与 iOS 系统整体氛围天生契合。
+        </div>
+      </div>
+
+      <!-- 方案 2: Newsreader -->
+      <div class="column">
+        <div class="scheme-header">
+          <div class="scheme-num">方案 02 · 文学出版</div>
+          <div class="scheme-name">Newsreader</div>
+          <div class="font-stack-tag">Editorial Serif</div>
+        </div>
+
+        <div class="card font-newsreader">
+          <div class="orig-box">
+            <div class="orig-en">I am very sleep today, because too much meeting.</div>
+            <div class="orig-zh">我今天很困，因为会议太多。</div>
+          </div>
+          <div class="target-box">
+            <div class="label">Polish</div>
+            <div class="target-en">I’m completely snowed under with meetings today and feeling exhausted.</div>
+          </div>
+          <div class="note-box">
+            <div class="label">Note</div>
+            <div class="note-text">用 "snowed under with" 形象描述被大量工作压得透不过气；修饰人困倦疲惫要用形容词 sleepy 或 exhausted，而非动词原形 sleep。</div>
+          </div>
+        </div>
+
+        <div class="traits-box">
+          <strong>气质特征：</strong>古典、温润、纸质铅字感。<br>
+          专为长文与报刊设计，带有人文墨迹的舒展与优雅，是规范预设的终极目标。
+        </div>
+      </div>
+
+      <!-- 方案 3: Charter -->
+      <div class="column">
+        <div class="scheme-header">
+          <div class="scheme-num">方案 03 · 权威词典</div>
+          <div class="scheme-name">Charter</div>
+          <div class="font-stack-tag">iOS Built-in</div>
+        </div>
+
+        <div class="card font-charter">
+          <div class="orig-box">
+            <div class="orig-en">I am very sleep today, because too much meeting.</div>
+            <div class="orig-zh">我今天很困，因为会议太多。</div>
+          </div>
+          <div class="target-box">
+            <div class="label">Polish</div>
+            <div class="target-en">I’m completely snowed under with meetings today and feeling exhausted.</div>
+          </div>
+          <div class="note-box">
+            <div class="label">Note</div>
+            <div class="note-text">用 "snowed under with" 形象描述被大量工作压得透不过气；修饰人困倦疲惫要用形容词 sleepy 或 exhausted，而非动词原形 sleep。</div>
+          </div>
+        </div>
+
+        <div class="traits-box">
+          <strong>气质特征：</strong>硬朗、刚劲、学术词典感。<br>
+          字腔开阔，笔画扎实厚重，在小字号下有无可比拟的结构清晰度，权威感最强。
+        </div>
+      </div>
+
+      <!-- 方案 4: Georgia -->
+      <div class="column">
+        <div class="scheme-header">
+          <div class="scheme-num">方案 04 · 温润亲和</div>
+          <div class="scheme-name">Georgia</div>
+          <div class="font-stack-tag">iOS Built-in</div>
+        </div>
+
+        <div class="card font-georgia">
+          <div class="orig-box">
+            <div class="orig-en">I am very sleep today, because too much meeting.</div>
+            <div class="orig-zh">我今天很困，因为会议太多。</div>
+          </div>
+          <div class="target-box">
+            <div class="label">Polish</div>
+            <div class="target-en">I’m completely snowed under with meetings today and feeling exhausted.</div>
+          </div>
+          <div class="note-box">
+            <div class="label">Note</div>
+            <div class="note-text">用 "snowed under with" 形象描述被大量工作压得透不过气；修饰人困倦疲惫要用形容词 sleepy 或 exhausted，而非动词原形 sleep。</div>
+          </div>
+        </div>
+
+        <div class="traits-box">
+          <strong>气质特征：</strong>通俗、饱满、屏读友好。<br>
+          超大 x-height，字母圆润舒展，视觉体量略大，完全没有阅读压迫感。
+        </div>
+      </div>
+
+    </main>
+
+    <!-- 字母解剖标本镜 (Specimen Inspection) -->
+    <section class="specimen-box">
+      <div class="specimen-title">字母字形与衬线细节特写 (Aa Qq Gg &amp; Aperture)</div>
+      <div class="specimen-grid">
+        <div class="specimen-col font-newyork">
+          <span class="specimen-name">01. New York</span>
+          <div class="specimen-big">Aa Rr f</div>
+          <div class="specimen-detail">笔画末端圆润，竖笔微带弧度，现代数字原生感。</div>
+        </div>
+        <div class="specimen-col font-newsreader">
+          <span class="specimen-name">02. Newsreader</span>
+          <div class="specimen-big">Aa Rr f</div>
+          <div class="specimen-detail">笔画有手写倾角与刀刻起笔，典型的传统书卷温度。</div>
+        </div>
+        <div class="specimen-col font-charter">
+          <span class="specimen-name">03. Charter</span>
+          <div class="specimen-big">Aa Rr f</div>
+          <div class="specimen-detail">粗壮方衬线（Slab Serif），字母极度挺拔稳健，耐磨损。</div>
+        </div>
+        <div class="specimen-col font-georgia">
+          <span class="specimen-name">04. Georgia</span>
+          <div class="specimen-big">Aa Rr f</div>
+          <div class="specimen-detail">字面开阔，小写字母高大，曲线饱满，易读性极佳。</div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+</body>
+</html>

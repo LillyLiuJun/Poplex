@@ -1,0 +1,397 @@
+<title>Only words so far</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Charis+SIL:ital,wght@0,400;0,700&family=Geist:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --doc-bg:#F6F5F3; --doc-panel:#FFFFFF; --doc-ink:#24211C; --doc-ink-2:#5A544B;
+    --doc-ink-3:#8C857A; --doc-line:#E3E0D9; --doc-line-2:#EFEDE8; --accent:#C2410C;
+    --sans:"Geist",ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --serif:"Charis SIL",Charter,"Bitstream Charter",Georgia,serif;
+  }
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+    --doc-bg:#16150F; --doc-panel:#1F1D16; --doc-ink:#EDE9E0; --doc-ink-2:#B3ADA1;
+    --doc-ink-3:#837C70; --doc-line:#322E25; --doc-line-2:#272419; --accent:#E8763C;
+  }}
+  :root[data-theme="dark"]{
+    --doc-bg:#16150F; --doc-panel:#1F1D16; --doc-ink:#EDE9E0; --doc-ink-2:#B3ADA1;
+    --doc-ink-3:#837C70; --doc-line:#322E25; --doc-line-2:#272419; --accent:#E8763C;
+  }
+  *{box-sizing:border-box}
+  body{background:var(--doc-bg);color:var(--doc-ink);font-family:var(--sans);
+    font-size:15px;line-height:1.6;margin:0;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1180px;margin:0 auto;padding:52px 24px 96px}
+  .eyebrow{font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--doc-ink-3)}
+  h1{font-family:var(--serif);font-size:clamp(28px,4vw,38px);font-weight:700;line-height:1.15;
+    margin:10px 0 12px;text-wrap:balance}
+  .standfirst{font-size:16.5px;color:var(--doc-ink-2);max-width:66ch;margin:0}
+  h2{font-family:var(--serif);font-size:22px;font-weight:700;margin:0}
+  .sec{margin-top:52px}
+  .sec-head{padding-bottom:13px;border-bottom:1px solid var(--doc-line);margin-bottom:24px}
+  .sec-head p{margin:6px 0 0;color:var(--doc-ink-2);max-width:68ch}
+  .note{margin-top:18px;font-size:13px;color:var(--doc-ink-3);border-left:2px solid var(--doc-line);
+    padding-left:13px;max-width:68ch}
+  .note strong{color:var(--doc-ink)}
+  code{font-family:ui-monospace,Menlo,monospace;font-size:12.5px;color:var(--doc-ink-2)}
+  .cols{display:grid;gap:30px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));align-items:start}
+  .colhead{display:flex;align-items:baseline;gap:9px;margin-bottom:12px}
+  .colhead strong{font-size:15px;font-weight:600}
+  .colhead span{font-size:12.5px;color:var(--doc-ink-3)}
+
+  .phone{
+    --pageBg:#FCF8F3; --card:#FFFDFB; --ink:#211811; --ink2:#4B4640;
+    --muted:#7C7773; --faint:#C7C3BD; --line:#E6E1DA; --btn:#17120C;
+    --chipBg:#F4EFE8; --chipInk:#3A342D;
+    background:var(--pageBg);color:var(--ink);
+    border:1px solid var(--doc-line);border-radius:26px;padding:18px 14px 22px;
+    box-shadow:0 1px 3px rgba(20,15,10,.05),0 10px 30px rgba(20,15,10,.06);
+  }
+  .phone *{color-scheme:light}
+  .h2t{font-family:var(--sans);font-size:11px;font-weight:600;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--muted);padding:0 4px 10px}
+
+  .hero{background:var(--card);border:.5px solid var(--line);border-radius:20px;overflow:hidden;
+    box-shadow:0 1.5px 4px rgba(33,24,17,.035),0 4px 8px rgba(46,40,32,.025)}
+  .art{height:112px;position:relative}
+  .art.closet{background:linear-gradient(155deg,#B9B2A6 0%,#8E8B84 42%,#D8D3C9 78%,#6F6B63 100%)}
+  .art.preset{background:#F3EDE6;display:flex;align-items:center;justify-content:center}
+  .art.preset svg{width:30px;height:30px;stroke:#B0A79C;stroke-width:1.5;fill:none}
+  .toprow{position:absolute;left:12px;top:12px;right:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .chip{font-family:var(--sans);font-size:11.5px;font-weight:600;color:#fff;
+    background:rgba(20,14,10,.44);padding:5px 10px;border-radius:8px;backdrop-filter:blur(8px)}
+  .chip.onlight{color:#4B4640;background:rgba(255,255,255,.82)}
+  .opill{font-family:var(--sans);font-size:11.5px;font-weight:500;color:#FFE4D2;
+    background:rgba(20,14,10,.44);backdrop-filter:blur(8px);border-radius:999px;
+    padding:5px 10px 5px 8px;white-space:nowrap;display:inline-flex;align-items:center;gap:6px}
+  .opill i{width:6px;height:6px;border-radius:50%;background:#FF8A4C;flex:none}
+  .opill.onlight{color:#8A8079;background:rgba(255,255,255,.82)}
+  .opill.onlight i{background:#C9BFB4}
+
+  .hbody{padding:15px 18px 17px}
+  .seclab{font-family:var(--sans);font-size:11px;font-weight:600;letter-spacing:.09em;
+    text-transform:uppercase;color:var(--muted);margin:0 0 9px}
+  .achips{display:flex;flex-wrap:wrap;gap:7px;overflow:hidden;
+    height:calc(31px * 2 + 7px);align-content:flex-start;margin:0}
+  .achips .a{font-family:var(--serif);font-size:15px;line-height:1;color:var(--chipInk);
+    background:var(--chipBg);border-radius:999px;padding:8px 13px;white-space:nowrap}
+  .achips .more{font-family:var(--sans);font-size:12.5px;line-height:1;color:var(--muted);
+    padding:9px 6px;white-space:nowrap}
+  /* 空态：一行 sans 小字，不占两行槽 */
+  .onlywords{font-family:var(--sans);font-size:13px;line-height:1.35;color:var(--muted);margin:0}
+
+  .footrow{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:15px}
+  .words{font-size:13px;color:var(--muted);margin:0;font-variant-numeric:tabular-nums}
+  .cta{display:inline-flex;align-items:center;gap:8px;background:var(--btn);color:#FCF8F3;
+    font-size:15px;font-weight:600;padding:11px 20px;border-radius:999px}
+
+  .rows{display:flex;flex-direction:column;gap:12px}
+  .row{display:flex;background:var(--card);border:.5px solid var(--line);border-radius:20px;
+    overflow:hidden;box-shadow:0 1.5px 4px rgba(33,24,17,.035),0 4px 8px rgba(46,40,32,.025)}
+  .thumb{width:76px;flex:none;background:#F3EDE6;display:flex;align-items:center;justify-content:center}
+  .thumb svg{width:26px;height:26px;stroke:#B0A79C;stroke-width:1.5;fill:none}
+  .t-key{background:linear-gradient(155deg,#3A3A40,#111114 55%,#6E6A62)}
+  .rbody{padding:12px 10px 12px 14px;flex:1;min-width:0}
+  .rtop{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+  .rcat{font-family:var(--sans);font-size:12px;font-weight:600;color:var(--ink2);
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .rtime{font-size:11.5px;color:var(--faint);white-space:nowrap;flex:none}
+  .rchips{display:flex;flex-wrap:wrap;gap:6px;overflow:hidden;
+    height:calc(27px * 2 + 6px);align-content:flex-start;margin:7px 0 0}
+  .rchips .a{font-family:var(--serif);font-size:13px;line-height:1;color:var(--chipInk);
+    background:var(--chipBg);border-radius:999px;padding:7px 11px;white-space:nowrap}
+  .rchips .more{font-family:var(--sans);font-size:11.5px;line-height:1;color:var(--muted);
+    padding:8px 4px;white-space:nowrap}
+  .rwords{font-size:12px;color:var(--muted);margin:8px 0 0;font-variant-numeric:tabular-nums}
+  .rwords.tight{margin-top:6px}
+  .arrow{display:flex;align-items:center;padding-right:14px;color:var(--muted);font-size:15px}
+
+  .tablewrap{overflow-x:auto;border:1px solid var(--doc-line);border-radius:10px;background:var(--doc-panel)}
+  table{border-collapse:collapse;width:100%;font-size:14px;min-width:560px}
+  th,td{text-align:left;padding:12px 15px;border-bottom:1px solid var(--doc-line-2);vertical-align:top}
+  th{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--doc-ink-3);
+    font-weight:600;border-bottom:1px solid var(--doc-line)}
+  tr:last-child td{border-bottom:0}
+  td strong{color:var(--doc-ink)}
+  .marker{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.06em;
+    text-transform:uppercase;color:var(--accent);margin-bottom:8px}
+</style>
+
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">Poplex · Library · 解锁但无 activity 的空态</div>
+  <h1>只有词的类目</h1>
+  <p class="standfirst">
+    解锁门槛是 <code>word_count ≥ 20</code>，而查词也算词——**但词卡的 <code>scene_detail</code> 永远是 null**。
+    所以一个主要靠查词的用户，完全可能有一个 47 词、已解锁、<strong>零 activity</strong> 的类目。
+    这不是数据异常，是设计的必然结果。下面是它在两处的样子。
+  </p>
+</header>
+
+<!-- Hero -->
+<section class="sec">
+  <div class="sec-head">
+    <h2>Hero：标题保留，一行字替代胶囊</h2>
+    <p>
+      Hero 是整页唯一的主卡，塌成薄壳会让人以为页面坏了。所以标题留着、底下给一句话——
+      但这句话说的是<strong>有什么</strong>（词），不是<strong>缺什么</strong>（活动）。
+    </p>
+  </div>
+
+  <div class="cols">
+    <div>
+      <div class="colhead"><strong>有 activity</strong><span>对照</span></div>
+      <div class="phone">
+        <div class="hero">
+          <div class="art closet">
+            <div class="toprow"><span class="chip">Daily Routine</span>
+              <span class="opill"><i></i>Added 3 times today</span></div>
+          </div>
+          <div class="hbody">
+            <p class="seclab">Recent activities</p>
+            <div class="achips">
+              <span class="a">Getting up</span><span class="a">Making coffee</span>
+              <span class="a">Chores</span><span class="a">Tidying up</span>
+              <span class="more">+3 more</span>
+            </div>
+            <div class="footrow"><span class="words">47 words</span>
+              <span class="cta">Start talking →</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="colhead"><strong>无 activity</strong><span>本方案</span></div>
+      <div class="phone">
+        <div class="hero">
+          <div class="art preset">
+            <div class="toprow"><span class="chip onlight">Daily Routine</span>
+              <span class="opill onlight"><i></i>Nothing new in 5 days</span></div>
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="4"/><path d="M12 3v2M12 21v-2M3 13h2M19 13h2M6 7l1.5 1.5M18 7l-1.5 1.5"/></svg>
+          </div>
+          <div class="hbody">
+            <p class="seclab">Recent activities</p>
+            <p class="onlywords">Only words so far</p>
+            <div class="footrow"><span class="words">47 words</span>
+              <span class="cta">Start talking →</span></div>
+          </div>
+        </div>
+      </div>
+      <p class="note">
+        <strong>没有封面。</strong>封面来自 activity 的素材，没有 activity 就没有照片——
+        走预设图标底。这和刀 6 定的规矩自洽：<strong>有照片 = 存过东西，有图标 = 还没画面。</strong>
+        图标底是浅色，所以标签与理由胶囊换成浅底深字的一套。
+      </p>
+    </div>
+  </div>
+
+  <p class="note">
+    <strong>关键：占位不是两行槽。</strong>两行槽 69pt 是为「多颗胶囊可扫视比较」存在的，
+    这里只有一行字，按单行文本的自然高度走——卡片比有活动时矮一点，<strong>矮得有理由</strong>。
+    文案用 sans + <code>textMuted</code>，<strong>不用衬线</strong>：衬线是用户内容的标记，这是系统在说明状态。
+  </p>
+</section>
+
+<!-- More -->
+<section class="sec">
+  <div class="sec-head">
+    <h2>More 行：整块收掉，一个字也不放</h2>
+    <p>一行里塞一句「没有活动」，在四五行的列表里就是噪音。行变矮，<code>N words</code> 还在。</p>
+  </div>
+
+  <div class="cols">
+    <div>
+      <div class="colhead"><strong>有 activity</strong><span>对照</span></div>
+      <div class="phone">
+        <div class="rows">
+          <div class="row">
+            <div class="thumb t-key"></div>
+            <div class="rbody">
+              <div class="rtop"><span class="rcat">Work &amp; Study</span><span class="rtime">Added yesterday</span></div>
+              <div class="rchips">
+                <span class="a">Working</span><span class="a">Studying</span>
+                <span class="a">Meetings</span><span class="a">Emails</span>
+                <span class="more">+1 more</span>
+              </div>
+              <p class="rwords">53 words</p>
+            </div>
+            <div class="arrow">→</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="colhead"><strong>无 activity</strong><span>本方案</span></div>
+      <div class="phone">
+        <div class="rows">
+          <div class="row">
+            <div class="thumb">
+              <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M8 20h8M12 16v4"/></svg>
+            </div>
+            <div class="rbody">
+              <div class="rtop"><span class="rcat">Digital &amp; Tech</span><span class="rtime">Added 2 days ago</span></div>
+              <p class="rwords tight">31 words</p>
+            </div>
+            <div class="arrow">→</div>
+          </div>
+        </div>
+      </div>
+      <p class="note">
+        胶囊组整块不渲染，<strong>连 60pt 固定高度一起收掉</strong>。
+        不是留个空槽、也不是放一句话——行就是矮的。
+      </p>
+    </div>
+  </div>
+
+  <div style="margin-top:30px">
+    <div class="colhead"><strong>那要不要也给一句话</strong><span>两种都画出来</span></div>
+    <div class="cols">
+      <div>
+        <div class="phone" style="max-width:400px">
+          <div class="rows">
+            <div class="row">
+              <div class="thumb">
+                <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M8 20h8M12 16v4"/></svg>
+              </div>
+              <div class="rbody">
+                <div class="rtop"><span class="rcat">Digital &amp; Tech</span><span class="rtime">Added 2 days ago</span></div>
+                <p class="rwords tight">31 words</p>
+              </div>
+              <div class="arrow">→</div>
+            </div>
+          </div>
+        </div>
+        <p class="note"><span class="marker">B1 · 收掉</span>
+          行最矮。<code>31 words</code> 独自承担「这里有东西」。</p>
+      </div>
+      <div>
+        <div class="phone" style="max-width:400px">
+          <div class="rows">
+            <div class="row">
+              <div class="thumb">
+                <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M8 20h8M12 16v4"/></svg>
+              </div>
+              <div class="rbody">
+                <div class="rtop"><span class="rcat">Digital &amp; Tech</span><span class="rtime">Added 2 days ago</span></div>
+                <p class="onlywords" style="margin:7px 0 0">Only words so far</p>
+                <p class="rwords tight">31 words</p>
+              </div>
+              <div class="arrow">→</div>
+            </div>
+          </div>
+        </div>
+        <p class="note"><span class="marker">B2 · 给一句话</span>
+          和 Hero 同一句、同一档。代价：<strong>它和下面那行 <code>31 words</code> 说的是同一件事。</strong></p>
+      </div>
+    </div>
+    <p class="note">
+      画出来之后我改了看法的地方：<strong>B2 的问题不是「噪音」，是「重复」。</strong>
+      我原先说一行里塞否定句是噪音——不准确，<code>Only words so far</code> 并不是否定句。
+      真正的毛病是它<strong>紧挨着 <code>31 words</code></strong>，两行说的是同一件事，
+      而 Hero 那边隔着一整个卡身、中间还有标题，重复感弱得多。
+      <br><br>
+      所以如果要给 More 一句话，<strong>更该考虑的是让它顶替 <code>N words</code> 那一行</strong>，
+      而不是加在它上面。但那样就丢掉了词数这个真实数字——不值得。
+      <br><br>
+      <span class="marker">决定 · 2026-09-16 拍板</span>
+      <strong>用 B2，接受与词数重复。</strong>一致性压过简洁——同一个状态在两处说同一句话，
+      规则少一个例外。实现以本决定为准：More 空态渲染一行 <code>Only words so far</code>
+      （与 Hero 同一句、同一档样式），<code>N words</code> 保留在其下方。
+    </p>
+  </div>
+
+  <div style="margin-top:30px">
+    <div class="colhead"><strong>混在一列里</strong><span>矮行会不会显得乱</span></div>
+    <div class="phone" style="max-width:420px">
+      <div class="h2t">More to talk about</div>
+      <div class="rows">
+        <div class="row">
+          <div class="thumb t-key"></div>
+          <div class="rbody">
+            <div class="rtop"><span class="rcat">Work &amp; Study</span><span class="rtime">Added yesterday</span></div>
+            <div class="rchips">
+              <span class="a">Working</span><span class="a">Studying</span>
+              <span class="a">Meetings</span><span class="more">+1 more</span>
+            </div>
+            <p class="rwords">53 words</p>
+          </div>
+          <div class="arrow">→</div>
+        </div>
+        <div class="row">
+          <div class="thumb">
+            <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M8 20h8M12 16v4"/></svg>
+          </div>
+          <div class="rbody">
+            <div class="rtop"><span class="rcat">Digital &amp; Tech</span><span class="rtime">Added 2 days ago</span></div>
+            <p class="rwords tight">31 words</p>
+          </div>
+          <div class="arrow">→</div>
+        </div>
+        <div class="row">
+          <div class="thumb">
+            <svg viewBox="0 0 24 24"><path d="M4 8h16l-1.2 12H5.2z"/><path d="M9 8V6a3 3 0 016 0v2"/></svg>
+          </div>
+          <div class="rbody">
+            <div class="rtop"><span class="rcat">Shopping</span><span class="rtime">4 days ago</span></div>
+            <p class="rwords tight">24 words</p>
+          </div>
+          <div class="arrow">→</div>
+        </div>
+        <div class="row">
+          <div class="thumb t-key" style="background:linear-gradient(160deg,#E8B7C6,#C2748F)"></div>
+          <div class="rbody">
+            <div class="rtop"><span class="rcat">Social &amp; Feelings</span><span class="rtime">3 days ago</span></div>
+            <div class="rchips">
+              <span class="a">Sharing thoughts</span><span class="a">Catching up</span>
+              <span class="a">Texting</span><span class="more">+9 more</span>
+            </div>
+            <p class="rwords">27 words</p>
+          </div>
+          <div class="arrow">→</div>
+        </div>
+      </div>
+    </div>
+    <p class="note">
+      两种行高混在一列里<strong>不乱，反而更清楚</strong>：高的行有内容、矮的行只有词，
+      一眼就分得出来。这正是固定两行槽那条规矩的本意——
+      <strong>让同一类的行可以比较</strong>；而这两种本来就不是同一类，
+      高度不同恰恰是在说这件事。
+    </p>
+  </div>
+</section>
+
+<!-- 规则表 -->
+<section class="sec">
+  <div class="sec-head">
+    <h2>规则</h2>
+    <p>判定沿用刀 6b 已有的 <code>showsActivities</code>，不新增字段、不动后端、不新增文案。</p>
+  </div>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th style="min-width:120px">位置</th><th>有 activity</th><th>无 activity</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Hero 小标题</strong></td><td>Recent activities</td><td>Recent activities（保留）</td></tr>
+        <tr><td><strong>Hero 内容</strong></td><td>胶囊组，两行固定 69pt</td><td><code>Only words so far</code>，单行自然高度</td></tr>
+        <tr><td><strong>Hero 封面</strong></td><td>素材照片</td><td>预设类别图标底（浅色，标签转浅底深字）</td></tr>
+        <tr><td><strong>More 内容</strong></td><td>胶囊组，两行固定 60pt</td><td><strong>整块不渲染</strong>，高度一并收掉</td></tr>
+        <tr><td><strong>More 文案</strong></td><td>—</td><td><strong>不放任何文案</strong></td></tr>
+        <tr><td colspan="3" style="color:var(--doc-ink-3)">
+          两处都不变：类别名、时间、<code>N words</code>、理由胶囊、<code>Start talking</code>、点击行为
+        </td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="note">
+    <code>Only words so far</code> <strong>不是新文案</strong>——它已经在
+    <code>Tab2CardLabels.reasonLine</code> 里，作为 <code>lastMaterialAt == nil</code> 的兜底。
+    而那个分支实际上<strong>永远不可达</strong>（RPC 的 <code>last_material_at</code> 取的是所有
+    occurrence 的 <code>MAX(created_at)</code>，查词也算），所以：一，用在这里
+    <strong>不会和理由胶囊在同一张卡上撞车</strong>；二，这句好文案终于有了真正的用处。
+    <br><br>
+    附带一笔账：那个不可达分支要么删掉、要么写明为什么留着。
+    <strong>留一段永远不执行的代码，下一个人会以为它是活的。</strong>
+  </p>
+</section>
+
+</div>

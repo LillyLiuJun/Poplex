@@ -1,7 +1,9 @@
 // Supabase Edge Function: get-tab2-home
-// Tab2 首页数据：解锁状态、分类卡、子场景、预览词。
+// Tab2 首页数据：解锁状态、分类卡与活动清单。
 // 调用 get_tab2_home PG 函数，通过 JWT 鉴权限定到当前用户。
 // image_url 字段存的是 Storage 路径，在此统一签名后再返回给客户端。
+
+import { parseDayStart } from "./dayStart.ts";
 
 const SUPABASE_URL     = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SVC_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -39,8 +41,8 @@ async function getAuthUserId(req: Request): Promise<string | null> {
   }
 }
 
-// 批量签名：收集 sub_scenes[].image_url + featured.image_url + hero_photos[].image_url
-// 里的所有 Storage 路径，一次请求换成签名 URL。
+// 批量签名：收集 activities[].cover.image_url 里的所有 Storage 路径，
+// 一次请求换成签名 URL。
 async function signImagePaths(
   categories: Array<Record<string, unknown>>
 ): Promise<Array<Record<string, unknown>>> {
@@ -50,12 +52,11 @@ async function signImagePaths(
     if (typeof v === "string" && v) paths.add(v);
   };
   for (const cat of categories) {
-    (cat.sub_scenes as Array<Record<string, unknown>> | undefined)
-      ?.forEach((s) => collect(s.image_url));
-    const featured = cat.featured as Record<string, unknown> | null | undefined;
-    if (featured) collect(featured.image_url);
-    (cat.hero_photos as Array<Record<string, unknown>> | undefined)
-      ?.forEach((p) => collect(p.image_url));
+    (cat.activities as Array<Record<string, unknown>> | undefined)
+      ?.forEach((a) => {
+        const cover = a.cover as Record<string, unknown> | null | undefined;
+        if (cover) collect(cover.image_url);
+      });
   }
 
   if (paths.size === 0) return categories;
@@ -95,28 +96,21 @@ async function signImagePaths(
     typeof v === "string" ? (signedMap.get(v) ?? null) : null;
 
   // 替换路径为签名 URL：
-  //   · sub_scenes / featured 的 image_url 是可空字段——签名失败留 null，不透原始路径
-  //   · hero_photos 的 image_url 前端模型为非空——签名失败的整张从拼图剔除
+  //   · cover.image_url 是可空字段——签名失败只置 null，不透原始路径；
+  //     activity 的 scene_detail / occurrence_count 没有图也要展示，整条不丢。
+  //   · cover 必须用展开语法回写（cover: {...cover, image_url: signed}），
+  //     不能把 cover 整体替换成 URL——否则 material_id 丢失，
+  //     客户端的图片缓存 key 和去重会失效。
   return categories.map((cat) => {
     const out: Record<string, unknown> = { ...cat };
 
-    const scenes = cat.sub_scenes as Array<Record<string, unknown>> | undefined;
-    if (scenes) out.sub_scenes = scenes.map((s) => ({ ...s, image_url: sign(s.image_url) }));
-
-    const featured = cat.featured as Record<string, unknown> | null | undefined;
-    if (featured) out.featured = { ...featured, image_url: sign(featured.image_url) };
-
-    const hero = cat.hero_photos as Array<Record<string, unknown>> | undefined;
-    if (hero) {
-      out.hero_photos = hero
-        .map((p) => ({ ...p, image_url: sign(p.image_url) }))
-        .filter((p) => {
-          if (!p.image_url) {
-            console.warn("[get-tab2-home] hero_photo sign failed, dropped:", p.material_id);
-            return false;
-          }
-          return true;
-        });
+    const activities = cat.activities as Array<Record<string, unknown>> | undefined;
+    if (activities) {
+      out.activities = activities.map((a) => {
+        const cover = a.cover as Record<string, unknown> | null | undefined;
+        if (!cover) return a;
+        return { ...a, cover: { ...cover, image_url: sign(cover.image_url) } };
+      });
     }
 
     return out;
@@ -138,6 +132,12 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // 刀 4a：客户端把「本地今日 00:00 对应的 UTC 时刻」放在 day_start query 参数里；
+    // 缺失或不合法 → parseDayStart 返回 null，RPC 走服务端日界兜底（故意不报错）。
+    const pDayStart = parseDayStart(
+      new URL(req.url).searchParams.get("day_start")
+    );
+
     const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_tab2_home`, {
       method: "POST",
       headers: {
@@ -145,7 +145,7 @@ Deno.serve(async (req) => {
         "Authorization": `Bearer ${SUPABASE_SVC_KEY}`,
         "apikey": SUPABASE_SVC_KEY,
       },
-      body: JSON.stringify({ p_user_id: userId }),
+      body: JSON.stringify({ p_user_id: userId, p_day_start: pDayStart }),
     });
 
     if (!res.ok) {

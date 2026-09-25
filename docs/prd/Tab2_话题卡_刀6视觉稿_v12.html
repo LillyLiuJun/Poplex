@@ -1,0 +1,654 @@
+<title>Tab2 视觉稿 v12 · 胶囊版</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Charis+SIL:ital,wght@0,400;0,700&family=Geist:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --doc-bg:#F6F5F3; --doc-panel:#FFFFFF; --doc-ink:#24211C; --doc-ink-2:#5A544B;
+    --doc-ink-3:#8C857A; --doc-line:#E3E0D9; --doc-line-2:#EFEDE8; --accent:#C2410C;
+    --sans:"Geist",ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --serif:"Charis SIL",Charter,"Bitstream Charter",Georgia,serif;
+  }
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+    --doc-bg:#16150F; --doc-panel:#1F1D16; --doc-ink:#EDE9E0; --doc-ink-2:#B3ADA1;
+    --doc-ink-3:#837C70; --doc-line:#322E25; --doc-line-2:#272419; --accent:#E8763C;
+  }}
+  :root[data-theme="dark"]{
+    --doc-bg:#16150F; --doc-panel:#1F1D16; --doc-ink:#EDE9E0; --doc-ink-2:#B3ADA1;
+    --doc-ink-3:#837C70; --doc-line:#322E25; --doc-line-2:#272419; --accent:#E8763C;
+  }
+  *{box-sizing:border-box}
+  body{background:var(--doc-bg);color:var(--doc-ink);font-family:var(--sans);
+    font-size:15px;line-height:1.6;margin:0;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1220px;margin:0 auto;padding:52px 24px 96px}
+
+  .eyebrow{font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--doc-ink-3)}
+  h1{font-family:var(--serif);font-size:clamp(28px,4vw,40px);font-weight:700;line-height:1.15;
+    margin:10px 0 12px;text-wrap:balance}
+  .standfirst{font-size:16.5px;color:var(--doc-ink-2);max-width:66ch;margin:0}
+  h2{font-family:var(--serif);font-size:23px;font-weight:700;margin:0}
+  .sec{margin-top:58px}
+  .sec-head{padding-bottom:13px;border-bottom:1px solid var(--doc-line);margin-bottom:24px}
+  .sec-head p{margin:6px 0 0;color:var(--doc-ink-2);max-width:68ch}
+  .note{margin-top:18px;font-size:13px;color:var(--doc-ink-3);border-left:2px solid var(--doc-line);
+    padding-left:13px;max-width:68ch}
+  .note strong{color:var(--doc-ink)}
+  code{font-family:ui-monospace,Menlo,monospace;font-size:12.5px;color:var(--doc-ink-2)}
+
+  .cols{display:grid;gap:34px;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));align-items:start}
+  .colhead{display:flex;align-items:baseline;gap:9px;margin-bottom:13px}
+  .colhead strong{font-size:15px;font-weight:600}
+  .colhead span{font-size:12.5px;color:var(--doc-ink-3)}
+
+  /* ── 手机：App 浅色暖纸真值 ── */
+  .phone{
+    --pageBg:#FCF8F3; --card:#FFFDFB; --ink:#211811; --ink2:#4B4640;
+    --muted:#7C7773; --faint:#C7C3BD; --line:#E6E1DA; --btn:#17120C;
+    --chipBg:#F4EFE8; --chipInk:#3A342D;
+    background:var(--pageBg);color:var(--ink);
+    border:1px solid var(--doc-line);border-radius:28px;padding:20px 14px 26px;
+    box-shadow:0 1px 3px rgba(20,15,10,.05),0 10px 30px rgba(20,15,10,.06);
+  }
+  .phone *{color-scheme:light}
+  .bare{padding:0;border:0;border-radius:0;box-shadow:none;background:transparent}
+  .navtabs{display:flex;justify-content:center;gap:6px;padding:2px 0 20px}
+  .navtabs span{font-size:13px;font-weight:500;color:var(--muted);padding:5px 13px}
+  .navtabs span.on{color:var(--ink);background:var(--card);border-radius:999px;
+    box-shadow:0 1px 2px rgba(20,15,10,.06)}
+
+  .h1t{font-family:var(--serif);font-size:24px;font-weight:700;letter-spacing:-.01em;
+    color:var(--ink);padding:0 4px 12px}
+  .h2t{font-family:var(--sans);font-size:12px;font-weight:600;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--muted);padding:24px 4px 10px}
+
+  /* ── Hero ── */
+  .hero{background:var(--card);border:.5px solid var(--line);border-radius:20px;overflow:hidden;
+    box-shadow:0 1.5px 4px rgba(33,24,17,.035),0 4px 8px rgba(46,40,32,.025)}
+  .art{height:150px;position:relative}
+  .art.closet{background:linear-gradient(155deg,#B9B2A6 0%,#8E8B84 42%,#D8D3C9 78%,#6F6B63 100%)}
+  .chip{position:absolute;left:12px;top:12px;font-family:var(--sans);font-size:11.5px;
+    font-weight:600;color:#fff;background:rgba(20,14,10,.44);padding:5px 10px;border-radius:8px;
+    backdrop-filter:blur(8px);font-variant-numeric:tabular-nums;letter-spacing:.005em}
+  .chip .dim{font-weight:400;color:rgba(255,255,255,.78)}
+  .hbody{padding:16px 18px 18px}
+  .pillrow{display:flex;margin:0 0 11px}
+  /* 图上一行：类别 + 理由 */
+  .toprow{position:absolute;left:12px;top:12px;right:12px;display:flex;align-items:center;gap:8px;
+    flex-wrap:wrap}
+  .toprow .chip{position:static}
+  .opill{font-family:var(--sans);font-size:11.5px;font-weight:500;color:#FFE4D2;
+    background:rgba(20,14,10,.44);backdrop-filter:blur(8px);border-radius:999px;
+    padding:5px 10px 5px 8px;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;
+    font-variant-numeric:tabular-nums}
+  .opill i{width:6px;height:6px;border-radius:50%;background:#FF8A4C;flex:none}
+  .opill.quiet{color:rgba(255,255,255,.82)}
+  .opill.quiet i{background:rgba(255,255,255,.55)}
+  /* 区内小标题 */
+  .seclab{font-family:var(--sans);font-size:11px;font-weight:600;letter-spacing:.09em;
+    text-transform:uppercase;color:var(--muted);margin:0 0 9px}
+  .footrow{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:16px}
+  .words{font-size:13px;color:var(--muted);margin:0;font-variant-numeric:tabular-nums}
+
+  /* 理由胶囊 */
+  .rpill{font-family:var(--sans);font-size:11.5px;font-weight:500;color:#9E4A1C;
+    background:#FFF3EB;border-radius:999px;padding:4px 10px 4px 8px;white-space:nowrap;flex:none;
+    display:inline-flex;align-items:center;gap:6px;font-variant-numeric:tabular-nums}
+  .rpill i{width:6px;height:6px;border-radius:50%;background:#C2410C;flex:none}
+  .rpill.quiet{color:var(--muted);background:#F1ECE5;font-weight:400}
+  .rpill.quiet i{background:#CFC7BC}
+
+  /* ── 活动胶囊组：固定两行 ── */
+  .achips{display:flex;flex-wrap:wrap;gap:7px;overflow:hidden;
+    height:calc(31px * 2 + 7px);align-content:flex-start;margin:0}
+  .achips .a{font-family:var(--serif);font-size:15px;line-height:1;color:var(--chipInk);
+    background:var(--chipBg);border-radius:999px;padding:8px 13px;white-space:nowrap;
+    letter-spacing:-.005em}
+  .achips .more{font-family:var(--sans);font-size:12.5px;line-height:1;color:var(--muted);
+    background:transparent;border-radius:999px;padding:9px 6px;white-space:nowrap;
+    font-variant-numeric:tabular-nums}
+
+  .ctarow{display:flex;justify-content:flex-end;margin-top:16px}
+  .cta{display:inline-flex;align-items:center;gap:8px;background:var(--btn);color:#FCF8F3;
+    font-size:15px;font-weight:600;padding:12px 22px;border-radius:999px}
+
+  /* ── More 行 ── */
+  .rows{display:flex;flex-direction:column;gap:12px}
+  .row{display:flex;background:var(--card);border:.5px solid var(--line);border-radius:20px;
+    overflow:hidden;box-shadow:0 1.5px 4px rgba(33,24,17,.035),0 4px 8px rgba(46,40,32,.025)}
+  .thumb{width:76px;flex:none}
+  .t-key{background:linear-gradient(155deg,#3A3A40,#111114 55%,#6E6A62)}
+  .t-alb{background:linear-gradient(160deg,#E8B7C6,#C2748F)}
+  .t-sea{background:linear-gradient(170deg,#7FC4DA 0%,#3E8FB0 38%,#E4D9BE 62%,#CFC2A4 100%)}
+  .t-pot{background:linear-gradient(155deg,#C9C3BA,#8B857C 60%,#A8998A)}
+  .t-mark{background:#F3EDE6;display:flex;align-items:center;justify-content:center}
+  .t-mark svg{width:26px;height:26px;stroke:#B0A79C;stroke-width:1.5;fill:none}
+
+  .rbody{padding:12px 10px 12px 14px;flex:1;min-width:0}
+  .rtop{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+  .rcat{font-family:var(--sans);font-size:12px;font-weight:600;color:var(--ink2);
+    letter-spacing:.01em;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .rtime{font-size:11.5px;color:var(--faint);white-space:nowrap;flex:none}
+  .rchips{display:flex;flex-wrap:wrap;gap:6px;overflow:hidden;
+    height:calc(27px * 2 + 6px);align-content:flex-start;margin:7px 0 0}
+  .rchips .a{font-family:var(--serif);font-size:13px;line-height:1;color:var(--chipInk);
+    background:var(--chipBg);border-radius:999px;padding:7px 11px;white-space:nowrap}
+  .rchips .more{font-family:var(--sans);font-size:11.5px;line-height:1;color:var(--muted);
+    background:transparent;padding:8px 4px;white-space:nowrap;font-variant-numeric:tabular-nums}
+  .rwords{font-size:12px;color:var(--muted);margin:8px 0 0;font-variant-numeric:tabular-nums}
+  .arrow{display:flex;align-items:center;padding-right:14px;color:var(--muted);font-size:15px}
+
+  /* ── Topics in progress ── */
+  .tip{background:var(--card);border:.5px solid var(--line);border-radius:20px;overflow:hidden;
+    box-shadow:0 1.5px 4px rgba(33,24,17,.035)}
+  .tiprow{padding:13px 15px}
+  .tipmain{display:flex;align-items:center;gap:11px}
+  .tipmain svg{width:19px;height:19px;stroke:var(--ink2);stroke-width:1.5;fill:none;flex:none}
+  .tipmain b{flex:1;font-size:15px;font-weight:500}
+  .pill{font-size:12px;color:var(--ink2);background:#F1ECE5;border-radius:999px;padding:4px 10px;
+    font-variant-numeric:tabular-nums}
+  .bar{height:2px;background:#EFEAE2;border-radius:2px;margin-top:11px;overflow:hidden}
+  .bar i{display:block;height:100%;background:#CFC7BC}
+
+  /* v11 旧样式：仅左栏对照用 */
+  .o-acts{font-family:var(--serif);font-size:21px;font-weight:400;line-height:1.3;margin:0;
+    color:var(--ink);min-height:calc(21px * 1.3 * 2);
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .o-acts .x,.o-racts .x{font-family:var(--sans);font-size:11px;color:var(--muted);
+    font-variant-numeric:tabular-nums;vertical-align:.42em;margin-left:1px}
+  .o-acts .sep,.o-racts .sep{color:var(--faint)}
+  .o-acts .rest{font-family:var(--sans);font-size:13px;color:var(--faint)}
+  .o-racts{font-family:var(--serif);font-size:16px;line-height:1.32;color:var(--ink);margin:4px 0 0;
+    min-height:calc(16px * 1.32 * 2);
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .o-racts .rest{font-family:var(--sans);font-size:12px;color:var(--faint)}
+
+  .opts{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(268px,1fr))}
+  .opt{background:var(--doc-panel);border:1px solid var(--doc-line);border-radius:12px;padding:16px}
+  .opt.pick{border-color:var(--accent)}
+  .opt .lk{display:block;font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--doc-ink-3);margin-bottom:11px}
+  .opt.pick .lk{color:var(--accent)}
+  .opt p{margin:11px 0 0;font-size:13px;color:var(--doc-ink-2);line-height:1.55}
+
+  table{border-collapse:collapse;width:100%;font-size:14px;min-width:620px}
+  .tablewrap{overflow-x:auto;border:1px solid var(--doc-line);border-radius:10px;background:var(--doc-panel)}
+  th,td{text-align:left;padding:12px 15px;border-bottom:1px solid var(--doc-line-2);vertical-align:top}
+  th{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--doc-ink-3);
+    font-weight:600;border-bottom:1px solid var(--doc-line)}
+  tr:last-child td{border-bottom:0}
+  td strong{color:var(--doc-ink)}
+</style>
+
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">Poplex · Library · 刀 6 视觉稿 v12.1 · 胶囊版</div>
+  <h1>活动变成可数的东西</h1>
+  <p class="standfirst">
+    v11 把活动写成一串文字，靠 <code>·</code> 分隔、靠上标数字标次数。
+    这一版把每个活动装进<strong>独立的胶囊</strong>，
+    <strong>次数不再显示</strong>，<strong>Hero 与 More 用同一种形体</strong>。
+    后端字段一个没改——<code>occurrence_count</code> 照常返回，前端只是不画它。
+  </p>
+</header>
+
+<!-- ══ 整页对比 ══ -->
+<section class="sec">
+  <div class="sec-head">
+    <h2>整页：v11 &amp; v12</h2>
+    <p>内容取自 2026-09-10 真机数据；照片位以色块近似。</p>
+  </div>
+
+  <div class="cols">
+
+    <!-- ─── v11 ─── -->
+    <div>
+      <div class="colhead"><strong>v11</strong><span>文字流 · 带次数</span></div>
+      <div class="phone">
+        <div class="navtabs"><span>Today</span><span class="on">Library</span></div>
+
+        <div class="h1t">Talk about today</div>
+        <div class="hero">
+          <div class="art closet"><span class="chip">Daily routines <span class="dim">· 47 words</span></span></div>
+          <div class="hbody">
+            <div class="pillrow"><span class="rpill"><i></i>Added something new today</span></div>
+            <p class="o-acts">Chores<span class="x">4</span> <span class="sep">·</span>
+               Sleeping<span class="x">2</span> <span class="sep">·</span>
+               Getting up<span class="x">2</span> <span class="rest">+3 more</span></p>
+            <div class="ctarow"><span class="cta">Start talking →</span></div>
+          </div>
+        </div>
+
+        <div class="h2t">More to talk about</div>
+        <div class="rows">
+          <div class="row">
+            <div class="thumb t-mark">
+              <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M8 20h8"/><path d="M12 16v4"/></svg>
+            </div>
+            <div class="rbody">
+              <div class="rtop"><span class="rcat">Tech &amp; gadgets</span><span class="rtime">Added today</span></div>
+              <p class="o-racts">Using an app<span class="x">4</span> <span class="sep">·</span>
+                 Taking photos<span class="x">3</span> <span class="sep">·</span>
+                 Charging devices<span class="x">2</span> <span class="rest">+2 more</span></p>
+              <p class="rwords">37 words</p>
+            </div>
+            <div class="arrow">→</div>
+          </div>
+          <div class="row">
+            <div class="thumb t-key"></div>
+            <div class="rbody">
+              <div class="rtop"><span class="rcat">Work &amp; study</span><span class="rtime">Added yesterday</span></div>
+              <p class="o-racts">Working<span class="x">7</span> <span class="sep">·</span>
+                 Studying<span class="x">5</span> <span class="sep">·</span>
+                 Meetings<span class="x">2</span> <span class="rest">+1 more</span></p>
+              <p class="rwords">53 words</p>
+            </div>
+            <div class="arrow">→</div>
+          </div>
+          <div class="row">
+            <div class="thumb t-alb"></div>
+            <div class="rbody">
+              <div class="rtop"><span class="rcat">Social</span><span class="rtime">3 days ago</span></div>
+              <p class="o-racts">Sharing thoughts<span class="x">12</span> <span class="sep">·</span>
+                 Catching up<span class="x">3</span> <span class="sep">·</span>
+                 Texting<span class="x">2</span> <span class="rest">+9 more</span></p>
+              <p class="rwords">27 words</p>
+            </div>
+            <div class="arrow">→</div>
+          </div>
+        </div>
+      </div>
+      <p class="note">
+        一整段衬线文字里混着三种东西：活动名、上标数字、<code>+N more</code>。
+        <strong>它们读起来是一句话，可其实是一张列表。</strong>
+      </p>
+    </div>
+
+    <!-- ─── v12 ─── -->
+    <div>
+      <div class="colhead"><strong>v12 胶囊版</strong><span>一活动一胶囊 · 无次数</span></div>
+      <div class="phone">
+        <div class="navtabs"><span>Today</span><span class="on">Library</span></div>
+
+        <div class="h1t">Talk about today</div>
+        <div class="hero">
+          <div class="art closet">
+            <div class="toprow"><span class="chip">Daily routines</span>
+              <span class="opill"><i></i>Added 3 times today</span></div>
+          </div>
+          <div class="hbody">
+            <p class="seclab">Recent activities</p>
+            <div class="achips">
+              <span class="a">Chores</span><span class="a">Sleeping</span>
+              <span class="a">Getting up</span><span class="a">Tidying up</span>
+              <span class="more">+3 more</span>
+            </div>
+            <div class="footrow"><span class="words">47 words</span>
+              <span class="cta">Start talking →</span></div>
+          </div>
+        </div>
+
+        <div class="h2t">More to talk about</div>
+        <div class="rows">
+          <div class="row">
+            <div class="thumb t-mark">
+              <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M8 20h8"/><path d="M12 16v4"/></svg>
+            </div>
+            <div class="rbody">
+              <div class="rtop"><span class="rcat">Tech &amp; gadgets</span><span class="rtime">Added today</span></div>
+              <div class="rchips">
+                <span class="a">Using an app</span><span class="a">Taking photos</span>
+                <span class="a">Charging devices</span><span class="more">+2 more</span>
+              </div>
+              <p class="rwords">37 words</p>
+            </div>
+            <div class="arrow">→</div>
+          </div>
+          <div class="row">
+            <div class="thumb t-key"></div>
+            <div class="rbody">
+              <div class="rtop"><span class="rcat">Work &amp; study</span><span class="rtime">Added yesterday</span></div>
+              <div class="rchips">
+                <span class="a">Working</span><span class="a">Studying</span>
+                <span class="a">Meetings</span><span class="a">Emails</span>
+                <span class="more">+1 more</span>
+              </div>
+              <p class="rwords">53 words</p>
+            </div>
+            <div class="arrow">→</div>
+          </div>
+          <div class="row">
+            <div class="thumb t-alb"></div>
+            <div class="rbody">
+              <div class="rtop"><span class="rcat">Social</span><span class="rtime">3 days ago</span></div>
+              <div class="rchips">
+                <span class="a">Sharing thoughts</span><span class="a">Catching up</span>
+                <span class="a">Texting</span><span class="more">+9 more</span>
+              </div>
+              <p class="rwords">27 words</p>
+            </div>
+            <div class="arrow">→</div>
+          </div>
+          <div class="row">
+            <div class="thumb t-pot"></div>
+            <div class="rbody">
+              <div class="rtop"><span class="rcat">Food</span><span class="rtime">2 weeks ago</span></div>
+              <div class="rchips">
+                <span class="a">Cooking</span><span class="a">Eating at home</span>
+                <span class="a">Making coffee</span><span class="more">+3 more</span>
+              </div>
+              <p class="rwords">40 words</p>
+            </div>
+            <div class="arrow">→</div>
+          </div>
+        </div>
+
+        <div class="h2t">Topics in progress</div>
+        <div class="tip">
+          <div class="tiprow">
+            <div class="tipmain">
+              <svg viewBox="0 0 24 24"><circle cx="13" cy="4.5" r="2"/><path d="M9 21l2.5-5 3-2-1-5-3.5 2.5L8 14"/><path d="M14.5 9l3 2 3-.5"/></svg>
+              <b>Health &amp; fitness</b><span class="pill">7 words ▾</span></div>
+            <div class="bar"><i style="width:35%"></i></div>
+          </div>
+          <div class="tiprow">
+            <div class="tipmain">
+              <svg viewBox="0 0 24 24"><path d="M4 8h16l-1.2 12H5.2z"/><path d="M9 8V6a3 3 0 016 0v2"/></svg>
+              <b>Shopping</b><span class="pill">4 words ▾</span></div>
+            <div class="bar"><i style="width:20%"></i></div>
+          </div>
+        </div>
+      </div>
+      <p class="note">
+        每个胶囊<strong>只装一件事</strong>，边界由形体给出，不再需要 <code>·</code>。
+        次数消失后，一行里剩下的全是名词——
+        <strong>这一列现在读起来是「你做过这些事」，而不是一段统计。</strong>
+      </p>
+    </div>
+
+  </div>
+</section>
+
+<!-- ══ 为什么胶囊 ══ -->
+<section class="sec">
+  <div class="sec-head">
+    <h2>胶囊解决的三件事</h2>
+    <p>不是换个装饰，是三个 v11 没解决干净的问题一起消失了。</p>
+  </div>
+
+  <div class="opts">
+    <div class="opt">
+      <span class="lk">① 边界</span>
+      <p>v11 用 <code>·</code> 分隔，可 <code>Eating at home</code> 里本来就有空格——
+        眼睛得先断句才知道哪到哪是一个活动。
+        <strong>胶囊的边界是看出来的，不是读出来的。</strong></p>
+    </div>
+    <div class="opt">
+      <span class="lk">② 可点性</span>
+      <p>活动本来就该能点进去看那几张照片。
+        文字流里没有一个明确的可点区域，胶囊天然就是。
+        <strong>这一版没做点击，但形体先把路留出来了。</strong></p>
+    </div>
+    <div class="opt">
+      <span class="lk">③ 层级</span>
+      <p>v11 里活动名 16px 衬线是全行最大，可它旁边贴着 11px 上标数字，
+        <strong>大小差了 5px 的两个东西挨在一起，谁也不安生。</strong>
+        次数拿掉后，行里只剩一个字号。</p>
+    </div>
+  </div>
+
+  <p class="note">
+    <strong>代价要说清楚：</strong><code>Sharing thoughts</code> 发生过 12 次、
+    <code>Texting</code> 发生过 2 次，在卡片上现在<strong>看起来一样重</strong>。
+    次数仍然决定<em>顺序</em>（第一个胶囊就是最常发生的），
+    但"多"和"少"不再能一眼读出。
+    <br><br>
+    我认为这笔交易划算：次数是<strong>系统的观察</strong>，活动名是<strong>用户的生活</strong>。
+    卡片这么小，先保后者。真要让重复可见，
+    以后可以让胶囊的<strong>底色深浅</strong>跟着次数走——不占任何宽度，也不多一个数字。
+  </p>
+</section>
+
+<!-- ══ 排布规则 ══ -->
+<section class="sec">
+  <div class="sec-head">
+    <h2>两行，装得下几个就几个</h2>
+    <p>规则和 v11 完全一致，只是计量单位从"行内字符"变成"胶囊宽度"。</p>
+  </div>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th style="min-width:110px">规则</th><th>定义</th></tr></thead>
+      <tbody>
+        <tr><td>候选</td><td>后端每类返回最多 5 条，<strong>已按 <code>occurrence_count</code> 降序排好</strong>，客户端原序取用，不重排</td></tr>
+        <tr><td>显示</td><td><strong>两行排得下几个就几个</strong>。名字短时 4–5 个，名字长时可能只有 1–2 个</td></tr>
+        <tr><td><code>+N more</code></td><td><code>activity_count</code> 减实际显示数。<strong>作为最后一个"无底色胶囊"</strong>跟在末尾，<code>N = 0</code> 时不渲染</td></tr>
+        <tr><td>让位</td><td>放不下就<strong>少显示一个胶囊</strong>，绝不截断活动名。少一个，<code>N</code> 自动加一</td></tr>
+        <tr><td>高度</td><td>两行是<strong>固定高度</strong>：只有 1 个胶囊也占两行的高。卡高与行高恒定</td></tr>
+        <tr><td>次数</td><td><strong>不渲染。</strong>后端照常返回 <code>occurrence_count</code>，客户端只用它排序</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div style="margin-top:24px" class="opts">
+    <div class="opt">
+      <span class="lk">① 短名 · 排下 5 个</span>
+      <div class="phone bare">
+        <div class="row">
+          <div class="thumb t-key"></div>
+          <div class="rbody">
+            <div class="rtop"><span class="rcat">Work &amp; study</span><span class="rtime">Added yesterday</span></div>
+            <div class="rchips">
+              <span class="a">Working</span><span class="a">Studying</span><span class="a">Meetings</span>
+              <span class="a">Emails</span><span class="a">Reading</span>
+            </div>
+            <p class="rwords">53 words</p>
+          </div>
+          <div class="arrow">→</div>
+        </div>
+      </div>
+      <p>5 个全排下 → <code>+N</code> 为 0 不渲染。</p>
+    </div>
+
+    <div class="opt pick">
+      <span class="lk">② 长名 · 自动让位</span>
+      <div class="phone bare">
+        <div class="row">
+          <div class="thumb t-mark">
+            <svg viewBox="0 0 24 24"><path d="M4 20V9l8-5 8 5v11"/><path d="M9 20v-6h6v6"/></svg>
+          </div>
+          <div class="rbody">
+            <div class="rtop"><span class="rcat">Daily routines</span><span class="rtime">Added today</span></div>
+            <div class="rchips">
+              <span class="a">Organizing daily necessities</span><span class="a">Getting up</span>
+              <span class="more">+4 more</span>
+            </div>
+            <p class="rwords">47 words</p>
+          </div>
+          <div class="arrow">→</div>
+        </div>
+      </div>
+      <p>28 字符的名字独占一行 → 只放得下 2 个，其余进 <code>+4 more</code>。
+        <strong>两个名字都完整，没有省略号。</strong></p>
+    </div>
+
+    <div class="opt">
+      <span class="lk">③ 活动很多</span>
+      <div class="phone bare">
+        <div class="row">
+          <div class="thumb t-alb"></div>
+          <div class="rbody">
+            <div class="rtop"><span class="rcat">Social</span><span class="rtime">3 days ago</span></div>
+            <div class="rchips">
+              <span class="a">Sharing thoughts</span><span class="a">Catching up</span>
+              <span class="a">Texting</span><span class="more">+9 more</span>
+            </div>
+            <p class="rwords">27 words</p>
+          </div>
+          <div class="arrow">→</div>
+        </div>
+      </div>
+      <p>12 个活动排下 3 个。行高与上下完全一致。</p>
+    </div>
+
+    <div class="opt">
+      <span class="lk">④ 只有一个</span>
+      <div class="phone bare">
+        <div class="row">
+          <div class="thumb t-sea"></div>
+          <div class="rbody">
+            <div class="rtop"><span class="rcat">Getting around</span><span class="rtime">4 days ago</span></div>
+            <div class="rchips">
+              <span class="a">Waiting for the bus</span>
+            </div>
+            <p class="rwords">22 words</p>
+          </div>
+          <div class="arrow">→</div>
+        </div>
+      </div>
+      <p>第二行空着，<strong>高度照占</strong>——不需要凑字。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══ Hero 三态 ══ -->
+<section class="sec">
+  <div class="sec-head">
+    <h2>Hero 的理由行：数字回来了，单位变了</h2>
+    <p>
+      <code>bits</code> 指代不明——胶囊上没有数字之后，用户会去卡片上找那个 3 对应什么。
+      改成 <code>times</code>，数字锚在<strong>"你动手的次数"</strong>上，
+      而"次"在页面上本来就没有可见的对应物，所以不会产生找不到的落差。
+    </p>
+  </div>
+
+  <div class="opts">
+    <div class="opt pick">
+      <span class="lk">今天放了 3 次</span>
+      <div class="phone bare">
+        <div class="hero">
+          <div class="art closet" style="height:96px">
+            <div class="toprow"><span class="chip">Daily routines</span>
+              <span class="opill"><i></i>Added 3 times today</span></div>
+          </div>
+          <div class="hbody">
+            <p class="seclab">Recent activities</p>
+            <div class="achips">
+              <span class="a">Chores</span><span class="a">Sleeping</span>
+              <span class="a">Getting up</span><span class="a">Tidying up</span>
+              <span class="more">+3 more</span>
+            </div>
+            <div class="footrow"><span class="words">47 words</span>
+              <span class="cta">Start talking →</span></div>
+          </div>
+        </div>
+      </div>
+      <p>暖橙胶囊 + 6px 点。数字直接读作"三回"。</p>
+    </div>
+
+    <div class="opt">
+      <span class="lk">今天放了 1 次</span>
+      <div class="phone bare">
+        <div class="hero">
+          <div class="art closet" style="height:96px">
+            <div class="toprow"><span class="chip">Food</span>
+              <span class="opill"><i></i>Added something today</span></div>
+          </div>
+          <div class="hbody">
+            <p class="seclab">Recent activities</p>
+            <div class="achips">
+              <span class="a">Cooking</span><span class="a">Eating at home</span>
+              <span class="a">Making coffee</span><span class="more">+3 more</span>
+            </div>
+            <div class="footrow"><span class="words">40 words</span>
+              <span class="cta">Start talking →</span></div>
+          </div>
+        </div>
+      </div>
+      <p>单数不写 <code>1 time</code>——那句话在英文里读着别扭。</p>
+    </div>
+
+    <div class="opt">
+      <span class="lk">久未触碰</span>
+      <div class="phone bare">
+        <div class="hero">
+          <div class="art closet" style="height:96px">
+            <div class="toprow"><span class="chip">Social</span>
+              <span class="opill quiet"><i></i>Nothing new in 3 weeks</span></div>
+          </div>
+          <div class="hbody">
+            <p class="seclab">Recent activities</p>
+            <div class="achips">
+              <span class="a">Sharing thoughts</span><span class="a">Catching up</span>
+              <span class="a">Texting</span><span class="more">+9 more</span>
+            </div>
+            <div class="footrow"><span class="words">27 words</span>
+              <span class="cta">Start talking →</span></div>
+          </div>
+        </div>
+      </div>
+      <p>同一个形体换中性色。<strong>颜色在做事，形体不变。</strong></p>
+    </div>
+  </div>
+
+  <p class="note">
+    文案三档：<code>Added N times today</code>（N ≥ 2）/ <code>Added something today</code>（N = 1）/
+    <code>Nothing new in X</code>（N = 0）。
+    <br><br>
+    <strong>理由行移到图上之后，它就不能再用浅底胶囊了</strong>——照片深浅不可控，浅底会在深色照片上炸成一块白斑。
+    所以图上版沿用类别标签那套半透明深色底，暖橙只留给那个点和字色
+    （<code>#FF8A4C</code> 点 / <code>#FFE4D2</code> 字，在深色底上才够亮）。
+    形体、位置、两种状态的规矩都不变。
+    <br><br>
+    后端配套一条小修：<code>new_material_count</code> 补上 <code>AND lo.source_type = 'material'</code>，
+    让"次数"只数用户自己放进来的东西——<strong>对话上线那天，这个数字不会悄悄变脏。</strong>
+  </p>
+</section>
+
+<!-- ══ 改动清单 ══ -->
+<section class="sec">
+  <div class="sec-head">
+    <h2>相对 v11 改了什么</h2>
+    <p>后端只有一处小修；前端字段一个没删。</p>
+  </div>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th style="min-width:112px">位置</th><th>v11</th><th>v12</th><th>为什么</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>活动的形体</td><td>衬线文字流，<code>·</code> 分隔</td>
+          <td><strong>一活动一胶囊</strong>，衬线字，浅底圆角</td>
+          <td>活动名里本来就有空格，<code>·</code> 断不干净；胶囊的边界是看出来的。</td>
+        </tr>
+        <tr>
+          <td>次数</td><td><code>7</code> 上标灰</td><td><strong>不显示</strong></td>
+          <td>它仍决定顺序，但不再占版面。行里只剩一个字号。</td>
+        </tr>
+        <tr>
+          <td><code>+N more</code></td><td>随文流的灰字</td><td><strong>无底色的胶囊</strong>，跟在末尾</td>
+          <td>它和活动是同一列表的成员，该站同一条基线上。</td>
+        </tr>
+        <tr>
+          <td>Hero 理由</td><td><code>You added 3 new bits today</code></td>
+          <td><code>Added 3 times today</code></td>
+          <td><code>bits</code> 没有对应物；<code>times</code> 有——你动手的次数。</td>
+        </tr>
+        <tr>
+          <td>Hero / More 形体</td><td>字号不同，处理相同</td><td><strong>同一种胶囊</strong>，Hero 15px / More 13px</td>
+          <td>同一种东西该长一个样，只有大小之别。</td>
+        </tr>
+        <tr>
+          <td><code>new_material_count</code></td><td>未过滤来源</td>
+          <td>加 <code>source_type = 'material'</code></td>
+          <td>三个数字口径统一；对话上线不污染。</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="note">
+    <strong>没有动：</strong>返回字段一个不删（<code>occurrence_count</code> 照常返回、照常排序）；
+    候选 5 条不变；<code>+N</code> 基数不变；Hero 选取与排序不变；
+    点击仍传分类；<code>Start talking</code> 仍弹 Coming soon；
+    暖橙只标记"今天有新东西"、整屏一处的规矩不变。
+  </p>
+</section>
+
+</div>

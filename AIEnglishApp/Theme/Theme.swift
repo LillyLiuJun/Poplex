@@ -164,17 +164,21 @@ private enum Primitive {
     //    靠"描边 + 双层紧阴影"分层；不用纯白，避免冷白跳出整套暖色系 ──
     static let warmWhite = Color(hex: 0xFFFDFB)
 
-    // Tab2 Hero B1 预设图：这些值来自视觉规格，语义层按用途消费。
+    // 安静胶囊底（理由胶囊 quiet 态 + Topics 计数胶囊底共用，两个独立组件 → primitive）
+    static let quietSurface = Color(hex: 0xF1ECE5)
+    // 安静填充（quiet 胶囊圆点 + Topics 进度条填充共用，两个独立组件 → primitive）
+    static let quietFill = Color(hex: 0xCFC7BC)
+
+    // ── Tab2 Hero B1 预设图（视觉回归 main 基线）：这些值来自视觉规格，语义层按用途消费。
     static let tab2HeroPresetGradientMiddle = Color(hex: 0xFCF8F5)
     static let tab2HeroPresetBloomSecondary = Color(hex: 0xFFEEE2)
     // 预设图图标描边棕：hero 与 More 行内预设图共用。原名 tab2HeroPresetIcon，
     // 行内变体复用后改名——primitive 是色阶，不应顶着单一组件的名字。
     static let presetIconInk = Color(hex: 0x965832)
     static let tab2HeroPresetLabel = Color(hex: 0x8A4A20)
-
-    // Tab2 More 行内预设图（更淡变体）：这两个值来自视觉规格，语义层按用途消费。
-    static let tab2MoreRowPresetFaintGradientTop = Color(hex: 0xFCF7F2)
-    static let tab2MoreRowPresetFaintGradientBottom = Color(hex: 0xF5EDE6)
+    // 理由胶囊浅底字色：介于 neutral400(#A5A099)/neutral500(#7C7773) 之间，
+    // 按视觉规格单独取值，不落入现有色阶任一档——独立命名，不合并进 neutral 序列。
+    static let reasonPillInk = Color(hex: 0x8A8079)
 
     // ── App 图标资产色 ────────────────────────────────────────────────────
     // 开屏动画的第 0 帧必须与 iOS 图标放大转场的最后一帧一致，否则启动会闪一下。
@@ -229,6 +233,7 @@ enum AppTheme {
         // 与 onboardingHeaderToContent 当前同值（24）但**用途不同、各自演化**，故不合并：
         // 合并会把两个没有设计因果关系的间距绑死——改 Tab2 的分区节奏时 onboarding 会跟着动。
         static let titleToContent: CGFloat      = Primitive.space24
+        // 刀 6 章节眉题（12pt 大写无衬线）→ 内容的间距（v11 .h2t padding-bottom 10px）。
         // Tab2 解锁页分区之间的节奏（已解锁卡片区底 → Topics in progress 顶）
         static let paddingBetweenSections: CGFloat = Primitive.space28
         // 虚线空输入区的上下内边距。24 → 16：框内实测 276 高里有 98pt 是纯空，
@@ -386,12 +391,13 @@ enum AppTheme {
 
         // Tab2 Hero 顶部照片的统一调色与预设图（B1）专用色。组件只消费这些语义 token，
         // 不直接引用 Primitive 或字面 Color，以便日后更换目标市场的视觉主题时集中调整。
+        // 视觉回归 main 基线（2026-09-22 §2.1/2.4/2.5）：以下 token 名与取值逐条取自
+        // `git show main:AIEnglishApp/Theme/Theme.swift`，不转录、不另起名。
         static let tab2HeroPhotoToneWarm = Primitive.primary600
         static let tab2HeroPhotoTonePaper = Primitive.primary100
         static let tab2HeroPhotoTopScrim = Primitive.neutral900
         static let tab2HeroPhotoOverlayText = Primitive.controlOnMedia
         static let tab2HeroPhotoOverlayShadow = Primitive.mediaSurface
-        static let tab2HeroCTAOnColor = Primitive.controlOnMedia
         static let tab2HeroPresetGradientTop = Primitive.neutral50
         static let tab2HeroPresetGradientMiddle = Primitive.tab2HeroPresetGradientMiddle
         static let tab2HeroPresetGradientBottom = Primitive.controlOnMedia
@@ -399,17 +405,30 @@ enum AppTheme {
         static let tab2HeroPresetBloomSecondary = Primitive.tab2HeroPresetBloomSecondary
         static let tab2HeroPresetIcon = Primitive.presetIconInk
         static let tab2HeroPresetLabel = Primitive.tab2HeroPresetLabel
-        // Tab2 More 行（§5）：行内预设图两套渐变、描边棕、照片暖橙 multiply 层、✓ 前缀。
-        // 常规变体直接复用 primary100/primary300（#FFF3EB/#FFDFCC）；
-        // 更淡变体是两个只属于行内预设图的视觉规格值，落在 Primitive。
+        // Tab2 More 行（§2.2）：行内预设图复用 hero 同一套描边棕；常规变体直接复用
+        // primary100/primary300（main §5 无 faint 变体消费者，本刀不引入）。
+        static let tab2MoreRowPresetIcon = Primitive.presetIconInk
         static let tab2MoreRowPresetGradientTop = Primitive.primary100
         static let tab2MoreRowPresetGradientBottom = Primitive.primary300
-        static let tab2MoreRowPresetFaintGradientTop = Primitive.tab2MoreRowPresetFaintGradientTop
-        static let tab2MoreRowPresetFaintGradientBottom = Primitive.tab2MoreRowPresetFaintGradientBottom
-        static let tab2MoreRowPresetIcon = Primitive.presetIconInk
+        // 图上标签（§2.4 去托底 + §2.5 理由胶囊去 hot/quiet 变色）：main 没有托底胶囊，
+        // 靠裸文字 + shadow（photoTextShadow）+ 照片层顶部 scrim 保可读性；预设浅底上
+        // 无 shadow（Tab2Hero.Opacity.transparent）。理由胶囊文案已经把状态说完
+        // （"Added 3 times today" / "Nothing new in 2 weeks"），不再用颜色说第二遍——
+        // 两态共用同一套配色，取原 Quiet 值（更克制，不与暖橙"今天有新东西"信号抢戏）。
+        static let tab2ReasonPillOnPhotoText = Primitive.controlOnMedia.opacity(0.82)
+        static let tab2ReasonPillOnLightText = Primitive.reasonPillInk
+        // 活动胶囊：方案 B 幽灵半透底 + 0.5pt 细线框
+        // primary100 @ 30% 半透微底，融入卡片同时保留微妙轮廓；
+        // 0.5pt 发丝边使用 presetIconInk @ 16%（既有色阶 #965832）；字色使用 neutral900。
+        static let tab2ActivityChipBg = Primitive.primary100.opacity(0.30)
+        static let tab2ActivityChipBorder = Primitive.presetIconInk.opacity(0.16)
+        static let tab2ActivityChipText = Primitive.neutral900
         // 照片暖橙 multiply 层：与 hero 同 primitive（primary600）、强度独立（.24 vs .20），
         // 独立 token 便于单侧调整（同 brandWash / tab2HeroPhotoTonePaper 共用 primary100 的先例）。
         static let tab2MoreRowPhotoToneWarm = Primitive.primary600
+        // Topics 计数胶囊（幽灵半透微底 + 0.5pt 发丝边，与活动胶囊方案 B 材质同族）
+        static let tab2ProgressPillBg = tab2ActivityChipBg
+        static let tab2ProgressPillBorder = tab2ActivityChipBorder
         // 半轻灰胶囊底（计数 + chevron 合并单元）：暖近黑极低透明，中性、不引入橙
         static let pillNeutralBg    = Primitive.neutral900.opacity(0.06)
 
@@ -426,7 +445,8 @@ enum AppTheme {
         // 跟着底色走，不再是实心灰。hairline 与 progressTrack 同值是有意共享：
         // 玻璃容器内"最轻一档"的分隔统一 4.5%。
         static let progressTrack = Primitive.neutral900.opacity(0.045)
-        static let progressFill  = Primitive.neutral900.opacity(0.145)
+        // 刀 6 去橙：进度填充改安静灰（与 quiet 胶囊点同源 #CFC7BC）。Topics 不再有橙。
+        static let progressFill  = Primitive.quietFill
         static let glassHairline = Primitive.neutral900.opacity(0.045)
 
         // 开屏（= App 图标资产色，用于和图标转场无缝衔接）
@@ -443,11 +463,54 @@ enum AppTheme {
     }
 
     enum Font {
-        // 英文主内容 / 词条大标题走衬线（Warm Editorial：内容用 Newsreader；
-        // 暂以系统衬线 New York 顶位，待打包 Newsreader 后仅换 design/family）。
-        static let englishPrimary = SwiftUI.Font.system(.body, design: .serif)                    // 英文主内容（内容衬线，规则用 .body 保 Dynamic Type）
-        static let wordTitle      = SwiftUI.Font.system(.title3, design: .serif, weight: .semibold) // 词条大标题（内容衬线，半粗以有分量不过重）
-        static let englishBody    = SwiftUI.Font.system(.body)                        // 英文例句
+        // ── 字体三巨头：Charter (英文衬线) + Gothic A1 (英文无衬线) + 冬青黑 (中文) ──
+        // 字重参数只收本字族「真有的档位」——每个字族一个小枚举，调用方写不出
+        // 不存在的字重，由编译器拦截、不靠注释也不靠人记得（刀 5-① PM 拍板）。
+        // 旧版是 Font.Weight 九档 + 二值 isBold 静默降级：.medium 全 app 退成
+        // Regular、.black 退成 Regular——API 承诺了它兑现不了的东西。
+        enum SansWeight {
+            case regular, medium, semibold
+
+            /// UI 无衬线字体的 PostScript 名——全 App（含测试、测量代码）唯一来源。
+            /// 换字体只改这里。
+            var postScriptName: String {
+                switch self {
+                case .regular:  "GothicA1-Regular"
+                case .medium:   "GothicA1-Medium"
+                case .semibold: "GothicA1-SemiBold"
+                }
+            }
+        }  // 打包文件：Regular / Medium / SemiBold
+        enum CharterWeight  { case regular, bold }              // 系统字族仅有这两档
+        enum HiraginoWeight { case w3, w6 }                     // 冬青黑系统两档
+
+        private static func charter(_ size: CGFloat, weight: CharterWeight = .regular, relativeTo style: SwiftUI.Font.TextStyle = .body) -> SwiftUI.Font {
+            FontLoader.registerCustomFonts()
+            let name = weight == .bold ? "Charter-Bold" : "Charter"
+            return SwiftUI.Font.custom(name, size: size, relativeTo: style)
+        }
+
+        /// 固定字号变体（不随 Dynamic Type 缩放）。品牌资产专用（字标 / 开屏封面大标题），
+        /// 放大会撑破居中构图、且不承载可读信息，理由见 splashWordmark 注释。
+        private static func charterFixed(_ size: CGFloat, weight: CharterWeight = .regular) -> SwiftUI.Font {
+            FontLoader.registerCustomFonts()
+            return SwiftUI.Font.custom(weight == .bold ? "Charter-Bold" : "Charter", fixedSize: size)
+        }
+
+        private static func sans(_ size: CGFloat, weight: SansWeight = .regular, relativeTo style: SwiftUI.Font.TextStyle = .body) -> SwiftUI.Font {
+            FontLoader.registerCustomFonts()
+            return SwiftUI.Font.custom(weight.postScriptName, size: size, relativeTo: style)
+        }
+
+        private static func hiragino(_ size: CGFloat, weight: HiraginoWeight = .w3, relativeTo style: SwiftUI.Font.TextStyle = .body) -> SwiftUI.Font {
+            FontLoader.registerCustomFonts()
+            return SwiftUI.Font.custom(weight == .w6 ? "HiraginoSansGB-W6" : "HiraginoSansGB-W3", size: size, relativeTo: style)
+        }
+
+        // 英文主内容 / 词条大标题（Warm Editorial 内容衬线，Charter 权威粗衬线）
+        static let englishPrimary = charter(17, weight: .regular, relativeTo: .body)                    // 英文主内容（Charter 衬线，保 Dynamic Type）
+        static let wordTitle      = charter(20, weight: .bold, relativeTo: .title3)                 // 词条大标题（内容衬线，半粗以有分量不过重）
+        static let englishBody    = sans(17, weight: .regular, relativeTo: .body)                     // 界面正文：设置行 / 输入框 / 空态提示 / 用户气泡等（非「英文例句」专用，命名早于实际用途扩散）
         // Onboarding 拼贴里的示意微文案（照片注脚 / 语音转写 / 便签正文）。
         // 尺寸：15（比 englishBody 17 降一档）——这些字是「让人认出这是什么输入」的示意，
         //   不是要读的内容；17pt 主色会让三张卡同时抢主标题的注意力，整页发重。
@@ -455,95 +518,121 @@ enum AppTheme {
         //   同为内容衬线）是同一类东西，理应同族；且整页其余全是衬线，卡上突然出现无衬线
         //   就是「形态语言不同族」，与 N-1 里 chevron 的问题同类。
         // 不挪用 chineseBody（语义是中文）或 statusNote（语义是加载/空态提示）。
-        static let onboardingCollageNote = SwiftUI.Font.system(.subheadline, design: .serif)
-        static let buddy          = SwiftUI.Font.system(.subheadline, weight: .medium) // 场景追问（=参考稿 14.5/500）
-        static let keyPhrase      = SwiftUI.Font.system(.subheadline, weight: .bold)  // 核心词组（=参考稿 kp-word 15/700 加黑）
-        static let phonetic       = SwiftUI.Font.system(.footnote, design: .monospaced) // IPA 音标（等宽）
-        static let pos            = SwiftUI.Font.system(.caption2)                    // 词性 / 卡片 Meta（=参考稿 ~11-12px）
+        static let onboardingCollageNote = charter(15, weight: .regular, relativeTo: .subheadline)
+        static let buddy          = sans(14.5, weight: .medium, relativeTo: .subheadline)           // 次级按钮与说明（Not now / Try saying it / 话题 chip / 对话顶栏话题名等，9 个文件；=参考稿 14.5/500）
+        static let keyPhrase      = sans(15, weight: .semibold, relativeTo: .subheadline)               // 核心词组（=参考稿 kp-word 15/700 加黑；.bold→.semibold 显式化：无衬线最重档 SemiBold，渲染不变）
+        static let phonetic       = SwiftUI.Font.system(.footnote, design: .monospaced)               // IPA 音标（等宽）
+        static let pos            = sans(11, weight: .regular, relativeTo: .caption2)                // 词性 / 卡片 Meta（=参考稿 ~11-12px）
+        // CardTypeChip 曾用 pos 叠加 .fontWeight(.bold)：请求的是没打包的 Bold 700，
+        // 系统会自行挑最近字重或合成假粗体，结果不可控。改用强类型枚举里真有的 SemiBold。
+        static let cardTypeChipLabel = sans(11, weight: .semibold, relativeTo: .caption2)           // 卡片类型标签（CardTypeChip，大写 uppercase 展示）
         // 静态事实 / 计数小字：版本号、字数计数、字段脚注。
         // 与 pos 当前同值（.caption2）但**语义不同、各自演化**，故不合并：
         // pos 的语义是「学习内容的词性标注」，跟着内容卡走；这一档跟着功能页的
         // 辅助信息走。此前这三处都挪用了 pos，改版权衡时会互相牵制。
-        static let metaNote       = SwiftUI.Font.system(.caption2)
-        static let popsCount      = SwiftUI.Font.system(.caption, weight: .medium)    // Topics 进度行 pops 计数（配 .monospacedDigit()）
-        static let sectionLabel   = SwiftUI.Font.system(.caption2, weight: .semibold) // 区块小标（例句 / 说明，11/600）
-        static let statusNote     = SwiftUI.Font.system(.footnote)                     // 加载态 / 空态 / 系统提示性短句
-        static let statusNoteSerif = SwiftUI.Font.system(.footnote, design: .serif)     // 衬线小字状态提示（如手风琴展开 loading "Gathering words…"）
-        static let growthStatus   = SwiftUI.Font.system(.footnote, weight: .semibold)  // 成长线状态（如「0 pops so far」）
-        static let actionNote     = SwiftUI.Font.system(.footnote)                     // 操作项的补充说明（如拍照入口副文案）
-        static let compactActionLabel = SwiftUI.Font.system(.subheadline, weight: .medium) // 上传胶囊动作（Camera / Gallery）：无图标时用中等字重建立操作重量
-        static let inlineActionLabel = SwiftUI.Font.system(.footnote, weight: .semibold) // 无底框行内动作按钮文字（错误态 Try again，13/600，随 Dynamic Type 缩放）
-        static let feedbackChipLabel = SwiftUI.Font.system(.subheadline, weight: .regular) // 反馈分类标签：常规细字重，保持视觉轻柔收敛
-        static let chineseFaint   = SwiftUI.Font.system(.footnote)                    // 中文原文弱化
-        static let chineseBody    = SwiftUI.Font.system(.subheadline)                 // 中文翻译（=参考稿 content-zh 14px 灰）
-        static let date           = SwiftUI.Font.system(.caption2, weight: .semibold) // 日期分隔
-        static let hero           = SwiftUI.Font.system(.largeTitle, weight: .bold)   // Onboarding 标题
-        static let screenTitle    = SwiftUI.Font.system(.title2, weight: .bold)       // 功能页大标题（onboarding 实操页等）
-        static let pageTitleSerif = SwiftUI.Font.system(.largeTitle, design: .serif, weight: .semibold) // 页面衬线大标题（Warm Editorial：Tab2「Not open yet」等，与内容衬线同族）
-        static let onboardingHeroSerif = SwiftUI.Font.system(size: 46, weight: .semibold, design: .serif) // Onboarding 封面大标题：比 largeTitle 更大的展示字号，撑起全屏第一印象。封面特例——固定字号、不随 Dynamic Type 放大（与 pageTitleSerif 同为衬线同族，仅尺寸更大）
-        static let onboardingLeadSerif = englishPrimary  // Onboarding 各屏副标题（标题下的价值/说明句）：复用内容衬线（现 New York→将来 Newsreader），与 onboardingHeroSerif 成对；别名而非重声明，避免与例句内容耦合、也不重复定义同值。（tabLabel 已于 2026-09-01 改无衬线，脱离本次换装范围，见需求清单 C11。）
-        static let sectionTitleSerif = SwiftUI.Font.system(.title2, design: .serif, weight: .semibold)  // 分区衬线小标题（Topics in progress / Materials Yours），比页面大标题小一档
-        static let compactSectionTitleSerif = SwiftUI.Font.system(.title3, design: .serif, weight: .semibold) // 紧凑页面内的小分区标题（如 Onboarding 样例区）
-        static let settingsSectionTitleSerif = SwiftUI.Font.system(.subheadline, design: .serif, weight: .medium) // Settings 卡外分组标题：保留衬线编辑感，但退到辅助层
-        static let settingsPinnedTitleSerif = SwiftUI.Font.system(.title3, design: .serif, weight: .semibold) // Settings 家族固定顶栏标题：比系统导航栏字号大一档，仍在 60pt 顶栏内不挤，保留品牌衬线
-        static let settingsVersion = SwiftUI.Font.system(.caption, design: .serif) // Settings 页脚版本号：caption 直立端正衬线（方案 2：严谨书籍出版感）
-        static let libraryFooterTagline = SwiftUI.Font.system(.caption, design: .serif) // Library 页脚品牌收口宣言：caption 直立端正衬线，与标题 Serif 呼应
-        static let ctaLabel       = SwiftUI.Font.system(.body, weight: .semibold)     // 主按钮文字（Continue / Get Started）
-        static let tab2HeroCategoryLabel = SwiftUI.Font.system(.caption2, weight: .heavy)
-        static let tab2HeroPopsLabel = SwiftUI.Font.system(.caption2, weight: .semibold)
-        static let tab2HeroMeta = SwiftUI.Font.system(.caption, weight: .semibold)
-        static let tab2HeroWord = SwiftUI.Font.system(.subheadline, design: .serif, weight: .semibold)
-        static let tab2HeroWordPartOfSpeech = SwiftUI.Font.system(.caption2).italic()
-        static let tab2HeroWordMeaning = SwiftUI.Font.system(.footnote)
-        static let tab2HeroCTA = SwiftUI.Font.system(.subheadline, weight: .semibold)
-        // ── Tab2 More 行（§5.2，2026-09-01 二稿：两声部而非四声部）：与 hero
-        //    同类角色但独立成族，换装/微调互不牵制（同 date/sectionLabel 先例，
-        //    允许同式不同名）──────
-        // 元数据声部：分类标签 / pops / meta 三者共用同一个 token——写法必须
-        // 完全相同，三者才读作同一档而不是各说各话。不要为其中一个单独开小灶
-        // （加粗/改色/改字号），那正是二稿要修的问题。
-        static let tab2MoreRowMetadata = SwiftUI.Font.system(.caption)
-        // 内容声部：全卡唯一深色、唯一衬线。比 hero 主句（.body 衬线 semibold）
-        // 小一档字号、轻一档字重——hero 是「推荐」的强断言，这里只是「也说得出口」。
-        static let tab2MoreRowSentence = SwiftUI.Font.system(.subheadline, design: .serif, weight: .regular)
-        static let tab2MoreRowWord = SwiftUI.Font.system(.subheadline, weight: .semibold)       // 纯查词行词 14/600 无衬线
-        static let tab2MoreRowWordMeaning = SwiftUI.Font.system(.caption2)                      // 释义 11/400
-        // 顶部 Tab 名称：2026-09-01 改无衬线（与内容衬线脱钩，不再随 Newsreader
+        static let metaNote       = sans(11, weight: .regular, relativeTo: .caption2)
+        static let tab2ProgressCount = sans(12, weight: .medium, relativeTo: .caption)              // Topics 进度行 words 计数（刀 6：pops→words 改名）
+        static let tab2TopicLabel = sans(13.5, weight: .medium, relativeTo: .subheadline)           // Topics 类别名（调小卸重：13.5/500，与无底纹居中图标 1:1 光学平齐，恒中性）
+        static let sectionLabel   = sans(11, weight: .semibold, relativeTo: .caption2)              // 区块小标（例句 / 说明，11/600 无衬线 SemiBold）
+        static let statusNote     = sans(13, weight: .regular, relativeTo: .footnote)                // 加载态 / 空态 / 系统提示性短句
+        static let statusNoteSerif = charter(13, weight: .regular, relativeTo: .footnote)             // 衬线小字状态提示（如手风琴展开 loading "Gathering words…"）
+        static let growthStatus   = sans(13, weight: .semibold, relativeTo: .footnote)              // 成长线状态（如「0 pops so far」）
+        static let actionNote     = sans(13, weight: .regular, relativeTo: .footnote)               // 操作项的补充说明（如拍照入口副文案）
+        static let compactActionLabel = sans(15, weight: .medium, relativeTo: .subheadline)         // 上传胶囊动作（Camera / Gallery）：无图标时用中等字重建立操作重量
+        static let inlineActionLabel = sans(13, weight: .semibold, relativeTo: .footnote)           // 无底框行内动作按钮文字（错误态 Try again，13/600，随 Dynamic Type 缩放）
+        static let feedbackChipLabel = sans(15, weight: .regular, relativeTo: .subheadline)          // 反馈分类标签：常规细字重，保持视觉轻柔收敛
+        static let chineseFaint   = hiragino(13, weight: .w3, relativeTo: .footnote)             // 中文原文弱化 (冬青黑体)
+        static let chineseBody    = hiragino(15, weight: .w3, relativeTo: .subheadline)          // 中文翻译 / 释义（=参考稿 content-zh 14px 灰）
+        static let date           = sans(11, weight: .semibold, relativeTo: .caption2)              // 日期分隔
+        static let hero           = sans(34, weight: .semibold, relativeTo: .largeTitle)                // Onboarding 标题（.bold→.semibold 显式化：无衬线最重档 SemiBold，渲染不变）
+        static let screenTitle    = sans(22, weight: .semibold, relativeTo: .title2)                    // 功能页大标题（onboarding 实操页等；.bold→.semibold 显式化：无衬线最重档 SemiBold，渲染不变）
+        static let pageTitleSerif = charter(34, weight: .bold, relativeTo: .largeTitle)          // 页面衬线大标题（Tab2「Not open yet」等，与内容衬线同族）
+        // Onboarding 封面大标题：比 largeTitle 更大的展示字号，撑起全屏第一印象。
+        // 封面特例——固定字号、不随 Dynamic Type 放大（与 pageTitleSerif 同为衬线同族，
+        // 仅尺寸更大）。换装仍保留该特例：改用 charterFixed（固定字号工厂，品牌资产
+        // 专用），因为随 Dynamic Type 缩放与特例语义冲突。
+        static let onboardingHeroSerif = charterFixed(46, weight: .bold)
+        static let onboardingLeadSerif = englishPrimary  // Onboarding 各屏副标题（标题下的价值/说明句）：复用内容衬线，与 onboardingHeroSerif 成对；别名而非重声明，避免与例句内容耦合、也不重复定义同值。（tabLabel 已于 2026-09-01 改无衬线，脱离本次换装范围，见需求清单 C11。）
+        static let sectionTitleSerif = charter(22, weight: .bold, relativeTo: .title2)           // 分区衬线小标题（Topics in progress / Materials Yours），比页面大标题小一档
+        static let compactSectionTitleSerif = charter(20, weight: .bold, relativeTo: .title3)    // 紧凑页面内的小分区标题（如 Onboarding 样例区）
+        static let settingsSectionTitleSerif = charter(15, weight: .regular, relativeTo: .subheadline) // Settings 卡外分组标题：保留衬线编辑感，但退到辅助层（.medium→.regular 显式化：Charter 无中间档，渲染不变）
+        static let settingsPinnedTitleSerif = charter(20, weight: .bold, relativeTo: .title3)    // Settings 家族固定顶栏标题：比系统导航栏字号大一档，仍在 60pt 顶栏内不挤，保留品牌衬线
+        static let settingsVersion = charter(12, weight: .regular, relativeTo: .caption)              // Settings 页脚版本号：caption 直立端正衬线（方案 2：严谨书籍出版感）
+        static let libraryFooterTagline = charter(12, weight: .regular, relativeTo: .caption)         // Library 页脚品牌收口宣言：caption 直立端正衬线，与标题 Serif 呼应
+        static let ctaLabel       = sans(17, weight: .semibold, relativeTo: .body)                  // 主按钮文字（Continue / Get Started）
+        static let tab2HeroMeta = sans(12, weight: .semibold, relativeTo: .caption)
+        static let tab2HeroWord = charter(15, weight: .bold, relativeTo: .subheadline)
+        static let tab2HeroWordPartOfSpeech = sans(11, weight: .regular, relativeTo: .caption2).italic()
+        static let tab2HeroWordMeaning = hiragino(13, weight: .w3, relativeTo: .footnote)
+        static let tab2HeroCTA = sans(15, weight: .semibold, relativeTo: .subheadline)
+        // ── 刀 6 卡面（刀 6b v12 视觉稿「胶囊改版」）──
+        // 活动胶囊：一行一个胶囊（Charter 活动名 on 幽灵半透底），+N more 无底尾随；
+        // 固定两行高、只排得下一条也占两行（Hero 57 / More 50）。次数上标已随 v12 删除
+        // （occurrence_count 仍返回，只参与后端排序，卡面永不渲染）。
+        // 基准字号独立成常量：胶囊拟合用 CoreText 测量宽度，SwiftUI Font 无法反解字号，
+        // 故测量侧用 UIFontMetrics(forTextStyle:) 复刻同名 token 的缩放（见 Tab2ActivityDisplay）。
+        static let tab2HeroCapsuleNameBaseSize: CGFloat = 13.5
+        static let tab2MoreRowCapsuleNameBaseSize: CGFloat = 12
+        static let tab2HeroCapsuleMoreBaseSize: CGFloat = 12
+        static let tab2MoreRowCapsuleMoreBaseSize: CGFloat = 11
+        static let tab2HeroCapsuleName = charter(tab2HeroCapsuleNameBaseSize, weight: .regular, relativeTo: .subheadline)       // Hero 胶囊活动名 13.5px Charter
+        // 内容声部：比 hero 胶囊（tab2HeroCapsuleName 13.5pt）低一档——12 vs 13.5，
+        // hero 是「推荐」的强断言，这里只是「也说得出口」。层级差异完全由字号承担，
+        // 调其中一个数前先看这句。
+        static let tab2MoreRowCapsuleName = charter(tab2MoreRowCapsuleNameBaseSize, weight: .regular, relativeTo: .footnote)     // More 胶囊活动名 12px
+        static let tab2HeroCapsuleMore = sans(tab2HeroCapsuleMoreBaseSize, weight: .regular, relativeTo: .footnote) // Hero +N more 12px muted
+        static let tab2MoreRowCapsuleMore = sans(tab2MoreRowCapsuleMoreBaseSize, weight: .regular, relativeTo: .caption2) // More +N more 11px muted
+        static let tab2MoreRowMeta = sans(12, weight: .regular, relativeTo: .caption)   // More 词数行 12px（v12 .rwords）
+        /// 理由胶囊文字（刀 6b v12 .opill）：两态同形同 11.5/500（v12 quiet 态不降字重），
+        /// 只换颜色——hot 暖奶油字、quiet 白 82%。
+        static let tab2ReasonPill = sans(11.5, weight: .medium, relativeTo: .caption)
+        static let tab2HeroChipCategory = sans(11.5, weight: .semibold, relativeTo: .caption2) // 照片标签类别名 11.5/600（v12 起不再带词数段）
+        /// Hero「Recent activities」区内小标题（v12 .seclab）：11px/600 无衬线大写。
+        static let tab2HeroActivitySectionLabel = sans(11, weight: .semibold, relativeTo: .caption2)
+        /// Hero 脚行左端词数（v12 .footrow .words）：13px muted 表格数字。
+        static let tab2HeroFootrowWords = sans(13, weight: .regular, relativeTo: .footnote)
+        /// 无 activity 空态说明行（刀 6b 空态 v1 .onlywords）：13px 无衬线 muted，
+        /// 单行自然高度——衬线是用户内容的标记，这是系统在说明状态，不带衬线。
+        /// Hero 与 More 空态共用同一句、同一档（B2 拍板：同一个状态在两处说同一
+        /// 句话）。规格与 tab2HeroFootrowWords 同为 13px 常规无衬线，但用途不同、
+        /// 不共用 token（单侧调字号不应牵动另一处）；重复值待 token hygiene 巡检。
+        static let tab2EmptyStateLine = sans(13, weight: .regular, relativeTo: .footnote)
+        static let tab2MoreRowCategory = sans(12, weight: .semibold, relativeTo: .caption)      // More 类别帽 12px/600 textSecondary（§三① 15→12 降为帽）
+        static let tab2MoreRowTimeline = sans(11.5, weight: .regular, relativeTo: .caption2)    // More 时间 11.5px，升到帽行右端（§三②）
+        // 手风琴展开词条（CategoryProgressRow.WordEntryRow）：与 tab2HeroWord 数值相同
+        // 但独立定义，不共用——同理 pos / metaNote（本来就是 CLAUDE.md 允许的「值相同、
+        // 语义各自演化」先例）：Hero 卡改字号不应牵动词条列表，反之亦然。
+        static let tab2WordEntryTitle = charter(15, weight: .bold, relativeTo: .subheadline)    // 词条单词：系统衬线换 Charter Bold，字号沿用现状
+        static let tab2WordEntryMeaning = hiragino(12, weight: .w3, relativeTo: .caption)       // 词条释义：系统 SF 换冬青黑 W3，字号沿用现状
+
+        // 顶部 Tab 名称：2026-09-01 改无衬线（与内容衬线脱钩，不再随衬线家族
         // 换装同步——见需求清单 C11，问题已随此改动消解）。两项同重，选中关系
         // 仍交给毛玻璃胶囊，而不是靠字重制造对比。
-        // 配方（TextStyle/design/字重）单独成 token：UIKit 无公开 API 从 SwiftUI Font
-        // 反解配方，导航 chrome 宽度测试（labelTabRowFits…）只能读这里的原值来测量——
-        // 与 tabLabel 共用同一份，改配方只改这一处、测试自动按新配方重测（放不下会红）。
-        static let tabLabelStyle  = SwiftUI.Font.TextStyle.subheadline
-        static let tabLabelDesign = SwiftUI.Font.Design.default
-        static let tabLabelWeight = SwiftUI.Font.Weight.medium
-        static let tabLabel       = SwiftUI.Font.system(tabLabelStyle, design: tabLabelDesign, weight: tabLabelWeight)
-        static let cardSentence   = SwiftUI.Font.system(.body, design: .serif, weight: .semibold) // 时刻卡英文主句（衬线 + 半粗，Dynamic Type 安全）
-        static let feedbackTitleSerif = cardSentence // 轻量错误/恢复提示标题：沿用内容衬线，但保持 body 层级，不冒充页面标题
-        static let onboardingUploadTitle = SwiftUI.Font.system(.body, design: .serif, weight: .medium) // 上传卡标题：比内容主句更轻一级
-        // 开屏字标「oplex」：与 App 内容字同族（design: .serif = New York，
-        // 和 pageTitleSerif / wordTitle 是同一套），再加 italic 呼应 PoplexPShape 的 -6° 斜切。
+        // 基准字号独立成常量：AIEnglishAppTests 实测顶栏行宽时与生产共用这一个数
+        // （测试按 .subheadline 的 UIFontMetrics 表复刻 relativeTo 的缩放，再量打包的
+        // GothicA1-Medium 真字体）。旧三常量 tabLabelStyle/Design/Weight 已删——它们只有
+        // 测试在读、生产从不读，实测的是 SF Pro 而非无衬线自有字体，等于保证了一个不存在的
+        // 东西；改字重档位时须同步测试里的 PostScript 名，不同步会红。
+        static let tabLabelBaseSize: CGFloat = 15
+        static let tabLabel       = sans(tabLabelBaseSize, weight: .medium, relativeTo: .subheadline)
+        static let cardSentence   = charter(17, weight: .bold, relativeTo: .body)
+        static let feedbackTitleSerif = cardSentence
+        static let onboardingUploadTitle = charter(17, weight: .regular, relativeTo: .body)  // (.medium→.regular 显式化：Charter 无中间档，渲染不变)
+        // 开屏字标「oplex」：与内容同族（Charter Bold + italic 呼应 PoplexPShape 的 -6° 斜切）。
         // 品牌资产特例——固定字号、不随 Dynamic Type 变化（放大后会撑破居中构图，
         // 且开屏不承载可读信息，无可访问性损失）。
         // 字号改动需同步 SplashScreenView.wordmarkSize，两者必须一致，
         // 否则 P 的字高（由字号算 cap height）会和 oplex 对不上。
         static let splashWordmark = wordmark(size: 56)
 
-        /// Topics 分类行标题：非 hot 为 medium，最接近解锁 / 已达标时为 semibold。
-        /// 保持原有字重，只把条件字体选择收回 Theme 语义层。
-        static func categoryLabel(isHot: Bool) -> SwiftUI.Font {
-            SwiftUI.Font.system(.callout, weight: isHot ? .semibold : .medium)
-        }
-
         /// 字标专用字体。品牌资产特例：**尺寸由字标度量推算**，所以这里是函数不是常量，
         /// 也不随 Dynamic Type 变化（字标放大会撑破构图，且不承载可读信息）。
         /// 除 `PoplexWordmark` / `SplashScreenView` 外不要调用它写正文。
         static func wordmark(size: CGFloat) -> SwiftUI.Font {
-            SwiftUI.Font.system(size: size, weight: .bold, design: .serif).italic()
+            charterFixed(size, weight: .bold).italic()
         }
 
-        /// 每日额度大数字展示（仪表盘 Sheet 主数字：以 .largeTitle 衬线加粗为基座，保留 Dynamic Type 缩放能力）。
-        static let quotaHeroNumber = SwiftUI.Font.system(.largeTitle, design: .serif, weight: .bold)
+        static let quotaHeroNumber = charter(34, weight: .bold, relativeTo: .largeTitle)
     }
 
     // 排版微调（行距 / 字距 / 动态字号上限）。SwiftUI 的 Font 装不下这些，故单列一层，
@@ -659,7 +748,7 @@ enum AppTheme {
         static let rowIcon: CGFloat    = Primitive.size28  // 列表行前导图标框 / 小圆控件（设置行、关闭键）
         static let imageLoadingIndicatorDiameter: CGFloat = 24
         static let imageLoadingIndicatorStroke: CGFloat = 2
-        static let categoryBadge: CGFloat = Primitive.size36  // Topics 类别圆形徽章边长（浅橘底托类别图标）
+        static let categoryBadge: CGFloat = 20  // Topics 类别图标边长（20×20 纯线条，紧凑不占位）
         /// AI Consent 弹窗固定高度：文案精简自洽，不设展开档；消灭空旷下巴与过度拉伸。
         static let consentSheetHeight: CGFloat = 410
         /// Tab1 Passage 卡片展开正文的外层时间线高度上限。超出部分在卡内滚动，
@@ -689,15 +778,16 @@ enum AppTheme {
         static let settingsChevronStroke: CGFloat = 2.8
 
         // ── CategoryProgressRow 控件度量（不落在 4pt 间距刻度上的内量，不要凑整）──
-        static let progressBarHeight: CGFloat    = 2.5   // 进度条轨道高度（超轻细线）
-        static let categoryIconGlyph: CGFloat    = 17    // 分类图标徽章 SF Symbol 字号
-        static let expandArrow: CGFloat          = 8     // 展开三角字号（颜色已升为 textMuted，回到原有 8pt 度量）
+        static let progressBarHeight: CGFloat    = 1.5   // 进度条轨道高度（超轻 1.5pt 微轨）
+        static let categoryIconGlyph: CGFloat    = 15    // 分类图标 SF Symbol 字号（与 13.5pt 标题光学平齐）
+        static let expandArrow: CGFloat          = 7.5   // 展开三角字号
         static let entryThumbnail: CGFloat       = 32    // 词条左栏缩略图 / 图标底块边长
         static let entryBadgeGlyph: CGFloat      = 14    // 词条类型 SF Symbol 字号
-        static let pillHSpacing: CGFloat         = 6     // PopsPill HStack 间距
-        static let pillHPad: CGFloat             = 10    // PopsPill 水平内边距
-        static let pillVPad: CGFloat             = 5     // PopsPill 垂直内边距
-        static let rowLabelToProgress: CGFloat   = 10    // 分类行首行（标题+胶囊）→ 进度条间距
+        static let pillHSpacing: CGFloat         = 5     // 分类行进度胶囊 HStack 间距
+        static let pillHPad: CGFloat             = 9     // 分类行进度胶囊水平内边距
+        static let pillVPad: CGFloat             = 4     // 分类行进度胶囊垂直内边距
+        static let rowLabelToProgress: CGFloat   = 6.5   // 分类行首行（标题+胶囊）→ 进度条间距
+        static let categoryRowContentSpacing: CGFloat = 10 // 分类图标与右侧内容列水平间距
         static let wordEntrySpacing: CGFloat     = 2     // 词条行词 + 释义纵向间距
         static let wordListLoadingVPad: CGFloat  = 14    // 词列表加载态垂直内边距
         static let inlineActionIconGlyph: CGFloat = 11   // 行内动作按钮图标字号（错误态 Try again ↻，与 inlineActionLabel 光学配对）
@@ -830,21 +920,47 @@ enum AppTheme {
         static let onboardingFallbackBadgeGlyph: CGFloat         = 15  // 角标内白色描边字形
     }
 
-    /// Tab2 Hero 卡的固定图像区与 B1 预设图度量。文字区本身保持由内容撑开，
-    /// 这里只有其最小高度，避免短句卡留下不受控的空白。
+    /// Tab2 Hero 卡的固定图像区度量（刀 6 重排：文字区由「理由胶囊 + 固定两行活动块 +
+    /// CTA」撑开，不再需要最小高度兜底——活动块两行槽高天然恒定卡高）。
     enum Tab2Hero {
         enum Layout {
             static let artHeight: CGFloat = 150
             static let artTextOverlap: CGFloat = -14
-            static let textMinimumHeight: CGFloat = 138.5
             static let sceneDetailMaximumWidth: CGFloat = 175
             static let ctaHeight: CGFloat = 42
             static let ctaHorizontalInset: CGFloat = 22
-            static let ctaContentGap: CGFloat = 7
+            static let ctaContentGap: CGFloat = 8
             static let ctaCornerRadius: CGFloat = 21
             static let photoTopScrimHeight: CGFloat = 54
+            static let wordRowHeight: CGFloat = 26
+            static let wordRowGap: CGFloat = 9
+            static let metaContentGap: CGFloat = 5
+            // ── 刀 6 ──
+            /// 图上标签行（§二①）左上角定位。2026-09-22 视觉回归 main 基线（§2.4）：
+            /// chip/理由胶囊的托底胶囊（内边距/圆角/圆点）已删除，改为裸文字 + shadow，
+            /// shadow 半径/Y 取自 main HeroTopOverlay。
+            static let chipTopLeading: CGFloat = Primitive.space12
             static let photoOverlayShadowRadius: CGFloat = 6
             static let photoOverlayShadowY: CGFloat = 1
+            /// 文字区内边距（v12 .hbody 16/18/18）与纵向节奏（.seclab 下距 9、
+            /// 胶囊组→脚行 16）。
+            static let bodyTopInset: CGFloat = Primitive.space16
+            static let bodyHorizontalInset: CGFloat = 18
+            static let bodyBottomInset: CGFloat = 18
+            static let sectionLabelToCapsules: CGFloat = 9
+            static let activityToCTA: CGFloat = Primitive.space16
+            // ── 刀 6b 活动胶囊（方案 B 精细化瘦身）──
+            // 行高 25 = 13.5px 字 + 上下 padding 4×2 紧凑包裹；两行槽 57 = 25×2 + gap 7。
+            // 固定两行高、只排得下一条也占两行（v12 溢出例④）。组件私有，不在 4pt 刻度上。
+            static let activityCapsuleRowHeight: CGFloat = 25
+            static let activityCapsuleRowGap: CGFloat = 7
+            static let activityCapsuleHorizontalInset: CGFloat = 9
+            static let activityCapsuleMoreHorizontalInset: CGFloat = 6
+            /// 「Recent activities」区内小标题字距：v12 .seclab letter-spacing .09em
+            /// × 11px = 0.99。组件私有。
+            static let sectionLabelTracking: CGFloat = 0.99
+            // ── 预设图（B1，2026-09-22 视觉回归 main 基线 §2.1，逐字段取自
+            // `git show main:AIEnglishApp/Theme/Theme.swift` Tab2Hero.Layout）──
             static let presetBloomPrimaryWidth: CGFloat = 220
             static let presetBloomPrimaryHeight: CGFloat = 165
             static let presetBloomPrimaryLeading: CGFloat = 20
@@ -861,9 +977,6 @@ enum AppTheme {
             static let presetDotTop: CGFloat = 74
             static let presetIconStrokeWidth: CGFloat = 1.9
             static let presetBloomBlur: CGFloat = 36
-            static let wordRowHeight: CGFloat = 26
-            static let wordRowGap: CGFloat = 9
-            static let metaContentGap: CGFloat = 5
         }
 
         enum Opacity {
@@ -871,22 +984,16 @@ enum AppTheme {
             static let photoToneWarm: CGFloat = 0.20
             static let photoTonePaper: CGFloat = 0.45
             static let photoTopScrim: CGFloat = 0.30
-            static let photoPops: CGFloat = 0.82
             static let photoTextShadow: CGFloat = 0.50
             static let presetBloomPrimary: CGFloat = 0.55
             static let presetBloomSecondary: CGFloat = 0.90
             static let presetIcon: CGFloat = 0.19
-            static let presetPops: CGFloat = 0.60
             static let presetDot: CGFloat = 0.90
         }
 
         enum ImageTreatment {
             static let photoSaturation: Double = 0.70
             static let bottomFadeOpaqueEnd: CGFloat = 0.58
-        }
-
-        enum Typography {
-            static let categoryTracking: CGFloat = 1.4
         }
 
         enum Motion {
@@ -907,7 +1014,9 @@ enum AppTheme {
             /// 默认档下内容天然 ≤ 此值，行会稳定停在这个高度（视觉上等同于固定行高）；
             /// 字号调大到内容超出它时，minHeight 就放行长高，不裁字。组件私有度量，
             /// 不进 primitive 色阶（同 progressBarHeight 先例）。
-            static let rowHeight: CGFloat = 117
+            /// 刀 6b 重排后内容变为「帽行 + 固定两行胶囊组 + 词数行」（方案 B 瘦身后
+            // 胶囊槽高从 60 降为 50，默认档自然内容 ≈ 119），此值随截图实测校准。
+            static let rowHeight: CGFloat = 119
             static let thumbnailWidth: CGFloat = Primitive.size76
             /// 主句区两行高度的下限（§5.2）：短句留白、长句省略号，不用「最多两行」。
             /// 实测取自两行 + sentenceLineSpacing 后的自然高度，理由同 rowHeight。
@@ -915,15 +1024,36 @@ enum AppTheme {
             /// 分类行 → 主句的呼吸距离（三稿从 4 放宽到 7）。不在 4pt 间距刻度上，
             /// 组件私有（同 progressBarHeight 先例）。
             static let categoryToSentence: CGFloat = 7
-            /// 主句区 → meta 的节奏（三稿从 3 放宽到 6）。不在 4pt 间距刻度上，组件私有。
-            static let sentenceToMeta: CGFloat = 6
+            /// 帽行 → 胶囊组的距离（刀 6b v12 .rchips 上距 7px）。组件私有。
+            static let categoryToActivity: CGFloat = 7
+            /// 胶囊组 → 词数行的距离（刀 6b v12 .rwords 上距 8px）。组件私有。
+            static let activityToWords: CGFloat = 8
+            /// 空态说明行 → 词数行的距离（刀 6b 空态 v1 B2 .rwords.tight 上距 6px）。
+            /// 比有胶囊的 8 更紧——说明行与词数行说的是同一件事，距离收窄。组件私有。
+            static let emptyLineToWords: CGFloat = 6
             /// 纯查词行内「词—释义—·—词—释义」的均匀间距（= 释义紧跟词的左距 4）。
             static let wordGap: CGFloat = Primitive.space4
+            /// 预设缩略图图标（2026-09-22 视觉回归 main 基线 §2.2：main §5.6 取
+            /// Primitive.size28，描边宽度 1.2——28pt 小图标下细了发虚、粗了发闷）。
             static let presetIconSize: CGFloat = Primitive.size28
-            /// §5.6 未给描边宽度；28pt 小图标下 1.2 与 .42/.30 透明度搭配——
-            /// 细了发虚、粗了发闷。
             static let presetIconStrokeWidth: CGFloat = 1.2
-            static let arrowGlyph: CGFloat = 13
+            static let arrowGlyph: CGFloat = 15
+            /// 文字区内边距与右侧统一对齐基准（对齐 Space.paddingPage 16pt，与下方 Topics 展开胶囊保持同轴）。
+            static let contentTopInset: CGFloat = Primitive.space12
+            static let contentBottomInset: CGFloat = Primitive.space12
+            static let contentLeadingInset: CGFloat = 14
+            static let contentTrailingInset: CGFloat = 10
+            /// 帽行（类别名 + 时间标签）右侧边距：16pt，右对齐时间文本，与下方 Topics 展开胶囊同轴
+            static let hatRowTrailingInset: CGFloat = Space.paddingPage
+            /// 箭头右边距：16pt，与帽行时间文本及下方 Topics 展开胶囊右边缘严格同轴对齐
+            static let arrowTrailingInset: CGFloat = Space.paddingPage
+            // ── 刀 6b 活动胶囊（方案 B 精细化瘦身）──
+            // 行高 22 = 12px 字 + 上下 padding 3.5×2；两行槽 50 = 22×2 + gap 6。
+            // 固定两行高、只排得下一条也占两行。组件私有，不在 4pt 刻度上。
+            static let activityCapsuleRowHeight: CGFloat = 22
+            static let activityCapsuleRowGap: CGFloat = 6
+            static let activityCapsuleHorizontalInset: CGFloat = 8
+            static let activityCapsuleMoreHorizontalInset: CGFloat = 4
             /// 卡片之间的外间距（三稿从 11 放宽到 16 = Primitive.space16，
             /// 回到 4pt 刻度上，不再是组件私有的例外值）。判据：外间距必须不小于
             /// 卡片内边距（Space.paddingCard，同为 16）的视觉权重，否则五行会被
@@ -942,11 +1072,10 @@ enum AppTheme {
         enum Opacity {
             /// 照片上的暖橙 multiply 层（比 hero .20 重一档：行内没有 soft-light 提亮，靠它压住照片）。
             static let photoToneWarm: CGFloat = 0.24
-            /// 纯查词行整行透明度。
-            static let wordsOnlyRow: CGFloat = 0.82
-            /// 预设图图标描边透明度：常规行 / 纯查词行（更淡）。
+            /// 预设图图标描边透明度（视觉回归 main 基线 §2.2）。main 另有 presetIconFaint
+            /// 供「纯查词行」更淡变体，但本分支 More 行不区分该状态（查证结论见交付报告），
+            /// 未引入对应 token。
             static let presetIcon: CGFloat = 0.42
-            static let presetIconFaint: CGFloat = 0.30
         }
 
         enum ImageTreatment {

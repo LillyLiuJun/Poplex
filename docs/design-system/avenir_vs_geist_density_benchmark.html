@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Avenir Next vs. Geist · 高密度非衬线场景深度盲测</title>
+  <!-- 引入 Geist 官方全套字重 -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --page-bg: #FCF8F3;
+      --card-surface: #FFFDF8;
+      --text-primary: #211811;
+      --text-secondary: #594C43;
+      --text-muted: #7C7773;
+      --brand-strong: #FF7622;
+      --brand-ink: #C2410C;
+      --danger: #DC2626;
+      --border-card: rgba(230, 225, 218, 0.5);
+      --card-shadow: 0 1.5px 4px rgba(33, 24, 17, 0.035), 0 4px 12px rgba(46, 40, 32, 0.03);
+
+      --font-charter: "Charter", "Bitstream Charter", serif;
+      --font-cjk: "Hiragino Sans GB", "冬青黑体简体中文", "PingFang SC", sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-font-smoothing: antialiased; }
+    body {
+      background: #E8E2D9;
+      color: var(--text-primary);
+      padding: 40px 24px 100px;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      font-family: -apple-system, sans-serif;
+    }
+
+    .container {
+      max-width: 1320px;
+      width: 100%;
+    }
+
+    .header {
+      margin-bottom: 32px;
+    }
+    .kicker {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--brand-ink);
+      margin-bottom: 4px;
+    }
+    .title {
+      font-size: 30px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      font-family: var(--font-charter);
+    }
+    .subtitle {
+      font-size: 15px;
+      color: var(--text-secondary);
+      margin-top: 6px;
+      line-height: 1.55;
+    }
+
+    /* 左右两列并排：左 Avenir Next，右 Geist */
+    .compare-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 32px;
+      align-items: start;
+    }
+
+    .column {
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+    }
+
+    /* 列标题 */
+    .column-banner {
+      background: #FFFDF8;
+      border-radius: 18px;
+      padding: 16px 20px;
+      border: 1px solid rgba(89, 76, 67, 0.12);
+      box-shadow: var(--card-shadow);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .font-name {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+    .font-tag {
+      font-size: 11.5px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 999px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .tag-avenir { background: rgba(255, 118, 34, 0.12); color: var(--brand-ink); }
+    .tag-geist { background: rgba(33, 24, 17, 0.08); color: var(--text-primary); }
+
+    /* 场景卡片通用外壳 */
+    .scene-card {
+      background: var(--card-surface);
+      border-radius: 20px;
+      padding: 20px;
+      border: 0.5px solid var(--border-card);
+      box-shadow: var(--card-shadow);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .scene-title {
+      font-size: 11.5px;
+      font-weight: 700;
+      color: var(--brand-ink);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      border-bottom: 0.5px solid rgba(124, 119, 115, 0.15);
+      padding-bottom: 8px;
+    }
+
+    /* 字体绑定：西文衬线全为 Charter，中文全为冬青黑 */
+    .charter-font { font-family: var(--font-charter); }
+    .cjk-font { font-family: var(--font-cjk); }
+
+    /* 非衬线测试类 */
+    .use-avenir { font-family: "Avenir Next", "Avenir", sans-serif; }
+    .use-geist  { font-family: "Geist", sans-serif; }
+
+    /* 场景 1：Settings 设置页超大密集文本行 */
+    .settings-group {
+      display: flex;
+      flex-direction: column;
+    }
+    .set-header {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+    }
+    .set-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 0;
+      border-bottom: 0.5px solid rgba(124, 119, 115, 0.15);
+    }
+    .set-row:last-child { border-bottom: none; }
+    .set-label {
+      font-size: 16px;
+      color: var(--text-primary);
+    }
+    .set-value {
+      font-size: 15.5px;
+      color: var(--text-muted);
+    }
+
+    /* 场景 2：英文长篇用法说明 (Long Grammar Note) */
+    .grammar-passage {
+      font-size: 14.5px;
+      line-height: 1.6;
+      color: var(--text-secondary);
+    }
+
+    /* 场景 3：多重微观标签与徽章云 (Badge Cloud) */
+    .badge-cloud {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .pill-badge {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 999px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .pill-neutral { background: rgba(33, 24, 17, 0.05); color: var(--text-secondary); }
+    .pill-brand { background: rgba(255, 118, 34, 0.12); color: var(--brand-ink); }
+    .pill-dark { background: var(--text-primary); color: #fff; }
+
+    /* 场景 4：交互操作控件群 (CTA, Input, Toast) */
+    .cta-group {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .mock-input {
+      padding: 12px 16px;
+      border-radius: 999px;
+      background: rgba(33, 24, 17, 0.03);
+      border: 1px solid rgba(124, 119, 115, 0.2);
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+    .mock-btn-primary {
+      padding: 12px 18px;
+      border-radius: 999px;
+      background: var(--text-primary);
+      color: #fff;
+      font-size: 14.5px;
+      font-weight: 600;
+      text-align: center;
+      letter-spacing: 0.01em;
+    }
+    .mock-toast {
+      padding: 10px 14px;
+      background: #FFFDF8;
+      border: 1px solid rgba(89, 76, 67, 0.15);
+      border-radius: 12px;
+      font-size: 13px;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* 字母标本放大镜 */
+    .specimen-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+      background: #FFFDF8;
+      border-radius: 14px;
+      padding: 14px;
+      border: 1px solid rgba(89, 76, 67, 0.1);
+      font-size: 13px;
+    }
+    .spec-large {
+      font-size: 34px;
+      line-height: 1.1;
+      color: var(--text-primary);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <header class="header">
+      <div class="kicker">Density & Multi-Context Evaluation</div>
+      <h1 class="title">Avenir Next vs. Geist 高密度非衬线场景深度对比</h1>
+      <p class="subtitle">
+        在英文主角锁死 <strong>Charter</strong>、中文锁死 <strong>冬青黑</strong> 的前提下，全景测试 <strong>设置页长列表、英文长段语法解析、标签徽章云与操作控件</strong> 等密集非衬线场景下的可读性与气质。
+      </p>
+    </header>
+
+    <main class="compare-grid">
+
+      <!-- ════════════ 左列：Avenir Next ════════════ -->
+      <div class="column use-avenir">
+        <div class="column-banner">
+          <div>
+            <div class="font-name">Avenir Next</div>
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">法式高雅人文几何 · iOS 原生预装</div>
+          </div>
+          <span class="font-tag tag-avenir">Option A</span>
+        </div>
+
+        <!-- 场景 1：Settings 高密度列表 -->
+        <div class="scene-card">
+          <div class="scene-title">场景 1 · Settings 高密度行列表</div>
+          <div class="settings-group">
+            <div class="set-header">Preferences &amp; Languages</div>
+            <div class="set-row">
+              <span class="set-label">Target learning language</span>
+              <span class="set-value">English (US)</span>
+            </div>
+            <div class="set-row">
+              <span class="set-label">Native translation language</span>
+              <span class="set-value">Chinese (Simplified)</span>
+            </div>
+            <div class="set-row">
+              <span class="set-label">Daily study reminder schedule</span>
+              <span class="set-value">Every day at 8:30 PM</span>
+            </div>
+          </div>
+
+          <div class="settings-group" style="margin-top: 10px;">
+            <div class="set-header">Legal &amp; Privacy Governance</div>
+            <div class="set-row">
+              <span class="set-label">How AI uses your personalized data</span>
+              <span class="set-value">›</span>
+            </div>
+            <div class="set-row">
+              <span class="set-label">Terms of Service &amp; User Agreement</span>
+              <span class="set-value">›</span>
+            </div>
+            <div class="set-row">
+              <span class="set-label" style="color: var(--danger);">Permanently delete account &amp; expressions</span>
+              <span class="set-value">›</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 场景 2：英文长段连续语法说明 (Long Grammar Note) -->
+        <div class="scene-card">
+          <div class="scene-title">场景 2 · 连续段落英文解析 (English Reading Flow)</div>
+          <div>
+            <div class="charter-font" style="font-size: 20px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px;">
+              I’m completely snowed under with meetings today.
+            </div>
+            <div class="cjk-font" style="font-size: 14.5px; color: var(--text-secondary); margin-bottom: 12px;">
+              我今天被各种会议彻底淹没了，精疲力竭。
+            </div>
+            <p class="grammar-passage">
+              The idiom <strong>"snowed under with"</strong> is a vivid conversational metaphor in modern professional English. It conveys having far more obligations or messages than one can realistically manage, much like a house buried under a sudden mountain blizzard. Notice that we say <em>"feeling exhausted"</em> rather than <em>"feeling sleep"</em>, as emotional states require true qualitative adjectives in standard predicate structures.
+            </p>
+          </div>
+        </div>
+
+        <!-- 场景 3：微观标签与徽章云 -->
+        <div class="scene-card">
+          <div class="scene-title">场景 3 · 标签、词性与状态指示</div>
+          <div class="badge-cloud">
+            <span class="pill-badge pill-brand">Idiomatic Expression</span>
+            <span class="pill-badge pill-neutral">C1 Advanced</span>
+            <span class="pill-badge pill-neutral">Transitive Verb</span>
+            <span class="pill-badge pill-dark">High Priority</span>
+            <span class="pill-badge pill-neutral">Spoken English</span>
+            <span class="pill-badge pill-neutral">Oxford 3000</span>
+          </div>
+        </div>
+
+        <!-- 场景 4：输入框与操作控件 -->
+        <div class="scene-card">
+          <div class="scene-title">场景 4 · 输入框、按钮与 Toast 浮层</div>
+          <div class="cta-group">
+            <div class="mock-input">Describe this image in natural English...</div>
+            <div class="mock-btn-primary">Continue Daily Practice (4 Remaining)</div>
+            <div class="mock-toast">
+              <span style="color: #10B981;">●</span>
+              <span>Your session has been saved to your personal lexicon ledger.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 字母细节特写 -->
+        <div class="specimen-grid">
+          <div>
+            <div style="font-size: 11px; color: var(--text-muted); font-weight: 600;">大写字母气质 (Uppercase)</div>
+            <div class="spec-large">Q R G A M</div>
+            <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">开阔圆润、古罗马碑文经典比例</div>
+          </div>
+          <div>
+            <div style="font-size: 11px; color: var(--text-muted); font-weight: 600;">小写字母细节 (Lowercase)</div>
+            <div class="spec-large">a e g t y</div>
+            <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">小写 t 顶端平整底部微翘，极度温润</div>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- ════════════ 右列：Geist ════════════ -->
+      <div class="column use-geist">
+        <div class="column-banner">
+          <div>
+            <div class="font-name">Geist</div>
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">现代先锋几何极客 · Vercel 出品</div>
+          </div>
+          <span class="font-tag tag-geist">Option D</span>
+        </div>
+
+        <!-- 场景 1：Settings 高密度列表 -->
+        <div class="scene-card">
+          <div class="scene-title">场景 1 · Settings 高密度行列表</div>
+          <div class="settings-group">
+            <div class="set-header">Preferences &amp; Languages</div>
+            <div class="set-row">
+              <span class="set-label">Target learning language</span>
+              <span class="set-value">English (US)</span>
+            </div>
+            <div class="set-row">
+              <span class="set-label">Native translation language</span>
+              <span class="set-value">Chinese (Simplified)</span>
+            </div>
+            <div class="set-row">
+              <span class="set-label">Daily study reminder schedule</span>
+              <span class="set-value">Every day at 8:30 PM</span>
+            </div>
+          </div>
+
+          <div class="settings-group" style="margin-top: 10px;">
+            <div class="set-header">Legal &amp; Privacy Governance</div>
+            <div class="set-row">
+              <span class="set-label">How AI uses your personalized data</span>
+              <span class="set-value">›</span>
+            </div>
+            <div class="set-row">
+              <span class="set-label">Terms of Service &amp; User Agreement</span>
+              <span class="set-value">›</span>
+            </div>
+            <div class="set-row">
+              <span class="set-label" style="color: var(--danger);">Permanently delete account &amp; expressions</span>
+              <span class="set-value">›</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 场景 2：英文长段连续语法说明 (Long Grammar Note) -->
+        <div class="scene-card">
+          <div class="scene-title">场景 2 · 连续段落英文解析 (English Reading Flow)</div>
+          <div>
+            <div class="charter-font" style="font-size: 20px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px;">
+              I’m completely snowed under with meetings today.
+            </div>
+            <div class="cjk-font" style="font-size: 14.5px; color: var(--text-secondary); margin-bottom: 12px;">
+              我今天被各种会议彻底淹没了，精疲力竭。
+            </div>
+            <p class="grammar-passage">
+              The idiom <strong>"snowed under with"</strong> is a vivid conversational metaphor in modern professional English. It conveys having far more obligations or messages than one can realistically manage, much like a house buried under a sudden mountain blizzard. Notice that we say <em>"feeling exhausted"</em> rather than <em>"feeling sleep"</em>, as emotional states require true qualitative adjectives in standard predicate structures.
+            </p>
+          </div>
+        </div>
+
+        <!-- 场景 3：微观标签与徽章云 -->
+        <div class="scene-card">
+          <div class="scene-title">场景 3 · 标签、词性与状态指示</div>
+          <div class="badge-cloud">
+            <span class="pill-badge pill-brand">Idiomatic Expression</span>
+            <span class="pill-badge pill-neutral">C1 Advanced</span>
+            <span class="pill-badge pill-neutral">Transitive Verb</span>
+            <span class="pill-badge pill-dark">High Priority</span>
+            <span class="pill-badge pill-neutral">Spoken English</span>
+            <span class="pill-badge pill-neutral">Oxford 3000</span>
+          </div>
+        </div>
+
+        <!-- 场景 4：输入框与操作控件 -->
+        <div class="scene-card">
+          <div class="scene-title">场景 4 · 输入框、按钮与 Toast 浮层</div>
+          <div class="cta-group">
+            <div class="mock-input">Describe this image in natural English...</div>
+            <div class="mock-btn-primary">Continue Daily Practice (4 Remaining)</div>
+            <div class="mock-toast">
+              <span style="color: #10B981;">●</span>
+              <span>Your session has been saved to your personal lexicon ledger.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 字母细节特写 -->
+        <div class="specimen-grid">
+          <div>
+            <div style="font-size: 11px; color: var(--text-muted); font-weight: 600;">大写字母气质 (Uppercase)</div>
+            <div class="spec-large">Q R G A M</div>
+            <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">冷峻紧凑、极度水平垂直切割</div>
+          </div>
+          <div>
+            <div style="font-size: 11px; color: var(--text-muted); font-weight: 600;">小写字母细节 (Lowercase)</div>
+            <div class="spec-large">a e g t y</div>
+            <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">直线末端全为水平切口，微弱极简代码感</div>
+          </div>
+        </div>
+      </div>
+
+    </main>
+
+  </div>
+
+</body>
+</html>

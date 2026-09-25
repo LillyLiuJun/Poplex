@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>非衬线字体巅峰对决 (Sans-Serif Candidates for Charter + Hiragino)</title>
+  <!-- 引入 Geist 与 Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@500;600;700&family=Inter:wght@500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --page-bg: #FCF8F3;
+      --card-surface: #FFFDF8;
+      --text-primary: #211811;
+      --text-secondary: #594C43;
+      --text-muted: #7C7773;
+      --brand-strong: #FF7622;
+      --border-card: rgba(230, 225, 218, 0.45);
+      --card-shadow: 0 1.5px 4px rgba(33, 24, 17, 0.035), 0 4px 10px rgba(46, 40, 32, 0.025);
+
+      /* 衬线固定 Charter，中文固定冬青黑 */
+      --font-charter: "Charter", "Bitstream Charter", serif;
+      --font-cjk: "Hiragino Sans GB", "冬青黑体简体中文", "PingFang SC", sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-font-smoothing: antialiased; }
+    body {
+      background: #E8E2D9;
+      color: var(--text-primary);
+      padding: 40px 20px 80px;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      font-family: -apple-system, sans-serif;
+    }
+
+    .container {
+      max-width: 1360px;
+      width: 100%;
+    }
+
+    .header {
+      margin-bottom: 28px;
+    }
+    .kicker {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #C2410C;
+      margin-bottom: 4px;
+    }
+    .title {
+      font-size: 28px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      font-family: var(--font-charter);
+    }
+    .subtitle {
+      font-size: 14.5px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+    }
+
+    /* 4 列非衬线方案网格 */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(280px, 1fr));
+      gap: 20px;
+      align-items: start;
+    }
+
+    .column {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .sans-header {
+      padding: 0 4px;
+    }
+    .sans-kicker {
+      font-size: 11px;
+      font-weight: 700;
+      color: #C2410C;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .sans-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-top: 2px;
+    }
+    .sans-tag {
+      display: inline-block;
+      font-family: "SF Mono", Menlo, monospace;
+      font-size: 11px;
+      background: rgba(33, 24, 17, 0.06);
+      padding: 2px 7px;
+      border-radius: 4px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+    }
+
+    /* 统一卡片 */
+    .card {
+      background: var(--card-surface);
+      border-radius: 20px;
+      padding: 16px;
+      border: 0.5px solid var(--border-card);
+      box-shadow: var(--card-shadow);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .charter-text { font-family: var(--font-charter); }
+    .cjk-text { font-family: var(--font-cjk); }
+
+    /* 标签与操作字体的 4 种方案 */
+    .font-avenir .sans-ui { font-family: "Avenir Next", "Avenir", sans-serif; }
+    .font-gill .sans-ui   { font-family: "Gill Sans", "Gill Sans MT", sans-serif; }
+    .font-inter .sans-ui  { font-family: "Inter", sans-serif; }
+    .font-geist .sans-ui  { font-family: "Geist", sans-serif; }
+
+    .sec-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 4px;
+    }
+
+    .pos-chip {
+      font-size: 10.5px;
+      font-weight: 600;
+      color: var(--text-muted);
+      letter-spacing: 0.04em;
+    }
+
+    .cta-preview {
+      margin-top: 4px;
+      padding: 10px 14px;
+      background: var(--text-primary);
+      color: #FFFDF8;
+      border-radius: 999px;
+      text-align: center;
+      font-size: 13.5px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .review-box {
+      background: #FFFDF8;
+      border-radius: 14px;
+      padding: 14px;
+      border: 1px solid rgba(89, 76, 67, 0.1);
+      font-size: 12.5px;
+      line-height: 1.5;
+      color: var(--text-secondary);
+    }
+    .review-box strong { color: var(--text-primary); }
+
+    /* 标签细节特写 */
+    .spec-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 10px;
+      background: rgba(33, 24, 17, 0.03);
+      border-radius: 8px;
+      font-size: 12px;
+      margin-top: 4px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <header class="header">
+      <div class="kicker">Sans-Serif Typography Audit · In Support of Charter</div>
+      <h1 class="title">非衬线字体 4 大高阶候选横向对比</h1>
+      <p class="subtitle">
+        英文主角固定 <strong>Charter</strong>，中文固定 <strong>冬青黑 (Hiragino)</strong>。
+        比对不同的界面无衬线字体在<strong>区块小标 (POLISH/NOTE)、词性 Chip 与操作按钮 (CTA)</strong> 上的气场表现。
+      </p>
+    </header>
+
+    <main class="grid">
+
+      <!-- 方案 A：Avenir Next -->
+      <div class="column font-avenir">
+        <div class="sans-header">
+          <div class="sans-kicker">方案 A · 至高法式人文</div>
+          <div class="sans-title">Avenir Next</div>
+          <div class="sans-tag">iOS 原生预装 · 推荐</div>
+        </div>
+
+        <div class="card">
+          <div>
+            <div class="charter-text" style="font-size: 22px; font-weight: 700;">ephemeral</div>
+            <div style="display: flex; gap: 8px; align-items: baseline; margin-top: 4px;">
+              <span style="font-family: 'SF Mono', monospace; font-size: 13px; color: var(--text-muted);">/ɪˈfemərəl/</span>
+              <span class="sans-ui pos-chip">ADJ. / N.</span>
+            </div>
+            <div class="cjk-text" style="font-size: 14.5px; color: var(--text-secondary); margin-top: 6px;">
+              短暂的，转瞬即逝的；朝生暮死的生命
+            </div>
+          </div>
+
+          <div>
+            <div class="sans-ui sec-label">Polish</div>
+            <div class="charter-text" style="font-size: 16.5px; line-height: 1.35;">
+              I’m completely snowed under with meetings today and feeling exhausted.
+            </div>
+            <div class="cjk-text" style="font-size: 14.5px; color: var(--text-secondary); margin-top: 4px;">
+              我今天被各种会议彻底淹没了，精疲力竭。
+            </div>
+          </div>
+
+          <div>
+            <div class="sans-ui sec-label">Note</div>
+            <div class="cjk-text" style="font-size: 13.5px; color: var(--text-secondary); line-height: 1.45;">
+              用 "snowed under with" 形象描述被大量工作压得透不过气。
+            </div>
+          </div>
+
+          <div class="sans-ui cta-preview">Continue Practice</div>
+        </div>
+
+        <div class="review-box">
+          <strong>气质特征：高雅从容、温润现代</strong><br>
+          Frutiger 大师手笔。几何骨架融入了极其舒展温润的人文弧度，与刚劲的 Charter 搭配堪称<strong>“英伦厚重 × 法式高雅”</strong>，彻底洗去极客感。
+        </div>
+      </div>
+
+      <!-- 方案 B：Gill Sans -->
+      <div class="column font-gill">
+        <div class="sans-header">
+          <div class="sans-kicker">方案 B · 纯正英伦文库</div>
+          <div class="sans-title">Gill Sans</div>
+          <div class="sans-tag">iOS 原生预装 · 企鹅经典</div>
+        </div>
+
+        <div class="card">
+          <div>
+            <div class="charter-text" style="font-size: 22px; font-weight: 700;">ephemeral</div>
+            <div style="display: flex; gap: 8px; align-items: baseline; margin-top: 4px;">
+              <span style="font-family: 'SF Mono', monospace; font-size: 13px; color: var(--text-muted);">/ɪˈfemərəl/</span>
+              <span class="sans-ui pos-chip">ADJ. / N.</span>
+            </div>
+            <div class="cjk-text" style="font-size: 14.5px; color: var(--text-secondary); margin-top: 6px;">
+              短暂的，转瞬即逝的；朝生暮死的生命
+            </div>
+          </div>
+
+          <div>
+            <div class="sans-ui sec-label">Polish</div>
+            <div class="charter-text" style="font-size: 16.5px; line-height: 1.35;">
+              I’m completely snowed under with meetings today and feeling exhausted.
+            </div>
+            <div class="cjk-text" style="font-size: 14.5px; color: var(--text-secondary); margin-top: 4px;">
+              我今天被各种会议彻底淹没了，精疲力竭。
+            </div>
+          </div>
+
+          <div>
+            <div class="sans-ui sec-label">Note</div>
+            <div class="cjk-text" style="font-size: 13.5px; color: var(--text-secondary); line-height: 1.45;">
+              用 "snowed under with" 形象描述被大量工作压得透不过气。
+            </div>
+          </div>
+
+          <div class="sans-ui cta-preview">Continue Practice</div>
+        </div>
+
+        <div class="review-box">
+          <strong>气质特征：典雅学术、纯正血统</strong><br>
+          英国企鹅经典文库御用字体。全大写标签（POLISH, NOTE）有一种传统文学刊物的仪式感，与 Charter 骨肉相融。
+        </div>
+      </div>
+
+      <!-- 方案 C：Inter -->
+      <div class="column font-inter">
+        <div class="sans-header">
+          <div class="sans-kicker">方案 C · 极致耐读工马</div>
+          <div class="sans-title">Inter</div>
+          <div class="sans-tag">开源顶级 UI · 认知第一</div>
+        </div>
+
+        <div class="card">
+          <div>
+            <div class="charter-text" style="font-size: 22px; font-weight: 700;">ephemeral</div>
+            <div style="display: flex; gap: 8px; align-items: baseline; margin-top: 4px;">
+              <span style="font-family: 'SF Mono', monospace; font-size: 13px; color: var(--text-muted);">/ɪˈfemərəl/</span>
+              <span class="sans-ui pos-chip">ADJ. / N.</span>
+            </div>
+            <div class="cjk-text" style="font-size: 14.5px; color: var(--text-secondary); margin-top: 6px;">
+              短暂的，转瞬即逝的；朝生暮死的生命
+            </div>
+          </div>
+
+          <div>
+            <div class="sans-ui sec-label">Polish</div>
+            <div class="charter-text" style="font-size: 16.5px; line-height: 1.35;">
+              I’m completely snowed under with meetings today and feeling exhausted.
+            </div>
+            <div class="cjk-text" style="font-size: 14.5px; color: var(--text-secondary); margin-top: 4px;">
+              我今天被各种会议彻底淹没了，精疲力竭。
+            </div>
+          </div>
+
+          <div>
+            <div class="sans-ui sec-label">Note</div>
+            <div class="cjk-text" style="font-size: 13.5px; color: var(--text-secondary); line-height: 1.45;">
+              用 "snowed under with" 形象描述被大量工作压得透不过气。
+            </div>
+          </div>
+
+          <div class="sans-ui cta-preview">Continue Practice</div>
+        </div>
+
+        <div class="review-box">
+          <strong>气质特征：中性克制、功能第一</strong><br>
+          全球数字产品公认的清晰度天花板。它自身没有任何张扬性格，纯粹作为功能载体，让 Charter 主角更醒目。
+        </div>
+      </div>
+
+      <!-- 方案 D：Geist -->
+      <div class="column font-geist">
+        <div class="sans-header">
+          <div class="sans-kicker">方案 D · 现代极客先锋</div>
+          <div class="sans-title">Geist</div>
+          <div class="sans-tag">Vercel 出品 · 先锋几何</div>
+        </div>
+
+        <div class="card">
+          <div>
+            <div class="charter-text" style="font-size: 22px; font-weight: 700;">ephemeral</div>
+            <div style="display: flex; gap: 8px; align-items: baseline; margin-top: 4px;">
+              <span style="font-family: 'SF Mono', monospace; font-size: 13px; color: var(--text-muted);">/ɪˈfemərəl/</span>
+              <span class="sans-ui pos-chip">ADJ. / N.</span>
+            </div>
+            <div class="cjk-text" style="font-size: 14.5px; color: var(--text-secondary); margin-top: 6px;">
+              短暂的，转瞬即逝的；朝生暮死的生命
+            </div>
+          </div>
+
+          <div>
+            <div class="sans-ui sec-label">Polish</div>
+            <div class="charter-text" style="font-size: 16.5px; line-height: 1.35;">
+              I’m completely snowed under with meetings today and feeling exhausted.
+            </div>
+            <div class="cjk-text" style="font-size: 14.5px; color: var(--text-secondary); margin-top: 4px;">
+              我今天被各种会议彻底淹没了，精疲力竭。
+            </div>
+          </div>
+
+          <div>
+            <div class="sans-ui sec-label">Note</div>
+            <div class="cjk-text" style="font-size: 13.5px; color: var(--text-secondary); line-height: 1.45;">
+              用 "snowed under with" 形象描述被大量工作压得透不过气。
+            </div>
+          </div>
+
+          <div class="sans-ui cta-preview">Continue Practice</div>
+        </div>
+
+        <div class="review-box">
+          <strong>气质特征：冷峻犀利、微弱极简</strong><br>
+          先锋开发者的锐利感。缺点是稍微偏冷偏硬，与生活化、温暖的语言学习场景相比，略有一点控制台代码感。
+        </div>
+      </div>
+
+    </main>
+
+  </div>
+
+</body>
+</html>

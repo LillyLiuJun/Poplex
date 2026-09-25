@@ -7,8 +7,7 @@ struct CardTypeChip: View {
 
     var body: some View {
         Text(label.uppercased())
-            .font(AppTheme.Font.pos)
-            .fontWeight(.bold)
+            .font(AppTheme.Font.cardTypeChipLabel)
             .tracking(0.8)
             .foregroundStyle(AppTheme.Color.textMuted)
     }

@@ -3,6 +3,7 @@ import Foundation
 import UIKit
 import SwiftUI
 import Observation
+import Vision
 @testable import AIEnglishApp
 
 @MainActor
@@ -363,6 +364,46 @@ struct Tab2RefreshLifecycleTests {
     }
 }
 
+// MARK: - Tab2HomeViewModel.tab2HomeRequestURL tests（刀 4a）
+
+struct Tab2HomeRequestURLTests {
+    @Test func appendsLocalDayStartAsUTCTimestamp() {
+        // 固定上海时区与 2026-09-10 10:00 本地时刻，锁定时区换算，
+        // 不依赖跑测试的机器所在的时区。
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Shanghai")!
+        var comps = DateComponents()
+        comps.year = 2026; comps.month = 9; comps.day = 10; comps.hour = 10
+        let now = calendar.date(from: comps)!
+
+        let url = Tab2HomeViewModel.tab2HomeRequestURL(now: now, calendar: calendar)
+
+        let components = url.flatMap {
+            URLComponents(url: $0, resolvingAgainstBaseURL: false)
+        }
+        let dayStart = components?.queryItems?.first { $0.name == "day_start" }?.value
+        // 上海 2026-09-10 00:00 (+08:00) = UTC 2026-09-09 16:00
+        #expect(dayStart == "2026-09-09T16:00:00Z")
+        #expect(components?.path == "/functions/v1/get-tab2-home")
+        #expect(components?.queryItems?.count == 1)
+    }
+
+    @Test func utcCalendarStillYieldsUTCMidnight() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        var comps = DateComponents()
+        comps.year = 2026; comps.month = 9; comps.day = 10; comps.hour = 10
+        let now = calendar.date(from: comps)!
+
+        let url = Tab2HomeViewModel.tab2HomeRequestURL(now: now, calendar: calendar)
+        let components = url.flatMap {
+            URLComponents(url: $0, resolvingAgainstBaseURL: false)
+        }
+        let dayStart = components?.queryItems?.first { $0.name == "day_start" }?.value
+        #expect(dayStart == "2026-09-10T00:00:00Z")
+    }
+}
+
 // MARK: - Root tab swipe intent tests
 
 struct RootTabSwipeIntentTests {
@@ -545,24 +586,22 @@ struct NavigationChromeTokenTests {
     @Test func labelTabRowFitsNarrowestSupportedScreenAtMaxDynamicTypeSize() throws {
         // 双面包夹：从 AX1 到 AX5 逐档实测 Tab 行宽，最大放得下的档必须恰为 token
         // 声明的那一档——token 调高到放不下的档，或调低到还能再放一档的档，这里都会红。
-        // 文案取自 AppTab.title、字体配方取自 AppTheme.Font 的 tabLabel 配方 token
-        // （两处改动都会自动重测）；宽度独立于 topBarSideClearance 公式实测，
+        // 文案取自 AppTab.title；字体取自打包的 GothicA1-Medium 实测（与生产同源，见
+        // labelRowWidth 内注释）；宽度独立于 topBarSideClearance 公式实测，
         // clearance 改坏时也会红。
-        let fittingCategory = try #require(largestFittingAccessibilityCategory())
+        let fittingCategory = try #require(try largestFittingAccessibilityCategory())
         #expect(fittingCategory == AppTheme.Typography.topTabLabelMaxDynamicTypeSize.uiCategory)
     }
 
     /// AX1→AX5 逐档实测 Tab 行宽，返回最大放得下的档；一档都放不下时返回 nil。
-    /// 字体配方读自 AppTheme.Font 的 tabLabel 配方 token——与生产共用同一份，
-    /// 改 tabLabel 的 TextStyle / 字重 / design 时本测试自动按新配方重测（放不下会红）。
-    private func largestFittingAccessibilityCategory() -> UIContentSizeCategory? {
+    private func largestFittingAccessibilityCategory() throws -> UIContentSizeCategory? {
         let categories: [UIContentSizeCategory] = [
             .accessibilityMedium, .accessibilityLarge, .accessibilityExtraLarge,
             .accessibilityExtraExtraLarge, .accessibilityExtraExtraExtraLarge,
         ]
         var largest: UIContentSizeCategory?
         for category in categories {
-            guard labelRowWidth(at: category) <= availableWidth else { break }
+            guard try labelRowWidth(at: category) <= availableWidth else { break }
             largest = category
         }
         return largest
@@ -572,21 +611,23 @@ struct NavigationChromeTokenTests {
         narrowestSupportedScreenWidth - AppTheme.Size.topBarSideClearance * 2
     }
 
-    private func labelRowWidth(at category: UIContentSizeCategory) -> CGFloat {
-        let style = uiTextStyle(AppTheme.Font.tabLabelStyle)
-        // 固定按 .large（系统默认档）取基准字号，不读 UIFont.preferredFont(forTextStyle:)
-        // 的无参数重载——那个重载读的是进程当前"活的"系统字号设置，在并行跑全量测试时
-        // 会被同一模拟器上其他用例污染，导致基准字号本身就已经被放大过一次，
-        // 叠加下面的 UIFontMetrics 二次缩放，测出的可放档位会不确定地偏低（间歇性变红）。
-        let baseTrait = UITraitCollection(preferredContentSizeCategory: .large)
-        let baseSize = UIFont.preferredFont(forTextStyle: style, compatibleWith: baseTrait).pointSize
+    private func labelRowWidth(at category: UIContentSizeCategory) throws -> CGFloat {
+        // 与生产同一份字体：FontLoader 注册后按 PostScript 名取打包的 GothicA1-Medium 实测，
+        // PostScript 名读 AppTheme.Font.SansWeight.medium.postScriptName（全 App 唯一来源，
+        // 不在测试里重复硬编码字符串）。旧三常量（tabLabelStyle/Design/Weight）已删——
+        // 它们只有测试在读、生产从不读，实测的是 SF Pro Medium 而非无衬线自有字体，
+        // 等于保证了一个不存在的东西。
+        // 缩放复刻 tabLabel 配方：基准字号用生产同源的 tabLabelBaseSize（不读系统
+        // preferredFont 表——那样配方与测试各有一份基准值，会漂移；且无参重载读的是
+        // 进程当前"活的"字号设置，并行跑全量测试时会被同一模拟器上的其他用例污染，
+        // 造成间歇性变红），走 .subheadline 的 UIFontMetrics 表，与 SwiftUI relativeTo
+        // 的缩放同一套。若 tabLabel 的字重档位改动，须同步本处 PostScript 名——不同步
+        // 时这一行会红，测试当场指出。
+        FontLoader.registerCustomFonts()
+        let baseSize = AppTheme.Font.tabLabelBaseSize
         let trait = UITraitCollection(preferredContentSizeCategory: category)
-        let size = UIFontMetrics(forTextStyle: style).scaledValue(for: baseSize, compatibleWith: trait)
-        let weight = uiWeight(AppTheme.Font.tabLabelWeight)
-        let descriptor = UIFont.systemFont(ofSize: size, weight: weight).fontDescriptor
-            .withDesign(uiDesign(AppTheme.Font.tabLabelDesign))
-            ?? UIFont.systemFont(ofSize: size, weight: weight).fontDescriptor
-        let font = UIFont(descriptor: descriptor, size: size)
+        let size = UIFontMetrics(forTextStyle: .subheadline).scaledValue(for: baseSize, compatibleWith: trait)
+        let font = try #require(UIFont(name: AppTheme.Font.SansWeight.medium.postScriptName, size: size))
         let attributes: [NSAttributedString.Key: Any] = [.font: font]
         let labelsWidth = AppTab.allCases
             .map { ($0.title as NSString).size(withAttributes: attributes).width }
@@ -594,52 +635,6 @@ struct NavigationChromeTokenTests {
         return labelsWidth
             + AppTheme.Space.paddingM * 4          // 两个 tab 各水平内边距 paddingM ×2
             + AppTheme.Size.topTabItemSpacing
-    }
-
-    /// 测试用：SwiftUI Font.TextStyle → UIKit UIFont.TextStyle。
-    private func uiTextStyle(_ style: SwiftUI.Font.TextStyle) -> UIFont.TextStyle {
-        switch style {
-        case .largeTitle: return .largeTitle
-        case .title: return .title1
-        case .title2: return .title2
-        case .title3: return .title3
-        case .headline: return .headline
-        case .subheadline: return .subheadline
-        case .body: return .body
-        case .callout: return .callout
-        case .footnote: return .footnote
-        case .caption: return .caption1
-        case .caption2: return .caption2
-        @unknown default: return .body
-        }
-    }
-
-    /// 测试用：SwiftUI Font.Weight → UIKit UIFont.Weight。
-    /// Font.Weight 不公开 rawValue，无法直接换算，只能按静态成员逐档匹配。
-    private func uiWeight(_ weight: SwiftUI.Font.Weight) -> UIFont.Weight {
-        switch weight {
-        case .ultraLight: return .ultraLight
-        case .thin: return .thin
-        case .light: return .light
-        case .regular: return .regular
-        case .medium: return .medium
-        case .semibold: return .semibold
-        case .bold: return .bold
-        case .heavy: return .heavy
-        case .black: return .black
-        default: return .regular
-        }
-    }
-
-    /// 测试用：SwiftUI Font.Design → UIKit UIFontDescriptor.SystemDesign。
-    private func uiDesign(_ design: SwiftUI.Font.Design) -> UIFontDescriptor.SystemDesign {
-        switch design {
-        case .default: return .default
-        case .serif: return .serif
-        case .rounded: return .rounded
-        case .monospaced: return .monospaced
-        @unknown default: return .default
-        }
     }
 
     @Test func topBarMenuIconStrokeMatchesDesignedWeight() {
@@ -665,6 +660,26 @@ struct NavigationChromeTokenTests {
         #expect(AppTheme.Shadow.pillAmbientRadius == 8)
         #expect(AppTheme.Shadow.pillAmbientY == 2)
         #expect(AppTheme.Shadow.pillAmbientX == 0)
+    }
+}
+
+// MARK: - Gothic A1 字体注册测试（无衬线换装第 2 刀）
+// 断言 FontLoader 注册后，AppTheme.Font.SansWeight 三档的 PostScript 名都能
+// 用 UIFont(name:) 真取到字体——而不是回退到系统字体却无人察觉。
+struct FontLoaderTests {
+    @Test func gothicA1RegularIsRegisteredAndResolvable() throws {
+        FontLoader.registerCustomFonts()
+        _ = try #require(UIFont(name: AppTheme.Font.SansWeight.regular.postScriptName, size: 12))
+    }
+
+    @Test func gothicA1MediumIsRegisteredAndResolvable() throws {
+        FontLoader.registerCustomFonts()
+        _ = try #require(UIFont(name: AppTheme.Font.SansWeight.medium.postScriptName, size: 12))
+    }
+
+    @Test func gothicA1SemiBoldIsRegisteredAndResolvable() throws {
+        FontLoader.registerCustomFonts()
+        _ = try #require(UIFont(name: AppTheme.Font.SansWeight.semibold.postScriptName, size: 12))
     }
 }
 
@@ -4958,7 +4973,10 @@ struct Tab2HomeDataDecodeTests {
 
     private let decoder = JSONDecoder()
 
-    @Test func decodesFullPayloadWithSubScenesAndDate() throws {
+    @Test func decodesFullPayloadWithActivitiesAndLastTalkedAt() throws {
+        // fixture 故意用中文 scene_category：这是 SceneCategory.from(_:) legacyMap
+        // 兼容映射的唯一自动化证据（老数据的中文分类读回英文标签）。清库（上线前）
+        // 后若要删中文映射，先看这个测试——删了映射，老数据的读侧兼容就再无防护。
         let json = """
         {
             "unlocked": true,
@@ -4968,16 +4986,21 @@ struct Tab2HomeDataDecodeTests {
                     "scene_category": "工作与学业",
                     "word_count": 8,
                     "unlocked": true,
-                    "last_material_at": "2026-07-25T10:00:00.000Z",
-                    "sub_scenes": [
+                    "not_spoken_count": 3,
+                    "last_talked_at": "2026-07-25T10:00:00.000Z",
+                    "last_material_at": "2026-07-25T09:15:00.000Z",
+                    "new_material_count": 2,
+                    "activity_count": 6,
+                    "activities": [
                         {
                             "scene_detail": "Team meeting",
                             "occurrence_count": 3,
-                            "quote": "We had a long meeting",
-                            "image_url": null
+                            "cover": {
+                                "material_id": "00000000-0000-0000-0000-000000000001",
+                                "image_url": "images/u1/photo.jpg"
+                            }
                         }
-                    ],
-                    "preview_words": ["overtime", "deadline"]
+                    ]
                 }
             ]
         }
@@ -4992,15 +5015,73 @@ struct Tab2HomeDataDecodeTests {
         #expect(cat.sceneCategory == "工作与学业")
         #expect(cat.wordCount == 8)
         #expect(cat.unlocked == true)
+        #expect(cat.notSpokenCount == 3)
+        #expect(cat.lastTalkedAt != nil)
         #expect(cat.lastMaterialAt != nil)
+        #expect(cat.newMaterialCount == 2)
+        #expect(cat.activityCount == 6)
         #expect(cat.englishLabel == "Work & Study")
-        #expect(cat.previewWords.map(\.lemma) == ["overtime", "deadline"])
 
-        let scene = cat.subScenes[0]
-        #expect(scene.sceneDetail == "Team meeting")
-        #expect(scene.occurrenceCount == 3)
-        #expect(scene.quote == "We had a long meeting")
-        #expect(scene.imageUrl == nil)
+        let activity = cat.activities[0]
+        #expect(activity.sceneDetail == "Team meeting")
+        #expect(activity.occurrenceCount == 3)
+        #expect(activity.cover?.materialId == "00000000-0000-0000-0000-000000000001")
+        #expect(activity.cover?.imageUrl == "images/u1/photo.jpg")
+        #expect(activity.cover?.stableImageKey == "images/u1/photo.jpg")
+    }
+
+    @Test func coverNullFallsBackToNil() throws {
+        let json = """
+        {
+            "scene_category": "饮食",
+            "word_count": 2,
+            "unlocked": true,
+            "activities": [
+                {
+                    "scene_detail": "Cooking dinner",
+                    "occurrence_count": 1,
+                    "cover": null
+                }
+            ]
+        }
+        """.data(using: .utf8)!
+
+        let category = try decoder.decode(Tab2CategoryData.self, from: json)
+        #expect(category.activities[0].cover == nil)
+    }
+
+    // get-tab2-home 的 signImagePaths 在 Storage 签名失败时会把 cover 对象整个保留、
+    // 只把 image_url 单独置 null（不是把 cover 整条置 null）——这条曾经会让整页解码失败，
+    // 因为 Cover.imageUrl 原来声明成了非可选 String。
+    @Test func coverImageUrlNullDoesNotFailWholePayloadDecode() throws {
+        let json = """
+        {
+            "scene_category": "饮食",
+            "word_count": 2,
+            "unlocked": true,
+            "activities": [
+                {
+                    "scene_detail": "Cooking dinner",
+                    "occurrence_count": 1,
+                    "cover": {
+                        "material_id": "00000000-0000-0000-0000-000000000002",
+                        "image_url": null
+                    }
+                }
+            ]
+        }
+        """.data(using: .utf8)!
+
+        let category = try decoder.decode(Tab2CategoryData.self, from: json)
+        let cover = category.activities[0].cover
+        #expect(cover?.materialId == "00000000-0000-0000-0000-000000000002")
+        #expect(cover?.imageUrl == nil)
+        #expect(cover?.stableImageKey == nil)
+
+        // photoCover 的过滤要把这种「cover 存在但没有可用图」的情况当无图处理，
+        // 而不是把 nil imageUrl 传给下游渲染。
+        let display = Tab2ActivityDisplay.compute(category: category)
+        #expect(display.photoCover == nil)
     }
 
     @Test func missingOptionalFieldsDefaultToEmpty() throws {
@@ -5020,69 +5101,19 @@ struct Tab2HomeDataDecodeTests {
 
         let home = try decoder.decode(Tab2HomeData.self, from: json)
         let cat = home.categories[0]
-        #expect(cat.subScenes.isEmpty)
-        #expect(cat.previewWords.isEmpty)
+        #expect(cat.activities.isEmpty)
+        #expect(cat.notSpokenCount == 0)
+        #expect(cat.lastTalkedAt == nil)
         #expect(cat.lastMaterialAt == nil)
+        #expect(cat.newMaterialCount == 0)
+        #expect(cat.activityCount == 0)
     }
 
-    @Test func decodesLegacyStringPreviewWords() throws {
-        let json = """
-        {
-            "scene_category": "科技数码",
-            "word_count": 2,
-            "unlocked": true,
-            "preview_words": ["back up", "glitch"]
-        }
-        """.data(using: .utf8)!
+    // preview_words 相关测试已随 Tab2PreviewWord 模型删除（刀 3）。
+    // malformed → 空数组的宽容语义不再保留：activities 类型不符时整包解码失败，
+    // 走首页加载错误路径（与「空词条=失败」的产品决定一致）。
 
-        let category = try decoder.decode(Tab2CategoryData.self, from: json)
-
-        #expect(category.previewWords.map(\.lemma) == ["back up", "glitch"])
-        #expect(category.previewWords.allSatisfy { $0.displayForm == nil })
-    }
-
-    @Test func decodesObjectPreviewWords() throws {
-        let json = """
-        {
-            "scene_category": "科技数码",
-            "word_count": 1,
-            "unlocked": true,
-            "preview_words": [
-                {
-                    "lemma": "back up",
-                    "display_form": "backed up",
-                    "pos": "verb",
-                    "native_meaning": "备份"
-                }
-            ]
-        }
-        """.data(using: .utf8)!
-
-        let category = try decoder.decode(Tab2CategoryData.self, from: json)
-
-        #expect(category.previewWords.count == 1)
-        #expect(category.previewWords[0].lemma == "back up")
-        #expect(category.previewWords[0].displayForm == "backed up")
-        #expect(category.previewWords[0].pos == "verb")
-        #expect(category.previewWords[0].nativeMeaning == "备份")
-    }
-
-    @Test func malformedPreviewWordsFallsBackToEmpty() throws {
-        let json = """
-        {
-            "scene_category": "科技数码",
-            "word_count": 1,
-            "unlocked": true,
-            "preview_words": { "lemma": "back up" }
-        }
-        """.data(using: .utf8)!
-
-        let category = try decoder.decode(Tab2CategoryData.self, from: json)
-
-        #expect(category.previewWords.isEmpty)
-    }
-
-    @Test func lastMaterialAtParsesISO8601() throws {
+    @Test func lastTalkedAtParsesISO8601() throws {
         let json = """
         {
             "unlocked": true,
@@ -5092,17 +5123,58 @@ struct Tab2HomeDataDecodeTests {
                     "scene_category": "其他",
                     "word_count": 1,
                     "unlocked": true,
-                    "last_material_at": "2026-07-20T08:30:00.000Z"
+                    "last_talked_at": "2026-07-20T08:30:00.000Z"
                 }
             ]
         }
         """.data(using: .utf8)!
 
         let home = try decoder.decode(Tab2HomeData.self, from: json)
-        let date = home.categories[0].lastMaterialAt
+        let date = home.categories[0].lastTalkedAt
         #expect(date != nil)
         let after = ISO8601DateFormatter().date(from: "2026-07-01T00:00:00Z")!
         #expect(date! > after)
+    }
+
+    // 刀 4b：lastMaterialAt 走同一套双格式解析——毫秒小数（后端默认）与
+    // 无毫秒两种格式都必须解出来。
+    @Test func lastMaterialAtParsesBothISO8601Formats() throws {
+        let json = """
+        {
+            "unlocked": true,
+            "input_count": 2,
+            "categories": [
+                {
+                    "scene_category": "饮食",
+                    "word_count": 30,
+                    "unlocked": true,
+                    "last_material_at": "2026-09-09T23:59:59.500Z",
+                    "new_material_count": 1
+                },
+                {
+                    "scene_category": "出行交通",
+                    "word_count": 25,
+                    "unlocked": true,
+                    "last_material_at": "2026-09-08T12:00:00Z",
+                    "new_material_count": 0
+                }
+            ]
+        }
+        """.data(using: .utf8)!
+
+        let home = try decoder.decode(Tab2HomeData.self, from: json)
+
+        let fractional = home.categories[0]
+        #expect(fractional.lastMaterialAt != nil)
+        let expectedMs = "2026-09-09T23:59:59.500Z"
+        let fmtMs = ISO8601DateFormatter()
+        fmtMs.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        #expect(fractional.lastMaterialAt == fmtMs.date(from: expectedMs))
+        #expect(fractional.newMaterialCount == 1)
+
+        let plain = home.categories[1]
+        #expect(plain.lastMaterialAt == ISO8601DateFormatter().date(from: "2026-09-08T12:00:00Z"))
+        #expect(plain.newMaterialCount == 0)
     }
 
     @Test func emptyCategoriesArray() throws {
@@ -5130,14 +5202,32 @@ struct Tab2HomeDataDecodeTests {
     }
 }
 
-// MARK: - Tab2HomeViewModel.heroCategory() tests
+// MARK: - Tab2HomeViewModel.selectHero() / recencySorted() tests（刀 4b）
+//
+// 语义（§10.5 + §12 拍板）：候选集统一排序 = lastMaterialAt 降序，null 排最后、
+// 组内 wordCount 降序、id 升序兜底。Hero 选取：② newMaterialCount ≥ 1 的类中取
+// lastMaterialAt 最新，平局三级键 newMaterialCount 降序 → activityCount 降序 →
+// id 升序（wordCount 不参与）；③ 全 0 轮换——记录 类别ID → 上次选中日，
+// 无记录 = 从未被选中 = 最久排最前，同久按 §10.5，今天已记录 → 冻结不重轮换。
 
-struct Tab2HeroCategoryTests {
+struct Tab2HeroSelectionTests {
 
-    private let now = Date(timeIntervalSince1970: 1_788_153_600)
+    private let utcCal: Calendar = {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        return cal
+    }()
+
+    private func date(_ y: Int, _ m: Int, _ d: Int, _ h: Int = 12) -> Date {
+        utcCal.date(from: DateComponents(year: y, month: m, day: d, hour: h))!
+    }
 
     private func makeDefaults() -> UserDefaults {
-        UserDefaults(suiteName: "tab2-hero-tests-\(UUID().uuidString)")!
+        UserDefaults(suiteName: "tab2-hero-4b-tests-\(UUID().uuidString)")!
+    }
+
+    private func makeVM(defaults: UserDefaults) -> Tab2HomeViewModel {
+        Tab2HomeViewModel(defaults: defaults, now: { self.date(2026, 9, 10, 9) })
     }
 
     private func makeCategory(
@@ -5145,195 +5235,242 @@ struct Tab2HeroCategoryTests {
         wordCount: Int,
         unlocked: Bool,
         lastMaterialAt: Date? = nil,
-        featuredCreatedAt: Date? = nil,
-        subSceneDetails: [String] = []
+        newMaterialCount: Int = 0,
+        activityCount: Int = 0,
+        activityDetails: [String] = []
     ) -> Tab2CategoryData {
-        let featured: Tab2FeaturedMoment? = featuredCreatedAt.map { createdAt in
-            Tab2FeaturedMoment(
-                sceneDetail: subSceneDetails.first ?? "Scene", occurrenceCount: 1,
-                materialId: "m-\(sceneCategory)",
-                userOriginal: "some original", targetExpression: "some target",
-                nativeMeaning: nil, imageUrl: nil, inputLang: "native",
-                sourceDirection: "express", sourceGranularity: "sentence",
-                createdAt: createdAt, spokenCount: 0
-            )
-        }
-        return Tab2CategoryData(
+        Tab2CategoryData(
             sceneCategory: sceneCategory,
             wordCount: wordCount,
             unlocked: unlocked,
             lastMaterialAt: lastMaterialAt,
-            subScenes: subSceneDetails.map {
-                Tab2SubScene(
-                    sceneDetail: $0, occurrenceCount: 1, quote: nil,
-                    targetExpression: nil, imageUrl: nil
-                )
-            },
-            featured: featured
+            newMaterialCount: newMaterialCount,
+            activityCount: activityCount,
+            activities: activityDetails.map {
+                Tab2Activity(sceneDetail: $0, occurrenceCount: 1)
+            }
         )
     }
 
+    // MARK: recencySorted（§10.5 列表排序，纯函数）
+
+    @Test func recencySortsByLastMaterialAtDescending() {
+        let oldCat = makeCategory(sceneCategory: "A", wordCount: 20, unlocked: true,
+                                  lastMaterialAt: date(2026, 9, 1))
+        let newCat = makeCategory(sceneCategory: "B", wordCount: 20, unlocked: true,
+                                  lastMaterialAt: date(2026, 9, 9))
+        #expect(Tab2HomeViewModel.recencySorted([oldCat, newCat]).map(\.id) == ["B", "A"])
+    }
+
+    @Test func nullLastMaterialAtGoesLastOrderedByWordCountDescending() {
+        let dated = makeCategory(sceneCategory: "A", wordCount: 21, unlocked: true,
+                                 lastMaterialAt: date(2026, 9, 1))
+        let nullLow = makeCategory(sceneCategory: "B", wordCount: 21, unlocked: true)
+        let nullHigh = makeCategory(sceneCategory: "C", wordCount: 40, unlocked: true)
+        #expect(Tab2HomeViewModel.recencySorted([nullLow, dated, nullHigh]).map(\.id) == ["A", "C", "B"])
+    }
+
+    @Test func datedTieBreaksByIdAscendingNotWordCount() {
+        let same = date(2026, 9, 8)
+        let rich = makeCategory(sceneCategory: "B", wordCount: 99, unlocked: true,
+                                lastMaterialAt: same)
+        let poor = makeCategory(sceneCategory: "A", wordCount: 21, unlocked: true,
+                                lastMaterialAt: same)
+        // wordCount 不参与 dated 平局（null 组除外）→ id 升序
+        #expect(Tab2HomeViewModel.recencySorted([rich, poor]).map(\.id) == ["A", "B"])
+    }
+
+    // MARK: selectHero 规则 ②（今天有新素材）
+
+    @Test func freshCategoryWinsOverRotationPool() {
+        let vm = makeVM(defaults: makeDefaults())
+        let fresh = makeCategory(sceneCategory: "工作与学业", wordCount: 25, unlocked: true,
+                                 lastMaterialAt: date(2026, 9, 10), newMaterialCount: 2)
+        let stale = makeCategory(sceneCategory: "饮食", wordCount: 50, unlocked: true,
+                                 lastMaterialAt: date(2026, 9, 5), newMaterialCount: 0)
+        vm.data = Tab2HomeData(unlocked: true, inputCount: 2, categories: [stale, fresh])
+
+        #expect(vm.selectHero(now: date(2026, 9, 10), calendar: utcCal)?.sceneCategory == "工作与学业")
+    }
+
+    @Test func freshestLastMaterialAtWinsAmongFresh() {
+        let vm = makeVM(defaults: makeDefaults())
+        let later = makeCategory(sceneCategory: "工作与学业", wordCount: 25, unlocked: true,
+                                 lastMaterialAt: date(2026, 9, 10, 10), newMaterialCount: 1)
+        let earlier = makeCategory(sceneCategory: "饮食", wordCount: 25, unlocked: true,
+                                   lastMaterialAt: date(2026, 9, 10, 9), newMaterialCount: 1)
+        vm.data = Tab2HomeData(unlocked: true, inputCount: 2, categories: [earlier, later])
+        #expect(vm.selectHero(now: date(2026, 9, 10), calendar: utcCal)?.sceneCategory == "工作与学业")
+    }
+
+    // 三级平局各自独立成一次「进入页面」求值，各用各的 vm/defaults——
+    // 同一 vm 连续调用会让第一次的选择在同一天冻结（①规则），
+    // 后续调用会被冻结挡住而测不到②的三级 tiebreak，与本测试的意图无关。
+    @Test func freshTiebreakThreeLevelKey() {
+        let same = date(2026, 9, 10)
+
+        // 一级：同 lastMaterialAt → newMaterialCount 降序（word 99、activity 9 都不插队）
+        let a = makeCategory(sceneCategory: "A", wordCount: 99, unlocked: true,
+                             lastMaterialAt: same, newMaterialCount: 2, activityCount: 9)
+        let b = makeCategory(sceneCategory: "B", wordCount: 21, unlocked: true,
+                             lastMaterialAt: same, newMaterialCount: 3, activityCount: 1)
+        let vm1 = makeVM(defaults: makeDefaults())
+        vm1.data = Tab2HomeData(unlocked: true, inputCount: 2, categories: [a, b])
+        #expect(vm1.selectHero(now: date(2026, 9, 10), calendar: utcCal)?.id == "B")
+
+        // 二级：count 平 → activityCount 降序
+        let c = makeCategory(sceneCategory: "C", wordCount: 21, unlocked: true,
+                             lastMaterialAt: same, newMaterialCount: 3, activityCount: 9)
+        let vm2 = makeVM(defaults: makeDefaults())
+        vm2.data = Tab2HomeData(unlocked: true, inputCount: 2, categories: [b, c])
+        #expect(vm2.selectHero(now: date(2026, 9, 10), calendar: utcCal)?.id == "C")
+
+        // 三级：全平 → id 升序（确定键，保证可复现）
+        let d = makeCategory(sceneCategory: "D", wordCount: 21, unlocked: true,
+                             lastMaterialAt: same, newMaterialCount: 3, activityCount: 9)
+        let vm3 = makeVM(defaults: makeDefaults())
+        vm3.data = Tab2HomeData(unlocked: true, inputCount: 2, categories: [d, c])
+        #expect(vm3.selectHero(now: date(2026, 9, 10), calendar: utcCal)?.id == "C")
+    }
+
+    // MARK: selectHero 规则 ③（全 0 轮换）
+
+    @Test func rotationFirstEntryPicksRecencyOrderFirstAndWritesRecord() {
+        let defaults = makeDefaults()
+        let vm = makeVM(defaults: defaults)
+        let older = makeCategory(sceneCategory: "工作与学业", wordCount: 25, unlocked: true,
+                                 lastMaterialAt: date(2026, 9, 2))
+        let newer = makeCategory(sceneCategory: "饮食", wordCount: 21, unlocked: true,
+                                 lastMaterialAt: date(2026, 9, 6))
+        vm.data = Tab2HomeData(unlocked: true, inputCount: 2, categories: [older, newer])
+
+        // 首次进入：全体「从未被选中」→ 按 §10.5 取第一个（lastMaterialAt 最新）
+        #expect(vm.selectHero(now: date(2026, 9, 10), calendar: utcCal)?.id == "饮食")
+        // 并写入今天的记录
+        let records = defaults.dictionary(forKey: Tab2Defaults.heroLastSelectedDays)
+            as? [String: String] ?? [:]
+        #expect(records["饮食"] == "2026-09-10")
+    }
+
+    @Test func rotationNeverSelectedCountsAsOldest() {
+        let defaults = makeDefaults()
+        let vm = makeVM(defaults: defaults)
+        let never = makeCategory(sceneCategory: "饮食", wordCount: 21, unlocked: true,
+                                 lastMaterialAt: date(2026, 9, 2))
+        let recorded = makeCategory(sceneCategory: "工作与学业", wordCount: 25, unlocked: true,
+                                    lastMaterialAt: date(2026, 9, 9))
+        defaults.set(["工作与学业": "2026-09-09"], forKey: Tab2Defaults.heroLastSelectedDays)
+        vm.data = Tab2HomeData(unlocked: true, inputCount: 2, categories: [never, recorded])
+
+        // 无记录 = 最久，排在昨天被选过的类前面——即使后者 lastMaterialAt 更新
+        #expect(vm.selectHero(now: date(2026, 9, 10), calendar: utcCal)?.id == "饮食")
+    }
+
+    @Test func rotationPicksOldestRecordedDay() {
+        let defaults = makeDefaults()
+        let vm = makeVM(defaults: defaults)
+        let recent = makeCategory(sceneCategory: "饮食", wordCount: 21, unlocked: true)
+        let ancient = makeCategory(sceneCategory: "工作与学业", wordCount: 21, unlocked: true)
+        defaults.set(
+            ["饮食": "2026-09-09", "工作与学业": "2026-09-03"],
+            forKey: Tab2Defaults.heroLastSelectedDays
+        )
+        vm.data = Tab2HomeData(unlocked: true, inputCount: 2, categories: [recent, ancient])
+
+        #expect(vm.selectHero(now: date(2026, 9, 10), calendar: utcCal)?.id == "工作与学业")
+    }
+
+    @Test func rotationFreezesWhenTodayAlreadyRecorded() {
+        let defaults = makeDefaults()
+        let vm = makeVM(defaults: defaults)
+        let todaysPick = makeCategory(sceneCategory: "工作与学业", wordCount: 21, unlocked: true)
+        let never = makeCategory(sceneCategory: "饮食", wordCount: 21, unlocked: true)
+        defaults.set(["工作与学业": "2026-09-10"], forKey: Tab2Defaults.heroLastSelectedDays)
+        vm.data = Tab2HomeData(unlocked: true, inputCount: 2, categories: [todaysPick, never])
+
+        // 同一天再次进入：已有当天记录 → 冻结，不因「饮食 从未被选中」重新轮换
+        #expect(vm.selectHero(now: date(2026, 9, 10), calendar: utcCal)?.id == "工作与学业")
+        let records = defaults.dictionary(forKey: Tab2Defaults.heroLastSelectedDays)
+            as? [String: String] ?? [:]
+        #expect(records.count == 1)
+    }
+
+    // 回归测试：①冻结必须统一在②③分支之外先判定，否则今天冻结之后
+    // 别的分类冒出新素材会静默把 Hero 换掉（selectHero 曾把①的检查
+    // 只写在③轮换分支里，②分支完全不查，此测试修前会失败）。
+    @Test func freezeAlsoBeatsFreshMaterialArrivingLater() {
+        let defaults = makeDefaults()
+        let vm = makeVM(defaults: defaults)
+        // 今天早上轮换已冻结「工作与学业」；「饮食」在这之后才收到新素材。
+        let frozen = makeCategory(sceneCategory: "工作与学业", wordCount: 21, unlocked: true)
+        let freshLater = makeCategory(sceneCategory: "饮食", wordCount: 21, unlocked: true,
+                                       lastMaterialAt: date(2026, 9, 10, 15), newMaterialCount: 1)
+        defaults.set(["工作与学业": "2026-09-10"], forKey: Tab2Defaults.heroLastSelectedDays)
+        vm.data = Tab2HomeData(unlocked: true, inputCount: 2, categories: [frozen, freshLater])
+
+        #expect(vm.selectHero(now: date(2026, 9, 10), calendar: utcCal)?.id == "工作与学业")
+        let records = defaults.dictionary(forKey: Tab2Defaults.heroLastSelectedDays)
+            as? [String: String] ?? [:]
+        #expect(records.count == 1)
+    }
+
+    @Test func rotationEqualDayTieUsesRecencyOrder() {
+        let defaults = makeDefaults()
+        let vm = makeVM(defaults: defaults)
+        let older = makeCategory(sceneCategory: "工作与学业", wordCount: 21, unlocked: true,
+                                 lastMaterialAt: date(2026, 9, 2))
+        let newer = makeCategory(sceneCategory: "饮食", wordCount: 21, unlocked: true,
+                                 lastMaterialAt: date(2026, 9, 8))
+        defaults.set(
+            ["工作与学业": "2026-09-03", "饮食": "2026-09-03"],
+            forKey: Tab2Defaults.heroLastSelectedDays
+        )
+        vm.data = Tab2HomeData(unlocked: true, inputCount: 2, categories: [older, newer])
+        #expect(vm.selectHero(now: date(2026, 9, 10), calendar: utcCal)?.id == "饮食")
+    }
+
+    // MARK: 基础守卫生
+
     @Test func nilDataReturnsNil() {
         let vm = Tab2HomeViewModel()
-        vm.data = nil
-        #expect(vm.heroCategory() == nil)
+        #expect(vm.selectHero() == nil)
     }
 
     @Test func noUnlockedCategoriesReturnsNil() {
-        let vm = Tab2HomeViewModel()
+        let vm = makeVM(defaults: makeDefaults())
         vm.data = Tab2HomeData(unlocked: false, inputCount: 2, categories: [
             makeCategory(sceneCategory: "工作与学业", wordCount: 5, unlocked: false),
             makeCategory(sceneCategory: "饮食", wordCount: 3, unlocked: false)
         ])
-        #expect(vm.heroCategory() == nil)
+        #expect(vm.selectHero(now: date(2026, 9, 10), calendar: utcCal) == nil)
     }
 
-    @Test func noFeaturedFallsBackToHighestWordCount() {
-        let vm = Tab2HomeViewModel(defaults: makeDefaults(), now: { now })
-        let low  = makeCategory(sceneCategory: "工作与学业", wordCount: 10, unlocked: true)
-        let high = makeCategory(sceneCategory: "饮食", wordCount: 20, unlocked: true)
-        vm.data = Tab2HomeData(unlocked: true, inputCount: 5, categories: [low, high])
-        let hero = vm.heroCategory()
-        #expect(hero?.sceneCategory == "饮食")
-        #expect(hero?.wordCount == 20)
-    }
-
-    @Test func prefersCategoryWithFeaturedOverHigherWordCount() {
-        let vm = Tab2HomeViewModel(defaults: makeDefaults(), now: { now })
-        let featuredCat = makeCategory(
-            sceneCategory: "工作与学业", wordCount: 5, unlocked: true,
-            featuredCreatedAt: now, subSceneDetails: ["Team meeting"]
-        )
-        let wordRichCat = makeCategory(
-            sceneCategory: "饮食", wordCount: 50, unlocked: true
-        )
-        vm.data = Tab2HomeData(unlocked: true, inputCount: 8, categories: [wordRichCat, featuredCat])
-        #expect(vm.heroCategory()?.sceneCategory == "工作与学业")
-    }
-
-    @Test func recentFeaturedWinsWhenBothCategoriesHaveFeaturedMoments() {
-        let vm = Tab2HomeViewModel(defaults: makeDefaults(), now: { now })
-        let older = now.addingTimeInterval(-8 * 24 * 60 * 60)
-        let newer = now.addingTimeInterval(-2 * 24 * 60 * 60)
-        let oldCat = makeCategory(
-            sceneCategory: "家庭与人际", wordCount: 15, unlocked: true,
-            featuredCreatedAt: older, subSceneDetails: ["Family dinner"]
-        )
-        let newCat = makeCategory(
-            sceneCategory: "工作与学业", wordCount: 10, unlocked: true,
-            featuredCreatedAt: newer, subSceneDetails: ["Team meeting"]
-        )
-        vm.data = Tab2HomeData(unlocked: true, inputCount: 10, categories: [oldCat, newCat])
-        #expect(vm.heroCategory()?.sceneCategory == "工作与学业")
-    }
-
-    @Test func moreMomentsWinsInsideRecentBucket() {
-        let vm = Tab2HomeViewModel(defaults: makeDefaults(), now: { now })
-        let oneMoment = makeCategory(
-            sceneCategory: "工作与学业", wordCount: 20, unlocked: true,
-            featuredCreatedAt: now.addingTimeInterval(-1 * 24 * 60 * 60),
-            subSceneDetails: ["Team meeting"]
-        )
-        let twoMoments = makeCategory(
-            sceneCategory: "饮食", wordCount: 10, unlocked: true,
-            featuredCreatedAt: now.addingTimeInterval(-2 * 24 * 60 * 60),
-            subSceneDetails: ["Making breakfast", "Ordering lunch"]
-        )
-        vm.data = Tab2HomeData(
-            unlocked: true, inputCount: 10, categories: [oneMoment, twoMoments]
-        )
-
-        #expect(vm.heroCategory()?.sceneCategory == "饮食")
-    }
-
-    @Test func recentLastMaterialAtDoesNotOverrideFeaturedRecency() {
-        let vm = Tab2HomeViewModel(defaults: makeDefaults(), now: { now })
-        let pollutedByLookup = makeCategory(
-            sceneCategory: "科技与数码", wordCount: 30, unlocked: true,
-            lastMaterialAt: now,
-            featuredCreatedAt: now.addingTimeInterval(-20 * 24 * 60 * 60),
-            subSceneDetails: ["Fixing a device"]
-        )
-        let genuinelyRecent = makeCategory(
-            sceneCategory: "休闲娱乐", wordCount: 5, unlocked: true,
-            lastMaterialAt: now.addingTimeInterval(-30 * 24 * 60 * 60),
-            featuredCreatedAt: now.addingTimeInterval(-2 * 24 * 60 * 60),
-            subSceneDetails: ["Watching a game"]
-        )
-        vm.data = Tab2HomeData(
-            unlocked: true, inputCount: 12, categories: [pollutedByLookup, genuinelyRecent]
-        )
-
-        #expect(vm.heroCategory()?.sceneCategory == "休闲娱乐")
-    }
-
-    @Test func heroStaysStableUntilANewMomentArrives() {
-        let defaults = makeDefaults()
-        let vm = Tab2HomeViewModel(defaults: defaults, now: { now })
-        let first = makeCategory(
-            sceneCategory: "工作与学业", wordCount: 10, unlocked: true,
-            featuredCreatedAt: now.addingTimeInterval(-2 * 60 * 60),
-            subSceneDetails: ["Team meeting"]
-        )
-        let second = makeCategory(
-            sceneCategory: "饮食", wordCount: 10, unlocked: true,
-            featuredCreatedAt: now.addingTimeInterval(-3 * 60 * 60),
-            subSceneDetails: ["Making breakfast"]
-        )
-        vm.data = Tab2HomeData(unlocked: true, inputCount: 6, categories: [first, second])
-        #expect(vm.heroCategory()?.sceneCategory == "工作与学业")
-
-        let refreshedSecond = makeCategory(
-            sceneCategory: "饮食", wordCount: 10, unlocked: true,
-            featuredCreatedAt: now.addingTimeInterval(-1 * 60 * 60),
-            subSceneDetails: ["Making breakfast"]
-        )
-        vm.data = Tab2HomeData(
-            unlocked: true, inputCount: 6, categories: [first, refreshedSecond]
-        )
-        #expect(vm.heroCategory()?.sceneCategory == "工作与学业")
-
-        let secondWithNewMoment = makeCategory(
-            sceneCategory: "饮食", wordCount: 11, unlocked: true,
-            featuredCreatedAt: now.addingTimeInterval(-1 * 60 * 60),
-            subSceneDetails: ["Making breakfast", "Ordering lunch"]
-        )
-        vm.data = Tab2HomeData(
-            unlocked: true, inputCount: 7, categories: [first, secondWithNewMoment]
-        )
-        #expect(vm.heroCategory()?.sceneCategory == "饮食")
-    }
-
-    @Test func heroRemainsStableEvenAfterRecencyWindowPasses() {
-        var currentNow = now
-        let vm = Tab2HomeViewModel(defaults: makeDefaults(), now: { currentNow })
-        let recent = makeCategory(
-            sceneCategory: "工作与学业", wordCount: 10, unlocked: true,
-            featuredCreatedAt: now.addingTimeInterval(-6 * 24 * 60 * 60),
-            subSceneDetails: ["Team meeting"]
-        )
-        let olderWithMoreMoments = makeCategory(
-            sceneCategory: "饮食", wordCount: 10, unlocked: true,
-            featuredCreatedAt: now.addingTimeInterval(-8 * 24 * 60 * 60),
-            subSceneDetails: ["Making breakfast", "Ordering lunch"]
-        )
-        vm.data = Tab2HomeData(
-            unlocked: true, inputCount: 8, categories: [recent, olderWithMoreMoments]
-        )
-        #expect(vm.heroCategory()?.sceneCategory == "工作与学业")
-
-        // 时间越过 7 天窗口（若重排会翻到 moment 更多的 饮食），
-        // 但没有新 moment 出现 → 复用 heroMaterialID 保持稳定。
-        currentNow = now.addingTimeInterval(2 * 24 * 60 * 60)
-        #expect(vm.heroCategory()?.sceneCategory == "工作与学业")
+    @Test func excludedCategoriesAreNotSelected() {
+        let vm = makeVM(defaults: makeDefaults())
+        let excluded = makeCategory(sceneCategory: "工作与学业", wordCount: 25, unlocked: true,
+                                    lastMaterialAt: date(2026, 9, 10), newMaterialCount: 1)
+        let other = makeCategory(sceneCategory: "饮食", wordCount: 21, unlocked: true)
+        vm.data = Tab2HomeData(unlocked: true, inputCount: 2, categories: [excluded, other])
+        #expect(vm.selectHero(excluding: ["工作与学业"], now: date(2026, 9, 10), calendar: utcCal)?.id == "饮食")
     }
 }
 
-// MARK: - Tab2HomeViewModel.moreCategories() tests
+// MARK: - Tab2HomeViewModel.moreCategories() tests（刀 4b）
+//
+// 候选集 = 已解锁 − 排除集 − hero，保持 §10.5 排序（lastMaterialAt 降序，
+// null 最后内部 wordCount 降序）。不读 lastTalkedAt、不跟踪「聊过」。
 
 struct Tab2MoreCategoriesTests {
 
-    private let now = Date(timeIntervalSince1970: 1_788_153_600)
+    private let utcCal: Calendar = {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        return cal
+    }()
+
+    private func date(_ y: Int, _ m: Int, _ d: Int, _ h: Int = 12) -> Date {
+        utcCal.date(from: DateComponents(year: y, month: m, day: d, hour: h))!
+    }
 
     private func makeDefaults() -> UserDefaults {
         UserDefaults(suiteName: "tab2-more-tests-\(UUID().uuidString)")!
@@ -5344,293 +5481,1051 @@ struct Tab2MoreCategoriesTests {
         wordCount: Int,
         unlocked: Bool,
         lastMaterialAt: Date? = nil,
-        featuredCreatedAt: Date? = nil,
-        subSceneDetails: [String] = []
+        activityCount: Int = 0,
+        activityDetails: [String] = []
     ) -> Tab2CategoryData {
-        let featured: Tab2FeaturedMoment? = featuredCreatedAt.map { createdAt in
-            Tab2FeaturedMoment(
-                sceneDetail: subSceneDetails.first ?? "Scene", occurrenceCount: 1,
-                materialId: "m-\(sceneCategory)",
-                userOriginal: "some original", targetExpression: "some target",
-                nativeMeaning: nil, imageUrl: nil, inputLang: "native",
-                sourceDirection: "express", sourceGranularity: "sentence",
-                createdAt: createdAt, spokenCount: 0
-            )
-        }
-        return Tab2CategoryData(
+        Tab2CategoryData(
             sceneCategory: sceneCategory,
             wordCount: wordCount,
             unlocked: unlocked,
             lastMaterialAt: lastMaterialAt,
-            subScenes: subSceneDetails.map {
-                Tab2SubScene(
-                    sceneDetail: $0, occurrenceCount: 1, quote: nil,
-                    targetExpression: nil, imageUrl: nil
-                )
-            },
-            featured: featured
+            activityCount: activityCount,
+            activities: activityDetails.map {
+                Tab2Activity(sceneDetail: $0, occurrenceCount: 1)
+            }
         )
     }
 
-    @Test func twoGroupsFeaturedBeforeWordsOnlyReturnGroupOrder() {
-        let vm = Tab2HomeViewModel(defaults: makeDefaults(), now: { now })
-        let featuredOlder = makeCategory(
-            sceneCategory: "工作与学业", wordCount: 5, unlocked: true,
-            featuredCreatedAt: now.addingTimeInterval(-1 * 24 * 60 * 60),
-            subSceneDetails: ["Team meeting"]
-        )
-        let featuredNewer = makeCategory(
-            sceneCategory: "家庭与人际", wordCount: 9, unlocked: true,
-            featuredCreatedAt: now.addingTimeInterval(-1 * 60 * 60),
-            subSceneDetails: ["Calling family"]
-        )
-        let wordsOnly = makeCategory(
-            sceneCategory: "饮食", wordCount: 99, unlocked: true
-        )
+    @Test func keepsRecencyOrderWithNullsLastByWordCount() {
+        let vm = Tab2HomeViewModel(defaults: makeDefaults(), now: { self.date(2026, 9, 10) })
+        let dated = makeCategory(sceneCategory: "A", wordCount: 21, unlocked: true,
+                                 lastMaterialAt: date(2026, 9, 9))
+        let datedOld = makeCategory(sceneCategory: "B", wordCount: 21, unlocked: true,
+                                    lastMaterialAt: date(2026, 9, 1))
+        let nullRich = makeCategory(sceneCategory: "C", wordCount: 90, unlocked: true)
+        let nullPoor = makeCategory(sceneCategory: "D", wordCount: 21, unlocked: true)
+        // 服务端 wordCount DESC 顺序入参，客户端重排为 §10.5
         vm.data = Tab2HomeData(
-            unlocked: true, inputCount: 3, categories: [wordsOnly, featuredNewer, featuredOlder]
+            unlocked: true, inputCount: 4,
+            categories: [nullPoor, dated, nullRich, datedOld]
         )
 
-        let more = vm.moreCategories(hero: nil)
-        // 组 1 有 featured：同处 7 天新近桶、moment 数打平 → featured 时间定序；
-        // 组 2 纯查词（无 featured）即使词更多也整组排后。
-        #expect(more.map(\.sceneCategory) == ["家庭与人际", "工作与学业", "饮食"])
+        #expect(vm.moreCategories(hero: nil).map(\.id) == ["A", "B", "C", "D"])
     }
 
     @Test func heroCategoryIsExcluded() {
-        let vm = Tab2HomeViewModel(defaults: makeDefaults(), now: { now })
-        let heroCat = makeCategory(
-            sceneCategory: "工作与学业", wordCount: 10, unlocked: true,
-            featuredCreatedAt: now, subSceneDetails: ["Team meeting"]
-        )
-        let other = makeCategory(
-            sceneCategory: "饮食", wordCount: 10, unlocked: true,
-            featuredCreatedAt: now, subSceneDetails: ["Making breakfast"]
-        )
-        vm.data = Tab2HomeData(
-            unlocked: true, inputCount: 2, categories: [heroCat, other]
-        )
+        let vm = Tab2HomeViewModel(defaults: makeDefaults(), now: { self.date(2026, 9, 10) })
+        let heroCat = makeCategory(sceneCategory: "工作与学业", wordCount: 25, unlocked: true,
+                                   lastMaterialAt: date(2026, 9, 9))
+        let other = makeCategory(sceneCategory: "饮食", wordCount: 21, unlocked: true,
+                                 lastMaterialAt: date(2026, 9, 8))
+        vm.data = Tab2HomeData(unlocked: true, inputCount: 2, categories: [heroCat, other])
 
-        let more = vm.moreCategories(hero: heroCat)
-        #expect(more.map(\.sceneCategory) == ["饮食"])
+        #expect(vm.moreCategories(hero: heroCat).map(\.id) == ["饮食"])
     }
 
     @Test func excludedCategoryIDsAreFiltered() {
-        let vm = Tab2HomeViewModel(defaults: makeDefaults(), now: { now })
-        let milestone = makeCategory(
-            sceneCategory: "工作与学业", wordCount: 10, unlocked: true,
-            featuredCreatedAt: now, subSceneDetails: ["Team meeting"]
-        )
-        let visible = makeCategory(
-            sceneCategory: "饮食", wordCount: 10, unlocked: true,
-            featuredCreatedAt: now, subSceneDetails: ["Making breakfast"]
-        )
-        vm.data = Tab2HomeData(
-            unlocked: true, inputCount: 2, categories: [milestone, visible]
-        )
+        let vm = Tab2HomeViewModel(defaults: makeDefaults(), now: { self.date(2026, 9, 10) })
+        let milestone = makeCategory(sceneCategory: "工作与学业", wordCount: 25, unlocked: true,
+                                     lastMaterialAt: date(2026, 9, 9))
+        let visible = makeCategory(sceneCategory: "饮食", wordCount: 21, unlocked: true,
+                                   lastMaterialAt: date(2026, 9, 8))
+        vm.data = Tab2HomeData(unlocked: true, inputCount: 2, categories: [milestone, visible])
 
-        let more = vm.moreCategories(excluding: ["工作与学业"], hero: nil)
-        #expect(more.map(\.sceneCategory) == ["饮食"])
+        #expect(vm.moreCategories(excluding: ["工作与学业"], hero: nil).map(\.id) == ["饮食"])
     }
 
     @Test func lockedCategoriesAreFiltered() {
-        let vm = Tab2HomeViewModel(defaults: makeDefaults(), now: { now })
-        let locked = makeCategory(
-            sceneCategory: "科技与数码", wordCount: 40, unlocked: false,
-            featuredCreatedAt: now, subSceneDetails: ["Fixing a device"]
-        )
-        let visible = makeCategory(
-            sceneCategory: "饮食", wordCount: 10, unlocked: true,
-            featuredCreatedAt: now, subSceneDetails: ["Making breakfast"]
-        )
-        vm.data = Tab2HomeData(
-            unlocked: true, inputCount: 2, categories: [locked, visible]
-        )
+        let vm = Tab2HomeViewModel(defaults: makeDefaults(), now: { self.date(2026, 9, 10) })
+        let locked = makeCategory(sceneCategory: "科技与数码", wordCount: 40, unlocked: false,
+                                  lastMaterialAt: date(2026, 9, 9))
+        let visible = makeCategory(sceneCategory: "饮食", wordCount: 21, unlocked: true,
+                                   lastMaterialAt: date(2026, 9, 8))
+        vm.data = Tab2HomeData(unlocked: true, inputCount: 2, categories: [locked, visible])
 
-        let more = vm.moreCategories(hero: nil)
-        #expect(more.map(\.sceneCategory) == ["饮食"])
+        #expect(vm.moreCategories(hero: nil).map(\.id) == ["饮食"])
     }
 
-    @Test func group1RecentFeaturedBeatsOlder() {
-        let vm = Tab2HomeViewModel(defaults: makeDefaults(), now: { now })
-        let older = makeCategory(
-            sceneCategory: "家庭与人际", wordCount: 15, unlocked: true,
-            featuredCreatedAt: now.addingTimeInterval(-8 * 24 * 60 * 60),
-            subSceneDetails: ["Family dinner"]
-        )
-        let recent = makeCategory(
-            sceneCategory: "工作与学业", wordCount: 10, unlocked: true,
-            featuredCreatedAt: now.addingTimeInterval(-2 * 24 * 60 * 60),
-            subSceneDetails: ["Team meeting"]
-        )
-        vm.data = Tab2HomeData(
-            unlocked: true, inputCount: 2, categories: [older, recent]
-        )
+    @Test func lastTalkedAtDoesNotAffectOrdering() {
+        let vm = Tab2HomeViewModel(defaults: makeDefaults(), now: { self.date(2026, 9, 10) })
+        let talkedRecently = makeCategory(sceneCategory: "科技与数码", wordCount: 30, unlocked: true,
+                                          lastMaterialAt: date(2026, 9, 2))
+        let quietButFresher = makeCategory(sceneCategory: "休闲娱乐", wordCount: 21, unlocked: true,
+                                           lastMaterialAt: date(2026, 9, 9))
+        vm.data = Tab2HomeData(unlocked: true, inputCount: 2, categories: [talkedRecently, quietButFresher])
 
-        let more = vm.moreCategories(hero: nil)
-        #expect(more.map(\.sceneCategory) == ["工作与学业", "家庭与人际"])
-    }
-
-    @Test func group1MoreMomentsFirstInsideRecentBucket() {
-        let vm = Tab2HomeViewModel(defaults: makeDefaults(), now: { now })
-        let oneMoment = makeCategory(
-            sceneCategory: "工作与学业", wordCount: 20, unlocked: true,
-            featuredCreatedAt: now.addingTimeInterval(-1 * 24 * 60 * 60),
-            subSceneDetails: ["Team meeting"]
-        )
-        let twoMoments = makeCategory(
-            sceneCategory: "饮食", wordCount: 10, unlocked: true,
-            featuredCreatedAt: now.addingTimeInterval(-2 * 24 * 60 * 60),
-            subSceneDetails: ["Making breakfast", "Ordering lunch"]
-        )
-        vm.data = Tab2HomeData(
-            unlocked: true, inputCount: 2, categories: [oneMoment, twoMoments]
-        )
-
-        let more = vm.moreCategories(hero: nil)
-        #expect(more.map(\.sceneCategory) == ["饮食", "工作与学业"])
-    }
-
-    @Test func recentLastMaterialAtDoesNotOverrideFeaturedRecency() {
-        let vm = Tab2HomeViewModel(defaults: makeDefaults(), now: { now })
-        let pollutedByLookup = makeCategory(
-            sceneCategory: "科技与数码", wordCount: 30, unlocked: true,
-            lastMaterialAt: now,
-            featuredCreatedAt: now.addingTimeInterval(-20 * 24 * 60 * 60),
-            subSceneDetails: ["Fixing a device"]
-        )
-        let genuinelyRecent = makeCategory(
-            sceneCategory: "休闲娱乐", wordCount: 5, unlocked: true,
-            lastMaterialAt: now.addingTimeInterval(-30 * 24 * 60 * 60),
-            featuredCreatedAt: now.addingTimeInterval(-2 * 24 * 60 * 60),
-            subSceneDetails: ["Watching a game"]
-        )
-        vm.data = Tab2HomeData(
-            unlocked: true, inputCount: 2, categories: [pollutedByLookup, genuinelyRecent]
-        )
-
-        let more = vm.moreCategories(hero: nil)
-        #expect(more.map(\.sceneCategory) == ["休闲娱乐", "科技与数码"])
+        // 排序只看 lastMaterialAt——最近聊过的分类不能靠 lastTalkedAt 插队。
+        #expect(vm.moreCategories(hero: nil).map(\.id) == ["休闲娱乐", "科技与数码"])
     }
 
     @Test func emptyCandidatesReturnsEmpty() {
-        let vm = Tab2HomeViewModel(defaults: makeDefaults(), now: { now })
+        let vm = Tab2HomeViewModel(defaults: makeDefaults(), now: { self.date(2026, 9, 10) })
         #expect(vm.moreCategories(hero: nil).isEmpty)
 
-        let heroCat = makeCategory(
-            sceneCategory: "工作与学业", wordCount: 10, unlocked: true,
-            featuredCreatedAt: now, subSceneDetails: ["Team meeting"]
-        )
+        let heroCat = makeCategory(sceneCategory: "工作与学业", wordCount: 25, unlocked: true)
         vm.data = Tab2HomeData(unlocked: true, inputCount: 1, categories: [heroCat])
         #expect(vm.moreCategories(hero: heroCat).isEmpty)
     }
 
     @Test func nilHeroExcludesNothing() {
-        let vm = Tab2HomeViewModel(defaults: makeDefaults(), now: { now })
-        let a = makeCategory(
-            sceneCategory: "工作与学业", wordCount: 10, unlocked: true,
-            featuredCreatedAt: now, subSceneDetails: ["Team meeting"]
-        )
-        let b = makeCategory(
-            sceneCategory: "饮食", wordCount: 10, unlocked: true,
-            featuredCreatedAt: now, subSceneDetails: ["Making breakfast"]
-        )
+        let vm = Tab2HomeViewModel(defaults: makeDefaults(), now: { self.date(2026, 9, 10) })
+        let a = makeCategory(sceneCategory: "工作与学业", wordCount: 25, unlocked: true)
+        let b = makeCategory(sceneCategory: "饮食", wordCount: 21, unlocked: true)
         vm.data = Tab2HomeData(unlocked: true, inputCount: 2, categories: [a, b])
 
         #expect(vm.moreCategories(hero: nil).count == 2)
     }
 }
 
-// MARK: - Tab2HeroCard 模式判据 tests（§4.2）
+// MARK: - Tab2SceneDetailValidation（刀 4b 活动名校验，四条全满足才渲染）
 
-struct Tab2HeroCardModeTests {
+struct Tab2SceneDetailValidationTests {
 
-    // 英文输入（input_lang=target）→ 模式 A（引号）
-    @Test func targetInputIsModeA() {
-        #expect(Tab2HeroCard.featuredMode(userOriginal: "I'm exhausted.", inputLang: "target", hasFeatured: true) == .a)
+    private func valid(_ s: String) -> Bool {
+        Tab2SceneDetailValidation.validatedTargetSceneDetail(s) != nil
     }
 
-    // 母语输入（native）→ 模式 B（无引号 + 注脚）
-    @Test func nativeInputIsModeB() {
-        #expect(Tab2HeroCard.featuredMode(userOriginal: "太累了", inputLang: "native", hasFeatured: true) == .b)
+    @Test func acceptsPlainEnglishPhrase() {
+        #expect(valid("Cooking dinner"))
+        #expect(valid("Let's cook"))
+        #expect(valid("Re-do the dishes"))
+        #expect(valid("a"))
+        #expect(valid("I"))
     }
 
-    // 第三语言（other）按非目标语言 → 模式 B（不加引号）
-    @Test func otherLangIsModeB() {
-        #expect(Tab2HeroCard.featuredMode(userOriginal: "疲れた", inputLang: "other", hasFeatured: true) == .b)
+    @Test func returnsTrimmedName() {
+        #expect(Tab2SceneDetailValidation.validatedTargetSceneDetail("  Meetings  ") == "Meetings")
+        #expect(Tab2SceneDetailValidation.validatedTargetSceneDetail("\n  Deadlines\t") == "Deadlines")
     }
 
-    // user_original 为空（纯图片）→ 模式 C
-    @Test func nilUserOriginalIsModeC() {
-        #expect(Tab2HeroCard.featuredMode(userOriginal: nil, inputLang: nil, hasFeatured: true) == .c)
+    @Test func rejectsEmptyOrWhitespaceOnly() {
+        #expect(!valid(""))
+        #expect(!valid("   "))
+        #expect(!valid("\n\t"))
     }
 
-    // user_original 空字符串也当纯图片 → 模式 C
-    @Test func emptyUserOriginalIsModeC() {
-        #expect(Tab2HeroCard.featuredMode(userOriginal: "", inputLang: nil, hasFeatured: true) == .c)
+    @Test func rejectsOver24Characters() {
+        #expect(!valid("abcdefghijklmnopqrstuvwxy"))          // 25
+        #expect(valid("abcdefghijklmnopqrstuvwx"))           // 24 边界
+        #expect(!valid("   " + String(repeating: "a", count: 25) + "   "))  // trim 后仍 25
     }
 
-    // 无 featured（分类全查词）→ 模式 D
-    @Test func noFeaturedIsModeD() {
-        #expect(Tab2HeroCard.featuredMode(userOriginal: "x", inputLang: "target", hasFeatured: false) == .d)
+    @Test func rejectsNonASCII() {
+        #expect(!valid("做晚饭"))
+        #expect(!valid("Cooking 晚饭"))
+        #expect(!valid("déjeuner"))
+        #expect(!valid("Café"))                              // 带变音符的 é 不是 ASCII 字母
+    }
+
+    @Test func rejectsDigitsAndPunctuation() {
+        #expect(!valid("Meeting 1"))
+        #expect(!valid("2024 goals"))
+        #expect(!valid("Buy coffee!"))
+        #expect(!valid("Gym & yoga"))
+        #expect(!valid("a.b"))
+    }
+
+    @Test func rejectsSlash() {
+        #expect(!valid("Work/life balance"))
+        #expect(!valid("/"))
+        #expect(!valid("a/b"))
+    }
+
+    @Test func rejectsNonLetterFirstCharacter() {
+        #expect(!valid("-important"))
+        #expect(!valid("'quote"))
+        #expect(!valid(" 1pm"))
     }
 }
 
-// MARK: - Tab2MomentRow 行高的 minHeight 策略
+// MARK: - Tab2CardLabels（刀 4b 时间档位 + 理由行）tests
+//
+// 日差口径是 4b 最容易写错的一处：本地自然日之差（Calendar.dateComponents），
+// 不是时间戳相减除以 86400。跨日边界 23:59 → 次日 00:01 必须算 d = 1。
+
+struct Tab2CardLabelsTests {
+
+    private let utcCal: Calendar = {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        return cal
+    }()
+
+    private func date(_ y: Int, _ m: Int, _ d: Int, _ h: Int = 12, _ min: Int = 0) -> Date {
+        utcCal.date(from: DateComponents(year: y, month: m, day: d, hour: h, minute: min))!
+    }
+
+    // MARK: naturalDayDifference
+
+    @Test func sameDayIsZero() {
+        let from = date(2026, 9, 10, 0, 0)
+        let to = date(2026, 9, 10, 23, 59)
+        #expect(Tab2CardLabels.naturalDayDifference(from: from, to: to, calendar: utcCal) == 0)
+    }
+
+    @Test func midnightBoundaryCountsAsOneDay() {
+        // 23:59 → 次日 00:01：时间戳差只有 2 分钟，但跨了一个自然日 → d = 1
+        let from = date(2026, 9, 9, 23, 59)
+        let to = date(2026, 9, 10, 0, 1)
+        #expect(Tab2CardLabels.naturalDayDifference(from: from, to: to, calendar: utcCal) == 1)
+    }
+
+    @Test func spansDaysAndMonths() {
+        #expect(Tab2CardLabels.naturalDayDifference(
+            from: date(2026, 9, 1), to: date(2026, 9, 10), calendar: utcCal) == 9)
+        #expect(Tab2CardLabels.naturalDayDifference(
+            from: date(2026, 8, 31), to: date(2026, 9, 1), calendar: utcCal) == 1)
+    }
+
+    @Test func nilFromIsNil() {
+        #expect(Tab2CardLabels.naturalDayDifference(
+            from: nil, to: date(2026, 9, 10), calendar: utcCal) == nil)
+    }
+
+    @Test func futureTimestampClampsToZero() {
+        // 时钟偏差（服务端时间超前）→ 负日差夹为 0，不落进「一个月」档
+        let from = date(2026, 9, 11)
+        let to = date(2026, 9, 10)
+        #expect(Tab2CardLabels.naturalDayDifference(from: from, to: to, calendar: utcCal) == 0)
+    }
+
+    // MARK: timeLine（§10.3 档位表）
+
+    @Test func timeLineTiers() {
+        let now = date(2026, 9, 10)
+        func line(_ y: Int, _ m: Int, _ d: Int) -> String? {
+            Tab2CardLabels.timeLine(lastMaterialAt: date(y, m, d), now: now, calendar: utcCal)
+        }
+        #expect(line(2026, 9, 10) == "Added today")                 // d=0
+        #expect(line(2026, 9, 9) == "Added yesterday")              // d=1
+        #expect(line(2026, 9, 8) == "Added 2 days ago")             // d=2
+        #expect(line(2026, 9, 4) == "Added 6 days ago")             // d=6
+        #expect(line(2026, 9, 3) == "Added last week")              // d=7
+        #expect(line(2026, 8, 28) == "Added last week")             // d=13
+        #expect(line(2026, 8, 27) == "Added 2 weeks ago")           // d=14, w=2
+        #expect(line(2026, 8, 20) == "Added 3 weeks ago")           // d=21, w=3
+        #expect(line(2026, 8, 12) == "Added 4 weeks ago")           // d=29, w=4
+        #expect(line(2026, 8, 11) == "Nothing new in a month")      // d=30
+        #expect(Tab2CardLabels.timeLine(
+            lastMaterialAt: nil, now: now, calendar: utcCal) == nil)  // null → 整行不渲染
+    }
+
+    @Test func timeLineMidnightBoundaryUsesNaturalDay() {
+        // 昨天 23:59 存入、今天 00:01 渲染 → "Added yesterday"，不是 "Added today"
+        let line = Tab2CardLabels.timeLine(
+            lastMaterialAt: date(2026, 9, 9, 23, 59),
+            now: date(2026, 9, 10, 0, 1),
+            calendar: utcCal
+        )
+        #expect(line == "Added yesterday")
+    }
+
+    // MARK: reasonLine（§10.4 + §12 文案集 + 防御）
+
+    @Test func reasonLineTodayBranch() {
+        // 刀 6b：today 分支改 v12 文案「Added N times today / Added something today」
+        // （图上 opill 渲染，「次数」是今天记了几次，不是「几条新词」）。
+        let now = date(2026, 9, 10)
+        #expect(Tab2CardLabels.reasonLine(
+            lastMaterialAt: date(2026, 9, 10), newMaterialCount: 1,
+            now: now, calendar: utcCal) == "Added something today")
+        #expect(Tab2CardLabels.reasonLine(
+            lastMaterialAt: date(2026, 9, 10), newMaterialCount: 3,
+            now: now, calendar: utcCal) == "Added 3 times today")
+    }
+
+    @Test func reasonLineNothingNewTiers() {
+        let now = date(2026, 9, 10)
+        func line(_ y: Int, _ m: Int, _ d: Int) -> String {
+            Tab2CardLabels.reasonLine(
+                lastMaterialAt: date(y, m, d), newMaterialCount: 0,
+                now: now, calendar: utcCal)
+        }
+        #expect(line(2026, 9, 9) == "Nothing new since yesterday")     // d=1
+        #expect(line(2026, 9, 5) == "Nothing new in 5 days")           // d=5
+        #expect(line(2026, 9, 3) == "Nothing new in the last week")    // d=7
+        #expect(line(2026, 8, 28) == "Nothing new in the last week")   // d=13
+        #expect(line(2026, 8, 27) == "Nothing new in 2 weeks")         // d=14
+        #expect(line(2026, 8, 11) == "Nothing new in a month")         // d=30
+    }
+
+    @Test func reasonLineOnlyWordsSoFar() {
+        #expect(Tab2CardLabels.reasonLine(
+            lastMaterialAt: nil, newMaterialCount: 0,
+            now: date(2026, 9, 10), calendar: utcCal) == "Only words so far")
+    }
+
+    @Test func reasonLineStaleCacheDefensePrefersDay() {
+        // §12 防御：跨午夜后渲染缓存旧响应（count ≥ 1 但 d ≥ 1）→ 以 d 为准走久未。
+        // 宁可少报一次「今天有新东西」，也不要在第二天早上还说「你今天加了 3 条」。
+        let now = date(2026, 9, 10, 8)
+        #expect(Tab2CardLabels.reasonLine(
+            lastMaterialAt: date(2026, 9, 9, 20), newMaterialCount: 3,
+            now: now, calendar: utcCal) == "Nothing new since yesterday")
+        #expect(Tab2CardLabels.reasonLine(
+            lastMaterialAt: date(2026, 9, 5), newMaterialCount: 2,
+            now: now, calendar: utcCal) == "Nothing new in 5 days")
+    }
+
+    // MARK: words（§9.4 POPS 文案删除后的替代）
+
+    @Test func wordsLabel() {
+        #expect(Tab2CardLabels.words(20) == "20 words")
+        #expect(Tab2CardLabels.words(1) == "1 word")
+    }
+
+    // MARK: reasonPillState（刀 6 §二②：理由胶囊两态 + 防御）
+
+    @Test func reasonPillStateHot() {
+        // hot = 今天有新东西（count ≥ 1 且 d == 0）。刀 6b 文案 v12：
+        // 1 条 → "Added something today"；≥2 条 → "Added N times today"。
+        let now = date(2026, 9, 10)
+        let one = Tab2CardLabels.reasonPillState(
+            lastMaterialAt: date(2026, 9, 10), newMaterialCount: 1,
+            now: now, calendar: utcCal)
+        #expect(one.text == "Added something today")
+        #expect(one.isHot)
+
+        let many = Tab2CardLabels.reasonPillState(
+            lastMaterialAt: date(2026, 9, 10), newMaterialCount: 3,
+            now: now, calendar: utcCal)
+        #expect(many.text == "Added 3 times today")
+        #expect(many.isHot)
+    }
+
+    @Test func reasonPillStateQuiet() {
+        // quiet = 其余一切：count 0 / 久未 / lastMaterialAt 为 nil。
+        let now = date(2026, 9, 10)
+        let none = Tab2CardLabels.reasonPillState(
+            lastMaterialAt: date(2026, 9, 9), newMaterialCount: 0,
+            now: now, calendar: utcCal)
+        #expect(none.text == "Nothing new since yesterday")
+        #expect(!none.isHot)
+
+        let only = Tab2CardLabels.reasonPillState(
+            lastMaterialAt: nil, newMaterialCount: 0,
+            now: now, calendar: utcCal)
+        #expect(only.text == "Only words so far")
+        #expect(!only.isHot)
+    }
+
+    @Test func reasonPillStateStaleCacheDefensePrefersDay() {
+        // §12 防御：跨午夜后 count ≥ 1 但 d ≥ 1 → 以 d 为准落 quiet（同 reasonLine）。
+        let now = date(2026, 9, 10, 8)
+        let stale = Tab2CardLabels.reasonPillState(
+            lastMaterialAt: date(2026, 9, 9, 20), newMaterialCount: 3,
+            now: now, calendar: utcCal)
+        #expect(stale.text == "Nothing new since yesterday")
+        #expect(!stale.isHot)
+    }
+}
+
+// MARK: - Tab2ActivityRow 行高的 minHeight 策略
 //
 // rowHeight 是「内容比这矮时兜底不塌陷」的下限，不是要死守的固定高度：装得下
 // 就锁死在这个高度（对多数用户，观感等同固定行高），装不下才放开长高、不裁字。
 // 不按字号档位分支判断——minHeight 本身就是「够用就不长，不够用才长」，
+// MARK: - Tab2 activity display 口径 tests（刀 4b 引入、刀 6 重写、刀 6b 增 showsActivities）
+//
+// 刀 6 变化：displayCap 删除（§四「不设条数上限，后端上限 5」），compute 只算
+// 宽度无关口径（valid / blockedCount / photoCover）；显示条数与 +N 的让位规则
+// 移到 Tab2CapsuleFit（见下）。旧测试迁移：cap 折叠类 → fit 测试，
+// blocked / photoCover / 顺序 / trim 类 → 保留在 compute 测试。
+// 刀 6b 变化：showsActivities 驱动 Hero「Recent activities」区块整块显隐。
+
+struct Tab2ActivityDisplayTests {
+
+    private func activity(
+        _ sceneDetail: String,
+        occurrenceCount: Int = 1,
+        cover: Tab2Activity.Cover? = nil
+    ) -> Tab2Activity {
+        Tab2Activity(
+            sceneDetail: sceneDetail,
+            occurrenceCount: occurrenceCount,
+            cover: cover
+        )
+    }
+
+    private func category(
+        activityCount: Int,
+        activities: [Tab2Activity]
+    ) -> Tab2CategoryData {
+        Tab2CategoryData(
+            sceneCategory: "工作与学业", wordCount: 41, unlocked: true,
+            activityCount: activityCount,
+            activities: activities
+        )
+    }
+
+    private func compute(
+        activityCount: Int,
+        activities: [Tab2Activity]
+    ) -> Tab2ActivityDisplay {
+        Tab2ActivityDisplay.compute(
+            category: category(activityCount: activityCount, activities: activities)
+        )
+    }
+
+    // 被挡的活动整条不渲染：不进 valid，blockedCount 单独计数
+    // （第 1 条脏名被挡、第 3 条顶上）
+    @Test func blockedActivitiesAreSkippedAndCounted() {
+        let d = compute(
+            activityCount: 5,
+            activities: [
+                activity("帮妈妈弄手机"),
+                activity("Family dinner", occurrenceCount: 4),
+                activity("Weekend calls"),
+            ]
+        )
+        #expect(d.valid.map(\.name) == ["Family dinner", "Weekend calls"])
+        #expect(d.blockedCount == 1)
+    }
+
+    // 后端原序渲染、不重排（§10.5：重排会让 +N 的「剩下的都比这些少」语义失效）
+    @Test func preservesBackendOrder() {
+        let d = compute(
+            activityCount: 3,
+            activities: [
+                activity("Deadlines"),
+                activity("Meetings", occurrenceCount: 2),
+                activity("Emails"),
+            ]
+        )
+        #expect(d.valid.map(\.name) == ["Deadlines", "Meetings", "Emails"])
+    }
+
+    // 校验 trim：展示名必须用 trim 后的值
+    @Test func trimsValidNames() {
+        let d = compute(
+            activityCount: 1,
+            activities: [activity("  Cooking dinner  ")]
+        )
+        #expect(d.valid.map(\.name) == ["Cooking dinner"])
+    }
+
+    // 取图跳过被挡的活动：第 1 条脏名有图也不取，用第 1 条**有效**活动的封面
+    @Test func photoCoverSkipsBlockedActivities() {
+        let cover = Tab2Activity.Cover(materialId: "m2", imageUrl: "https://x/pic.jpg")
+        let d = compute(
+            activityCount: 3,
+            activities: [
+                activity("开会做记录", cover: Tab2Activity.Cover(materialId: "m1", imageUrl: "https://x/blocked.jpg")),
+                activity("Family dinner", cover: cover),
+                activity("Weekend calls"),
+            ]
+        )
+        #expect(d.photoCover?.materialId == "m2")
+    }
+
+    // 第一条有效活动没有 cover → 不向后翻别的活动（图不属于这件事），nil → 预设图
+    @Test func photoCoverNilWhenFirstValidHasNoCover() {
+        let d = compute(
+            activityCount: 2,
+            activities: [
+                activity("Meetings"),
+                activity("Deadlines", cover: Tab2Activity.Cover(materialId: "m2", imageUrl: "https://x/pic.jpg")),
+            ]
+        )
+        #expect(d.photoCover == nil)
+    }
+
+    // cover 的 imageUrl 为空串 → 视同无图
+    @Test func photoCoverNilWhenCoverImageUrlIsEmpty() {
+        let d = compute(
+            activityCount: 1,
+            activities: [activity("Meetings", cover: Tab2Activity.Cover(materialId: "m1", imageUrl: ""))]
+        )
+        #expect(d.photoCover == nil)
+    }
+
+    // 全被挡 → valid 空、photoCover nil（卡面走「Nothing logged yet」/ 预设图）
+    @Test func allBlockedYieldsEmptyValidAndNoPhoto() {
+        let d = compute(
+            activityCount: 2,
+            activities: [activity("帮妈妈弄手机"), activity("12345")]
+        )
+        #expect(d.valid.isEmpty)
+        #expect(d.blockedCount == 2)
+        #expect(d.photoCover == nil)
+    }
+
+    // 刀 6b：showsActivities 驱动 Hero「Recent activities」区块的整块显隐
+    @Test func showsActivitiesIsTrueWhenThereIsAValidActivity() {
+        let d = compute(activityCount: 2, activities: [activity("Meetings")])
+        #expect(d.showsActivities)
+    }
+
+    // activityCount = 0 → 区块消失（valid 必为空）
+    @Test func showsActivitiesIsFalseWhenCountIsZero() {
+        let d = compute(activityCount: 0, activities: [])
+        #expect(!d.showsActivities)
+    }
+
+    // 有素材但全被挡 → 同样无事可显示，区块不渲染
+    @Test func showsActivitiesIsFalseWhenAllBlocked() {
+        let d = compute(activityCount: 2, activities: [activity("帮妈妈弄手机")])
+        #expect(!d.showsActivities)
+    }
+}
+
+// MARK: - 胶囊让位拟合 tests（刀 6b v12）
+//
+// 「两行排得下几条就显示几条（不设条数上限、后端上限 5）；装不下时减条数、
+// +N 自动加一，总数永远对得上；绝不截断活动名（省略号禁止）、绝不截断
+// +N more」。+N more 是流里的第 displayed+1 个元素：首行放得下就落首行尾，
+// 首行满则独占第二行开头（v12 溢出例③），第二行尾同理；more 自身放不下
+// 同样让位（少显示一条活动）。任何名字宽于整行 → 该名字与后续全部弃置
+// （不截断），只剩 +N 独占首行——显示 0 条也是合法输出，规则闭合。
+
+struct Tab2CapsuleFitTests {
+
+    private func activity(
+        _ sceneDetail: String,
+        occurrenceCount: Int = 1
+    ) -> Tab2ActivityDisplay.ValidActivity {
+        Tab2ActivityDisplay.ValidActivity(
+            name: sceneDetail,
+            occurrenceCount: occurrenceCount,
+            cover: nil
+        )
+    }
+
+    // 测试用固定度量：Charter 15（名字）/ GothicA1-Regular 12.5（+N），行高 31 / 行距 7 /
+    // 水平内边距 13/6——与 hero() 同值但不依赖 UIFontMetrics 环境缩放（测试
+    // 进程环境恒为默认档，名字 UIFont 与基值相同 → 行高恒 31）。
+    private func metrics() throws -> Tab2ActivityCapsuleMetrics {
+        let charter = try #require(UIFont(name: "Charter", size: 15))
+        let more = try #require(UIFont(name: AppTheme.Font.SansWeight.regular.postScriptName, size: 12.5))
+        return Tab2ActivityCapsuleMetrics(
+            nameBaseUIFont: charter,
+            nameUIFont: charter,
+            moreUIFont: more,
+            baseRowHeight: 31,
+            rowGap: 7,
+            namePaddingH: 13,
+            morePaddingH: 6
+        )
+    }
+
+    private func fit(
+        valid: [Tab2ActivityDisplay.ValidActivity],
+        activityCount: Int,
+        blockedCount: Int = 0,
+        width: CGFloat
+    ) throws -> Tab2CapsuleFit {
+        Tab2CapsuleFit.fit(
+            valid: valid,
+            activityCount: activityCount,
+            blockedCount: blockedCount,
+            width: width,
+            metrics: try metrics()
+        )
+    }
+
+    // 全排得下：5 条短名宽 500 → 5 条全显示、+N 0、more 不渲染
+    @Test func showsAllWhenEverythingFits() throws {
+        let f = try fit(
+            valid: ["Meetings", "Deadlines", "Emails", "Presentations", "Reviews"].map { activity($0) },
+            activityCount: 5,
+            width: 500
+        )
+        #expect(f.displayed == 5)
+        #expect(f.collapsed == 0)
+        #expect(!f.showsMore)
+        #expect(f.moreInRow1 == nil)
+        #expect(f.moreInRow2 == nil)
+    }
+
+    // +N 基数是 activity_count 不是取回条数：后端截断没取回的那部分也必须算进去
+    @Test func plusNCountsBackendTruncation() throws {
+        let f = try fit(
+            valid: [activity("Meetings"), activity("Deadlines")],
+            activityCount: 7,
+            width: 500
+        )
+        #expect(f.displayed == 2)
+        #expect(f.collapsed == 5)
+        #expect(f.showsMore)
+    }
+
+    // 被挡的不计入 +N：activity_count 5 − 显示 2 − 被挡 1 = 2
+    @Test func blockedActivitiesAreNotCountedIntoPlusN() throws {
+        let f = try fit(
+            valid: [activity("Family dinner", occurrenceCount: 4), activity("Weekend calls")],
+            activityCount: 5,
+            blockedCount: 1,
+            width: 500
+        )
+        #expect(f.displayed == 2)
+        #expect(f.collapsed == 2)
+    }
+
+    // activity_count 全显示完 → +N 为 0，不渲染
+    @Test func plusNClampsAtZero() throws {
+        let f = try fit(
+            valid: [activity("Meetings"), activity("Deadlines")],
+            activityCount: 2,
+            width: 500
+        )
+        #expect(f.collapsed == 0)
+    }
+
+    // 防御夹取：activity_count 比可显示条数还小（实际不可达，纯输入防御）→ +N 不为负
+    @Test func plusNNeverNegativeEvenWhenCountSmallerThanValid() throws {
+        let f = try fit(
+            valid: [activity("Meetings"), activity("Deadlines")],
+            activityCount: 1,
+            width: 500
+        )
+        #expect(f.collapsed == 0)
+        #expect(f.displayed == 2)
+    }
+
+    // v12 溢出例③：3 条短名恰好塞满首行 → "+9 more" 独占第二行行首
+    // （more 是流元素，不是「追加到末行尾」）。12 个活动、只取回 3 条 → N = 9。
+    @Test func moreIsSoleRowTwoElementWhenRowOneIsFull() throws {
+        let name = "Meetings"
+        let m = try metrics()
+        let a = m.nameCapsuleWidth(name)
+        let width = a * 3 + m.rowGap * 2   // 3 条恰好排满首行，不差一分
+        let f = try fit(
+            valid: [activity(name), activity(name), activity(name)],
+            activityCount: 12,
+            width: width
+        )
+        #expect(f.displayed == 3)
+        #expect(f.row1 == [name, name, name])
+        #expect(f.row2.isEmpty)
+        #expect(f.moreInRow1 == nil)
+        #expect(f.moreInRow2 == 9)
+    }
+
+    // v12 溢出例②：28 字符长名独占首行，短名 + "+4 more" 落第二行尾。
+    // 宽度取「长名整宽 + 5」：短名进不了首行，第二行 = 短名 + more。
+    @Test func longFirstNameFillsRowOneAndMoreLandsAtRowTwoEnd() throws {
+        let long = "Organizing daily necessities"   // 28 字符
+        let a1 = try metrics().nameCapsuleWidth(long)
+        let width = a1 + 5
+        let f = try fit(
+            valid: [
+                activity(long),
+                activity("Meetings"),
+                activity("Deadlines"),
+                activity("Emails"),
+                activity("Reviews"),
+            ],
+            activityCount: 6,
+            width: width
+        )
+        #expect(f.displayed == 2)
+        #expect(f.row1 == [long])
+        #expect(f.row2 == ["Meetings"])
+        #expect(f.moreInRow1 == nil)
+        #expect(f.moreInRow2 == 4)
+    }
+
+    // v12 验收例②实测形状：长名占首行后空隙装不下第二个名字、但装得下 +N ——
+    // more 绝不回填首行尾空隙（flex-wrap 语义：一行断了就断了），必须排在
+    // 第二行名字之后。修复前 more 会回填首行，插到 Meetings 前面（顺序 bug）。
+    @Test func moreNeverBackfillsRowOneGapAfterRowOneCloses() throws {
+        let long = "Organizing daily routine"      // 24 字符（校验上限内最长）
+        let m = try metrics()
+        let a1 = m.nameCapsuleWidth(long)
+        let more = m.moreCapsuleWidth(3)
+        // 首行空隙恰好容得下 more、容不下第二个名字（Meetings 宽于 " +3 more"）
+        let width = a1 + m.rowGap + more
+        let f = try fit(
+            valid: [
+                activity(long),
+                activity("Meetings"),
+                activity("Deadlines"),
+            ],
+            activityCount: 6,
+            width: width
+        )
+        // 核心锁定：moreInRow1 必须为 nil——首行已关闭，more 不许回填
+        #expect(f.row1 == [long])
+        #expect(f.moreInRow1 == nil)
+        #expect(f.displayed == 3)
+        #expect(f.row2 == ["Meetings", "Deadlines"])
+        #expect(f.moreInRow2 == 3)
+    }
+
+    // 索引不变量：+N more 恒为摊平渲染序的最后一个元素（索引 = 显示元素总数
+    // displayed）——对四种溢出形状都成立（PM 收尾要求）。摊平渲染序 =
+    // row1 名字 → [row1 尾 more] → row2 名字 → [row2 尾 more]：名字占 0..<displayed，
+    // more 占 displayed 位。四种形状：① 五短名全排下（N=0，无 more，空真）；
+    // ② 长名独占首行 + 次行名字 + more 落次行尾；③ 三短名塞满首行 + more 独占
+    // 次行行首；④ 单颗胶囊 + more 落首行尾、次行留空。
+    @Test func moreIsAlwaysTheLastRenderedElement() throws {
+        // ① 五短名全排下（w6 形状）：activity_count 全显示 → N=0
+        assertMoreIsLastElement(
+            try fit(
+                valid: ["Working", "Studying", "Meetings", "Emails", "Reading"].map { activity($0) },
+                activityCount: 5,
+                width: 500
+            ),
+            validNames: ["Working", "Studying", "Meetings", "Emails", "Reading"]
+        )
+        // ② 长名独占首行 + 次行 Getting up + more 落次行尾（w7 形状）
+        let long = "Organizing daily routine"
+        let m2 = try metrics()
+        assertMoreIsLastElement(
+            try fit(
+                valid: [activity(long), activity("Getting up"), activity("Making coffee")],
+                activityCount: 6,
+                width: m2.nameCapsuleWidth(long) + m2.rowGap + m2.moreCapsuleWidth(4)
+            ),
+            validNames: [long, "Getting up", "Making coffee"]
+        )
+        // ③ 三短名恰好塞满首行 + more 独占次行行首（w8 形状）
+        let name = "Meetings"
+        let a = m2.nameCapsuleWidth(name)
+        assertMoreIsLastElement(
+            try fit(
+                valid: [activity(name), activity(name), activity(name)],
+                activityCount: 12,
+                width: a * 3 + m2.rowGap * 2
+            ),
+            validNames: [name, name, name]
+        )
+        // ④ 单颗胶囊 + more 落首行尾、次行留空（w9 同构：只排得下一条）
+        assertMoreIsLastElement(
+            try fit(
+                valid: [activity("Waiting for the bus")],
+                activityCount: 3,
+                width: 500
+            ),
+            validNames: ["Waiting for the bus"]
+        )
+    }
+
+    /// 断言一条 fit 结果满足「+N more 恒为最后一个渲染元素」：
+    /// - 名字序：row1 + row2 == 输入前缀（displayed 条），more 不占名字位；
+    /// - N=0 → 两行都无 more；
+    /// - more 落首行 → 全部名字都在首行（次行必空），索引 = row1.count = displayed；
+    /// - more 落次行 → 索引 = row1.count + row2.count = displayed。
+    private func assertMoreIsLastElement(
+        _ f: Tab2CapsuleFit,
+        validNames: [String],
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) {
+        #expect(
+            f.row1 + f.row2 == Array(validNames.prefix(f.displayed)),
+            "名字序漂移或 more 占了名字位",
+            sourceLocation: sourceLocation
+        )
+        if !f.showsMore {
+            #expect(f.moreInRow1 == nil, sourceLocation: sourceLocation)
+            #expect(f.moreInRow2 == nil, sourceLocation: sourceLocation)
+            return
+        }
+        if let more1 = f.moreInRow1 {
+            #expect(f.moreInRow2 == nil, sourceLocation: sourceLocation)
+            #expect(f.row2.isEmpty, "more 落首行尾则全部名字都在首行", sourceLocation: sourceLocation)
+            #expect(f.row1.count == f.displayed, "more 索引 = displayed", sourceLocation: sourceLocation)
+            #expect(more1 == f.collapsed, sourceLocation: sourceLocation)
+        } else if let more2 = f.moreInRow2 {
+            #expect(f.moreInRow1 == nil, sourceLocation: sourceLocation)
+            #expect(f.row1.count + f.row2.count == f.displayed, "more 索引 = displayed", sourceLocation: sourceLocation)
+            #expect(more2 == f.collapsed, sourceLocation: sourceLocation)
+        } else {
+            Issue.record("showsMore 为真但两行都没有 more", sourceLocation: sourceLocation)
+        }
+    }
+
+    // 只排得下一条：第二行留空、+N 落首行尾（两行槽高由视图层固定，
+    // fit 层不产空行占位——留空行也占高度，见高度恒定 suite）
+    @Test func singleCapsuleLeavesRowTwoEmptyWithMoreOnRowOne() throws {
+        let f = try fit(
+            valid: [activity("Meetings")],
+            activityCount: 3,
+            width: 500
+        )
+        #expect(f.displayed == 1)
+        #expect(f.row1 == ["Meetings"])
+        #expect(f.row2.isEmpty)
+        #expect(f.moreInRow1 == 2)
+        #expect(f.moreInRow2 == nil)
+    }
+
+    // more 自身放不下 → 少显示一条活动（让位），直到排得下。
+    // 宽度 = max(名字, more)+1：一条名字放得下、more 单放也放得下，但
+    // 「两条名字 + more」排不下（第二行 a+g+m 超宽）→ displayed 从 3 让到 1。
+    @Test func moreNotFittingYieldsOneActivity() throws {
+        let name = "Meetings"
+        let m = try metrics()
+        let a = m.nameCapsuleWidth(name)
+        let more = m.moreCapsuleWidth(2)
+        let width = max(a, more) + 1
+        let f = try fit(
+            valid: [activity(name), activity(name), activity(name)],
+            activityCount: 3,
+            width: width
+        )
+        #expect(f.displayed == 1)
+        #expect(f.row1 == [name])
+        #expect(f.moreInRow2 == 2)
+    }
+
+    // 名字宽于整行 → 该名字与后续全部弃置（绝不截断），只剩 +N 独占首行；
+    // 显示 0 条也是合法输出，规则闭合。
+    @Test func nameWiderThanContainerDegeneratesToMoreOnly() throws {
+        let m = try metrics().moreCapsuleWidth(5)
+        let width = m + 1   // more 放得下、名字放不下
+        let f = try fit(
+            valid: [activity("Organizing daily necessities"), activity("Meetings")],
+            activityCount: 5,
+            width: width
+        )
+        #expect(f.displayed == 0)
+        #expect(f.collapsed == 5)
+        #expect(f.row1.isEmpty)
+        #expect(f.row2.isEmpty)
+        #expect(f.moreInRow1 == 5)
+        #expect(f.moreInRow2 == nil)
+    }
+
+    // 后端原序：两行名字拼接后与输入前缀一致（more 不占名字位）
+    @Test func preservesBackendOrderAcrossRows() throws {
+        let names = ["Deadlines", "Meetings", "Emails", "Presentations", "Reviews"]
+        let f = try fit(
+            valid: names.map { activity($0) },
+            activityCount: 8,
+            width: 320
+        )
+        #expect(f.row1 + f.row2 == Array(names.prefix(f.displayed)))
+    }
+
+    // 宽度扫描不变量：任何宽度下 displayed + collapsed + blocked == activityCount，
+    // 且每一行实测宽度（名字 + more 逐个累加，含行内 gap）不超过容器宽。
+    @Test func widthSweepKeepsTotalAndFitsBothRows() throws {
+        let valid = [
+            activity("Meetings", occurrenceCount: 5),
+            activity("Organizing daily necessities"),
+            activity("Preparing slides for the investor update meeting"),
+            activity("Drafting the roadmap for next quarter"),
+            activity("One-on-ones"),
+        ]
+        for width in stride(from: 100.0, through: 500.0, by: 20.0) {
+            let f = try fit(valid: valid, activityCount: 8, blockedCount: 1, width: width)
+            #expect(
+                f.displayed + f.collapsed + 1 == 8,
+                "width \(width): displayed \(f.displayed) collapsed \(f.collapsed)"
+            )
+            let row1W = try rowWidth(names: f.row1, more: f.moreInRow1)
+            let row2W = try rowWidth(names: f.row2, more: f.moreInRow2)
+            #expect(row1W <= width + 0.5, "width \(width): row1 \(row1W)")
+            #expect(row2W <= width + 0.5, "width \(width): row2 \(row2W)")
+        }
+    }
+
+    /// 按胶囊组渲染同口径复算一行宽度：名字胶囊整宽 + more 整宽，含行内 gap。
+    private func rowWidth(names: [String], more: Int?) throws -> CGFloat {
+        let m = try metrics()
+        var total: CGFloat = 0
+        var count = 0
+        for name in names {
+            if count > 0 { total += m.rowGap }
+            total += m.nameCapsuleWidth(name)
+            count += 1
+        }
+        if let more {
+            if count > 0 { total += m.rowGap }
+            total += m.moreCapsuleWidth(more)
+        }
+        return total
+    }
+}
+
+// MARK: - 胶囊组高度恒定 tests（刀 6b v12 验收）
+//
+// 验收要求：胶囊组在任何内容下高度恒定（长名 / 多条 / 单条三种输入）——
+// 固定两行槽高 = 行高 × 2 + 行距，只排一条也占两行（v12 溢出例④）。
+// UIHostingController 必须主线程（约束同 Tab2ActivityRowHeightTests）。
+
+@MainActor
+struct Tab2CapsuleGroupHeightTests {
+
+    private func group(
+        valid: [Tab2ActivityDisplay.ValidActivity],
+        activityCount: Int? = nil
+    ) -> Tab2ActivityCapsuleGroup {
+        Tab2ActivityCapsuleGroup(
+            activities: valid,
+            activityCount: activityCount ?? valid.count,
+            blockedCount: 0,
+            metrics: Tab2ActivityCapsuleMetrics.hero(),
+            nameFont: AppTheme.Font.tab2HeroCapsuleName,
+            moreFont: AppTheme.Font.tab2HeroCapsuleMore
+        )
+    }
+
+    private func height(_ group: Tab2ActivityCapsuleGroup, width: CGFloat = 320) -> CGFloat {
+        let host = UIHostingController(rootView: group)
+        return host.sizeThatFits(in: CGSize(width: width, height: CGFloat.infinity)).height
+    }
+
+    private func activity(
+        _ sceneDetail: String,
+        occurrenceCount: Int = 1
+    ) -> Tab2ActivityDisplay.ValidActivity {
+        Tab2ActivityDisplay.ValidActivity(
+            name: sceneDetail,
+            occurrenceCount: occurrenceCount,
+            cover: nil
+        )
+    }
+
+    private func assertSlotHeight(_ measured: CGFloat, _ name: String) {
+        let slot = Tab2ActivityCapsuleMetrics.hero().twoRowHeight
+        #expect(abs(measured - slot) < 0.5, "\(name): measured \(measured), slot \(slot)")
+    }
+
+    // ① 单条短名：只排一条也占两行
+    @Test func heightIsConstantForSingleShortActivity() {
+        assertSlotHeight(height(group(valid: [activity("Meetings")])), "single short")
+    }
+
+    // ② 多条：排满后端上限 5 条
+    @Test func heightIsConstantForManyActivities() {
+        let valid = ["Meetings", "Deadlines", "Emails", "Presentations", "Reviews"]
+            .map { activity($0, occurrenceCount: 2) }
+        assertSlotHeight(height(group(valid: valid)), "many")
+    }
+
+    // ③ 单条超长名：名字比容器还宽 → 名字弃置只剩 +N（不截断），槽高不变
+    @Test func heightIsConstantForSingleLongActivity() {
+        let valid = [activity("Coordinating the quarterly budget review presentation with stakeholders")]
+        assertSlotHeight(height(group(valid: valid)), "single long")
+    }
+
+    // ④ 空 valid：整组不渲染、高度 0（Hero 由 showsActivities 连小标题整块移除，
+    // More 由外层判断）
+    @Test func emptyValidRendersNothing() {
+        #expect(height(group(valid: [])) == 0)
+    }
+
+    // 行高随 Dynamic Type 只加「字形线高增量」：放大档直接给更大字号的 UIFont
+    // （测试进程环境无法改 preferredContentSizeCategory，用构造参数等价模拟），
+    // 行高 = 基值 + 线高差，两行槽高 = 行高×2 + 行距。默认档必须严格等于
+    // v12 CSS 值（行 31 / 两行 69），放大档只增不减、不裁字。
+    @Test func rowHeightGrowsByLineHeightDeltaOnly() throws {
+        let base = Tab2ActivityCapsuleMetrics(
+            nameBaseUIFont: try #require(UIFont(name: "Charter", size: 15)),
+            nameUIFont: try #require(UIFont(name: "Charter", size: 15)),
+            moreUIFont: try #require(UIFont(name: AppTheme.Font.SansWeight.regular.postScriptName, size: 12.5)),
+            baseRowHeight: 31, rowGap: 7,
+            namePaddingH: 13, morePaddingH: 6
+        )
+        #expect(base.rowHeight == 31)
+        #expect(base.twoRowHeight == 69)
+
+        let scaledFont = try #require(UIFont(name: "Charter", size: 31))
+        let scaled = Tab2ActivityCapsuleMetrics(
+            nameBaseUIFont: base.nameBaseUIFont,
+            nameUIFont: scaledFont,
+            moreUIFont: try #require(UIFont(name: AppTheme.Font.SansWeight.regular.postScriptName, size: 22)),
+            baseRowHeight: 31, rowGap: 7,
+            namePaddingH: 13, morePaddingH: 6
+        )
+        let delta = scaledFont.lineHeight - base.nameBaseUIFont.lineHeight
+        #expect(scaled.rowHeight == 31 + delta)
+        #expect(scaled.twoRowHeight == (31 + delta) * 2 + 7)
+        #expect(scaled.rowHeight > base.rowHeight)
+    }
+}
+
 // 不需要额外的无障碍档位门控。见 2026-09-01 讨论。
+//
+// 刀 3 备注：主句位随 featured 模型删除而留空，行内容只剩分类行 + meta 行。
+// 刀 4b：行重做为「类别名 + 活动行 + 时间行」，meta 行退役（+N 并入活动行）。
+// 保留两个守卫：时间行真的占垂直空间（AX5 档把内容顶过 rowHeight 下限来验证）、
+// 缩略图长宽比不得影响行高（2026-09-01 真机回归）。
 // UIHostingController 必须在主线程创建（SwiftUI GraphHost.init 的断言，
 // 后台线程触发即 SIGTRAP）：Swift Testing 默认 testsMustRunOnMainThread:NO，
 // 测试会调度到哪个线程是随机的——曾经整宿主进程崩溃、283 个用例连带 0.000s
 // 失败。整组标 @MainActor 后三个测试串行跑在主 actor 上，与文件里其他 UI
 // 相关测试组（TodayViewModelTests 等）同一模式。
 @MainActor
-struct Tab2MomentRowHeightTests {
+struct Tab2ActivityRowHeightTests {
 
-    private func mockRow(sentence: String, momentCount: Int = 6) -> Tab2MomentRow {
-        Tab2MomentRow(
+    private func mockRow(activityCount: Int, lastMaterialAt: Date? = nil) -> Tab2ActivityRow {
+        Tab2ActivityRow(
             category: Tab2CategoryData(
                 sceneCategory: "工作与学业", wordCount: 41, unlocked: true,
-                momentCount: momentCount,
-                featured: Tab2FeaturedMoment(
-                    sceneDetail: "Meetings", occurrenceCount: 1, materialId: "m1",
-                    userOriginal: nil, targetExpression: sentence,
-                    nativeMeaning: nil, imageUrl: nil, inputLang: nil,
-                    sourceDirection: "express", sourceGranularity: "sentence",
-                    createdAt: nil, spokenCount: 0
-                )
+                lastMaterialAt: lastMaterialAt,
+                activityCount: activityCount,
+                activities: [Tab2Activity(sceneDetail: "Meetings", occurrenceCount: 1)]
             ),
             onTap: {}
         )
     }
 
-    private func height(_ row: Tab2MomentRow, category: ContentSizeCategory) -> CGFloat {
+    private func height(_ row: Tab2ActivityRow, category: ContentSizeCategory) -> CGFloat {
         let host = UIHostingController(rootView: row.environment(\.sizeCategory, category))
         return host.sizeThatFits(in: CGSize(width: 350, height: CGFloat.infinity)).height
     }
 
-    private let twoLineSentence = "I totally blanked when they asked for the timeline."
-
-    // 字号调到最大（XXXL，标准档最后一级——不是无障碍边缘情况）：行高必须
-    // 大于默认下限，否则意味着内容被摁在 rowHeight 里裁掉了。
-    @Test func largestStandardSizeGrowsPastFloorInsteadOfClipping() {
-        let row = mockRow(sentence: twoLineSentence)
-        #expect(height(row, category: .extraExtraExtraLarge) > AppTheme.Tab2MoreRow.Layout.rowHeight)
+    // 字号调到 AX5（无障碍最大档）：内容（分类行 + 活动行）必须超过
+    // rowHeight 下限——若被摁在下限里，说明 minHeight 没有放行内容长高。
+    @Test func largestAccessibilitySizeGrowsPastFloorInsteadOfClipping() {
+        let row = mockRow(activityCount: 6)
+        #expect(height(row, category: .accessibilityExtraExtraExtraLarge) > AppTheme.Tab2MoreRow.Layout.rowHeight)
     }
 
-    // 2026-09-01 三稿：More 列表的 meta 行不再渲染 scene_detail（Hero 卡才有），
-    // 只保留 +N moments；momentCount == 1（moreCount == 0）时 meta 整行不渲染，
-    // 不留空行——锁住「不渲染」不只是视觉上不显示，而是真的不占垂直空间。
-    // 用 XXXL 档位比较（不是 .large）：默认字号下两种内容都可能被 rowHeight
-    // 下限一起摁平、测不出差异，字号调大让内容超过下限、真实撑开高度时才能
-    // 看出 meta 行到底占不占地方。
-    @Test func metaRowOmittedWhenNoMoreMoments() {
-        let withMeta = mockRow(sentence: twoLineSentence, momentCount: 6)
-        let withoutMeta = mockRow(sentence: twoLineSentence, momentCount: 1)
-        #expect(height(withoutMeta, category: .extraExtraExtraLarge) < height(withMeta, category: .extraExtraExtraLarge))
+    // 刀 4b：+N 已并入活动行 inline（无独立 meta 行），本测试改为锁时间行——
+    // lastMaterialAt = null 时时间行整行不渲染、不占垂直空间（§10.3）。
+    // 同样用 AX5 档位比较：默认字号下两种内容都被 rowHeight 下限摁平、
+    // 测不出差异，字号调大让内容超过下限、真实撑开高度时才能看出
+    // 时间行到底占不占地方。
+    @Test func timelineOmittedWhenLastMaterialAtIsNull() {
+        let withTimeline = mockRow(activityCount: 6, lastMaterialAt: Date())
+        let withoutTimeline = mockRow(activityCount: 6, lastMaterialAt: nil)
+        #expect(height(withoutTimeline, category: .accessibilityExtraExtraExtraLarge) < height(withTimeline, category: .accessibilityExtraExtraExtraLarge))
+    }
+
+    // 刀 6b v12 替代刀 4b 的「尾省略」方案：More 行是并列可比的一组，行高必须
+    // 恒定——活动名永不截断、永不省略（省略号禁止），两行装不下就让位
+    // （少显示一条、+N 自动加一，见 Tab2CapsuleFit）。本测试锁住：超宽内容
+    // 与常规内容在 .large 档下行高完全一致、都等于 rowHeight。
+    // 若胶囊组未来又折行/省略，此断言先红。
+    // 空态 v1 修正过夹具：旧夹具用 60+ 字符名「制造溢出」，但超 24 字符上限的
+    // 名字被 Tab2SceneDetailValidation 挡住、整条不渲染——旧断言能过只是因为
+    // 全被挡时胶囊组的空两行槽还在。空态把「全被挡 = 无有效活动」改成一行
+    // Only words so far 后，旧夹具落到空态（高 80）红了——不是回归，是旧夹具
+    // 的前提在 v1 校验规则下本来就不成立。新夹具用上限内最长名（24 字符）
+    // 真实触发让位：四颗长胶囊两行只能排两颗，剩下两颗进 +2 more。
+    @Test func rowHeightIsConstantWhenActivityLineOverflows() {
+        let overflow = Tab2ActivityRow(
+            category: Tab2CategoryData(
+                sceneCategory: "工作与学业", wordCount: 41, unlocked: true,
+                activityCount: 4,
+                activities: [
+                    Tab2Activity(
+                        sceneDetail: "Organizing daily routine",
+                        occurrenceCount: 4
+                    ),
+                    Tab2Activity(
+                        sceneDetail: "Quarterly budget review",
+                        occurrenceCount: 2
+                    ),
+                    Tab2Activity(
+                        sceneDetail: "Investor update meeting",
+                        occurrenceCount: 2
+                    ),
+                    Tab2Activity(
+                        sceneDetail: "Preparing annual reports",
+                        occurrenceCount: 1
+                    ),
+                ]
+            ),
+            onTap: {}
+        )
+        let normal = mockRow(activityCount: 6)
+        #expect(height(overflow, category: .large) == AppTheme.Tab2MoreRow.Layout.rowHeight)
+        #expect(height(overflow, category: .large) == height(normal, category: .large))
     }
 
     // 2026-09-01 真机复现：缩略图曾经只锁宽度、不锁高度，极端长宽比的真实照片
@@ -5646,21 +6541,20 @@ struct Tab2MomentRowHeightTests {
         }
     }
 
-    private func mockRowWithPhoto(stableKey: String) -> Tab2MomentRow {
-        Tab2MomentRow(
+    private func mockRowWithPhoto(stableKey: String) -> Tab2ActivityRow {
+        Tab2ActivityRow(
             category: Tab2CategoryData(
                 sceneCategory: "工作与学业", wordCount: 41, unlocked: true,
-                momentCount: 6,
-                featured: Tab2FeaturedMoment(
-                    sceneDetail: "Meetings", occurrenceCount: 1, materialId: "m1",
-                    userOriginal: nil,
-                    targetExpression: "I totally blanked when they asked for the timeline.",
-                    nativeMeaning: nil,
-                    imageUrl: "https://example.com/\(stableKey).jpg?token=x",
-                    inputLang: nil,
-                    sourceDirection: "express", sourceGranularity: "sentence",
-                    createdAt: nil, spokenCount: 0
-                )
+                activityCount: 6,
+                activities: [
+                    Tab2Activity(
+                        sceneDetail: "Meetings", occurrenceCount: 1,
+                        cover: Tab2Activity.Cover(
+                            materialId: "m1",
+                            imageUrl: "https://example.com/\(stableKey).jpg?token=x"
+                        )
+                    )
+                ]
             ),
             onTap: {}
         )
@@ -5669,7 +6563,7 @@ struct Tab2MomentRowHeightTests {
     @Test func rowHeightIsIndependentOfThumbnailAspectRatio() {
         ImageCache.shared.clearMemoryForTesting()
         // key 必须是 stableImageKey（= imageUrl 去掉查询参数），跟生产代码
-        // Tab2FeaturedMoment.stableImageKey 的计算方式保持一致，否则测试会
+        // Tab2Activity.Cover.stableImageKey 的计算方式保持一致，否则测试会
         // 命中不了缓存、停在占位态，测不出真正的问题。
         ImageCache.shared.set(solidImage(width: 1200, height: 900), forKey: "https://example.com/landscape.jpg")
         ImageCache.shared.set(solidImage(width: 900, height: 1950), forKey: "https://example.com/phone-screenshot.jpg")
@@ -5679,6 +6573,230 @@ struct Tab2MomentRowHeightTests {
 
         #expect(height(landscape, category: .large) == height(extremePortrait, category: .large))
         #expect(height(extremePortrait, category: .large) == AppTheme.Tab2MoreRow.Layout.rowHeight)
+    }
+}
+
+// MARK: - 刀 6b 空态 v1：无 activity 的 Hero 卡与 More 行（B2 拍板）
+
+// 空态验收四条（PM 收尾口径）：
+// ① Hero 空态渲染标题 + 文案、不渲染胶囊组；② More 空态渲染文案、不渲染胶囊组；
+// ③ Hero 空态高度 ≠ 两行槽高度；④ More 空态行收掉 60pt 槽与行高下限，有内容行不变。
+// ①② 的内容断言用 ImageRenderer + Vision OCR 读渲染图里的真实文字——「渲染了
+// 标题与文案」只有读字才算数，高度差只能证明结构、证明不了文案；③④ 用
+// UIHostingController 量高度（与截图验收同款手段，只是跑在测试进程内），两者
+// 各锁一半，都不可少。ImageRenderer 与 UIHostingController 必须主线程
+// （约束同 Tab2ActivityRowHeightTests）。
+
+@MainActor
+struct Tab2EmptyStateTests {
+
+    private func heroCard(
+        activityCount: Int,
+        activities: [Tab2Activity] = [],
+        lastMaterialAt: Date? = nil
+    ) -> Tab2HeroCard {
+        Tab2HeroCard(
+            category: Tab2CategoryData(
+                sceneCategory: "日常起居", wordCount: 47, unlocked: true,
+                lastMaterialAt: lastMaterialAt,
+                activityCount: activityCount,
+                activities: activities
+            ),
+            onTalk: {}
+        )
+    }
+
+    private func moreRow(activityCount: Int, activities: [Tab2Activity]) -> Tab2ActivityRow {
+        Tab2ActivityRow(
+            category: Tab2CategoryData(
+                sceneCategory: "工作与学业", wordCount: 41, unlocked: true,
+                activityCount: activityCount,
+                activities: activities
+            ),
+            onTap: {}
+        )
+    }
+
+    private func height(_ view: some View, width: CGFloat = 350) -> CGFloat {
+        let host = UIHostingController(rootView: view)
+        return host.sizeThatFits(in: CGSize(width: width, height: CGFloat.infinity)).height
+    }
+
+    /// ImageRenderer 渲染 + Vision OCR 读字（scale 2 提高小字号命中率）。
+    /// 返回所有识别行的原文；断言时拼成整串再去掉空格比较——uppercase 小标题
+    /// 带字距时 OCR 可能把词拆成多行，逐行相等会假红。
+    private func renderedTexts(_ view: some View, width: CGFloat = 350) -> [String] {
+        let renderer = ImageRenderer(content: view)
+        renderer.proposedSize = ProposedViewSize(width: width, height: nil)
+        renderer.scale = 2
+        guard let image = renderer.uiImage, let cg = image.cgImage else { return [] }
+        let request = VNRecognizeTextRequest()
+        request.recognitionLevel = .accurate
+        request.recognitionLanguages = ["en-US"]
+        let handler = VNImageRequestHandler(cgImage: cg)
+        try? handler.perform([request])
+        return (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }
+    }
+
+    /// ① Hero 空态：小标题与说明行都渲染，被挡的活动名绝不出现在卡面（胶囊组没渲染）。
+    @Test func heroEmptyStateRendersTitleAndCopyWithoutCapsules() {
+        // 活动被校验挡掉（32 字符 > 24 上限）→ showsActivities = false，与
+        // activityCount = 0 走同一条空态路径，顺手锁住「全部被挡也进空态」。
+        let card = heroCard(
+            activityCount: 2,
+            activities: [
+                Tab2Activity(sceneDetail: "Coordinating quarterly budgets", occurrenceCount: 1)
+            ],
+            lastMaterialAt: Calendar.current.date(byAdding: .day, value: -5, to: Date())
+        )
+        let joined = renderedTexts(card).joined()
+            .uppercased().replacingOccurrences(of: " ", with: "")
+        #expect(joined.contains("RECENTACTIVITIES"), "小标题 Recent activities 必须渲染")
+        #expect(joined.contains("ONLYWORDSSOFAR"), "说明行 Only words so far 必须渲染")
+        #expect(!joined.contains("COORDINATING"), "被挡的活动名不得渲染（胶囊组没有画）")
+    }
+
+    /// ② More 空态：一行 Only words so far + 词数行保留其下；胶囊组不渲染。
+    @Test func moreEmptyRowRendersCopyNotCapsules() {
+        let row = Tab2ActivityRow(
+            category: Tab2CategoryData(
+                sceneCategory: "科技数码", wordCount: 31, unlocked: true,
+                lastMaterialAt: Calendar.current.date(byAdding: .day, value: -2, to: Date()),
+                activityCount: 0,
+                activities: []
+            ),
+            onTap: {}
+        )
+        let joined = renderedTexts(row).joined()
+            .uppercased().replacingOccurrences(of: " ", with: "")
+        #expect(joined.contains("ONLYWORDSSOFAR"), "说明行 Only words so far 必须渲染")
+        #expect(joined.contains("31WORDS"), "词数行必须保留其下（B2：两处说同一句话、词数不动）")
+    }
+
+    /// ③ Hero 空态高度 ≠ 两行槽高度：占位按单行文本自然高度走（空态 v1 关键
+    /// 规则）——有活动卡与空态卡的高度差恰为「两行槽 − 说明行自然高度」，
+    /// 槽位被一行字顶替：既不是留空槽（差 0）、也不是整块消失（差 69）。
+    @Test func heroEmptyStateReplacesSlotWithSingleLineHeight() {
+        let filled = heroCard(
+            activityCount: 6,
+            activities: [Tab2Activity(sceneDetail: "Meetings", occurrenceCount: 1)],
+            lastMaterialAt: Date()
+        )
+        let empty = heroCard(activityCount: 0)
+        let slot = Tab2ActivityCapsuleMetrics.hero().twoRowHeight
+        let line = height(Tab2OnlyWordsLine())
+
+        // 说明行本身：渲染了（>10）、是单行自然高度（<40）、远非两行槽 69。
+        #expect(line > 10)
+        #expect(line < 40)
+        #expect(abs(line - slot) > 20)
+
+        let hFilled = height(filled)
+        let hEmpty = height(empty)
+        #expect(hFilled > hEmpty, "空态卡必须比有内容卡矮（矮得有理由）")
+        #expect(
+            abs((hFilled - hEmpty) - (slot - line)) < 0.5,
+            "高度差应恰为两行槽被一行字顶替：filled \(hFilled) empty \(hEmpty) slot \(slot) line \(line)"
+        )
+    }
+
+    /// ④ More 空态行收掉行高下限：有内容行仍稳在 129（既有测试锁定值），
+    /// 空态行矮于下限且不为 0——「行就是矮的」本身是设计。
+    @Test func moreEmptyRowDropsSlotAndFloor() {
+        let filled = moreRow(
+            activityCount: 6,
+            activities: [Tab2Activity(sceneDetail: "Meetings", occurrenceCount: 1)]
+        )
+        let empty = moreRow(activityCount: 0, activities: [])
+
+        #expect(height(filled) == AppTheme.Tab2MoreRow.Layout.rowHeight)
+        let hEmpty = height(empty)
+        #expect(hEmpty > 0)
+        #expect(hEmpty < AppTheme.Tab2MoreRow.Layout.rowHeight)
+    }
+}
+
+// MARK: - 刀 6a：Tab2 解锁页区块显隐（状态矩阵四行）
+
+struct Tab2UnlockedVisibilityTests {
+    /// 状态矩阵行 ①：0 解锁 + 有在攒 → 只剩 Topics（Talk/Hero/More 整块与页脚不渲染）。
+    @Test func zeroUnlockedWithFillingShowsOnlyTopics() {
+        let filling = Tab2CategoryData(sceneCategory: "Travel", wordCount: 7, unlocked: false)
+        let v = Tab2UnlockedVisibility.compute(
+            categories: [filling],
+            hero: nil,
+            milestoneIDs: [],
+            moreRows: []
+        )
+        #expect(v.showsTalk == false)
+        #expect(v.showsMore == false)
+        #expect(v.showsTopics == true)
+        #expect(v.showsEmptyState == false)
+        #expect(v.stillFilling.count == 1)
+        #expect(v.stillFilling.first?.id == "Travel")
+    }
+
+    /// 状态矩阵行 ②：0 解锁 + 无在攒 → 三块全空 → EmptyStateView。
+    @Test func zeroUnlockedWithNothingShowsEmptyState() {
+        let v = Tab2UnlockedVisibility.compute(
+            categories: [],
+            hero: nil,
+            milestoneIDs: [],
+            moreRows: []
+        )
+        #expect(v.showsTalk == false)
+        #expect(v.showsMore == false)
+        #expect(v.showsTopics == false)
+        #expect(v.showsEmptyState == true)
+    }
+
+    /// 状态矩阵行 ③：仅 1 个解锁 → 有 Hero、无 More（规则 2 明写：只有一件事可聊，
+    /// 不存在「别的」——moreRows 已排除了 hero，唯一解锁被占掉）。
+    @Test func singleUnlockShowsHeroWithoutMore() {
+        let only = Tab2CategoryData(sceneCategory: "Daily Life", wordCount: 12, unlocked: true)
+        let v = Tab2UnlockedVisibility.compute(
+            categories: [only],
+            hero: only,
+            milestoneIDs: [],
+            moreRows: []
+        )
+        #expect(v.showsTalk == true)
+        #expect(v.showsMore == false)
+        #expect(v.showsTopics == false)
+        #expect(v.showsEmptyState == false)
+    }
+
+    /// 状态矩阵行 ④：≥2 解锁 → Talk + Hero + More + Topics 全齐，无空态。
+    @Test func multipleUnlocksShowAllBlocks() {
+        let heroCat = Tab2CategoryData(sceneCategory: "Daily Life", wordCount: 12, unlocked: true)
+        let moreCat = Tab2CategoryData(sceneCategory: "Food & Drink", wordCount: 8, unlocked: true)
+        let filling = Tab2CategoryData(sceneCategory: "Travel", wordCount: 5, unlocked: false)
+        let v = Tab2UnlockedVisibility.compute(
+            categories: [heroCat, moreCat, filling],
+            hero: heroCat,
+            milestoneIDs: [],
+            moreRows: [moreCat]
+        )
+        #expect(v.showsTalk == true)
+        #expect(v.showsMore == true)
+        #expect(v.showsTopics == true)
+        #expect(v.showsEmptyState == false)
+        #expect(v.moreRows.count == 1)
+        #expect(v.moreRows.first?.id == "Food & Drink")
+    }
+
+    /// 里程碑类目即使已达解锁条件也进 Topics（迁移来的既有规则，锁定防回归）。
+    @Test func milestoneCategoryCountsAsFilling() {
+        let milestoneCat = Tab2CategoryData(sceneCategory: "Daily Life", wordCount: 3, unlocked: true)
+        let v = Tab2UnlockedVisibility.compute(
+            categories: [milestoneCat],
+            hero: nil,
+            milestoneIDs: ["Daily Life"],
+            moreRows: []
+        )
+        #expect(v.showsTopics == true)
+        #expect(v.stillFilling.count == 1)
+        #expect(v.stillFilling.first?.id == "Daily Life")
     }
 }
 
@@ -5984,25 +7102,6 @@ struct ConversationViewModelStateTests {
         #expect(isDisabled(.listening) == false)
         #expect(isDisabled(.aiSpeaking) == true)
         #expect(isDisabled(.disabled) == false)
-    }
-}
-
-// MARK: - PopsLabel formatting tests
-// 锁定 pops 计数单位的复数处理（0/1/N），供 Topics 进度行胶囊与 Hero 卡共用。
-
-struct PopsLabelTests {
-
-    @Test func zeroUsesPlural() {
-        #expect(PopsLabel.format(0) == "0 pops")
-    }
-
-    @Test func oneUsesSingular() {
-        #expect(PopsLabel.format(1) == "1 pop")
-    }
-
-    @Test func manyUsePlural() {
-        #expect(PopsLabel.format(2) == "2 pops")
-        #expect(PopsLabel.format(18) == "18 pops")
     }
 }
 
@@ -6314,8 +7413,7 @@ struct LocalUserDataTests {
         let defaults = makeDefaults("local-user-data-other")
         defaults.set(true, forKey: Tab2Defaults.permanentlyUnlocked)
         defaults.set(true, forKey: Tab2Defaults.firstUnlockShown)
-        defaults.set("material-a", forKey: Tab2Defaults.heroMaterialID)
-        defaults.set(["Calling family"], forKey: Tab2Defaults.heroKnownMoments)
+        defaults.set(["饮食": "2026-09-09"], forKey: Tab2Defaults.heroLastSelectedDays)
         defaults.set(42, forKey: "mine_last_scene_count")
         // 2026-08-27 review 发现的遗漏：引导完成待同步标记也是账号级状态
         defaults.set(true, forKey: ProfileService.onboardingSyncPendingKey)
@@ -6323,18 +7421,20 @@ struct LocalUserDataTests {
         defaults.set("2026-09-05", forKey: UsageQuotaStore.cachedDateKey)
         defaults.set(3, forKey: UsageQuotaStore.cachedUsedCountKey)
         defaults.set(5, forKey: UsageQuotaStore.cachedDailyLimitKey)
-        // 聊过机制删除时枚举 case 一并没了，但字面量必须留在清理清单里——
-        // 用字面量而非 Tab2Defaults.* 写入，模拟「更新前的旧设备本地已写入」这一场景。
+        // 退役键（聊过机制 / 刀 3 旧 hero 稳定性键）：枚举 case 一并没了，
+        // 但字面量必须留在清理清单里——用字面量而非 Tab2Defaults.* 写入，
+        // 模拟「更新前的旧设备本地已写入」这一场景。
         defaults.set(["Calling family"], forKey: "tab2_spoken_moments")
         defaults.set(["Calling family"], forKey: "tab2_hero_known_spoken_moments")
+        defaults.set("material-a", forKey: "tab2_hero_material_id")
+        defaults.set(["Calling family"], forKey: "tab2_hero_known_moments")
 
         await LocalUserData.clearDefaults(defaults)
 
         // 这些键没有视图直接观察，移除即可，不必留占位值
         #expect(defaults.object(forKey: Tab2Defaults.permanentlyUnlocked) == nil)
         #expect(defaults.object(forKey: Tab2Defaults.firstUnlockShown) == nil)
-        #expect(defaults.object(forKey: Tab2Defaults.heroMaterialID) == nil)
-        #expect(defaults.object(forKey: Tab2Defaults.heroKnownMoments) == nil)
+        #expect(defaults.object(forKey: Tab2Defaults.heroLastSelectedDays) == nil)
         #expect(defaults.object(forKey: "mine_last_scene_count") == nil)
         #expect(defaults.object(forKey: ProfileService.onboardingSyncPendingKey) == nil)
         #expect(defaults.object(forKey: UsageQuotaStore.cachedDateKey) == nil)
@@ -6342,6 +7442,8 @@ struct LocalUserDataTests {
         #expect(defaults.object(forKey: UsageQuotaStore.cachedDailyLimitKey) == nil)
         #expect(defaults.object(forKey: "tab2_spoken_moments") == nil)
         #expect(defaults.object(forKey: "tab2_hero_known_spoken_moments") == nil)
+        #expect(defaults.object(forKey: "tab2_hero_material_id") == nil)
+        #expect(defaults.object(forKey: "tab2_hero_known_moments") == nil)
     }
 
     // 这条锁的是 re-review 发现的 false success：
@@ -6534,69 +7636,8 @@ struct Tab2MilestoneLifecycleTests {
             reduceMotion: false
         ) == 1.0)
     }
-
-    // MARK: - CategoryProgressRow.isHot（分类行「点亮」判定）
-
-    @Test func unlockedCategoryStaysHotEvenBelowTarget() {
-        // 已解锁的分类常驻点亮：即便 wordCount 因口径调整回落到 target 以下，
-        // 也不该退回未点亮的样子（feat/page-visual-polish 有意引入的行为）。
-        #expect(CategoryProgressRow.isHot(
-            isPresentingMilestone: false,
-            milestoneRevealed: false,
-            unlocked: true,
-            wordCount: 3,
-            targetCount: 20,
-            isHighlighted: false
-        ))
-    }
-
-    @Test func lockedCategoryIsHotOnlyAtOrAboveTarget() {
-        func hot(_ count: Int) -> Bool {
-            CategoryProgressRow.isHot(
-                isPresentingMilestone: false,
-                milestoneRevealed: false,
-                unlocked: false,
-                wordCount: count,
-                targetCount: 20,
-                isHighlighted: false
-            )
-        }
-        #expect(hot(19) == false)
-        #expect(hot(20))          // 边界：达标即点亮
-        #expect(hot(21))
-    }
-
-    @Test func highlightForcesHotOnLockedBelowTargetCategory() {
-        #expect(CategoryProgressRow.isHot(
-            isPresentingMilestone: false,
-            milestoneRevealed: false,
-            unlocked: false,
-            wordCount: 1,
-            targetCount: 20,
-            isHighlighted: true
-        ))
-    }
-
-    @Test func milestonePresentationOverridesAllOtherHotSources() {
-        // 演出期间只听揭示节拍：即使已解锁且远超达标线，未揭示前也必须保持未点亮，
-        // 否则数字还没跑完就抢先点亮，里程碑动效失去意义。
-        #expect(CategoryProgressRow.isHot(
-            isPresentingMilestone: true,
-            milestoneRevealed: false,
-            unlocked: true,
-            wordCount: 99,
-            targetCount: 20,
-            isHighlighted: true
-        ) == false)
-        #expect(CategoryProgressRow.isHot(
-            isPresentingMilestone: true,
-            milestoneRevealed: true,
-            unlocked: false,
-            wordCount: 0,
-            targetCount: 20,
-            isHighlighted: false
-        ))
-    }
+    // （刀 6：isHot / isHighlighted 机制整体删除——Topics 区全中性，暖橙只留给
+    // Hero 理由胶囊。里程碑 scale 演出保留，测试保留。）
 
     @Test func milestoneToastLifetimeIsShorterThanReadingToastLifetime() {
         #expect(AppTheme.Motion.milestoneToastLifetime < AppTheme.Motion.toastLifetime)
@@ -6661,7 +7702,7 @@ struct Tab2MilestoneLifecycleTests {
             currentCount: 20
         )])
 
-        #expect(message == "'Travel & Commute' reached 20 pops.")
+        #expect(message == "'Travel & Commute' reached 20 words.")
     }
 
     @Test func milestoneToastAggregatesSimultaneousTopicsAtThreshold() {
@@ -6679,7 +7720,7 @@ struct Tab2MilestoneLifecycleTests {
             )
         ])
 
-        #expect(message == "2 topics reached 20 pops.")
+        #expect(message == "2 topics reached 20 words.")
     }
 
     @Test func pendingPresentationRemainsUntilMatchingPresentationFinishes() {

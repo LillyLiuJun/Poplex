@@ -24,6 +24,10 @@ export type SceneCategory = typeof SCENE_CATEGORIES[number];
 // Classifiers were historically prompted with the Chinese list, and a model
 // shown Chinese input may still echo a Chinese value even when the prompt now
 // lists English keys.
+// 保质期：这是中英切换期的读侧兼容层——fetchExistingSceneLabels（generate/index.ts）
+// 也复用它把存量中文分类行映射回英文 key。清库（上线前）之后应删除本表及
+// normalizeSceneCategory 中的 legacy 分支：届时数据库中只剩英文值，这张中文表
+// 就是无人敢动的历史包袱。切勿把映射不到的值兜成 "Other"——那会污染分类语义。
 const LEGACY_SCENE_CATEGORIES: Record<string, SceneCategory> = {
   "家庭与人际": "Home & Family",
   "工作与学业": "Work & Study",

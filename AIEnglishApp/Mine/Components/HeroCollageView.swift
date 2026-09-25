@@ -1,21 +1,19 @@
 import SwiftUI
 
-/// Tab2 Hero 卡顶部照片。RPC 已把 featured 照片排在 slot 1；本视图只取第一张，
-/// 其余（如有）由前端直接忽略——不动 RPC 返回结构，也不动数据契约。
-struct HeroCollageView: View {
-    let photos: [Tab2HeroPhoto]
-    let categoryLabel: String
-    let popsText: String
-
-    private var featuredPhoto: Tab2HeroPhoto? { photos.first }
+/// Tab2 Hero 卡顶部照片层（刀 4b 按规格 v3「图片取值」恢复）。
+/// 只渲染**第一条有效活动**的封面——cover 由 `Tab2ActivityDisplay.photoCover` 决定，
+/// 为 nil 时卡面整体走预设图，本视图根本不创建。绝不向后翻别的活动：
+/// 那会给卡片配一张不属于这件事的照片，用户会以为图就是这件事。
+/// 刀 3 时随旧模型（Tab2HeroPhoto）删除，本文件只留下 HeroTopOverlay；
+/// 刀 4b 按 v3 规格恢复单图版；刀 6 类别标签行删除（并入左上角照片标签 chip，
+/// 由卡面叠加，HeroTopOverlay 随之整体退役）。
+struct Tab2HeroPhotoArt: View {
+    let cover: Tab2Activity.Cover
 
     var body: some View {
         ZStack {
-            GeometryReader { geometry in
-                singlePhoto(in: geometry.size)
-            }
+            photo
             photoTreatment
-            HeroTopOverlay(categoryLabel: categoryLabel, popsText: popsText, style: .photo)
         }
         .frame(height: AppTheme.Tab2Hero.Layout.artHeight)
         .frame(maxWidth: .infinity)
@@ -23,22 +21,15 @@ struct HeroCollageView: View {
         .mask(photoBottomFade)
     }
 
-    @ViewBuilder
-    private func singlePhoto(in size: CGSize) -> some View {
-        if let featuredPhoto {
-            tile(featuredPhoto, width: size.width, height: size.height)
-        } else {
-            placeholder
-        }
-    }
-
-    private func tile(_ photo: Tab2HeroPhoto, width: CGFloat, height: CGFloat) -> some View {
+    private var photo: some View {
         CachedRemoteImage(
-            signedUrl: photo.imageUrl,
-            stableKey: photo.stableImageKey ?? photo.imageUrl,
+            // photoCover 已过滤掉 imageUrl 为空/nil 的 cover（Tab2ActivityDisplay.compute），
+            // 这里的 ?? "" 只是让类型对上，实际走不到。
+            signedUrl: cover.imageUrl ?? "",
+            stableKey: cover.stableImageKey ?? cover.imageUrl ?? "",
             placeholder: { placeholder }
         )
-        .frame(width: width, height: height)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipped()
         .saturation(AppTheme.Tab2Hero.ImageTreatment.photoSaturation)
     }
@@ -90,79 +81,5 @@ struct HeroCollageView: View {
 
     private var placeholder: some View {
         Rectangle().fill(AppTheme.Color.imagePlaceholderBg)
-    }
-}
-
-// MARK: - 顶部标签行（拼图 / 预设图共用）
-
-struct HeroTopOverlay: View {
-    enum Style {
-        case photo
-        case preset
-    }
-
-    let categoryLabel: String
-    let popsText: String
-    let style: Style
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text(categoryLabel.uppercased())
-                .font(AppTheme.Font.tab2HeroCategoryLabel)
-                .tracking(AppTheme.Tab2Hero.Typography.categoryTracking)
-                .foregroundStyle(labelColor)
-                .shadow(
-                    color: shadowColor,
-                    radius: AppTheme.Tab2Hero.Layout.photoOverlayShadowRadius,
-                    x: 0,
-                    y: AppTheme.Tab2Hero.Layout.photoOverlayShadowY
-                )
-
-            Spacer(minLength: 0)
-
-            Text(popsText)
-                .font(AppTheme.Font.tab2HeroPopsLabel)
-                .monospacedDigit()
-                .foregroundStyle(popsColor)
-                .shadow(
-                    color: shadowColor,
-                    radius: AppTheme.Tab2Hero.Layout.photoOverlayShadowRadius,
-                    x: 0,
-                    y: AppTheme.Tab2Hero.Layout.photoOverlayShadowY
-                )
-        }
-        .padding(.horizontal, AppTheme.Space.paddingCard)
-        .padding(.top, topInset)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .allowsHitTesting(false)
-    }
-
-    private var topInset: CGFloat {
-        switch style {
-        case .photo: AppTheme.Space.paddingM
-        case .preset: AppTheme.Space.paddingPage
-        }
-    }
-
-    private var labelColor: Color {
-        switch style {
-        case .photo: AppTheme.Color.tab2HeroPhotoOverlayText
-        case .preset: AppTheme.Color.tab2HeroPresetLabel
-        }
-    }
-
-    private var popsColor: Color {
-        switch style {
-        case .photo:
-            AppTheme.Color.tab2HeroPhotoOverlayText.opacity(AppTheme.Tab2Hero.Opacity.photoPops)
-        case .preset:
-            AppTheme.Color.tab2HeroPresetLabel.opacity(AppTheme.Tab2Hero.Opacity.presetPops)
-        }
-    }
-
-    private var shadowColor: Color {
-        style == .photo
-            ? AppTheme.Color.tab2HeroPhotoOverlayShadow.opacity(AppTheme.Tab2Hero.Opacity.photoTextShadow)
-            : AppTheme.Color.tab2HeroPresetLabel.opacity(AppTheme.Tab2Hero.Opacity.transparent)
     }
 }

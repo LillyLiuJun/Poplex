@@ -17,6 +17,8 @@ struct MineView: View {
     @State private var path: [MineRoute] = []
     @State private var comingSoonToast: String? = nil
     @State private var milestoneToast: String? = nil
+    /// 刀 4b：Hero 进入页面时求值一次并持有，一次浏览之内不因数据刷新而换。
+    @State private var heroSelection: Tab2CategoryData? = nil
     @State private var isRadiantAscentActive: Bool = false
     @State private var lockedBottomBarHeight: CGFloat = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -72,6 +74,8 @@ struct MineView: View {
                     vm.prepareDebugMilestoneDemoFromCurrentData()
                 }
                 #endif
+                // 刀 4b：切回 Tab2 = 新一次浏览，Hero 在此刻重求值。
+                refreshHeroSelectionIfNeeded()
                 Task { await vm.load() }
             }
             .onChange(of: path) { _, newPath in
@@ -81,7 +85,17 @@ struct MineView: View {
                 if newValue {
                     lockedBottomBarHeight = 0
                     withAnimation(AppTheme.Motion.tabSelection) {}
+                    refreshHeroSelectionIfNeeded()
                 }
+            }
+            // 首载数据到位（nil → 有数据）时求值一次；后续刷新 categories id 不变、
+            // 不触发 → Hero 在一次浏览之内保持冻结。
+            .onChange(of: vm.data?.categories.map(\.id) ?? []) { _, _ in
+                refreshHeroSelectionIfNeeded()
+            }
+            // 里程碑排除集变化（弹出/播完）时重求值，与旧动态排除行为对齐。
+            .onChange(of: visibleMilestonePresentations) { _, _ in
+                refreshHeroSelectionIfNeeded()
             }
             .task(id: visibleMilestonePresentations) {
                 let presentations = visibleMilestonePresentations
@@ -115,6 +129,29 @@ struct MineView: View {
                 lifetime: AppTheme.Motion.milestoneToastLifetime,
                 extraBottomOffset: toastExtraBottomOffset
             )
+#if DEBUG
+            // 【toast-probe · 常备验收手段】真机曾现「toast 常驻不消失」
+            // （2026-09-15，结论：rebase 前旧包，当前代码无法复现）。三条 toast
+            // （comingSoon / vm.toastMessage / milestone）共用 AppToast 消失链路，
+            // 每次值变化都打 [toast-probe] NSLog——写入 N 秒后必须跟一条 nil，
+            // 否则自动消失链路坏。触发方式与验收标准见 CLAUDE.md「Debug Probes」。
+            // 设备 console 是管道、stdout 全缓冲，必须走 NSLog（os_log 通道）才即时可见。
+            .onChange(of: comingSoonToast) { _, newValue in
+                NSLog("[toast-probe] comingSoonToast -> %@", String(describing: newValue))
+            }
+            .onChange(of: vm.toastMessage) { _, newValue in
+                NSLog("[toast-probe] vm.toastMessage -> %@", String(describing: newValue))
+            }
+            .onChange(of: milestoneToast) { _, newValue in
+                NSLog("[toast-probe] milestoneToast -> %@", String(describing: newValue))
+            }
+            .task {
+                guard ProcessInfo.processInfo.environment["TOAST_PROBE"] == "1" else { return }
+                try? await Task.sleep(for: .seconds(2))
+                NSLog("[toast-probe] firing")
+                comingSoonToast = "Speaking mode will be available soon."
+            }
+#endif
             .onPreferenceChange(Tab2LockedBottomBarHeightKey.self) { height in
                 lockedBottomBarHeight = height
             }
@@ -129,6 +166,15 @@ struct MineView: View {
 
     private var visibleMilestonePresentations: [CategoryMilestonePresentation] {
         isActive ? vm.milestonePresentations : []
+    }
+
+    /// 刀 4b：Hero 在「进入页面」时求值一次并持有，一次浏览之内不随数据
+    /// 刷新换。重算触发器只有三个：切回 Tab2（新一次浏览）、解锁转场、
+    /// 里程碑排除集变化（与旧 heroCategory 的动态排除行为对齐）。
+    private func refreshHeroSelectionIfNeeded() {
+        guard vm.isPermanentlyUnlocked, vm.data != nil else { return }
+        let milestoneIDs = Set(visibleMilestonePresentations.map(\.categoryID))
+        heroSelection = vm.selectHero(excluding: milestoneIDs)
     }
 
     // MARK: - State machine
@@ -160,6 +206,7 @@ struct MineView: View {
     private var unlockedView: some View {
         Tab2UnlockedView(
             vm: vm,
+            hero: heroSelection,
             topInset: topInset,
             listResetToken: listResetToken,
             milestonePresentations: visibleMilestonePresentations,
@@ -374,7 +421,7 @@ private struct Tab2LockedView: View {
     }
 
     private var hintText: some View {
-        Text("Reach 20 pops in any topic to start talking.")
+        Text("Reach 20 words in any topic to start talking.")
             .font(AppTheme.Font.englishBody)
             .foregroundStyle(AppTheme.Color.textSecondary)
             .lineSpacing(AppTheme.Typography.lineBody)
@@ -389,6 +436,8 @@ private struct Tab2LockedView: View {
     // ── TOPICS list ──────────────────────────────────────────────────────
     private func topicsCard(_ proxy: ScrollViewProxy) -> some View {
         VStack(alignment: .leading, spacing: 0) {
+            // Topics 保持页面级标题（与 Talk about today 同款 sectionTitleSerif）；
+            // 刀 6 §六①只降档 More to talk about。
             Text("Topics in progress")
                 .font(AppTheme.Font.sectionTitleSerif)
                 .foregroundStyle(AppTheme.Color.textPrimary)
@@ -396,7 +445,6 @@ private struct Tab2LockedView: View {
                 .padding(.bottom, AppTheme.Space.paddingM)
 
             let cats  = categoriesWithWords
-            let topId = closestCategory?.id
 
             if cats.isEmpty {
                 Text("Capture a moment to get started.")
@@ -409,7 +457,6 @@ private struct Tab2LockedView: View {
                     ForEach(Array(cats.enumerated()), id: \.element.id) { index, cat in
                         CategoryProgressRow(
                             category: cat,
-                            isHighlighted: cat.id == topId,
                             isExpanded: expandedCategoryId == cat.id,
                             onToggle: { toggleExpand(cat.id, proxy) },
                             loadWords: { try await vm.loadCategoryWords(for: cat.sceneCategory) },
@@ -420,7 +467,7 @@ private struct Tab2LockedView: View {
                     }
                 }
                 .padding(.vertical, AppTheme.Space.paddingS)
-                .surfaceCard()
+                .surfaceCard(cornerRadius: AppTheme.Radius.large)
                 .padding(.horizontal, AppTheme.Space.paddingPage)
             }
         }
@@ -606,10 +653,6 @@ private struct Tab2LockedView: View {
         return (vm.data?.categories ?? []).filter { $0.wordCount >= 1 }
     }
 
-    private var closestCategory: Tab2CategoryData? {
-        categoriesWithWords.max(by: { $0.wordCount < $1.wordCount })
-    }
-
     private func sectionHeader(_ title: String, note: String) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: AppTheme.Space.paddingS) {
             Text(title)
@@ -623,19 +666,78 @@ private struct Tab2LockedView: View {
     }
 }
 
+/// Tab2 解锁页区块显隐决策（刀 6a）——纯函数，视图与单测共用。
+/// 标题属于区块，不属于页面：
+///  · 规则 1：0 个解锁类目 → Talk about today + Hero + More 整块不渲染（标题一起）。
+///  · 规则 2：只有 1 个解锁类目 → 有 Hero、无 More。More 的含义是「除了 Hero
+///    还有别的」——唯一那件事被 Hero 占掉，不存在「别的」。
+///  · 规则 4：三块全空 → EmptyStateView（规则 5 的页脚随 Hero 在视图层同进同出）。
+struct Tab2UnlockedVisibility {
+    let showsTalk: Bool
+    let showsMore: Bool
+    let showsTopics: Bool
+    let showsEmptyState: Bool
+    /// Topics 渲染输入（与 showsTopics 同源推导，视图直接消费，不重算）。
+    let stillFilling: [Tab2CategoryData]
+    /// More 渲染输入（同上）。
+    let moreRows: [Tab2CategoryData]
+
+    static func compute(
+        categories: [Tab2CategoryData],
+        hero: Tab2CategoryData?,
+        milestoneIDs: Set<String>,
+        moreRows: [Tab2CategoryData]
+    ) -> Tab2UnlockedVisibility {
+        let stillFilling = categories.filter {
+            (!$0.unlocked && $0.wordCount >= 1) || milestoneIDs.contains($0.id)
+        }
+        let showsTalk = hero != nil
+        let showsMore = !moreRows.isEmpty
+        let showsTopics = !stillFilling.isEmpty
+        return Tab2UnlockedVisibility(
+            showsTalk: showsTalk,
+            showsMore: showsMore,
+            showsTopics: showsTopics,
+            showsEmptyState: !showsTalk && !showsMore && !showsTopics,
+            stillFilling: stillFilling,
+            moreRows: moreRows
+        )
+    }
+}
+
 private struct Tab2UnlockedView: View {
     let vm: Tab2HomeViewModel
+    /// 刀 4b：Hero 由 MineView 进入页面时求值一次并传入，本视图内只读不重算。
+    var hero: Tab2CategoryData? = nil
     var topInset: CGFloat = 0
     var listResetToken: UUID = UUID()
     var milestonePresentations: [CategoryMilestonePresentation] = []
     let onTalk: (String) -> Void
     var footerTopSpace: CGFloat = AppTheme.Space.tab2FooterTop
     var footerBottomSpace: CGFloat = AppTheme.Space.tab2FooterBottom
+    /// 预览直达（刀 6 截图验收用）：进入页面后自动滚到指定分类行。生产调用恒 nil，无行为变化。
+    var initialScrollTarget: String? = nil
 
     // 单开手风琴：同时只展开一个 Topics-in-Progress 主题；切回 Mine 时回收起。
     @State private var expandedCategoryId: String?
     @State private var refreshHaptics = PullToRefreshHaptics()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// 刀 6a：区块显隐的单源决策。
+    /// 数据未就绪（vm.data == nil）时返回 nil → body 里 `if let visibility` 整块
+    /// 不渲染：加载态只显示页面底色，**不会**落进空态分支。规则 4 的
+    /// EmptyStateView 只可能出现在「已加载且三块全空」——loading 与 empty
+    /// 是两个互斥分支（CLAUDE.md 三态规矩：不允许共用一个分支）。
+    private var visibility: Tab2UnlockedVisibility? {
+        guard let data = vm.data else { return nil }
+        let milestoneIDs = Set(milestonePresentations.map(\.categoryID))
+        return Tab2UnlockedVisibility.compute(
+            categories: data.categories,
+            hero: hero,
+            milestoneIDs: milestoneIDs,
+            moreRows: vm.moreCategories(excluding: milestoneIDs, hero: hero)
+        )
+    }
 
     var body: some View {
         ZStack {
@@ -650,23 +752,32 @@ private struct Tab2UnlockedView: View {
                         WarmRefreshControlHelper(haptics: refreshHaptics)
                             .frame(width: 0, height: 0)
                         VStack(alignment: .leading, spacing: 0) {
-                            Text("Talk about today")
-                                .font(AppTheme.Font.sectionTitleSerif)
-                                .foregroundStyle(AppTheme.Color.textPrimary)
-                            .padding(.horizontal, AppTheme.Space.paddingPage)
-                            .padding(.top, AppTheme.Space.paddingPage)
-                            // 与「Topics in progress → 卡片」保持同一标题到内容节奏。
-                            .padding(.bottom, AppTheme.Space.paddingCard)
+                            // visibility == nil ⟺ vm.data == nil（未加载）：整块不渲染，
+                            // 不会闪空态。见 visibility 属性的注释。
+                            if let visibility {
+                                // 规则 4（刀 6a）：三块全空 → 空态。组件现成，解锁页首次
+                                // 接线；minHeight 与锁定页同款——把视图高度提案给组件
+                                // 内部 Spacer 均分，内容垂直居中。
+                                if visibility.showsEmptyState {
+                                    EmptyStateView()
+                                        .frame(minHeight: availableHeight)
+                                } else {
+                                    // 只作用于已解锁页面：最后一个可见卡片（Hero 或 Topics）
+                                    contentSections(proxy, visibility: visibility)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
 
-                            // 只作用于已解锁页面：最后一个可见卡片（Hero 或 Topics）
-                            contentSections(proxy)
-                                .fixedSize(horizontal: false, vertical: true)
+                                // 规则 5（刀 6a）：页脚宣言与 Hero 区块同进同出。
+                                // Spacer 与宣言是一对——负责把短内容的宣言推到底部
+                                // 贴暖光，两个必须一起在 Hero 分支里；只挪宣言会在
+                                // 空态页面底部多出一段撑开的空白。
+                                if visibility.showsTalk {
+                                    Spacer(minLength: footerTopSpace)
 
-                            // 页面底部收尾宣言：短内容自适应推底（与底部暖光贴合），长列表收缩为 72pt 呼吸断层随动
-                            Spacer(minLength: footerTopSpace)
-
-                            footerSignoff
-                                .padding(.bottom, footerBottomSpace)
+                                    footerSignoff
+                                        .padding(.bottom, footerBottomSpace)
+                                }
+                            }
                         }
                         .frame(minHeight: availableHeight, alignment: .top)
                         .background(alignment: .bottom) {
@@ -680,6 +791,12 @@ private struct Tab2UnlockedView: View {
                     .refreshable {
                         refreshHaptics.fire()
                         await vm.load(showFailureHint: true)
+                    }
+                    .task {
+                        // 刀 6 截图验收：预览直达 Topics 行（initialScrollTarget 生产恒 nil，不触发）。
+                        guard let target = initialScrollTarget else { return }
+                        try? await Task.sleep(nanoseconds: 600_000_000)
+                        proxy.scrollTo(target, anchor: .top)
                     }
                 }
             }
@@ -708,75 +825,80 @@ private struct Tab2UnlockedView: View {
     }
 
     @ViewBuilder
-    private func contentSections(_ proxy: ScrollViewProxy) -> some View {
-        if let data = vm.data {
-            let milestoneIDs = Set(milestonePresentations.map(\.categoryID))
-            let hero   = vm.heroCategory(excluding: milestoneIDs)
-            let stillFilling = data.categories.filter {
-                (!$0.unlocked && $0.wordCount >= 1) || milestoneIDs.contains($0.id)
-            }
+    private func contentSections(_ proxy: ScrollViewProxy, visibility: Tab2UnlockedVisibility) -> some View {
+        VStack(alignment: .leading, spacing: AppTheme.Space.paddingBetweenSections) {
+            // ── Talk about today（规则 1/2/5，刀 6a）──
+            // 标题属于本区块，不属于页面：有 Hero 才整块渲染，标题一起。
+            if let hero {
+                VStack(alignment: .leading, spacing: AppTheme.Space.paddingCard) {
+                    Text("Talk about today")
+                        .font(AppTheme.Font.sectionTitleSerif)
+                        .foregroundStyle(AppTheme.Color.textPrimary)
+                        .padding(.horizontal, AppTheme.Space.paddingPage)
 
-            VStack(alignment: .leading, spacing: AppTheme.Space.paddingBetweenSections) {
-                if let hero {
                     Tab2HeroCard(
                         category: hero,
                         onTalk: { onTalk(hero.sceneCategory) }
                     )
                     .padding(.horizontal, AppTheme.Space.paddingPage)
                 }
+            }
 
-                // More to talk about——hero 之后的推荐行（§3/§4）。行状态由行组件
-                // 按 featured 有无自行判定，不再跟踪「聊过」。空列表时标题与列表
-                // 整块不渲染（§6）：只有一件事可聊，不假装有选择。
-                let moreRows = vm.moreCategories(excluding: milestoneIDs, hero: hero)
-                if !moreRows.isEmpty {
-                    VStack(alignment: .leading, spacing: AppTheme.Space.paddingCard) {
-                        Text("More to talk about")
-                            .font(AppTheme.Font.sectionTitleSerif)
-                            .foregroundStyle(AppTheme.Color.textPrimary)
-                            .padding(.horizontal, AppTheme.Space.paddingPage)
-
-                        VStack(alignment: .leading, spacing: AppTheme.Tab2MoreRow.Layout.rowGap) {
-                            ForEach(moreRows) { category in
-                                Tab2MomentRow(
-                                    category: category,
-                                    onTap: { onTalk(category.sceneCategory) }
-                                )
-                            }
-                        }
+            // ── More to talk about（规则 2 明写，刀 6a）──
+            // More 的含义是「除了 Hero 还有别的」：只有 1 个解锁类目时它恰被
+            // Hero 占掉、moreRows 自然为空。这是规则，不是副作用——只有一件事
+            // 可聊时不存在「别的」，整块（含标题）不渲染。
+            if visibility.showsMore {
+                VStack(alignment: .leading, spacing: AppTheme.Space.paddingCard) {
+                    // 规则 3（刀 6a）：三标题同档 sectionTitleSerif
+                    // （刀 6 §六①曾把 More 降为眉题，本刀改回）。
+                    Text("More to talk about")
+                        .font(AppTheme.Font.sectionTitleSerif)
+                        .foregroundStyle(AppTheme.Color.textPrimary)
                         .padding(.horizontal, AppTheme.Space.paddingPage)
+
+                    VStack(alignment: .leading, spacing: AppTheme.Tab2MoreRow.Layout.rowGap) {
+                        ForEach(visibility.moreRows) { category in
+                            Tab2ActivityRow(
+                                category: category,
+                                onTap: { onTalk(category.sceneCategory) }
+                            )
+                        }
                     }
+                    .padding(.horizontal, AppTheme.Space.paddingPage)
                 }
+            }
 
-                // Topics in Progress——独立 Serif 标题 + 磨砂玻璃列表容器
-                if !stillFilling.isEmpty {
-                    VStack(alignment: .leading, spacing: AppTheme.Space.paddingCard) {
-                        Text("Topics in progress")
-                            .font(AppTheme.Font.sectionTitleSerif)
-                            .foregroundStyle(AppTheme.Color.textPrimary)
-                            .padding(.horizontal, AppTheme.Space.paddingPage)
-
-                        VStack(spacing: 0) {
-                            ForEach(Array(stillFilling.enumerated()), id: \.element.id) { index, cat in
-                                CategoryProgressRow(
-                                    category: cat,
-                                    isHighlighted: false,
-                                    isExpanded: expandedCategoryId == cat.id,
-                                    onToggle: { toggleExpand(cat.id, proxy) },
-                                    loadWords: { try await vm.loadCategoryWords(for: cat.sceneCategory) },
-                                    wordsRevision: vm.categoryWordsRevision,
-                                    milestonePresentations: milestonePresentations
-                                )
-                                .id(cat.id)
-                            }
-                        }
-                        .padding(.vertical, AppTheme.Space.paddingS)
-                        .surfaceCard()
+            // ── Topics in Progress——页面级标题 + 磨砂玻璃列表容器 ──
+            // 规则 3（刀 6a）：标题同档 sectionTitleSerif（Talk / More / Topics 一致）。
+            if visibility.showsTopics {
+                VStack(alignment: .leading, spacing: AppTheme.Space.paddingCard) {
+                    Text("Topics in progress")
+                        .font(AppTheme.Font.sectionTitleSerif)
+                        .foregroundStyle(AppTheme.Color.textPrimary)
                         .padding(.horizontal, AppTheme.Space.paddingPage)
+
+                    VStack(spacing: 0) {
+                        ForEach(Array(visibility.stillFilling.enumerated()), id: \.element.id) { index, cat in
+                            CategoryProgressRow(
+                                category: cat,
+                                isExpanded: expandedCategoryId == cat.id,
+                                onToggle: { toggleExpand(cat.id, proxy) },
+                                loadWords: { try await vm.loadCategoryWords(for: cat.sceneCategory) },
+                                wordsRevision: vm.categoryWordsRevision,
+                                milestonePresentations: milestonePresentations
+                            )
+                            .id(cat.id)
+                        }
                     }
+                    .padding(.vertical, AppTheme.Space.paddingS)
+                    .surfaceCard(cornerRadius: AppTheme.Radius.large)
+                    .padding(.horizontal, AppTheme.Space.paddingPage)
                 }
             }
         }
+        // 无 Hero 时首块顶距由这里补齐（有 Hero 时标题自带 top paddingPage）。
+        .padding(.top, visibility.showsTalk ? 0 : AppTheme.Space.paddingPage)
     }
 
     private var footerSignoff: some View {
@@ -973,17 +1095,13 @@ private struct BrandRadiantAscentOverlay: View {
                 sceneCategory: "工作与学业",
                 wordCount: 24,
                 unlocked: true,
-                momentCount: 5
+                activityCount: 5
             ),
             Tab2CategoryData(
                 sceneCategory: "饮食",
                 wordCount: 12,
                 unlocked: false,
-                previewWords: [
-                    Tab2PreviewWord(lemma: "comfort food"),
-                    Tab2PreviewWord(lemma: "grab a bite")
-                ],
-                momentCount: 3
+                activityCount: 3
             )
         ]
     )
@@ -1107,7 +1225,7 @@ private struct Tab2FooterMatrixPreviewView: View {
                                         .font(AppTheme.Font.englishBody)
                                         .foregroundStyle(AppTheme.Color.textPrimary)
                                     Spacer()
-                                    Text("3 pops ▾")
+                                    Text("3 words ▾")
                                         .font(AppTheme.Font.pos)
                                         .foregroundStyle(AppTheme.Color.textMuted)
                                 }
@@ -1272,30 +1390,22 @@ private struct Tab2FullPagePreviewView: View {
             inputCount: 28,
             categories: [
                 Tab2CategoryData(
-                    sceneCategory: "工作与学业",
+                    sceneCategory: "Work & Study",
                     wordCount: 24,
                     unlocked: true,
-                    momentCount: 5
+                    activityCount: 5
                 ),
                 Tab2CategoryData(
-                    sceneCategory: "饮食与生活",
+                    sceneCategory: "Food & Drink",
                     wordCount: 12,
                     unlocked: false,
-                    previewWords: [
-                        Tab2PreviewWord(lemma: "comfort food"),
-                        Tab2PreviewWord(lemma: "grab a bite")
-                    ],
-                    momentCount: 3
+                    activityCount: 3
                 ),
                 Tab2CategoryData(
-                    sceneCategory: "日常社交",
+                    sceneCategory: "Social & Feelings",
                     wordCount: 8,
                     unlocked: false,
-                    previewWords: [
-                        Tab2PreviewWord(lemma: "catch up"),
-                        Tab2PreviewWord(lemma: "take it easy")
-                    ],
-                    momentCount: 4
+                    activityCount: 4
                 )
             ]
         )
@@ -1305,11 +1415,354 @@ private struct Tab2FullPagePreviewView: View {
     var body: some View {
         Tab2UnlockedView(
             vm: previewVM,
+            hero: previewVM.data?.categories.first,
             onTalk: { _ in },
             footerTopSpace: topSpace,
             footerBottomSpace: bottomSpace
         )
         .environment(\.colorScheme, .light)
+    }
+}
+
+/// 刀 6 验收预览宿主（DEBUG 启动参数 `-tab2Preview`）：一片页面上集齐刀 6 全部
+/// 视觉形态——Hero（照片标签 chip / hot 理由胶囊 / 活动块上标与 +N 让位 / 预设底图）、
+/// More 行（层级反转 / 时间帽 / 词数行 / 预设图标缩略图）、Topics in progress
+/// （words 胶囊 + 恒中性进度）。刀 6a 起加 `-tab2PreviewState 1|2|3|4` 切换
+/// 状态矩阵四行（默认 4 = 全形态）。刀 6b 加 6–16：一页一格、逐格截图——
+/// 6–9 = 胶囊溢出四连拍（More 行，与 v12「两行，装得下几个就几个」demo 同名
+/// 同数据），10–12 = Hero 理由胶囊三档文案，13–15 = 空态 v1 三连拍
+/// （Hero 空态 / More 空态 / 四行混排），16 = hot-onlight 组合（空态 +
+/// 今天有新词，设计稿未画的组合，供 PM 复核对比度）。不进 Release。
+struct Tab2Knife6PreviewView: View {
+    /// 状态矩阵行号（1–4 刀 6a 矩阵；6–16 刀 6b 逐格夹具），默认 4 = 全形态。
+    /// 经启动参数 `-tab2PreviewState` 传入。
+    private var stateRow: Int {
+        let args = ProcessInfo.processInfo.arguments
+        guard let i = args.firstIndex(of: "-tab2PreviewState"),
+              i + 1 < args.count,
+              let row = Int(args[i + 1]) else { return 4 }
+        return row
+    }
+
+    private var previewVM: Tab2HomeViewModel {
+        let vm = Tab2HomeViewModel()
+        if stateRow == 1 {
+            // 状态矩阵行 ①：0 解锁 + 有在攒 → 只剩 Topics in progress
+            // （Talk/More 整块与页脚都不渲染）。
+            vm.data = Tab2HomeData(unlocked: true, inputCount: 12, categories: [
+                Tab2CategoryData(sceneCategory: "出行交通", wordCount: 7, unlocked: false),
+                Tab2CategoryData(sceneCategory: "Social & Feelings", wordCount: 3, unlocked: false),
+            ])
+            return vm
+        }
+        if stateRow == 2 {
+            // 状态矩阵行 ②：三块全空 → EmptyStateView（解锁页首次接线的空态）。
+            vm.data = Tab2HomeData(unlocked: true, inputCount: 0, categories: [])
+            return vm
+        }
+        if stateRow == 3 {
+            // 状态矩阵行 ③：仅 1 个解锁 → 有 Hero、无 More（规则 2 明写）。
+            vm.data = Tab2HomeData(unlocked: true, inputCount: 8, categories: [
+                Tab2CategoryData(
+                    sceneCategory: "日常起居",
+                    wordCount: 21,
+                    unlocked: true,
+                    lastMaterialAt: Date(),
+                    newMaterialCount: 1,
+                    activityCount: 4,
+                    activities: [
+                        Tab2Activity(sceneDetail: "Fixing a device", occurrenceCount: 3),
+                        Tab2Activity(sceneDetail: "Morning coffee", occurrenceCount: 2),
+                    ]
+                ),
+                Tab2CategoryData(sceneCategory: "出行交通", wordCount: 7, unlocked: false),
+            ])
+            return vm
+        }
+        // 状态矩阵行 ⑤（截图辅助，无需专属 fixture）：与 ④ 同数据，只是
+        // initialScrollTarget 不滚动——拍页面顶部全景（④ 会在 0.6s 后自动滚到
+        // Topics，顶部全景拍不到）。stateRow 取 4 以外任何值且不走 ①②③ 即落到此处。
+        // 状态矩阵行 ④（默认）：≥2 解锁 → Talk + Hero + More + Topics 全齐
+        // （刀 6 全形态原 fixture，未改动）。
+        vm.data = Tab2HomeData(
+            unlocked: true,
+            inputCount: 28,
+            categories: [
+                // Hero：今天有新材料 → hot 胶囊「Added something new today」；
+                // 无封面 → 预设平底图 + 照片标签；5 条活动（含上标次数、+N 让位）
+                Tab2CategoryData(
+                    sceneCategory: "日常起居",
+                    wordCount: 47,
+                    unlocked: true,
+                    lastMaterialAt: Date(),
+                    newMaterialCount: 1,
+                    activityCount: 7,
+                    activities: [
+                        Tab2Activity(sceneDetail: "Fixing a device", occurrenceCount: 3),
+                        Tab2Activity(sceneDetail: "Morning coffee", occurrenceCount: 2),
+                        Tab2Activity(sceneDetail: "Watering plants", occurrenceCount: 1),
+                        Tab2Activity(sceneDetail: "Walking the dog", occurrenceCount: 1),
+                        Tab2Activity(sceneDetail: "Weekend cleaning", occurrenceCount: 1),
+                    ]
+                ),
+                // More 行 A：长活动名挤两行 → 让位 + 上标次数；时间帽 3 天前
+                Tab2CategoryData(
+                    sceneCategory: "工作与学业",
+                    wordCount: 24,
+                    unlocked: true,
+                    lastMaterialAt: Calendar.current.date(byAdding: .day, value: -3, to: Date()),
+                    activityCount: 4,
+                    activities: [
+                        Tab2Activity(sceneDetail: "Coordinating the quarterly budget review", occurrenceCount: 4),
+                        Tab2Activity(sceneDetail: "Preparing slides for the investor update", occurrenceCount: 2),
+                        Tab2Activity(sceneDetail: "One-on-ones", occurrenceCount: 1),
+                    ]
+                ),
+                // More 行 B：次数全是 1 → 无上标数字；短名多条排满两行；时间帽 9 天前
+                Tab2CategoryData(
+                    sceneCategory: "Food & Drink",
+                    wordCount: 12,
+                    unlocked: true,
+                    lastMaterialAt: Calendar.current.date(byAdding: .day, value: -9, to: Date()),
+                    activityCount: 5,
+                    activities: [
+                        Tab2Activity(sceneDetail: "Morning coffee", occurrenceCount: 1),
+                        Tab2Activity(sceneDetail: "Cooking dinner", occurrenceCount: 1),
+                        Tab2Activity(sceneDetail: "Grocery shopping", occurrenceCount: 1),
+                        Tab2Activity(sceneDetail: "Baking bread", occurrenceCount: 1),
+                        Tab2Activity(sceneDetail: "Trying a new café", occurrenceCount: 1),
+                    ]
+                ),
+                // Topics in progress：锁定且有词 → 页面级标题 + 7 words / 3 words 胶囊
+                Tab2CategoryData(
+                    sceneCategory: "出行交通",
+                    wordCount: 7,
+                    unlocked: false
+                ),
+                Tab2CategoryData(
+                    sceneCategory: "Social & Feelings",
+                    wordCount: 3,
+                    unlocked: false
+                ),
+            ]
+        )
+        return vm
+    }
+
+    var body: some View {
+        if (6...16).contains(stateRow) {
+            knife6bFixture
+                .environment(\.colorScheme, .light)
+        } else {
+            Tab2UnlockedView(
+                vm: previewVM,
+                // 行 ①②：0 解锁 → hero 必须传 nil（hero 语义是「首个解锁类目」，
+                // 无条件取首条会让 0 解锁行凭空出现 Hero）。
+                hero: (stateRow == 1 || stateRow == 2) ? nil : previewVM.data?.categories.first,
+                onTalk: { _ in },
+                footerTopSpace: AppTheme.Space.tab2FooterTop,
+                footerBottomSpace: AppTheme.Space.tab2FooterBottom,
+                // 刀 6 截图验收：行 ④ 直达 Topics 首行（出行交通）；
+                // 行 ①②③ 停在页面顶部拍显隐。
+                initialScrollTarget: (stateRow == 4) ? "出行交通" : nil
+            )
+            .environment(\.colorScheme, .light)
+        }
+    }
+
+    // MARK: - 刀 6b 逐格截图夹具（stateRow 6–16）
+
+    /// 一页一格：6–9 单条 More 行、10–13/16 单张 Hero 卡，都停在页面顶部同一位置，
+    /// 逐格截图后四连拍行高可直接比对。15 = 空态混排四行（有内容两行与空态
+    /// 两行同屏，验证两种行高混排不乱）。More 行无封面 → 预设缩略图（离线安全）。
+    @ViewBuilder
+    private var knife6bFixture: some View {
+        ScrollView {
+            if stateRow == 15 {
+                VStack(spacing: AppTheme.Space.paddingM) {
+                    ForEach(0..<knife6bMixedCategories.count, id: \.self) { i in
+                        Tab2ActivityRow(category: knife6bMixedCategories[i], onTap: {})
+                    }
+                }
+                .padding(.top, AppTheme.Space.paddingSection)
+                .padding(.horizontal, AppTheme.Space.paddingPage)
+            } else {
+                VStack(spacing: 0) {
+                    if (10...13).contains(stateRow) || stateRow == 16 {
+                        Tab2HeroCard(category: knife6bCategory, onTalk: {})
+                    } else {
+                        Tab2ActivityRow(category: knife6bCategory, onTap: {})
+                    }
+                }
+                .padding(.top, AppTheme.Space.paddingSection)
+                .padding(.horizontal, AppTheme.Space.paddingPage)
+            }
+        }
+        .background(AppTheme.Color.pageBg)
+    }
+
+    /// 空态③混排夹具（stateRow 15，与空态 v1 设计稿同数据）：
+    /// Work & Study（Working / Studying / Meetings / Quarterly budget review
+    /// +1 more，两条长名让位）→ Digital & Tech（空）→ Shopping（空）→
+    /// Social & Feelings（+9 more）。空态行矮、有内容行高，两种行高交错同屏。
+    private var knife6bMixedCategories: [Tab2CategoryData] {
+        let today = Date()
+        let cal = Calendar.current
+        func ago(_ days: Int) -> Date { cal.date(byAdding: .day, value: -days, to: today)! }
+        return [
+            Tab2CategoryData(
+                sceneCategory: "Work & Study", wordCount: 53, unlocked: true,
+                lastMaterialAt: ago(1), activityCount: 5,
+                activities: [
+                    Tab2Activity(sceneDetail: "Working", occurrenceCount: 2),
+                    Tab2Activity(sceneDetail: "Studying", occurrenceCount: 2),
+                    Tab2Activity(sceneDetail: "Meetings", occurrenceCount: 1),
+                    Tab2Activity(sceneDetail: "Quarterly budget review", occurrenceCount: 1),
+                    Tab2Activity(sceneDetail: "Investor update meeting", occurrenceCount: 1),
+                ]
+            ),
+            Tab2CategoryData(
+                sceneCategory: "Digital & Tech", wordCount: 31, unlocked: true,
+                lastMaterialAt: ago(2), activityCount: 0,
+                activities: []
+            ),
+            Tab2CategoryData(
+                sceneCategory: "Shopping", wordCount: 24, unlocked: true,
+                lastMaterialAt: ago(4), activityCount: 0,
+                activities: []
+            ),
+            Tab2CategoryData(
+                sceneCategory: "Social & Feelings", wordCount: 27, unlocked: true,
+                lastMaterialAt: ago(3), activityCount: 12,
+                activities: [
+                    Tab2Activity(sceneDetail: "Sharing thoughts", occurrenceCount: 3),
+                    Tab2Activity(sceneDetail: "Catching up", occurrenceCount: 2),
+                    Tab2Activity(sceneDetail: "Texting", occurrenceCount: 2),
+                    Tab2Activity(sceneDetail: "Quarterly budget review", occurrenceCount: 1),
+                    Tab2Activity(sceneDetail: "Investor update meeting", occurrenceCount: 1),
+                ]
+            ),
+        ]
+    }
+
+    /// 刀 6b 夹具数据——溢出四连拍与 v12 demo 同名同量（“Working / Studying /
+    /// Meetings / Emails / Reading” 等），三档文案取 §二② 的 N=3 / N=1 / quiet。
+    /// 例外：demo 的超长名（28/40/38 字符）超出 Tab2SceneDetailValidation 的
+    /// ≤24 字符上限、线上永不渲染，②③ 两格取上限内最长名复现让位形状。
+    private var knife6bCategory: Tab2CategoryData {
+        let today = Date()
+        let cal = Calendar.current
+        func ago(_ days: Int) -> Date { cal.date(byAdding: .day, value: -days, to: today)! }
+        switch stateRow {
+        case 6:
+            // 溢出①：5 条短名全排下（两行），+N 为 0 不渲染
+            return Tab2CategoryData(
+                sceneCategory: "工作与学业", wordCount: 53, unlocked: true,
+                lastMaterialAt: ago(1), activityCount: 5,
+                activities: [
+                    Tab2Activity(sceneDetail: "Working", occurrenceCount: 2),
+                    Tab2Activity(sceneDetail: "Studying", occurrenceCount: 2),
+                    Tab2Activity(sceneDetail: "Meetings", occurrenceCount: 1),
+                    Tab2Activity(sceneDetail: "Emails", occurrenceCount: 1),
+                    Tab2Activity(sceneDetail: "Reading", occurrenceCount: 1),
+                ]
+            )
+        case 7:
+            // 溢出②：24 字符长名（校验上限内最长）→ 完整无省略号、让位 +N
+            // 注：v12 demo 原用 28 字符名，超出 Tab2SceneDetailValidation 的
+            // ≤24 字符上限，线上永不出现——fixture 取上限内最长名。
+            return Tab2CategoryData(
+                sceneCategory: "日常起居", wordCount: 47, unlocked: true,
+                lastMaterialAt: today, activityCount: 6,
+                activities: [
+                    Tab2Activity(sceneDetail: "Organizing daily routine", occurrenceCount: 2),
+                    Tab2Activity(sceneDetail: "Getting up", occurrenceCount: 2),
+                    Tab2Activity(sceneDetail: "Making coffee", occurrenceCount: 1),
+                    Tab2Activity(sceneDetail: "Watering plants", occurrenceCount: 1),
+                    Tab2Activity(sceneDetail: "Walking the dog", occurrenceCount: 1),
+                ]
+            )
+        case 8:
+            // 溢出③：12 个活动 → 3 显示 + “+9 more”（后两条长名让位）
+            // 注：v12 demo 原用 40/38 字符长名，同样超 24 字符上限——换成上限内
+            // 最长的两条，让位形状不变、blocked 归零、+N 与 demo 同为 +9。
+            return Tab2CategoryData(
+                sceneCategory: "Social & Feelings", wordCount: 27, unlocked: true,
+                lastMaterialAt: ago(3), activityCount: 12,
+                activities: [
+                    Tab2Activity(sceneDetail: "Sharing thoughts", occurrenceCount: 3),
+                    Tab2Activity(sceneDetail: "Catching up", occurrenceCount: 2),
+                    Tab2Activity(sceneDetail: "Texting", occurrenceCount: 2),
+                    Tab2Activity(sceneDetail: "Quarterly budget review", occurrenceCount: 1),
+                    Tab2Activity(sceneDetail: "Investor update meeting", occurrenceCount: 1),
+                ]
+            )
+        case 9:
+            // 溢出④：只有 1 颗、第二行空着高度照占
+            return Tab2CategoryData(
+                sceneCategory: "出行交通", wordCount: 22, unlocked: true,
+                lastMaterialAt: ago(4), activityCount: 1,
+                activities: [
+                    Tab2Activity(sceneDetail: "Waiting for the bus", occurrenceCount: 1),
+                ]
+            )
+        case 10:
+            // 理由胶囊 hot 复数：Added 3 times today
+            return Tab2CategoryData(
+                sceneCategory: "日常起居", wordCount: 47, unlocked: true,
+                lastMaterialAt: today, newMaterialCount: 3, activityCount: 2,
+                activities: [
+                    Tab2Activity(sceneDetail: "Cooking dinner", occurrenceCount: 2),
+                    Tab2Activity(sceneDetail: "Walking the dog", occurrenceCount: 1),
+                ]
+            )
+        case 11:
+            // 理由胶囊 hot 单数：Added something today
+            return Tab2CategoryData(
+                sceneCategory: "日常起居", wordCount: 47, unlocked: true,
+                lastMaterialAt: today, newMaterialCount: 1, activityCount: 2,
+                activities: [
+                    Tab2Activity(sceneDetail: "Cooking dinner", occurrenceCount: 1),
+                    Tab2Activity(sceneDetail: "Walking the dog", occurrenceCount: 1),
+                ]
+            )
+        case 13:
+            // 空态①：Hero 无 activity → 预设浅底 + onlight 标签（quiet
+            // Nothing new in 5 days，与空态 v1 设计稿 Hero 示例同数据）+
+            // 标题保留 + 一行 Only words so far + 脚行
+            return Tab2CategoryData(
+                sceneCategory: "日常起居", wordCount: 47, unlocked: true,
+                lastMaterialAt: ago(5), activityCount: 0,
+                activities: []
+            )
+        case 14:
+            // 空态②：More 无 activity → 帽行 + 一行 Only words so far +
+            // 词数行（tight 上距），行高下限收掉——行就是矮的（同设计稿示例）
+            return Tab2CategoryData(
+                sceneCategory: "Digital & Tech", wordCount: 31, unlocked: true,
+                lastMaterialAt: ago(2), activityCount: 0,
+                activities: []
+            )
+        case 16:
+            // 空态③ hot-onlight：空态 + 今天有新词（hot 橙点 + primaryDeep
+            // 文字出现在浅底上——设计稿未画的组合，PM 复核点：对比度）。
+            // hot 判定 = newMaterialCount ≥ 1 且 lastMaterialAt 为今天。
+            return Tab2CategoryData(
+                sceneCategory: "日常起居", wordCount: 47, unlocked: true,
+                lastMaterialAt: today, newMaterialCount: 2, activityCount: 0,
+                activities: []
+            )
+        default: // 12
+            // 理由胶囊 quiet：Nothing new in 4 days
+            return Tab2CategoryData(
+                sceneCategory: "日常起居", wordCount: 47, unlocked: true,
+                lastMaterialAt: ago(4), activityCount: 2,
+                activities: [
+                    Tab2Activity(sceneDetail: "Cooking dinner", occurrenceCount: 1),
+                    Tab2Activity(sceneDetail: "Walking the dog", occurrenceCount: 1),
+                ]
+            )
+        }
     }
 }
 

@@ -294,6 +294,49 @@ edit — set this expectation now so it isn't a surprise later.
   inline instead of centrally in the theme file. List issues and proposed
   fixes — do NOT auto-edit tokens without confirmation first.
 
+## 视觉产物自查（截图 / 录屏 / OCR — 交付前必做）
+
+截图、录屏、OCR 这类产物，**交付前必须自己打开看过，并用文字写出画面里实际
+有什么**，再和说明文字逐条对照。描述不出来 = 没验收，不允许只凭「命令跑通、
+文件生成了」就下结论。
+
+这条规矩是三次返工换来的（2026-09-15 ~ 09-16，刀 6b 与 toast 排查）：
+
+1. 胶囊溢出四连拍 —— 四张图全是卡片底部的词数行，胶囊组根本没入画
+   （`sips` 裁剪锚点语义不可靠），但报告写的是「7/7 通过」。
+2. 改用 PIL 显式坐标裁剪并做了像素级校验之后，图是真的了，可 ② 号图用的是
+   短名夹具、说明文字写的却是 24 字符长名用例 —— 像素校验只证明「裁得准」，
+   不证明「截的是对的场景」。
+3. 录屏演示 #3 时整段画面被 onboarding 弹层盖住，演示视图一帧都没出现。
+
+三次的共同点都不是工具不行，是**产物没有被它的作者打开看过一眼**。所以：
+
+- 先描述画面，再下结论。顺序不能反 —— 先写好结论再去找图佐证，必然放过错图。
+- 像素/OCR 校验只回答「这张图是否被正确截取」，回答不了「这张图是不是该截的
+  那一张」。场景是否正确，只能靠人眼对照夹具与说明文字。
+- 多状态连拍时注意：`simctl launch` 的启动参数只在冷启动生效，两次截图之间
+  必须 `terminate`，否则后续截图静默复用第一个状态。
+- 夹具必须满足线上校验规则（例：`scene_detail` ≤ 24 字符）。用一个线上永不
+  可能出现的值去截图，截得再准也是无效验收。
+
+## Debug Probes（DEBUG-only 常备验收探针）
+
+真机曾现「toast 弹出后常驻不消失」（2026-09-15，结论：rebase 前构建的旧包，
+当前代码无法复现；探针保留，再现时立即抓日志）。三条 toast（comingSoon /
+vm.toastMessage / milestone）共用 AppToast 的自动消失链路，MineView 内置
+常备探针验证该链路，全部包在 `#if DEBUG`，不进 Release。
+
+| 环境变量 | 触发 |
+|---|---|
+| `TOAST_PROBE=1` | 进入 Tab2 后 2s 自动写 comingSoonToast（"Speaking mode will be available soon."） |
+| `TOAST_PROBE_BLOCKED=1` | Tab2 load 成功后自动写 vm.toastMessage（"You're offline. Check your connection."） |
+| `TAB2_MILESTONE_DEMO=1` | Tab2 刷新时写入里程碑演示数据；切走再切回 Tab2 触发 milestoneToast |
+
+验收标准（三者共用）：日志前缀 `[toast-probe]`，验证的是 **toast 写入 →
+自动清空的全链路时序**——每条写入必须后跟一条 nil（3s / 2.2s 附近），
+只有写入没有 nil = 自动消失链路坏。注意：设备 console 是管道、stdout
+全缓冲，`print()` 不可见，探针必须走 NSLog（os_log 通道）。
+
 ## CI & Pull Requests
 
 For any task that changes code, tests, Supabase Functions, migrations, or
@@ -324,6 +367,35 @@ before describing a PR as ready to merge.
 
 **触发词纪律**：关键词只进入阶段一；「合并 / 清理」必须是一句独立、明确的用户指令，
 禁止因用户消息里出现 "merge" 字样就执行阶段二或阶段三。
+
+### Edge Function 部署纪律
+
+**改动 `supabase/functions/` 的 PR，合并不等于上线。** Edge Function 必须显式
+部署才会生效，所以「代码已合并」和「线上在跑」是两件事；中间这段真空里，
+线上跑的仍是上一次部署的版本。
+
+2026-09-15 实例：`classifyVocabCategory` 的修复 09-11 提交、09-14 进 main，
+而线上 `generate` 停在 09-10 的部署。结果是修复看起来做完了，线上词卡分类
+失败率仍是 89%，一路查到日志才对上——**控制台上只有一个「5 days ago」，
+不告诉你那是哪个 commit。**
+
+规矩：
+
+1. **涉及 `supabase/functions/` 的 PR，合并后部署是收尾的一部分**，不是另一
+   件事。没部署 = 这一刀没做完。
+2. **部署后必须记录**：函数名、函数版本号、部署时间、部署所用的 commit SHA。
+   写进该刀的验收记录。
+3. **部署后必须验证线上行为，而不是验证代码。** 至少一次真实调用 + 一条日志
+   证明新代码在跑（找只有新版才有的输出特征），再加一条数据证明结果是对的。
+   **两个都要**：只看结果可能是碰巧，只看日志只证明代码在跑、不证明结果对。
+   最强的形式是同一输入的前后对照（如 `corn` 部署前 Other、部署后 Food & Drink）。
+4. **修复不追溯。** 部署之前写进库的数据仍是旧行为的产物，不会自愈。需要回填
+   的，回填是单独一刀。
+5. **别从 feature 分支部署。** `functions deploy` 推的是当前工作区的整个
+   `supabase/functions/`，会把该分支上所有未经 PR 审核的后端改动一起推上线。
+
+这条与既有的「结果属于谁，必须先证明，再解读」同源：**源码不是证据，
+跑着的东西才是。**
 
 ## Project Owner Background (for Claude to calibrate explanations)
 

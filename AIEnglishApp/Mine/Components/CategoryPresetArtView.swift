@@ -1,11 +1,13 @@
 import SwiftUI
 
-/// Tab2 Hero 卡没有可信照片时的 B1 预设图。`moreCount` 保留接口兼容性；moments 数量改在文字区呈现。
+/// Tab2 Hero 卡没有可信照片时的 B1 预设图（2026-09-22 视觉回归 main 基线 §2.1）：
+/// 晨曦暖光渐变底 + 双光晕 + 手绘类别图标 + 橙点。结构、token 名、取值逐字段取自
+/// `git show main:AIEnglishApp/Mine/Components/CategoryPresetArtView.swift`，
+/// 不转录、不另起名——接口仍是当前分支的形状（只有 `category`，无 main 的
+/// `categoryLabel`/`popsText`/`moreCount`：图上标签由 `Tab2HeroCard` 在外层
+/// `.overlay` 叠加，不在这个视图内渲染）。
 struct CategoryPresetArtView: View {
     let category: SceneCategory
-    let categoryLabel: String
-    let popsText: String
-    let moreCount: Int
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -14,7 +16,6 @@ struct CategoryPresetArtView: View {
             secondaryBloom
             presetIcon
             presetDot
-            HeroTopOverlay(categoryLabel: categoryLabel, popsText: popsText, style: .preset)
         }
         .frame(height: AppTheme.Tab2Hero.Layout.artHeight)
         .frame(maxWidth: .infinity)
@@ -342,3 +343,18 @@ private func presetPath(_ build: (inout Path) -> Void) -> Path {
     build(&path)
     return path
 }
+
+#if DEBUG
+#Preview("Hero preset art · matrix") {
+    ScrollView {
+        VStack(spacing: AppTheme.Space.paddingPage) {
+            ForEach(SceneCategory.allCases, id: \.self) { category in
+                CategoryPresetArtView(category: category)
+                    .clipShape(.rect(cornerRadius: AppTheme.Radius.large))
+            }
+        }
+        .padding(AppTheme.Space.paddingPage)
+    }
+    .background(AppTheme.Color.pageBg)
+}
+#endif

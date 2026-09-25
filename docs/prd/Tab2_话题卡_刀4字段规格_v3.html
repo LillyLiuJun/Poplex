@@ -1,0 +1,810 @@
+<title>刀 4 字段规格</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Charis+SIL:ital,wght@0,400;0,700;1,400&family=Geist:wght@400;500;600;700&display=swap">
+<style>
+  /* ─────────────────────────────────────────────────────────────
+     页面外壳 = 中性文档底（冷一点的纸），和手机屏里的暖纸区分开，
+     让暖色只属于「App」，不属于「这份文档」。
+     手机屏内部一律使用 Theme.swift 的真实 token 值。
+     ───────────────────────────────────────────────────────────── */
+  :root {
+    --doc-bg:       #F6F5F3;
+    --doc-panel:    #FFFFFF;
+    --doc-ink:      #24211C;
+    --doc-ink-2:    #5A544B;
+    --doc-ink-3:    #8C857A;
+    --doc-line:     #E3E0D9;
+    --doc-line-2:   #EFEDE8;
+    --accent:       #C2410C;   /* = Primitive.primaryDeep */
+    --ok:           #4A8F6A;   /* = Primitive.success950 */
+    --warn:         #9E6B1C;
+
+    --sans: "Geist", ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --serif: "Charis SIL", Charter, "Bitstream Charter", Georgia, serif;
+    --cjk: "Hiragino Sans GB", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --doc-bg:     #16150F;
+      --doc-panel:  #1F1D16;
+      --doc-ink:    #EDE9E0;
+      --doc-ink-2:  #B3ADA1;
+      --doc-ink-3:  #837C70;
+      --doc-line:   #322E25;
+      --doc-line-2: #272419;
+      --accent:     #E8763C;
+      --ok:         #6FB893;
+      --warn:       #D2A25A;
+    }
+  }
+  :root[data-theme="dark"] {
+    --doc-bg:     #16150F;
+    --doc-panel:  #1F1D16;
+    --doc-ink:    #EDE9E0;
+    --doc-ink-2:  #B3ADA1;
+    --doc-ink-3:  #837C70;
+    --doc-line:   #322E25;
+    --doc-line-2: #272419;
+    --accent:     #E8763C;
+    --ok:         #6FB893;
+    --warn:       #D2A25A;
+  }
+
+  body {
+    background: var(--doc-bg);
+    color: var(--doc-ink);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 56px 24px 96px; }
+
+  /* ── 文档排版 ───────────────────────────────────────────────── */
+  .eyebrow {
+    font-size: 11px; font-weight: 600; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--doc-ink-3);
+  }
+  h1 {
+    font-family: var(--serif);
+    font-size: clamp(30px, 4.2vw, 42px); font-weight: 700;
+    line-height: 1.15; margin: 10px 0 12px; text-wrap: balance;
+  }
+  .standfirst {
+    font-size: 17px; color: var(--doc-ink-2);
+    max-width: 62ch; margin: 0;
+  }
+  h2 {
+    font-family: var(--serif);
+    font-size: 24px; font-weight: 700; margin: 0;
+    text-wrap: balance;
+  }
+  .sec { margin-top: 64px; }
+  .sec-head {
+    display: flex; flex-direction: column; gap: 6px;
+    padding-bottom: 14px; border-bottom: 1px solid var(--doc-line);
+    margin-bottom: 26px;
+  }
+  .sec-head p { margin: 0; color: var(--doc-ink-2); max-width: 66ch; }
+
+  /* ── 数据可得性表 ──────────────────────────────────────────── */
+  .tablewrap { overflow-x: auto; border: 1px solid var(--doc-line); border-radius: 10px; background: var(--doc-panel); }
+  table { border-collapse: collapse; width: 100%; min-width: 640px; font-size: 14px; }
+  th, td { text-align: left; padding: 13px 16px; border-bottom: 1px solid var(--doc-line-2); vertical-align: top; }
+  th {
+    font-size: 11px; letter-spacing: .09em; text-transform: uppercase;
+    color: var(--doc-ink-3); font-weight: 600;
+    border-bottom: 1px solid var(--doc-line);
+  }
+  tr:last-child td { border-bottom: 0; }
+  td code, .mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12.5px; color: var(--doc-ink-2);
+  }
+  .flag { font-weight: 600; white-space: nowrap; }
+  .flag.yes { color: var(--ok); }
+  .flag.mod { color: var(--warn); }
+
+  /* ── 手机对比 ──────────────────────────────────────────────── */
+  .compare {
+    display: grid; gap: 40px;
+    grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
+    align-items: start;
+  }
+  .col-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 14px; }
+  .col-head strong { font-size: 15px; font-weight: 600; }
+  .col-head span { font-size: 13px; color: var(--doc-ink-3); }
+
+  /* 手机屏：内部锁定为 App 的浅色暖纸系统，不随文档主题反转 —
+     App 本身尚未导出深色值（Theme.swift 明确注明），所以这里也不能编一套。 */
+  .phone {
+    --pageBg:  #FCF8F3;  /* neutral50  */
+    --card:    #FFFDFB;  /* warmWhite  */
+    --ink:     #211811;  /* neutral900 */
+    --ink2:    #4B4640;  /* neutral700 */
+    --muted:   #7C7773;  /* neutral500 */
+    --faint:   #C7C3BD;  /* neutral300 */
+    --line:    #E6E1DA;  /* neutral200 */
+    --brand:   #C2410C;  /* primaryDeep */
+    --btn:     #17120C;  /* neutral950 */
+    background: var(--pageBg);
+    color: var(--ink);
+    border: 1px solid var(--doc-line);
+    border-radius: 30px;
+    padding: 22px 16px 30px;
+    box-shadow: 0 1px 3px rgba(20,15,10,.05), 0 10px 30px rgba(20,15,10,.06);
+  }
+  .phone * { color-scheme: light; }
+
+  .statusbar {
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 11px; color: var(--muted); padding: 0 6px 16px;
+    font-variant-numeric: tabular-nums;
+  }
+  .navtabs { display: flex; justify-content: center; gap: 6px; padding-bottom: 22px; }
+  .navtabs span { font-size: 13.5px; font-weight: 500; color: var(--muted); padding: 5px 13px; }
+  .navtabs span.on {
+    color: var(--ink); background: var(--card);
+    border-radius: 999px; box-shadow: 0 1px 2px rgba(20,15,10,.06);
+  }
+
+  .stitle {
+    font-family: var(--serif);
+    color: var(--ink);
+    padding: 0 4px 12px;
+  }
+  /* 现状：三个标题同档 700 / 22 */
+  .now .stitle { font-size: 22px; font-weight: 700; }
+  .now .stitle + .stitle { margin-top: 0; }
+  /* 提案：页面级标题 vs 分区标题分两档 */
+  .new .stitle.page { font-size: 24px; font-weight: 700; letter-spacing: -.01em; }
+  .new .stitle.sub  {
+    font-size: 13px; font-weight: 600; font-family: var(--sans);
+    letter-spacing: .1em; text-transform: uppercase; color: var(--muted);
+    padding-bottom: 10px;
+  }
+  .gap { height: 26px; }
+
+  .ccard {
+    background: var(--card); border: .5px solid var(--line);
+    border-radius: 20px; overflow: hidden;
+    box-shadow: 0 1.5px 4px rgba(33,24,17,.035), 0 4px 8px rgba(46,40,32,.025);
+  }
+  .photo {
+    height: 132px; position: relative;
+    display: flex; align-items: flex-start; justify-content: space-between;
+    padding: 12px 14px;
+  }
+  .photo.noodle { background: linear-gradient(150deg, #C9BFA8 0%, #E0D6BE 45%, #A99C82 100%); }
+  .photo .plabel {
+    font-size: 10.5px; font-weight: 700; letter-spacing: .13em;
+    text-transform: uppercase; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.5);
+  }
+  .photo .pcount {
+    font-size: 11.5px; font-weight: 600; color: #fff;
+    text-shadow: 0 1px 3px rgba(0,0,0,.5); font-variant-numeric: tabular-nums;
+  }
+  .cbody { padding: 14px 16px 16px; }
+
+  /* 现状 hero 文字 */
+  .now .hsentence { font-family: var(--serif); font-size: 17px; font-weight: 700; line-height: 1.3; margin: 0 0 6px; }
+  .now .hzh { font-family: var(--cjk); font-size: 13px; color: var(--ink2); margin: 0 0 6px; line-height: 1.5; }
+  .now .hmore { font-size: 12px; color: var(--faint); margin: 0; }
+  .cta {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--btn); color: #FCF8F3;
+    font-size: 15px; font-weight: 600;
+    padding: 13px 22px; border-radius: 999px; margin-top: 16px;
+  }
+  .ctarow { display: flex; justify-content: flex-end; }
+  .cta small { font-size: 12.5px; font-weight: 400; opacity: .72; }
+
+  /* 现状 More 行 */
+  .nrow {
+    display: flex; background: var(--card); border: .5px solid var(--line);
+    border-radius: 20px; overflow: hidden; margin-bottom: 14px;
+    box-shadow: 0 1.5px 4px rgba(33,24,17,.035), 0 4px 8px rgba(46,40,32,.025);
+  }
+  .thumb { width: 76px; flex: none; }
+  .th1 { background: linear-gradient(160deg,#8E9B7E,#C3C9AE); }
+  .th2 { background: linear-gradient(160deg,#3B3B44,#8E8577); }
+  .th3 { background: linear-gradient(160deg,#D9A8B8,#B0748C); }
+  .th4 { background: linear-gradient(160deg,#E6D3C4,#C4A992); }
+  .nrow-body { padding: 13px 8px 13px 14px; flex: 1; min-width: 0; }
+  .nmeta { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .nsent { font-family: var(--serif); font-size: 15px; line-height: 1.35; margin: 0 0 4px; }
+  .nmore { font-size: 12px; color: var(--faint); margin: 0; }
+  .arrow { display: flex; align-items: center; padding-right: 14px; color: var(--muted); font-size: 16px; }
+
+  /* 提案：hero */
+  .reasonline {
+    font-size: 12px; font-weight: 600; color: var(--brand);
+    margin: 0 0 8px; letter-spacing: .01em;
+  }
+  .backlog {
+    font-family: var(--serif); font-size: 20px; font-weight: 700;
+    line-height: 1.3; margin: 0 0 5px; letter-spacing: -.01em;
+  }
+  .backlog em.x {
+    font-family: var(--sans); font-style: normal; font-weight: 600;
+    font-size: 13px; color: var(--brand); font-variant-numeric: tabular-nums;
+  }
+  .backlog em.rest {
+    font-family: var(--sans); font-style: normal; font-weight: 500;
+    font-size: 12.5px; color: var(--faint); white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  .substatus { font-size: 13px; color: var(--muted); margin: 0; }
+  .words { display: flex; flex-direction: column; gap: 7px; margin-bottom: 14px; }
+  .word { display: flex; align-items: baseline; gap: 9px; }
+  .word b { font-family: var(--serif); font-size: 16px; font-weight: 400; color: var(--ink); }
+  .word i { font-size: 11px; font-style: italic; color: var(--faint); font-family: var(--serif); }
+  .word span { font-family: var(--cjk); font-size: 12.5px; color: var(--ink2); }
+  .word .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--brand); flex: none; align-self: center; }
+  .word .dot.said { background: var(--faint); }
+  .source { font-size: 12px; color: var(--faint); margin: 0; padding-top: 11px; border-top: .5px solid var(--line); }
+
+  /* 提案：More 行 */
+  .prow { display: flex; background: var(--card); border: .5px solid var(--line);
+    border-radius: 20px; overflow: hidden; margin-bottom: 12px;
+    box-shadow: 0 1.5px 4px rgba(33,24,17,.035), 0 4px 8px rgba(46,40,32,.025); }
+  .prow.done { opacity: .62; }
+  .prow-body { padding: 13px 8px 13px 14px; flex: 1; min-width: 0; }
+  .prow-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 5px; }
+  .prow-top b { font-size: 15px; font-weight: 600; }
+  .badge { font-size: 12px; font-weight: 600; color: var(--brand); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .badge.clear { color: var(--muted); font-weight: 500; }
+  .pwords { font-family: var(--serif); font-size: 14.5px; color: var(--ink2); margin: 0 0 4px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pwords .rest { font-family: var(--sans); font-size: 12px; color: var(--faint); font-variant-numeric: tabular-nums; }
+  .pwords .x { font-family: var(--sans); font-size: 12px; font-weight: 600; color: var(--brand); font-variant-numeric: tabular-nums; }
+  .pstatus { font-size: 12px; color: var(--faint); margin: 0; }
+
+  /* ── 注释 ──────────────────────────────────────────────────── */
+  .notes { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); margin-top: 32px; }
+  .note { display: flex; gap: 13px; background: var(--doc-panel); border: 1px solid var(--doc-line); border-radius: 10px; padding: 15px 17px; }
+  .note .n {
+    flex: none; width: 22px; height: 22px; border-radius: 50%;
+    background: var(--accent); color: #fff; font-size: 11.5px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center; margin-top: 1px;
+  }
+  .note h3 { margin: 0 0 4px; font-size: 14px; font-weight: 600; }
+  .note p { margin: 0; font-size: 13.5px; color: var(--doc-ink-2); line-height: 1.55; }
+
+  .reasons {
+    display: grid; gap: 14px;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  }
+  .rcard {
+    background: var(--doc-panel); border: 1px solid var(--doc-line);
+    border-radius: 10px; padding: 16px 18px;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .rcard .reasonline {
+    --brand: var(--accent);
+    font-size: 14px; margin: 0;
+  }
+  .rcard .cond { font-size: 13px; color: var(--doc-ink); font-weight: 500; }
+  .rcard .src { font-size: 11.5px; color: var(--doc-ink-3); line-height: 1.45; }
+
+  .layers {
+    display: grid; gap: 1px; background: var(--doc-line);
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    border: 1px solid var(--doc-line); border-radius: 10px; overflow: hidden;
+    margin-top: 34px;
+  }
+  .layer { background: var(--doc-panel); padding: 17px 19px; }
+  .layer .lk {
+    display: block; font-size: 11px; font-weight: 600; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--accent); margin-bottom: 7px;
+  }
+  .layer strong { display: block; font-family: var(--serif); font-size: 19px; font-weight: 700; margin-bottom: 3px; }
+  .layer p { margin: 0; font-size: 13px; color: var(--doc-ink-2); }
+
+  .sample {
+    margin-top: 20px; font-size: 12.5px; color: var(--doc-ink-3);
+    border-left: 2px solid var(--doc-line); padding-left: 12px; max-width: 62ch;
+  }
+  del { color: var(--doc-ink-3); text-decoration-thickness: 1px; }
+</style>
+<style>
+  .cols { display:grid; gap:40px; grid-template-columns:repeat(auto-fit,minmax(330px,1fr)); align-items:start; }
+  td strong { color: var(--doc-ink); }
+  table { min-width: 720px; }
+  td:first-child { white-space: nowrap; }
+  td.mono { white-space: normal; }
+  .sample code { font-family: ui-monospace, Menlo, monospace; font-size: 11.5px; }
+</style>
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">Poplex · Library · 刀 4 字段规格 v3</div>
+    <h1>每个字段的状态与展示</h1>
+    <p class="standfirst">
+      前提：<code>conversationEnabled = false</code>，对话进不去，
+      所有以「说过」为前提的字段在 1.0 恒为空。这份规格只用 1.0 真实存在的数据，
+      逐字段定义<strong>取值范围、每种状态的展示、以及不展示的条件</strong>。
+      凡是没在这里定义的状态，实现时不得自行发挥。
+    </p>
+  </header>
+
+  <!-- ── 术语 ─────────────────────────────────────────────── -->
+  <section class="sec">
+    <div class="sec-head">
+      <h2>术语对齐</h2>
+      <p>三个名字指同一样东西，历史遗留，这里统一。</p>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>叫法</th><th>出现位置</th><th>状态</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">scene_detail</td><td>数据库列名</td><td class="flag yes">唯一真实名称，从未改过</td></tr>
+          <tr><td class="mono">sub_scene</td><td>v2 及更早的 migration</td><td class="flag mod">已废弃，仅存于历史文件</td></tr>
+          <tr><td class="mono">activity</td><td>v5 输出、刀 3 之后的客户端、本规格</td><td class="flag yes">当前正式叫法</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="sample">
+      定义：<strong>activity = 用户反复在做的一件具体的事</strong>，由 AI 从每条素材里抽出一个短标签，
+      同名累计即 <code>occurrence_count</code>。它与 <code>scene_category</code>（系统固定的 12 个桶）是两层，
+      前者从用户数据里长出来，后者是我们定死的。
+    </p>
+  </section>
+
+  <!-- ── 分类级字段 ───────────────────────────────────────── -->
+  <section class="sec">
+    <div class="sec-head">
+      <h2>分类级字段（9 个）</h2>
+      <p><code>get_tab2_home_topics_v5</code> 每个分类返回的字段。标 ★ 的是刀 4a 新增。</p>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr><th style="min-width:130px">字段</th><th>类型 / 取值</th><th>状态与展示</th><th>1.0</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="mono">scene_category</td>
+            <td>12 个中文枚举之一</td>
+            <td>经 <code>SceneCategory.englishLabel</code> 转英文展示。<br>
+                未知值 → <code>.other</code>（"Other"）。<strong>永远显示。</strong></td>
+            <td class="flag yes">用</td>
+          </tr>
+          <tr>
+            <td class="mono">word_count</td>
+            <td>int ≥ 0<br>该类不同词条数</td>
+            <td><code>0</code> → 该类不出现在任何列表<br>
+                <code>1–19</code> → 只进 Topics in progress，显示 <code>N / 20 words</code><br>
+                <code>≥20</code> → Hero 副状态 / More 徽章显示 <code>N words</code></td>
+            <td class="flag yes">用</td>
+          </tr>
+          <tr>
+            <td class="mono">unlocked</td>
+            <td>bool<br>= <code>word_count ≥ 20</code></td>
+            <td><code>true</code> → 进 Hero / More 候选<br>
+                <code>false</code> → 进 Topics in progress</td>
+            <td class="flag yes">用</td>
+          </tr>
+          <tr>
+            <td class="mono">activity_count</td>
+            <td>int ≥ 0<br>全量活动数，不受截断影响</td>
+            <td>只用于算折叠数 <code>+N</code>，<strong>本身不上卡面</strong>。<br>
+                <code>0</code> → 卡面走「无活动」态</td>
+            <td class="flag yes">用</td>
+          </tr>
+          <tr>
+            <td class="mono">activities</td>
+            <td>array，长度 0–5<br>后端已排序</td>
+            <td><code>[]</code> → 无活动态<br>
+                否则取前 N 条渲染（Hero 3 / More 2），<strong>原序，客户端不重排</strong></td>
+            <td class="flag yes">用</td>
+          </tr>
+          <tr>
+            <td class="mono">★ last_material_at</td>
+            <td>timestamptz | null<br>该类最近一条素材时间</td>
+            <td><code>null</code> → 纯查词，无素材 → 时间行整行不渲染<br>
+                否则按下方时间档位表格式化</td>
+            <td class="flag yes">新增</td>
+          </tr>
+          <tr>
+            <td class="mono">★ new_material_count</td>
+            <td>int ≥ 0<br>本地自然日内新增素材数</td>
+            <td><code>0</code> → Hero 理由行走「久未触碰」分支<br>
+                <code>≥1</code> → 走「今天有新东西」分支，数字入文案</td>
+            <td class="flag yes">新增</td>
+          </tr>
+          <tr>
+            <td class="mono">not_spoken_count</td>
+            <td>int，恒 = <code>word_count</code></td>
+            <td><strong>1.0 不读。</strong>字段保留在协议里，等对话接线后启用。</td>
+            <td class="flag mod">不用</td>
+          </tr>
+          <tr>
+            <td class="mono">last_talked_at</td>
+            <td>timestamptz，恒 null</td>
+            <td><strong>1.0 不读。</strong>写入方是「用户在对话里开口」，而对话进不去。</td>
+            <td class="flag mod">不用</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ── 活动级字段 ───────────────────────────────────────── -->
+  <section class="sec">
+    <div class="sec-head">
+      <h2>活动级字段（3 个）</h2>
+      <p><code>activities[]</code> 每个元素的字段。</p>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr><th style="min-width:130px">字段</th><th>类型 / 取值</th><th>状态与展示</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="mono">scene_detail</td>
+            <td>string，英文短语</td>
+            <td>
+              进入列表的条件（<strong>四条全满足</strong>）：非空 / ≤24 字符 / 纯 ASCII 英文 /
+              不含 <code>/</code>。<br>
+              任一不满足 → <strong>该活动整条不渲染</strong>，且不计入 <code>+N</code>。
+            </td>
+          </tr>
+          <tr>
+            <td class="mono">occurrence_count</td>
+            <td>int ≥ 1<br>该活动的不同素材条数</td>
+            <td>
+              <code>1</code> → <strong>只显示标签，不显示 <code>×1</code></strong><br>
+              <code>≥2</code> → 显示 <code>标签 ×N</code>，<code>×N</code> 用 brand 色 + 等宽数字
+            </td>
+          </tr>
+          <tr>
+            <td class="mono">cover</td>
+            <td>object | null<br><code>{material_id, image_url}</code></td>
+            <td>
+              <code>null</code> → 该活动全由查词攒成，无照片<br>
+              取值规则见下方「图片」一节
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="sample">
+      <strong>排序：后端已按 <code>occurrence_count DESC, activity_last_at DESC</code> 排好</strong>
+      （v5 第 ⑤ 段 <code>ROW_NUMBER</code>）——次数高的在前，次数相同时最近发生的在前。
+      客户端<strong>原序渲染，不得重排</strong>；重排会让「+N」的语义（"剩下的都比这些少"）失效。
+    </p>
+  </section>
+
+  <!-- ── 时间档位 ─────────────────────────────────────────── -->
+  <section class="sec">
+    <div class="sec-head">
+      <h2>时间档位（模板与取整规则）</h2>
+      <p>
+        下表里的 <code>{d}</code> 和 <code>{w}</code> 是变量，不是字面量。
+        <code>d</code> = <strong>本地自然日之差</strong>（不是 24 小时之差）：
+        昨天 23:50 与今天 00:10 相差 20 分钟，但 <code>d = 1</code>。
+      </p>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>条件</th><th>文案</th><th>实例</th><th>为什么这样分</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">d = 0</td><td class="mono">Added today</td><td class="mono">Added today</td><td rowspan="3">一周之内用户还记得具体是哪天，说「天」有意义。</td></tr>
+          <tr><td class="mono">d = 1</td><td class="mono">Added yesterday</td><td class="mono">Added yesterday</td></tr>
+          <tr><td class="mono">2 ≤ d ≤ 6</td><td class="mono">Added {d} days ago</td><td class="mono">d=4 → Added 4 days ago</td></tr>
+          <tr>
+            <td class="mono">7 ≤ d ≤ 13</td><td class="mono">Added last week</td><td class="mono">d=9 → Added last week</td>
+            <td rowspan="2">超过一周说「23 days」要用户心算。<br>
+                <strong>取整规则：<code>w = floor(d / 7)</code></strong>，即 d=13→w=1，d=14→w=2，d=23→w=3。</td>
+          </tr>
+          <tr><td class="mono">14 ≤ d ≤ 29</td><td class="mono">Added {w} weeks ago</td><td class="mono">d=23 → Added 3 weeks ago</td></tr>
+          <tr>
+            <td class="mono">d ≥ 30</td><td class="mono">Nothing new in a month</td><td class="mono">d=200 → Nothing new in a month</td>
+            <td>不再往上分档：两个月和五个月对用户是同一件事。<br>
+                句式从「你做过什么」变成「什么都没有」，这是唯一带推动意味的一档。</td>
+          </tr>
+          <tr>
+            <td class="mono">last_material_at = null</td><td><strong>整行不渲染</strong></td><td>—</td>
+            <td>不写 <code>Never added</code>——那是把「没有这个动作」说成「你没做」。</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="sample">
+      同一套档位在 Hero 理由行复用，只换句式：
+      <code>d ≥ 30</code> → <code>Nothing new in a month</code>；
+      <code>2 ≤ d ≤ 29</code> → <code>Nothing new in {…}</code>（同上取整）；
+      <code>d ≤ 1</code> 的情况由 <code>new_material_count</code> 接管，见下节。
+    </p>
+  </section>
+
+  <!-- ── Hero 理由行 ──────────────────────────────────────── -->
+  <section class="sec">
+    <div class="sec-head">
+      <h2>Hero 理由行：两个字段合成一句话</h2>
+      <p>
+        它是卡上唯一解释「为什么是它」的地方。
+        <code>new_material_count</code> 优先，为 0 才退到 <code>last_material_at</code>。
+      </p>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>条件</th><th>文案</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">new_material_count = 1</td><td class="mono">You added something new today</td></tr>
+          <tr><td class="mono">new_material_count ≥ 2</td><td class="mono">You added {n} new bits today</td></tr>
+          <tr><td class="mono">= 0，且 d 有值</td><td class="mono">Nothing new in {时间档位}</td></tr>
+          <tr><td class="mono">= 0，且 last_material_at = null</td><td class="mono">Only words so far</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="sample">
+      <strong>⚠️ 口径问题，必须先定：</strong><code>new_material_count</code> 的「今天」是谁的今天？
+      数据库是 UTC，用户在本地时区。若后端按 UTC 日切，东八区用户早上 8 点前存的东西会被算成「昨天」。
+      <br><br>
+      解法：RPC 增加参数 <code>p_day_start timestamptz</code>，由客户端传入
+      <strong>本地自然日 00:00 对应的 UTC 时刻</strong>，后端统计 <code>created_at ≥ p_day_start</code>。
+      这样 <code>new_material_count</code> 与 Hero 选取规则里的「今天」是同一个今天。
+      <br><br>
+      代价：<code>get-tab2-home</code> Edge Function 要计算并透传这个参数，
+      RPC 签名变化。<strong>这是刀 4a 的第三项改动，不是一行 SQL 能装下的。</strong>
+    </p>
+  </section>
+
+  <!-- ── 卡面元素 ─────────────────────────────────────────── -->
+  <section class="sec">
+    <div class="sec-head">
+      <h2>卡面元素逐项</h2>
+      <p>每个可见元素读哪个字段、显示几条、什么时候不出现。</p>
+    </div>
+
+    <div class="cols" style="grid-template-columns:1fr">
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th style="min-width:120px">元素</th><th>字段</th><th>规则</th><th>缺省</th></tr></thead>
+          <tbody>
+            <tr><td colspan="4" style="background:var(--doc-line-2);font-weight:600;font-size:12px;letter-spacing:.08em;text-transform:uppercase">Hero 卡</td></tr>
+            <tr>
+              <td>图片</td><td class="mono">activities[0].cover.image_url</td>
+              <td>签名 URL，卡片上半 132px</td><td>null → 类别预设图</td>
+            </tr>
+            <tr>
+              <td>类别标签</td><td class="mono">scene_category</td>
+              <td>英文标签，大写，字距 .13em，压在图上</td><td>无</td>
+            </tr>
+            <tr>
+              <td>理由行</td><td class="mono">new_material_count<br>last_material_at</td>
+              <td>见上节合成规则，brand 色 12px</td><td>无</td>
+            </tr>
+            <tr>
+              <td>活动行</td><td class="mono">activities[0..2]</td>
+              <td><strong>3 条</strong>，<code>·</code> 分隔，20px 衬线，允许折行至 2 行</td>
+              <td><code>[]</code> → <code>Nothing logged yet</code></td>
+            </tr>
+            <tr>
+              <td>折叠数</td><td class="mono">activity_count − 已显示条数</td>
+              <td><code>+{N} more activities</code></td><td>N ≤ 0 → 不渲染</td>
+            </tr>
+            <tr>
+              <td>副状态</td><td class="mono">word_count</td>
+              <td><code>{N} words</code>，13px 灰</td><td>无</td>
+            </tr>
+            <tr>
+              <td>CTA</td><td>—</td><td><code>Start talking →</code></td>
+              <td>无（点击弹 Coming soon）</td>
+            </tr>
+
+            <tr><td colspan="4" style="background:var(--doc-line-2);font-weight:600;font-size:12px;letter-spacing:.08em;text-transform:uppercase">More 行</td></tr>
+            <tr>
+              <td>缩略图</td><td class="mono">activities[0].cover.image_url</td>
+              <td>76px 方图，行左侧通高</td><td>null → 类别预设图</td>
+            </tr>
+            <tr>
+              <td>类别名</td><td class="mono">scene_category</td><td>英文标签 15px / 600</td><td>无</td>
+            </tr>
+            <tr>
+              <td>徽章</td><td class="mono">word_count</td>
+              <td><code>{N} words</code>，行右上角对齐基线</td><td>无</td>
+            </tr>
+            <tr>
+              <td>活动行</td><td class="mono">activities[0..1]</td>
+              <td><strong>2 条</strong>，单行，超出省略号</td>
+              <td><code>[]</code> → 该行只有类别名 + 词数 + 时间行</td>
+            </tr>
+            <tr>
+              <td>折叠数</td><td class="mono">activity_count − 已显示条数</td>
+              <td><code>+{N} more</code>（名词由上文补全）</td><td>N ≤ 0 → 不渲染</td>
+            </tr>
+            <tr>
+              <td>时间行</td><td class="mono">last_material_at</td>
+              <td>见时间档位表，12px 最浅灰</td><td>null → 整行不渲染</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <p class="sample">
+      <strong>为什么 Hero 3 条 / More 2 条：</strong>Hero 用 20px 衬线，第 4 条必然折到第三行，
+      一折就从「一句话」变成「一个列表」；More 行左侧被 76px 缩略图占掉，
+      剩余宽度放两条活动 + 折叠数刚好不省略。后端给 5 条是余量——
+      某条被上面四条校验规则挡掉时，卡面不至于少一格。
+      <br><br>
+      <strong>折叠数的基数是 <code>activity_count</code>，不是 5。</strong>
+      后端给 5 条、Hero 显示 3 条，另外 2 条也要算进 <code>+N</code> 里。
+    </p>
+  </section>
+
+  <!-- ── 列表与选取 ───────────────────────────────────────── -->
+  <section class="sec">
+    <div class="sec-head">
+      <h2>列表构成与 Hero 选取</h2>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th style="min-width:130px">规则</th><th>定义</th></tr></thead>
+        <tbody>
+          <tr><td>候选集</td><td class="mono">unlocked = true</td></tr>
+          <tr>
+            <td>排序</td>
+            <td><code>last_material_at</code> 降序；<code>null</code> 排在最后，其内部按 <code>word_count</code> 降序</td>
+          </tr>
+          <tr>
+            <td>Hero 选取</td>
+            <td>
+              ① <strong>一次浏览之内绝不换</strong>——进页面时定一次，之后数据刷新不影响<br>
+              ② <code>new_material_count ≥ 1</code> 的类中，取 <code>last_material_at</code> 最新的<br>
+              ③ 都为 0 时，按自然日在最久未被选中的类中轮换（记录上次选中日期与类别）
+            </td>
+          </tr>
+          <tr><td>More 列表</td><td>候选集 − Hero，保持上面的排序</td></tr>
+          <tr><td>More 为空</td><td><strong>标题与列表整块不渲染</strong>——不留空标题</td></tr>
+          <tr><td>Topics in progress</td><td><code>unlocked = false</code> 且 <code>word_count ≥ 1</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="sample">
+      规则 ① 要求选择结果在页面存活期间冻结。现在的 <code>heroCategory()</code>
+      写在 <code>@ViewBuilder</code> 里、每次 body 求值都重算，且带写 <code>UserDefaults</code> 的副作用——
+      刀 4b 必须把它移出 body，改为进入页面时求值一次并持有。
+    </p>
+  </section>
+
+  <!-- ── 图片 ─────────────────────────────────────────────── -->
+  <section class="sec">
+    <div class="sec-head">
+      <h2>图片取值</h2>
+    </div>
+    <div class="layers">
+      <div class="layer">
+        <span class="lk">有图</span><strong>该活动最新一张</strong>
+        <p>v5 的 <code>cover</code> 已按 <code>m.created_at DESC LIMIT 1</code> 取好，客户端直接用。</p>
+      </div>
+      <div class="layer">
+        <span class="lk">无图</span><strong>类别预设图</strong>
+        <p><code>cover = null</code>，即该活动全由查词攒成。</p>
+      </div>
+      <div class="layer">
+        <span class="lk">绝不</span><strong>不向后翻别的活动</strong>
+        <p>那会给卡片配一张不属于这件事的照片，用户会以为图就是这件事。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 三个数字的口径 ───────────────────────────────────── -->
+  <section class="sec">
+    <div class="sec-head">
+      <h2>三个数字的口径不一样，这是设计</h2>
+      <p>
+        每条素材带一个粒度标记：<code>word</code> / <code>sentence</code> / <code>passage</code>。
+        三个上卡面的数字对它的处理各不相同，因为它们回答的是不同的问题。
+      </p>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th style="min-width:150px">数字</th><th>含 word?</th><th>依据</th><th>它回答的问题</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="mono">occurrence_count<br>（Cooking ×7）</td>
+            <td class="flag mod">不含</td>
+            <td class="mono">v5 ②<br>FILTER (granularity &lt;&gt; 'word')</td>
+            <td><strong>你反复在做什么。</strong>查 7 个厨房单词不等于做了 7 次饭——含 word 这句话就是假的。</td>
+          </tr>
+          <tr>
+            <td class="mono">word_count<br>（40 words）</td>
+            <td class="flag yes">含</td>
+            <td class="mono">v5 ①<br>不加 granularity 过滤</td>
+            <td><strong>你在这一类攒了多少词。</strong>词库语义，来源无关。</td>
+          </tr>
+          <tr>
+            <td class="mono">★ new_material_count<br>（3 new bits today）</td>
+            <td class="flag yes">含</td>
+            <td>本次新定</td>
+            <td><strong>你今天往这儿放新东西了没有。</strong>查词就是放了新东西——
+                中午查了三个词、晚上看到「Nothing new in 2 weeks」，用户会觉得 app 眼瞎。</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="sample">
+      <code>new_material_count</code> 按<strong>不同素材去重</strong>：
+      一张照片抽出 8 个词算 1 条，不是 8 条。
+    </p>
+  </section>
+
+  <!-- ── 时区 ─────────────────────────────────────────────── -->
+  <section class="sec">
+    <div class="sec-head">
+      <h2>时区：1.0 用 B，但把 A 的门留着</h2>
+      <p>
+        存储层已是行业标准（<code>timestamptz</code>，内部 UTC，按用户时区渲染）。
+        缺的只是「聚合到自然日」这一步该由谁切。
+      </p>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>方案</th><th>做法</th><th>取舍</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>B · 1.0 采用</strong></td>
+            <td>客户端算出「本地今天 0 点 = UTC 的哪一刻」，作为 <code>p_day_start</code> 传入</td>
+            <td class="flag yes">设备自己知道时区和夏令时，永远算得对；无需时区设置项</td>
+          </tr>
+          <tr>
+            <td>A · 将来</td>
+            <td>服务端存用户时区，自行切日</td>
+            <td class="flag mod">需上报与保鲜（用户出差即过期）；<strong>但服务端主动动作（推送、周报）必须有它</strong></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="sample">
+      <strong>传时刻，不传偏移。</strong><code>p_day_start timestamptz</code> 而不是
+      <code>p_tz_offset int</code>——存偏移数字的系统每年夏令时会错两次，这是本领域最经典的坑。
+      同理，将来 A 方案存 IANA 名（<code>Asia/Shanghai</code>），不存 <code>+8</code>。
+      <br><br>
+      <strong>4a 必须一并写入的兜底</strong>（今天不改变任何行为，只是把门留着不锁）：
+      <br>
+      <code>v_day_start := COALESCE(p_day_start, date_trunc('day', now() AT TIME ZONE COALESCE(v_user_tz, 'UTC')));</code>
+      <br><br>
+      迁移到 A 的成本因此是：加一列 + 填值 + 改这一行兜底，<strong>客户端零改动</strong>。
+      之所以这么便宜，是因为「今天」只在读取时计算、从不落盘——
+      若哪天把每日统计物化成表并按 UTC 分桶，换时区就要重跑全部历史。<strong>不要那么做。</strong>
+    </p>
+  </section>
+
+  <!-- ── 4a / 4b ──────────────────────────────────────────── -->
+  <section class="sec">
+    <div class="sec-head">
+      <h2>刀 4 拆分</h2>
+      <p>4a 动后端并部署，4b 动卡面。4a 不完成，4b 没有数据可读。</p>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>切片</th><th>改动</th><th>验收</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>4a</strong><br>后端</td>
+            <td>
+              ① v5 输出新增 <code>last_material_at</code>（值即现有 <code>cat_words.sort_last_at</code>）<br>
+              ② v5 新增 <code>new_material_count</code>，统计 <code>created_at ≥ p_day_start</code> 的不同 <code>source_id</code><br>
+              ③ RPC 新增可空参数 <code>p_day_start timestamptz</code>（含 <code>COALESCE</code> 兜底）；
+              <code>get-tab2-home</code> 接收客户端传入的本地日切并透传；客户端计算该时刻
+            </td>
+            <td>
+              真实账号返回中两字段有值且自洽（<code>new_material_count ≥ 1</code> 时
+              <code>last_material_at</code> 必在当日内）；耗时不劣于 11.4ms 基线
+            </td>
+          </tr>
+          <tr>
+            <td><strong>4b</strong><br>卡面</td>
+            <td>按本规格重建 Hero 卡与 More 行；Hero 选取移出 body；重写活动名校验</td>
+            <td>四个边界态逐个截图；<code>×1</code> 不出现；<code>+N</code> 基数正确</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+</div>

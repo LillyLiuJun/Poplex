@@ -33,8 +33,7 @@ enum LocalUserData {
     private static let accountScopedKeys = [
         Tab2Defaults.permanentlyUnlocked,
         Tab2Defaults.firstUnlockShown,
-        Tab2Defaults.heroMaterialID,
-        Tab2Defaults.heroKnownMoments,
+        Tab2Defaults.heroLastSelectedDays,     // 刀 4b 轮换记账：类别ID → 上次选中日
         "mine_last_scene_count",       // Tab2「新增 N 条」的基线
         ProfileService.onboardingSyncPendingKey,  // 引导完成待同步到服务器的标记
         // 每日额度本地缓存（W3）：避免删号并重新匿名注册后，新账号断网读取到旧账号的额度数字
@@ -45,7 +44,9 @@ enum LocalUserData {
         // 更新前的设备本地可能已写入过它们，字面量消失会让 clearAll() 永远清不到——
         // 正是这个文件想防的那类「凭记忆列清单，改名漏一处」。
         "tab2_spoken_moments",
-        "tab2_hero_known_spoken_moments"
+        "tab2_hero_known_spoken_moments",
+        "tab2_hero_material_id",       // 刀 4b 退役（旧 hero 稳定性键）
+        "tab2_hero_known_moments"      // 刀 4b 退役（旧 moment 集合键）
     ]
 
     /// `CategoryMilestoneTracker` 的键前缀。

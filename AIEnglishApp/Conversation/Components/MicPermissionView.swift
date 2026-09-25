@@ -18,6 +18,7 @@ struct MicPermissionView: View {
                     .font(AppTheme.Font.screenTitle)
                     .foregroundStyle(AppTheme.Color.textPrimary)
                     .multilineTextAlignment(.center)
+                    .padding(.horizontal, AppTheme.Space.paddingPage)
 
                 Text("Practice happens out loud. Allow microphone and speech recognition so you can speak and be heard.")
                     .font(AppTheme.Font.englishBody)

@@ -1,0 +1,925 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Settings · 100% 生产对齐全真原型与排印视察 (Production Parity)</title>
+  <style>
+    :root {
+      /* ── 100% 生产环境 Primitive & Semantic 代币 ── */
+      --page-bg: #FCF8F3;         /* Primitive.neutral50 */
+      --card-surface: #FFFDF8;    /* AppTheme.Color.settingsCardSurface */
+      --text-primary: #211811;    /* Primitive.neutral900 (近黑 17.2:1) */
+      --text-secondary: #594C43;  /* Primitive.neutral700 (暖深灰 9.9:1) */
+      --text-muted: #7C7773;      /* Primitive.neutral500 (中灰 4.4:1) */
+      --brand-strong: #FF7622;    /* 品牌橙 */
+      --brand-ink: #C2410C;       /* 文字用品牌深橙 */
+      --danger: #DC2626;          /* 危险红 */
+      --border-card: rgba(230, 225, 218, 0.35);
+      --divider-line: rgba(124, 119, 115, 0.15);
+      --row-active-bg: rgba(33, 24, 17, 0.04);
+      --scrim-overlay: rgba(33, 24, 17, 0.45);
+
+      /* 双层微呼吸接触阴影 */
+      --card-shadow: 0 1.5px 4px rgba(33, 24, 17, 0.035), 0 4px 8px rgba(46, 40, 32, 0.025);
+      --button-shadow: 0 2px 6px rgba(33, 24, 17, 0.06), 0 1px 2px rgba(33, 24, 17, 0.04);
+      --sheet-shadow: 0 24px 64px rgba(33, 24, 17, 0.22), 0 4px 16px rgba(33, 24, 17, 0.08);
+
+      /* 字体排印族 */
+      --font-serif: "New York", ui-serif, "Iowan Old Style", "Newsreader", Charter, Georgia, serif;
+      --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Segoe UI", sans-serif;
+      --font-mono: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    body {
+      background: #EBE5DF;
+      font-family: var(--font-sans);
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 32px 20px 60px;
+    }
+
+    /* 顶部控制栏 */
+    .top-header {
+      max-width: 980px;
+      width: 100%;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+    .badge-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px;
+      background: rgba(255, 118, 34, 0.12);
+      color: var(--brand-ink);
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .header-title {
+      font-family: var(--font-serif);
+      font-size: 26px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .ctrl-btn {
+      padding: 8px 16px;
+      border-radius: 999px;
+      border: 1px solid rgba(89, 76, 67, 0.2);
+      background: #FFFDF8;
+      color: var(--text-secondary);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.18s ease;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+    }
+    .ctrl-btn:hover {
+      border-color: var(--brand-strong);
+      color: var(--brand-ink);
+      transform: translateY(-1px);
+    }
+    .ctrl-btn.active {
+      background: var(--text-primary);
+      color: #FFFDF8;
+      border-color: var(--text-primary);
+    }
+
+    /* 主工作台布局：左侧手机画布 + 右侧排印与间距审计 */
+    .workspace {
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      gap: 36px;
+      width: 100%;
+      max-width: 1140px;
+      margin: 0 auto;
+    }
+
+    /* iPhone 16 Pro 真机外框 */
+    .device-frame {
+      width: 393px;
+      height: 852px;
+      background: var(--page-bg);
+      border-radius: 54px;
+      box-shadow: 
+        0 0 0 12px #282422,
+        0 0 0 14px #423D3A,
+        var(--sheet-shadow);
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+
+    /* 灵动岛 */
+    .dynamic-island {
+      position: absolute;
+      top: 11px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 124px;
+      height: 36px;
+      background: #000000;
+      border-radius: 20px;
+      z-index: 99;
+      pointer-events: none;
+    }
+
+    /* 状态栏时间与电池 */
+    .status-bar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 54px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 28px;
+      font-size: 14.5px;
+      font-weight: 600;
+      color: var(--text-primary);
+      z-index: 90;
+      pointer-events: none;
+    }
+    .status-icons {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* 生产环境 SheetTopScrim 柔化遮罩 */
+    .sheet-top-scrim {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 72px;
+      background: linear-gradient(to bottom, #FCF8F3 0%, rgba(252, 248, 243, 0.96) 55%, rgba(252, 248, 243, 0) 100%);
+      pointer-events: none;
+      z-index: 50;
+    }
+
+    /* 顶栏固定标题与关闭键 */
+    .pinned-bar {
+      position: absolute;
+      top: 54px;
+      left: 0;
+      right: 0;
+      height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 60;
+      pointer-events: none;
+    }
+    .pinned-title {
+      font-family: var(--font-serif);
+      font-size: 20px;
+      font-weight: 600;
+      letter-spacing: -0.015em;
+      color: var(--text-primary);
+      pointer-events: auto;
+    }
+    .close-btn-wrap {
+      position: absolute;
+      top: 60px;
+      right: 20px;
+      z-index: 70;
+    }
+    .close-circle-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: var(--page-bg);
+      border: 0.5px solid rgba(230, 225, 218, 0.6);
+      box-shadow: var(--button-shadow);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.16s ease;
+    }
+    .close-circle-btn:active {
+      transform: scale(0.92);
+      background: #F4ECE3;
+    }
+
+    /* 滚动内容区 (SettingsScreen) */
+    .scroll-content {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding-top: 104px; /* barHeight(48) + topPadding(32) + 顶边间距 */
+      padding-bottom: 28px; /* pageFooterBottom */
+      -webkit-overflow-scrolling: touch;
+      position: relative;
+    }
+    .scroll-content::-webkit-scrollbar {
+      display: none;
+    }
+
+    /* 设置卡片外层分组 */
+    .settings-section {
+      margin-bottom: 32px; /* paddingSection */
+      padding: 0 20px;     /* paddingPage */
+    }
+    .section-header {
+      font-family: var(--font-serif);
+      font-size: 15px;      /* subheadline */
+      font-weight: 500;     /* Medium */
+      color: var(--text-secondary);
+      margin-bottom: 8px;   /* paddingS */
+      letter-spacing: -0.01em;
+    }
+
+    /* 暖纸内容卡片外壳 (surfaceCard) */
+    .settings-card {
+      background: var(--card-surface);
+      border-radius: 20px;  /* AppTheme.Radius.large */
+      border: 0.5px solid var(--border-card);
+      box-shadow: var(--card-shadow);
+      overflow: hidden;
+    }
+
+    /* 行容器与组件 */
+    .settings-row {
+      display: flex;
+      align-items: center;
+      padding: 16px;        /* paddingCard */
+      gap: 16px;
+      position: relative;
+      text-decoration: none;
+      color: inherit;
+      transition: background-color 0.12s ease;
+    }
+    .settings-row.clickable {
+      cursor: pointer;
+      user-select: none;
+    }
+    .settings-row.clickable:active {
+      background-color: var(--row-active-bg);
+    }
+
+    /* 图标容器 (24×24) */
+    .row-icon-col {
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .row-icon-col svg {
+      width: 20px;
+      height: 20px;
+      stroke-linecap: butt;
+      stroke-linejoin: round;
+      fill: none;
+    }
+    .row-icon-col.delete-icon svg {
+      stroke-linecap: round;
+    }
+
+    /* 文本排版 */
+    .row-label {
+      flex: 1;
+      font-size: 17px;       /* AppTheme.Font.englishBody */
+      font-weight: 400;      /* Regular */
+      color: var(--text-primary);
+      letter-spacing: -0.012em;
+    }
+    .row-label.danger {
+      color: var(--danger);
+    }
+    .row-value {
+      font-size: 17px;
+      font-weight: 400;
+      color: var(--text-muted);
+      letter-spacing: -0.01em;
+    }
+
+    /* 行分割线 (左缩进 56px = 16 + 24 + 16) */
+    .row-divider {
+      height: 0.5px;
+      background: var(--divider-line);
+      margin-left: 56px;
+    }
+
+    /* Chevron 箭头 (20×20 Canvas 产物) */
+    .row-chevron {
+      width: 14px;
+      height: 14px;
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+
+    /* 版本号页脚 (72pt 深度呼吸断层) */
+    .version-footer {
+      margin-top: 40px;      /* 72 - 32 = 40pt sectionToFooter */
+      text-align: center;
+      font-family: var(--font-serif);
+      font-size: 12px;       /* AppTheme.Font.settingsVersion */
+      font-weight: 400;
+      color: var(--text-muted);
+      letter-spacing: 0.01em;
+    }
+
+    /* 模拟底部 Home Indicator */
+    .home-indicator {
+      position: absolute;
+      bottom: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 138px;
+      height: 5px;
+      background: #211811;
+      border-radius: 999px;
+      opacity: 0.8;
+      pointer-events: none;
+      z-index: 80;
+    }
+
+    /* ── 交互反馈：生产级 Toast 浮层 ── */
+    .toast-pill {
+      position: absolute;
+      bottom: 40px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      opacity: 0;
+      background: var(--text-primary);
+      color: #FFFDF8;
+      padding: 10px 18px;
+      border-radius: 999px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      box-shadow: 0 8px 24px rgba(33, 24, 17, 0.2);
+      pointer-events: none;
+      transition: all 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+      z-index: 100;
+      white-space: nowrap;
+    }
+    .toast-pill.show {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+    }
+
+    /* ── 模拟系统 Alert 弹窗 ── */
+    .alert-modal-scrim {
+      position: absolute;
+      inset: 0;
+      background: var(--scrim-overlay);
+      backdrop-filter: blur(4px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 120;
+      padding: 24px;
+    }
+    .alert-modal-scrim.show {
+      display: flex;
+    }
+    .alert-box {
+      width: 270px;
+      background: rgba(255, 253, 248, 0.94);
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: 0 20px 48px rgba(0,0,0,0.25);
+      animation: alertPop 0.22s ease-out;
+      text-align: center;
+    }
+    @keyframes alertPop {
+      0% { transform: scale(0.92); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .alert-content {
+      padding: 20px 16px 16px;
+    }
+    .alert-title {
+      font-size: 17px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+    .alert-desc {
+      font-size: 13px;
+      line-height: 1.4;
+      color: var(--text-secondary);
+    }
+    .alert-actions {
+      border-top: 0.5px solid rgba(124, 119, 115, 0.2);
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+    }
+    .alert-btn {
+      padding: 12px;
+      font-size: 17px;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      font-weight: 400;
+      color: var(--text-primary);
+    }
+    .alert-btn.cancel {
+      font-weight: 600;
+      border-right: 0.5px solid rgba(124, 119, 115, 0.2);
+    }
+    .alert-btn.delete {
+      color: var(--danger);
+    }
+    .alert-btn:active {
+      background: rgba(0,0,0,0.05);
+    }
+
+    /* ── 右侧排印与间距视察面板 (Typography & Spacing Inspector) ── */
+    .inspector-panel {
+      flex: 1;
+      max-width: 520px;
+      background: #FFFDF8;
+      border-radius: 28px;
+      border: 1px solid rgba(89, 76, 67, 0.12);
+      box-shadow: var(--card-shadow);
+      padding: 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .inspector-title {
+      font-family: var(--font-serif);
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .inspector-desc {
+      font-size: 14px;
+      line-height: 1.6;
+      color: var(--text-secondary);
+    }
+    .token-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .token-table th {
+      text-align: left;
+      padding: 8px 10px;
+      border-bottom: 1.5px solid rgba(89, 76, 67, 0.15);
+      color: var(--text-muted);
+      font-weight: 600;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .token-table td {
+      padding: 10px;
+      border-bottom: 0.5px solid rgba(89, 76, 67, 0.08);
+      vertical-align: middle;
+    }
+    .token-table tr:last-child td {
+      border-bottom: none;
+    }
+    .code-tag {
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      background: rgba(33, 24, 17, 0.05);
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: var(--brand-ink);
+    }
+    .spec-pill {
+      display: inline-block;
+      font-size: 11.5px;
+      color: var(--text-secondary);
+    }
+    .highlight-pill {
+      background: rgba(255, 118, 34, 0.1);
+      color: var(--brand-ink);
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    /* 视觉辅助开关：标注框模式 */
+    body.show-overlays .settings-card {
+      outline: 1.5px dashed rgba(255, 118, 34, 0.55);
+    }
+    body.show-overlays .section-header {
+      background: rgba(255, 118, 34, 0.08);
+      border-radius: 4px;
+    }
+    body.show-overlays .version-footer {
+      background: rgba(75, 70, 64, 0.08);
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 顶部控制头 -->
+  <header class="top-header">
+    <div>
+      <div class="badge-wrap">
+        <span class="badge">Production Parity</span>
+        <span style="font-size: 13px; color: var(--text-muted);">Settings · 100% 生产对齐全真原型</span>
+      </div>
+      <h1 class="header-title" style="margin-top: 6px;">Settings Page & Typography Audit</h1>
+    </div>
+    <div class="controls">
+      <button class="ctrl-btn" id="btnToggleOverlays" onclick="toggleOverlays()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+        <span>排版网格视察</span>
+      </button>
+      <button class="ctrl-btn" onclick="triggerToast('Thank you! We\'ll be in touch soon')">
+        <span>测试 Feedback Toast</span>
+      </button>
+      <button class="ctrl-btn" onclick="openDeleteAlert()">
+        <span style="color: var(--danger);">测试删除弹窗</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- 工作区容器 -->
+  <main class="workspace">
+
+    <!-- 1. 原生真机外壳 (iPhone 16 Pro, 393×852) -->
+    <div class="device-frame" id="deviceFrame">
+      <!-- 灵动岛 -->
+      <div class="dynamic-island"></div>
+
+      <!-- 状态栏 -->
+      <div class="status-bar">
+        <span>9:41</span>
+        <div class="status-icons">
+          <svg width="16" height="11" viewBox="0 0 16 11" fill="currentColor"><path d="M1 8.5C2.5 7 4.5 6 7 6s4.5 1 6 2.5M3 5.5C4.5 4 6 3.5 7 3.5s2.5.5 4 2M5 2.5C6 1.8 7 1.5 8 1.5s2 .3 3 1"/></svg>
+          <svg width="22" height="11" viewBox="0 0 22 11" fill="none" stroke="currentColor" stroke-width="1"><rect x="0.5" y="0.5" width="18" height="10" rx="2.5"/><rect x="2" y="2" width="13" height="7" rx="1.5" fill="currentColor"/><path d="M20 3.5v4" stroke-linecap="round"/></svg>
+        </div>
+      </div>
+
+      <!-- 生产环境固定顶栏柔化遮罩 (SheetTopScrim) -->
+      <div class="sheet-top-scrim"></div>
+
+      <!-- 固定顶栏 (Pinned Title) -->
+      <div class="pinned-bar">
+        <span class="pinned-title">Settings</span>
+      </div>
+
+      <!-- 悬浮右上角关闭按钮 (SettingsCircleButton) -->
+      <div class="close-btn-wrap">
+        <button class="close-circle-btn" onclick="triggerClose()" title="Close Settings">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#211811" stroke-width="2.2" stroke-linecap="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <!-- 滚动内容区 -->
+      <div class="scroll-content" id="scrollContent">
+
+        <!-- 1. 语言分组 (My language) -->
+        <section class="settings-section">
+          <h2 class="section-header">My language</h2>
+          <div class="settings-card">
+            <!-- Row 1: Target language (只读) -->
+            <div class="settings-row">
+              <div class="row-icon-col">
+                <!-- 地球矢量线条 (SettingsRowIcon.targetLanguage) -->
+                <svg viewBox="0 0 24 24" stroke="#594C43" stroke-width="1.6">
+                  <circle cx="12" cy="12" r="8.5"/>
+                  <line x1="3.5" y1="12" x2="20.5" y2="12"/>
+                  <ellipse cx="12" cy="12" rx="4" ry="8.5"/>
+                </svg>
+              </div>
+              <span class="row-label">Target language</span>
+              <span class="row-value">English</span>
+            </div>
+            <div class="row-divider"></div>
+            <!-- Row 2: Native language (只读) -->
+            <div class="settings-row">
+              <div class="row-icon-col">
+                <!-- 人像矢量线条 (SettingsRowIcon.nativeLanguage) -->
+                <svg viewBox="0 0 24 24" stroke="#594C43" stroke-width="1.6">
+                  <circle cx="12" cy="8.5" r="3.6"/>
+                  <path d="M5 20 C5 16.4, 8.1 14, 12 14 C15.9 14, 19 16.4, 19 20"/>
+                </svg>
+              </div>
+              <span class="row-label">Native language</span>
+              <span class="row-value">Chinese</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- 2. 法律条款分组 (Legal) -->
+        <section class="settings-section">
+          <h2 class="section-header">Legal</h2>
+          <div class="settings-card">
+            <!-- Row 1: About AI -->
+            <div class="settings-row clickable" onclick="triggerToast('Opening About AI...')">
+              <div class="row-icon-col">
+                <!-- 四角星芒 (SettingsRowIcon.aiData) -->
+                <svg viewBox="0 0 24 24" stroke="#594C43" stroke-width="1.6">
+                  <polygon points="12,3 13.9,8.1 19,10 13.9,11.9 12,17 10.1,11.9 5,10 10.1,8.1"/>
+                </svg>
+              </div>
+              <span class="row-label">How AI uses your data</span>
+              <svg class="row-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>
+            </div>
+            <div class="row-divider"></div>
+            <!-- Row 2: Privacy Policy -->
+            <div class="settings-row clickable" onclick="triggerToast('Opening Privacy Policy...')">
+              <div class="row-icon-col">
+                <!-- 挂锁 (SettingsRowIcon.privacy) -->
+                <svg viewBox="0 0 24 24" stroke="#594C43" stroke-width="1.6">
+                  <rect x="5" y="10" width="14" height="10" rx="2.4"/>
+                  <path d="M8.2 10V7.2 C8.2 5.1, 9.9 3.4, 12 3.4 C14.1 3.4, 15.8 5.1, 15.8 7.2V10"/>
+                </svg>
+              </div>
+              <span class="row-label">Privacy Policy</span>
+              <svg class="row-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>
+            </div>
+            <div class="row-divider"></div>
+            <!-- Row 3: Terms of Service -->
+            <div class="settings-row clickable" onclick="triggerToast('Opening Terms of Service...')">
+              <div class="row-icon-col">
+                <!-- 文档 (SettingsRowIcon.terms) -->
+                <svg viewBox="0 0 24 24" stroke="#594C43" stroke-width="1.6">
+                  <path d="M6 3.5h7.5L18 8v12.5H6z"/>
+                  <polyline points="13.5,3.5 13.5,8 18,8"/>
+                  <line x1="9" y1="13" x2="15" y2="13"/>
+                  <line x1="9" y1="16.5" x2="15" y2="16.5"/>
+                </svg>
+              </div>
+              <span class="row-label">Terms of Service</span>
+              <svg class="row-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>
+            </div>
+          </div>
+        </section>
+
+        <!-- 3. 支持反馈分组 (Support) -->
+        <section class="settings-section">
+          <h2 class="section-header">Support</h2>
+          <div class="settings-card">
+            <!-- Row 1: Send feedback -->
+            <div class="settings-row clickable" onclick="triggerToast('Thank you! We\'ll be in touch soon')">
+              <div class="row-icon-col">
+                <!-- 气泡 (SettingsRowIcon.feedback) -->
+                <svg viewBox="0 0 24 24" stroke="#594C43" stroke-width="1.6">
+                  <path d="M3.5 6.5h17v11h-11L3.5 21z"/>
+                </svg>
+              </div>
+              <span class="row-label">Send feedback</span>
+              <svg class="row-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>
+            </div>
+          </div>
+        </section>
+
+        <!-- 4. 账号分组 (Account) -->
+        <section class="settings-section">
+          <h2 class="section-header">Account</h2>
+          <div class="settings-card">
+            <!-- Row 1: Delete account (高危红色，无 Chevron) -->
+            <div class="settings-row clickable" onclick="openDeleteAlert()">
+              <div class="row-icon-col delete-icon">
+                <!-- 垃圾桶 (SettingsRowIcon.delete) -->
+                <svg viewBox="0 0 24 24" stroke="#DC2626" stroke-width="1.6">
+                  <line x1="4.5" y1="7" x2="19.5" y2="7"/>
+                  <polyline points="9.5,7 9.5,4.2 14.5,4.2 14.5,7"/>
+                  <path d="M6.8 7l1 13.8h8.4l1-13.8"/>
+                </svg>
+              </div>
+              <span class="row-label danger">Delete account</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- 5. 调试开发者分组 (Developer - DEBUG) -->
+        <section class="settings-section">
+          <h2 class="section-header">Developer</h2>
+          <div class="settings-card">
+            <!-- Row 1: Reset Library unlock -->
+            <div class="settings-row clickable" onclick="triggerToast('Library unlock reset.')">
+              <div class="row-icon-col">
+                <!-- 回旋重置箭头 (SettingsRowIcon.reset) -->
+                <svg viewBox="0 0 24 24" stroke="#594C43" stroke-width="1.6">
+                  <path d="M7 8V4L3 8l4 4"/>
+                  <path d="M7 8c7-5 13-2 13 4c0 5-4 9-8 9"/>
+                </svg>
+              </div>
+              <span class="row-label">Reset Library unlock</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- 6. 版本号页脚 (72pt 深度呼吸断层) -->
+        <footer class="version-footer">
+          Version 1.0 (Build 1)
+        </footer>
+
+      </div>
+
+      <!-- 底部安全条指示器 -->
+      <div class="home-indicator"></div>
+
+      <!-- 生产 Toast 浮层 -->
+      <div class="toast-pill" id="toastPill">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#FFFDF8" stroke-width="2.2" stroke-linecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        <span id="toastMsg">Thank you! We'll be in touch soon</span>
+      </div>
+
+      <!-- 原生系统 Alert 模拟 -->
+      <div class="alert-modal-scrim" id="alertScrim">
+        <div class="alert-box">
+          <div class="alert-content">
+            <h3 class="alert-title">Delete account?</h3>
+            <p class="alert-desc">This will permanently delete your account, expressions, and progress. This action cannot be undone.</p>
+          </div>
+          <div class="alert-actions">
+            <button class="alert-btn cancel" onclick="closeDeleteAlert()">Cancel</button>
+            <button class="alert-btn delete" onclick="confirmDelete()">Delete</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- 2. 排印与间距审计视察面板 (Typography & Spacing Inspector) -->
+    <aside class="inspector-panel">
+      <div class="inspector-title">
+        <span>Settings 排版与设计代币审计</span>
+        <span class="highlight-pill">100% 对齐</span>
+      </div>
+      <p class="inspector-desc">
+        严格遵循 <code>AGENTS.md</code> 规范与 <code>AIEnglishApp/Settings/</code> 生产代码：
+        暖纸底色无大面积彩块，以<strong>纯留白（32/72/28pt）</strong>与<strong>字重/衬线双轴对比</strong>建立温润、克制的出版物级体验。
+      </p>
+
+      <!-- 字体 Token 表 -->
+      <table class="token-table">
+        <thead>
+          <tr>
+            <th>界面元素</th>
+            <th>生产 Token 名</th>
+            <th>排印参数与字族</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>顶栏固定标题</strong></td>
+            <td><span class="code-tag">settingsPinnedTitleSerif</span></td>
+            <td><span class="spec-pill">Serif · title3 · 20pt · 600</span></td>
+          </tr>
+          <tr>
+            <td><strong>卡外分区标题</strong></td>
+            <td><span class="code-tag">settingsSectionTitleSerif</span></td>
+            <td><span class="spec-pill">Serif · subheadline · 15pt · 500</span></td>
+          </tr>
+          <tr>
+            <td><strong>列表行主文字</strong></td>
+            <td><span class="code-tag">englishBody</span></td>
+            <td><span class="spec-pill">Sans · body · 17pt · 400</span></td>
+          </tr>
+          <tr>
+            <td><strong>列表行次要/数值</strong></td>
+            <td><span class="code-tag">englishBody (textMuted)</span></td>
+            <td><span class="spec-pill">Sans · body · 17pt · #7C7773</span></td>
+          </tr>
+          <tr>
+            <td><strong>危险操作文字</strong></td>
+            <td><span class="code-tag">englishBody (danger)</span></td>
+            <td><span class="spec-pill">Sans · body · 17pt · #DC2626</span></td>
+          </tr>
+          <tr>
+            <td><strong>版本号页脚</strong></td>
+            <td><span class="code-tag">settingsVersion</span></td>
+            <td><span class="spec-pill">Serif · caption · 12pt · 400</span></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- 间距节奏表 -->
+      <table class="token-table" style="margin-top: 4px;">
+        <thead>
+          <tr>
+            <th>间距类型</th>
+            <th>生产 Token 名</th>
+            <th>物理尺寸与设计意图</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>分区垂直节奏</strong></td>
+            <td><span class="code-tag">AppTheme.Space.paddingSection</span></td>
+            <td><span class="spec-pill"><strong>32pt</strong>（分组卡片之间的呼吸留白）</span></td>
+          </tr>
+          <tr>
+            <td><strong>标题到卡片</strong></td>
+            <td><span class="code-tag">AppTheme.Space.paddingS</span></td>
+            <td><span class="spec-pill"><strong>8pt</strong>（标题与其承载卡片的归属贴合）</span></td>
+          </tr>
+          <tr>
+            <td><strong>卡片内行间距</strong></td>
+            <td><span class="code-tag">AppTheme.Space.paddingCard</span></td>
+            <td><span class="spec-pill"><strong>16pt</strong>（上/下/左/右标准内边距）</span></td>
+          </tr>
+          <tr>
+            <td><strong>卡片到页脚</strong></td>
+            <td><span class="code-tag">AppTheme.Space.pageFooterTop</span></td>
+            <td><span class="spec-pill"><strong>72pt</strong>（打破卡片吸附的深度呼吸断层）</span></td>
+          </tr>
+          <tr>
+            <td><strong>页脚到底部</strong></td>
+            <td><span class="code-tag">AppTheme.Space.pageFooterBottom</span></td>
+            <td><span class="spec-pill"><strong>28pt</strong>（安全区之上的平稳收口留白）</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </aside>
+
+  </main>
+
+  <script>
+    // 切换网格线辅助标注
+    function toggleOverlays() {
+      document.body.classList.toggle('show-overlays');
+      const btn = document.getElementById('btnToggleOverlays');
+      btn.classList.toggle('active');
+    }
+
+    // 触发 Toast 提示
+    let toastTimer = null;
+    function triggerToast(msg) {
+      const pill = document.getElementById('toastPill');
+      const text = document.getElementById('toastMsg');
+      text.innerText = msg;
+      pill.classList.add('show');
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {
+        pill.classList.remove('show');
+      }, 3500);
+    }
+
+    // 触发右上角关闭 Sheet 动画
+    function triggerClose() {
+      const frame = document.getElementById('deviceFrame');
+      frame.style.transition = 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)';
+      frame.style.transform = 'translateY(80px) scale(0.96)';
+      frame.style.opacity = '0.4';
+      setTimeout(() => {
+        frame.style.transform = 'translateY(0) scale(1)';
+        frame.style.opacity = '1';
+        triggerToast('Settings Sheet 重置并拉回');
+      }, 400);
+    }
+
+    // 删除弹窗
+    function openDeleteAlert() {
+      document.getElementById('alertScrim').classList.add('show');
+    }
+    function closeDeleteAlert() {
+      document.getElementById('alertScrim').classList.remove('show');
+    }
+    function confirmDelete() {
+      closeDeleteAlert();
+      triggerToast('Account deletion simulated.');
+    }
+  </script>
+</body>
+</html>
