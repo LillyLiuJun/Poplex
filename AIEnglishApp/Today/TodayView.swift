@@ -451,12 +451,20 @@ private struct Tab1LimitReachedContextPreview: View {
 
     private func sampleUserBubble(_ text: String) -> some View {
         HStack {
-            Spacer(minLength: 60)
+            Spacer(minLength: AppTheme.Space.paddingHero)
             Text(text)
-                .font(AppTheme.Font.englishBody)
+                .font(AppTheme.Font.userBubbleText)
                 .foregroundStyle(AppTheme.Color.bubbleUserText)
-                .padding(AppTheme.Space.paddingCard)
-                .background(AppTheme.Color.bubbleUserBg, in: RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
+                .padding(.horizontal, AppTheme.Space.bubbleUserHorizontal)
+                .padding(.vertical, AppTheme.Space.bubbleUserVertical)
+                .background {
+                    let shape = RoundedRectangle(cornerRadius: AppTheme.Radius.bubbleUser)
+                    shape.fill(AppTheme.Color.bubbleUserBg)
+                        .overlay {
+                            shape.strokeBorder(AppTheme.Color.bubbleUserBorder, lineWidth: 0.5)
+                        }
+                }
+                .contentShape(RoundedRectangle(cornerRadius: AppTheme.Radius.bubbleUser))
         }
     }
 

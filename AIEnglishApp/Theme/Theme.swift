@@ -206,6 +206,11 @@ enum AppTheme {
         static let paddingSection: CGFloat      = Primitive.space32
         static let paddingHero: CGFloat         = Primitive.space48
         static let paddingScreenBottom: CGFloat = Primitive.space56
+        /// 用户输入回显气泡内边距（横向 14pt 紧凑收敛，纵向 8pt 呼吸节奏）。
+        /// 横向 14 是组件私有调优值（卡在 space12/space16 刻度中间是刻意的收敛尺寸，
+        /// 不是刻度缺口，不要"补全"成 12 或 16）——仅服务这一个气泡，不进 Primitive 刻度。
+        static let bubbleUserHorizontal: CGFloat = 14
+        static let bubbleUserVertical: CGFloat   = Primitive.space8
 
         /// 页面收尾页脚留白（SettingsView 等通用内容页脚版本号底部留白：28pt；卡片到页脚呼吸断层：72pt）
         static let pageFooterTop: CGFloat       = Primitive.space72
@@ -324,12 +329,15 @@ enum AppTheme {
         // 交互控件（发送键 / CTA / 光标）—— 暖近黑
         static let interactive   = Primitive.neutral950
 
-        // 用户气泡（极简暖灰底 + 深暖灰字：提问容器降权，凸显 AI 单词/语法卡片）
-        static let bubbleUserBg   = Primitive.neutral100
-        static let bubbleUserText = Primitive.neutral900
-        static let bubbleAIBg     = Primitive.warmWhite
+        // 用户气泡（温润书卷：半透暖纸灰底 68% + 书卷石墨暖深灰字 + 0.5pt 细微边缘，消除暗块与浓墨感，凸显 AI 学习卡）
+        // 对比度：文字与「气泡底色 68% 叠加在 pageBg 上」的实际合成色，按 WCAG 相对亮度公式核算 ≈8.25:1，
+        // 超过 AAA 门槛 7:1（2026-09-29 复核；若改动 bubbleUserBg/pageBg 任一色值需重新核算，别直接照抄这个数字）
+        static let bubbleUserBg     = Primitive.neutral100.opacity(0.68)
+        static let bubbleUserText   = Primitive.neutral700
+        static let bubbleUserBorder = Primitive.neutral200.opacity(0.55)
+        static let bubbleAIBg       = Primitive.warmWhite
         // 日期分隔胶囊背景（提亮加暖）
-        static let dateChipBg     = Primitive.neutral200.opacity(0.5)
+        static let dateChipBg       = Primitive.neutral200.opacity(0.5)
 
         // 描边 / 分割
         static let border       = Primitive.neutral200
@@ -510,7 +518,11 @@ enum AppTheme {
         // 英文主内容 / 词条大标题（Warm Editorial 内容衬线，Charter 权威粗衬线）
         static let englishPrimary = charter(17, weight: .regular, relativeTo: .body)                    // 英文主内容（Charter 衬线，保 Dynamic Type）
         static let wordTitle      = charter(20, weight: .bold, relativeTo: .title3)                 // 词条大标题（内容衬线，半粗以有分量不过重）
-        static let englishBody    = sans(17, weight: .regular, relativeTo: .body)                     // 界面正文：设置行 / 输入框 / 空态提示 / 用户气泡等（非「英文例句」专用，命名早于实际用途扩散）
+        static let englishBody    = sans(17, weight: .regular, relativeTo: .body)                     // 界面正文：设置行 / 输入框 / 空态提示等
+        /// 用户输入回显气泡文字（15pt 常规字重，温润书卷正文，保 Dynamic Type 缩放）。
+        /// 与下方 feedbackChipLabel 数值巧合相同（两者用途无关，纯属这次设计都选了 15pt regular）——
+        /// 刻意不合并成一个共用 Token：气泡和反馈表单是两件独立的事，以后单独调气泡字号不该连累反馈表单。
+        static let userBubbleText = sans(15, weight: .regular, relativeTo: .subheadline)
         // Onboarding 拼贴里的示意微文案（照片注脚 / 语音转写 / 便签正文）。
         // 尺寸：15（比 englishBody 17 降一档）——这些字是「让人认出这是什么输入」的示意，
         //   不是要读的内容；17pt 主色会让三张卡同时抢主标题的注意力，整页发重。
@@ -540,7 +552,7 @@ enum AppTheme {
         static let actionNote     = sans(13, weight: .regular, relativeTo: .footnote)               // 操作项的补充说明（如拍照入口副文案）
         static let compactActionLabel = sans(15, weight: .medium, relativeTo: .subheadline)         // 上传胶囊动作（Camera / Gallery）：无图标时用中等字重建立操作重量
         static let inlineActionLabel = sans(13, weight: .semibold, relativeTo: .footnote)           // 无底框行内动作按钮文字（错误态 Try again，13/600，随 Dynamic Type 缩放）
-        static let feedbackChipLabel = sans(15, weight: .regular, relativeTo: .subheadline)          // 反馈分类标签：常规细字重，保持视觉轻柔收敛
+        static let feedbackChipLabel = sans(15, weight: .regular, relativeTo: .subheadline)          // 反馈分类标签：常规细字重，保持视觉轻柔收敛（数值与 userBubbleText 巧合相同，两者刻意分开定义，见其注释）
         static let chineseFaint   = hiragino(13, weight: .w3, relativeTo: .footnote)             // 中文原文弱化 (冬青黑体)
         static let chineseBody    = hiragino(15, weight: .w3, relativeTo: .subheadline)          // 中文翻译 / 释义（=参考稿 content-zh 14px 灰）
         static let date           = sans(11, weight: .semibold, relativeTo: .caption2)              // 日期分隔
@@ -679,6 +691,7 @@ enum AppTheme {
 
     enum Radius {
         static let small: CGFloat          = Primitive.radius8   // tag / 小元素
+        static let bubbleUser: CGFloat     = 14                  // 用户回显气泡：便签轻量圆角（组件私有调优值，不进 Primitive 刻度）
         static let medium: CGFloat         = Primitive.radius16  // 卡片 / 气泡
         static let large: CGFloat          = Primitive.radius20  // 输入框
         static let glassContainer: CGFloat = Primitive.radius28  // 浮动 glass 容器

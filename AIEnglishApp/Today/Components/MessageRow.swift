@@ -191,11 +191,18 @@ private struct UserBubble: View {
                 HStack {
                     Spacer(minLength: AppTheme.Space.paddingHero)
                     Text(text)
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, AppTheme.Space.paddingM)
-                        .background(AppTheme.Color.bubbleUserBg)
+                        .font(AppTheme.Font.userBubbleText)
                         .foregroundStyle(AppTheme.Color.bubbleUserText)
-                        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.medium))
+                        .padding(.horizontal, AppTheme.Space.bubbleUserHorizontal)
+                        .padding(.vertical, AppTheme.Space.bubbleUserVertical)
+                        .background {
+                            let shape = RoundedRectangle(cornerRadius: AppTheme.Radius.bubbleUser)
+                            shape.fill(AppTheme.Color.bubbleUserBg)
+                                .overlay {
+                                    shape.strokeBorder(AppTheme.Color.bubbleUserBorder, lineWidth: 0.5)
+                                }
+                        }
+                        .contentShape(RoundedRectangle(cornerRadius: AppTheme.Radius.bubbleUser))
                 }
             }
         }
