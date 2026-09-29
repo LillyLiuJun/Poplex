@@ -4712,6 +4712,122 @@ struct OnboardingCompletionCoordinatorTests {
     }
 }
 
+// MARK: - Onboarding scroll offset observer tests (F-4，iOS 17 KVO 兜底)
+//
+// 这套追踪滚动位移的机制在 fix/ios17-top-mask 这刀之前换过两版都没修好
+// （详见 OnboardingShared.swift 顶部那段注释）：旧版 GeometryReader +
+// PreferenceKey 组合在真机/模拟器上诊断日志证实过——geometry 那一侧其实每帧
+// 都在正确重算，但订阅方 onPreferenceChange 只在挂载时触发一次就哑火，
+// 此后无论怎么滚动都不再回调。这正是这套单测要锁住的行为：不仅要确认
+// "挂载时报对了一次"，更要确认"挂载之后持续滚动，每一次变化都能收到"——
+// 只测前者会把上一版的坏版本也判定为通过。
+
+@MainActor
+struct OnboardingScrollOffsetObserverTests {
+
+    /// 用来在闭包内外共享同一份可变存储——数组是值类型，直接把它塞进
+    /// harness 元组里返回的话，后续在闭包里的 append 不会反映到已经取出的
+    /// 那份拷贝上，所以包一层引用类型。
+    private final class OffsetLog {
+        var values: [CGFloat] = []
+    }
+
+    private struct Harness {
+        let window: UIWindow
+        let scrollView: UIScrollView
+        let log: OffsetLog
+    }
+
+    /// 复刻真实调用方式：observer 贴在 ScrollView 的内容视图上（.background），
+    /// 不是贴在 ScrollView 自己身上——enclosingScrollView() 要沿 superview 链
+    /// 往上找才能碰到 UIScrollView，这个层级关系必须和生产代码一致。
+    private func makeHarness() -> Harness {
+        let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 100, height: 200))
+        // 真机/模拟器上 UIWindow 顶部自带状态栏安全区，默认的 .automatic 会让
+        // UIScrollView 把它自动叠进 adjustedContentInset.top（实测量出来接近
+        // 54pt，不是 0）——这正是生产代码特意通过 adjustedContentInset 才能拿到
+        // 的安全区语义，不是环境噪音，但对下面几条按绝对值断言的用例来说，
+        // 这份「静止时不是真的 0」会让断言全部失真。关掉自动叠加，把这份安全区
+        // 贡献隔离出去，才能让这几条测试真正测的是「重算逻辑对不对」而不是
+        // 「这次跑在哪台设备上」。安全区场景本身已经在
+        // reportedOffsetIncludesContentInsetTopDelta 里单独用差值覆盖了。
+        scrollView.contentInsetAdjustmentBehavior = .never
+        let contentView = UIView(frame: CGRect(x: 0, y: 0, width: 100, height: 400))
+        scrollView.contentSize = contentView.frame.size
+        scrollView.addSubview(contentView)
+
+        let log = OffsetLog()
+        let observer = OnboardingScrollOffsetObserverView()
+        observer.onOffsetChange = { offset in log.values.append(offset) }
+        contentView.addSubview(observer)
+
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 100, height: 200))
+        window.rootViewController = UIViewController()
+        window.rootViewController?.view.addSubview(scrollView)
+        window.makeKeyAndVisible()
+        window.layoutIfNeeded()
+
+        return Harness(window: window, scrollView: scrollView, log: log)
+    }
+
+    @Test func attachingReportsInitialOffset() {
+        let harness = makeHarness()
+        defer { harness.window.isHidden = true }
+
+        // .initial 应该在 observe() 调用当下就同步回调一次，不需要等任何滚动发生。
+        #expect(!harness.log.values.isEmpty)
+        #expect(harness.log.values.last == 0)
+    }
+
+    @Test func reportsEveryScrollChangeNotJustTheFirst() {
+        let harness = makeHarness()
+        defer { harness.window.isHidden = true }
+
+        harness.scrollView.contentOffset = CGPoint(x: 0, y: 50)
+        harness.scrollView.contentOffset = CGPoint(x: 0, y: 120)
+        harness.scrollView.contentOffset = CGPoint(x: 0, y: 80)
+
+        // 锁住的正是上一版坏掉的行为：不能只有挂载时那一次 0，
+        // 后续每一次滚动都必须被单独收到。
+        #expect(harness.log.values.contains(50))
+        #expect(harness.log.values.contains(120))
+        #expect(harness.log.values.last == 80)
+        #expect(harness.log.values.count >= 4)   // 1 次 initial + 3 次滚动
+    }
+
+    @Test func clampsOverscrollPastTopToZero() {
+        // 回弹越过顶端时 contentOffset.y 会短暂变负——不能把这段当成
+        // "往上滚出去了"，OnboardingTopFade 的 opacity 靠这个值算，
+        // 负值会被 smoothstep 意外钳成奇怪的样子。
+        let harness = makeHarness()
+        defer { harness.window.isHidden = true }
+
+        harness.scrollView.contentOffset = CGPoint(x: 0, y: -30)
+
+        #expect(harness.log.values.last == 0)
+    }
+
+    @Test func reportedOffsetIncludesContentInsetTopDelta() {
+        // 与 iOS 18 分支（onScrollGeometryChange 那条）同一套零点语义：
+        // 静止 = 0、安全区/contentInset 顶部要并入零点，不能只看裸 contentOffset.y。
+        // 用差值断言而不是绝对值，避开测试环境里 adjustedContentInset 本身
+        // 是否已经叠了别的安全区分量这个不确定因素。
+        let harness = makeHarness()
+        defer { harness.window.isHidden = true }
+
+        harness.scrollView.contentOffset = CGPoint(x: 0, y: 30)
+        let withoutExtraInset = harness.log.values.last ?? 0
+
+        harness.scrollView.contentInset = UIEdgeInsets(top: 20, left: 0, bottom: 0, right: 0)
+        harness.scrollView.layoutIfNeeded()
+        harness.scrollView.contentOffset = CGPoint(x: 0, y: 40)   // 换个新值，确保这次一定会重新触发 KVO
+        let withExtraInset = harness.log.values.last ?? 0
+
+        // Δoffset.y(=10) + Δinset.top(=20) = 30
+        #expect(withExtraInset - withoutExtraInset == 30)
+    }
+}
+
 // MARK: - ProfileService pending sync tests
 
 struct ProfileServicePendingSyncTests {

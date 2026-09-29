@@ -62,7 +62,7 @@ struct OnboardingScreen2View: View {
                     }
                     .padding(.bottom, AppTheme.Size.onboardingContentBottomClearance) // Give space for the absolute bottom button
                     .frame(minHeight: geo.size.height) // Full height
-                    .onboardingScrollOffsetProbe()   // iOS 17 走 PreferenceKey 兜底，iOS 18+ 无副作用
+                    .onboardingScrollOffsetProbe($scrollOffset)   // iOS 17 走 KVO 兜底，iOS 18+ 无副作用
                 }
                 .scrollBounceBehavior(.basedOnSize)
                 .onboardingScrollOffsetTracking($scrollOffset)

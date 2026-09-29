@@ -58,8 +58,17 @@ struct OnboardingCaptureView: View {
     @State private var appeared = false
     // 相机权限被拒：不弹通用 alert，Camera 行内变成说明 + 两个出口（F-3/C-1）
     @State private var cameraPermissionDenied = false
-    // 顶部渐隐随滚动出现（F-4）；selectionContent / resultContent 互斥显示，共用一个值
-    @State private var scrollOffset: CGFloat = 0
+    // 顶部渐隐随滚动出现（F-4）；selectionContent / resultContent 互斥显示，各自独立一个值
+    // ——曾经共用一个 @State，图省事：反正同一时刻只有一个在画面上、另一个的
+    // ScrollView 理论上早该没人再滚。但换成 KVO 之后这个"理论上"不成立了：
+    // 点返回时 viewModel.reset() 会在同一帧清空 generationResult，正在淡出的
+    // resultContent 因此在退场动画播到一半时突然变矮，系统会把它的
+    // UIScrollView.contentOffset 拉回合法范围，KVO 同步触发一次回调——这次回调
+    // 落在 .onChange(of: isSelecting) 清零之后，就把选择页刚显示的 0 又写脏了，
+    // 表现为返回瞬间遮罩闪一下。分开之后旧页面写的是自己的、没人再读的值，
+    // 不会再串到当前显示的页面上。
+    @State private var selectionScrollOffset: CGFloat = 0
+    @State private var resultScrollOffset: CGFloat = 0
     // 样例图横滑条在页面坐标空间里的 frame；翻页手势起点落在其中时不翻页
     @State private var carouselFrame: CGRect?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -97,7 +106,7 @@ struct OnboardingCaptureView: View {
             // 安全区上沿、且 z 序被限制在该子树内，真机表现为「这一页滚动时遮罩不出现」。
             // Screen1 / Screen2 / resultContent 的遮罩本来就是 GeometryReader 的兄弟节点，
             // 所以只有选择页翻车。提到最外层后四处结构一致，也顺便去掉了重复实例。
-            OnboardingTopFade(scrollOffset: scrollOffset)
+            OnboardingTopFade(scrollOffset: isSelecting ? selectionScrollOffset : resultScrollOffset)
         }
         .animation(.easeInOut(duration: 0.3), value: isSelecting)
         .contentShape(Rectangle())
@@ -134,9 +143,16 @@ struct OnboardingCaptureView: View {
         // 三页并排渲染，onAppear 启动即触发——入场动画必须在页面真正可见时才播
         .onAppear { if isActive { triggerEntrance() } }
         .onChange(of: isActive) { _, active in if active { triggerEntrance() } }
-        // 选择页与结果页共用同一个 scrollOffset（同一时刻只渲染其中一个）。切换的瞬间
-        // 新页面的 ScrollView 还没上报，旧值会残留一帧、顶部渐隐闪一下——切换时清零。
-        .onChange(of: isSelecting) { _, _ in scrollOffset = 0 }
+        // 切到哪一页就清哪一页自己的值：新出现的 ScrollView 还没上报前，
+        // 沿用它上次留下的旧值会让顶部渐隐闪一下——只清将要显示的那一页，
+        // 不碰正在退场的那一页（它的值现在没人读，写脏也不会再串出去）。
+        .onChange(of: isSelecting) { _, selecting in
+            if selecting {
+                selectionScrollOffset = 0
+            } else {
+                resultScrollOffset = 0
+            }
+        }
         .sheet(isPresented: $showConsentSheet) {
             // 弹窗高度固定（AppTheme.Size.consentSheetHeight = 410pt）：文案精简自洽，不设展开档。
             // 顶部横线显式可见作为 Sheet 层级视觉提示；
@@ -280,10 +296,10 @@ struct OnboardingCaptureView: View {
                         .padding(.horizontal, AppTheme.Space.paddingPage)
                         .padding(.bottom, AppTheme.Size.onboardingContentBottomClearance) // Give space for the absolute bottom button
                         .frame(minHeight: geo.size.height)
-                        .onboardingScrollOffsetProbe()   // iOS 17 走 PreferenceKey 兜底，iOS 18+ 无副作用
+                        .onboardingScrollOffsetProbe($selectionScrollOffset)   // iOS 17 走 KVO 兜底，iOS 18+ 无副作用
                     }
                     .scrollBounceBehavior(.basedOnSize)
-                    .onboardingScrollOffsetTracking($scrollOffset)
+                    .onboardingScrollOffsetTracking($selectionScrollOffset)
 
                     OnboardingBottomFade()
 
@@ -534,10 +550,10 @@ struct OnboardingCaptureView: View {
                     }
                     .padding(.bottom, AppTheme.Size.onboardingContentBottomClearance) // Give space for absolute bottom button
                     .frame(minHeight: geo.size.height)
-                    .onboardingScrollOffsetProbe()   // iOS 17 走 PreferenceKey 兜底，iOS 18+ 无副作用
+                    .onboardingScrollOffsetProbe($resultScrollOffset)   // iOS 17 走 KVO 兜底，iOS 18+ 无副作用
                 }
                 .scrollBounceBehavior(.basedOnSize)
-                .onboardingScrollOffsetTracking($scrollOffset)
+                .onboardingScrollOffsetTracking($resultScrollOffset)
             }
 
             OnboardingBottomFade()

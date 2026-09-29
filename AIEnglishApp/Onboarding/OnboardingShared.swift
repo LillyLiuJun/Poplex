@@ -169,24 +169,93 @@ struct OnboardingBottomFade: View {
 // MARK: - 滚动位移探针（F-4）
 //
 // 两条路并存，不再做「iOS 17 直接没有」的降级：
-//   · iOS 18+：onScrollGeometryChange，系统原生。
-//   · iOS 17 ：命名坐标空间 + PreferenceKey 探针。
+//   · iOS 18+：onScrollGeometryChange，系统原生，绑定具体 ScrollView 实例。
+//   · iOS 17 ：KVO 直接观察底层 UIScrollView.contentOffset。
 //
-// 上一版只留了 iOS 18 分支，理由是「PreferenceKey 写法滚动时不重新触发」。
-// 那次失败的真正原因是**探针没有落在一个命名坐标空间里**：GeometryReader 若相对
-// .global 或未命名空间取 frame，ScrollView 内容平移不会引起该 frame 变化，于是
-// preference 永远是同一个值、看起来像"不触发"。补上 .coordinateSpace(name:)，
-// 并把探针贴在滚动内容（而不是 ScrollView 本身）上之后，内容相对 ScrollView 的
-// minY 会随滚动实时变化，preference 正常重发。
-private enum OnboardingScrollSpace {
-    static let name = "onboardingScroll"
+// 这不是第一次为这段掉进坑里，记录一下走过的弯路，别再重踩：
+//   第一版只留 iOS 18 分支，iOS 17 直接不渲染遮罩（本刀要修的问题）。
+//   第二版补了 GeometryReader + .coordinateSpace(name:) + PreferenceKey 的
+//   iOS 17 兜底，诊断日志证实 GeometryReader 的 frame(in:) 确实随滚动逐帧
+//   正确重算，一度以为修好了。
+//   第三版怀疑是四个 onboarding 页（Screen1 / Screen2 / CaptureView 的
+//   selection 态与 result 态，三页并排常驻挂载、共存于同一视图树）共用同一个
+//   坐标空间名 "onboardingScroll" 撞了名，于是给四处各起独立名字——诊断日志
+//   证明这个猜测是错的：改完之后 onPreferenceChange 依然只在页面首次挂载时
+//   触发一次（值恒为 0），此后无论怎么滚动再也不回调，即使 GeometryReader
+//   那一侧仍在每帧正确算出新的 minY。真正原因：GeometryReader 的 frame(in:)
+//   重算由 UIKit 的布局系统在滚动时驱动，而 .onPreferenceChange 的回调依赖
+//   SwiftUI 自己的声明式 diff 周期——纯 UIScrollView 惯性/弹性滚动触发的布局
+//   变化不保证会让 SwiftUI 重新走一遍那棵子树的 diff，于是 preference 值变了、
+//   订阅方却收不到通知。这是 GeometryReader+PreferenceKey 组合追踪滚动位移在
+//   iOS 17 及更早版本上一个已知的不可靠点（iOS 18 加入 onScrollGeometryChange
+//   正是为了绕开它），继续在这条路径上改名字、调结构都无法根治。
+//   于是这次（第四版）换成对底层 UIScrollView.contentOffset 做 KVO：KVO 通知
+//   由 UIKit 在赋值时同步派发，不经过 SwiftUI 的 diff 周期，滚动多快就能跟多快。
+// internal，非 private：核心 KVO 逻辑单独锁一份单测（见 AIEnglishAppTests），
+// 需要 @testable import 能直接拿到这个类型。
+final class OnboardingScrollOffsetObserverView: UIView {
+    var onOffsetChange: ((CGFloat) -> Void)?
+    private var observation: NSKeyValueObservation?
+
+    // 三个时机都要挂：didMoveToSuperview 触发时，本视图往往只挂到了
+    // .background 包装出的中间容器上，UIScrollView 还不在祖先链里（诊断日志
+    // 实测过，此时 enclosingScrollView() 拿到的祖先链只有一层）；
+    // didMoveToWindow / layoutSubviews 在完整视图层级搭好之后才发生，
+    // attachIfNeeded 内部有 observation == nil 的哨兵，重复调用无副作用。
+    override func didMoveToSuperview() {
+        super.didMoveToSuperview()
+        attachIfNeeded()
+    }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        attachIfNeeded()
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        attachIfNeeded()
+    }
+
+    private func attachIfNeeded() {
+        guard observation == nil else { return }
+        guard let scrollView = enclosingScrollView() else { return }
+        observation = scrollView.observe(\.contentOffset, options: [.new, .initial]) { [weak self] scrollView, _ in
+            // 与 iOS 18 分支同一套零点语义：静止 = 0、下滚为正（见下方 contentInsets.top 说明）。
+            let offset = max(0, scrollView.contentOffset.y + scrollView.adjustedContentInset.top)
+            self?.onOffsetChange?(offset)
+        }
+    }
+
+    private func enclosingScrollView() -> UIScrollView? {
+        var view = superview
+        while let current = view {
+            if let scrollView = current as? UIScrollView { return scrollView }
+            view = current.superview
+        }
+        return nil
+    }
 }
 
-private struct OnboardingScrollOffsetKey: PreferenceKey {
-    static let defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
+private struct OnboardingScrollOffsetObserver: UIViewRepresentable {
+    @Binding var scrollOffset: CGFloat
+
+    func makeUIView(context: Context) -> OnboardingScrollOffsetObserverView {
+        let view = OnboardingScrollOffsetObserverView()
+        view.isUserInteractionEnabled = false
+        view.backgroundColor = .clear
+        view.onOffsetChange = { offset in
+            // KVO 回调可能落在滚动动画的中间帧上，写 @Binding 需要回到主线程语义安全的路径。
+            if Thread.isMainThread {
+                scrollOffset = offset
+            } else {
+                DispatchQueue.main.async { scrollOffset = offset }
+            }
+        }
+        return view
     }
+
+    func updateUIView(_ uiView: OnboardingScrollOffsetObserverView, context: Context) {}
 }
 
 private struct OnboardingScrollOffsetTracking: ViewModifier {
@@ -206,32 +275,30 @@ private struct OnboardingScrollOffsetTracking: ViewModifier {
             }
         } else {
             content
-                .coordinateSpace(name: OnboardingScrollSpace.name)
-                .onPreferenceChange(OnboardingScrollOffsetKey.self) { value in
-                    scrollOffset = max(0, value)
-                }
         }
     }
 }
 
 extension View {
-    /// 贴在 **ScrollView 本身** 上：声明命名坐标空间并接收探针上报。
+    /// 贴在 **ScrollView 本身** 上：iOS 18+ 用系统原生 onScrollGeometryChange。
+    /// iOS 17 的探测改由 `onboardingScrollOffsetProbe` 负责（见下方说明）。
     func onboardingScrollOffsetTracking(_ scrollOffset: Binding<CGFloat>) -> some View {
         modifier(OnboardingScrollOffsetTracking(scrollOffset: scrollOffset))
     }
 
-    /// 贴在 **滚动内容**（ScrollView 的直接子视图）上：上报内容顶边相对 ScrollView
-    /// 的位移。iOS 18+ 走 onScrollGeometryChange 用不到它，但挂着无副作用——
-    /// GeometryReader 放在 .background 里不参与父视图的尺寸上报。
-    func onboardingScrollOffsetProbe() -> some View {
-        background(
-            GeometryReader { proxy in
-                Color.clear.preference(
-                    key: OnboardingScrollOffsetKey.self,
-                    value: -proxy.frame(in: .named(OnboardingScrollSpace.name)).minY
-                )
+    /// 贴在 **滚动内容**（ScrollView 的直接子视图）上。iOS 18+ 已由
+    /// `onboardingScrollOffsetTracking` 的 onScrollGeometryChange 提供数据，这里
+    /// 空转；iOS 17 走 KVO 直接观察底层 UIScrollView.contentOffset——不再依赖
+    /// SwiftUI 的 PreferenceKey/命名坐标空间管线（那条路径在 iOS 17 上已确认
+    /// 不可靠，见上方大段注释）。
+    func onboardingScrollOffsetProbe(_ scrollOffset: Binding<CGFloat>) -> some View {
+        Group {
+            if #available(iOS 18.0, *) {
+                self
+            } else {
+                self.background(OnboardingScrollOffsetObserver(scrollOffset: scrollOffset))
             }
-        )
+        }
     }
 }
 
