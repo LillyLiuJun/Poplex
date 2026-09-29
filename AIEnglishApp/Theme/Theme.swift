@@ -102,6 +102,8 @@ private enum Primitive {
     // danger(#B0392A) 只有 11° 色相，会让两个按钮一起像在报警；
     // brandStrong(#FF7622) 分得开但白底仅 2.6:1。近黑两头都不占，是 PM 拍板的取舍。
     static let neutral950 = Color(hex: 0x17120C)
+    /// 极致深焦墨（接近纯黑，保留微暖调，对比度突破 20:1，专用于弥补极细字干的光通量损失）
+    static let neutral975 = Color(hex: 0x0A0705)
     /// Toast 浮层受阻专用纯实色沉静暖纸灰（坚决不透底，确保浮层清晰遮蔽底层内容）
     static let toastPaperGray = Color(hex: 0xEFECE6)
 
@@ -289,6 +291,14 @@ enum AppTheme {
         static let textPrimary   = Primitive.neutral900  // 17.2:1
         static let textSecondary = Primitive.neutral700  // 9.9:1
         static let textMuted     = Primitive.neutral500  // 4.4:1
+        /// Settings 列表行主文本专用焦墨色：采用 Primitive.neutral975 (#0A0705)，极致深焦墨，弥补 ExtraLight 200 纤细笔画在视网膜上的光通量，呈现锐利工笔针管笔质感
+        static let settingsRowText = Primitive.neutral975
+        /// Settings 列表行首图标专用中灰色彩：采用 Primitive.neutral500 (#7C7773，4.4:1 同展开箭头色)，
+        /// 彻底化解几何封闭图形在 200 极细文字旁的墨水重感与黑块压迫，与右侧展开箭头达成呼吸呼应，聚焦行内文字
+        static let settingsRowIconTint = Primitive.neutral500
+        /// Settings 卡外分组标题专用色彩（方案 D · 极简通透）：采用 Primitive.neutral500 (#7C7773，同 textMuted)，
+        /// 使分组标题深度后退、近乎隐性标线，将视觉重心 100% 留给卡片内的具体内容
+        static let settingsSectionTitle = textMuted
 
         // 非阅读性用途的最浅中性：禁用态填充、禁用态文字、装饰图形、分隔符号。
         // 1.73:1 —— 永远不可用于需要阅读的文字（WCAG 豁免非文字/禁用态对比度要求）。
@@ -391,11 +401,9 @@ enum AppTheme {
         // 名字里的 "glass" 是历史遗留：早期配方确实叠过橙薄纱与右上柔光，
         // 后因整卡发脏、削弱内容对比度而移除，只保留调用点名不改，避免大面积改名。
         static let warmGlassSurface = Primitive.warmWhite   // 暖纸白底（不透明单层）
-        // Settings 家族卡片（Settings / About AI / Feedback）专用：warmGlassSurface
-        // 100% 不透明在暖米色页面（pageBg neutral50）上对比过强、显"太亮"；
-        // 加透明度让页面底色透一点上来，与 warmGlassSurface 共用的 Tab2 卡片
-        // （MineView / CategoryProgressRow）不受影响——那两处仍用默认值。
-        static let settingsCardSurface = Primitive.warmWhite.opacity(0.85)
+        // Settings 家族卡片（Settings / About AI / Feedback）专用：对齐 Today TAB 100% 纯不透明暖白底（cardBg #FFFDFB），
+        // 遵循“别名引用而非重声明”规范，彻底消除 85% 透明度透底暗沉微灰感，让卡片通透明亮。
+        static let settingsCardSurface = cardBg
 
         // Tab2 Hero 顶部照片的统一调色与预设图（B1）专用色。组件只消费这些语义 token，
         // 不直接引用 Primitive 或字面 Color，以便日后更换目标市场的视觉主题时集中调整。
@@ -477,18 +485,20 @@ enum AppTheme {
         // 旧版是 Font.Weight 九档 + 二值 isBold 静默降级：.medium 全 app 退成
         // Regular、.black 退成 Regular——API 承诺了它兑现不了的东西。
         enum SansWeight {
-            case regular, medium, semibold
+            case extraLight, light, regular, medium, semibold
 
             /// UI 无衬线字体的 PostScript 名——全 App（含测试、测量代码）唯一来源。
             /// 换字体只改这里。
             var postScriptName: String {
                 switch self {
-                case .regular:  "GothicA1-Regular"
-                case .medium:   "GothicA1-Medium"
-                case .semibold: "GothicA1-SemiBold"
+                case .extraLight: "GothicA1-ExtraLight"
+                case .light:      "GothicA1-Light"
+                case .regular:    "GothicA1-Regular"
+                case .medium:     "GothicA1-Medium"
+                case .semibold:   "GothicA1-SemiBold"
                 }
             }
-        }  // 打包文件：Regular / Medium / SemiBold
+        }  // 打包文件：ExtraLight / Light / Regular / Medium / SemiBold
         enum CharterWeight  { case regular, bold }              // 系统字族仅有这两档
         enum HiraginoWeight { case w3, w6 }                     // 冬青黑系统两档
 
@@ -552,7 +562,8 @@ enum AppTheme {
         static let actionNote     = sans(13, weight: .regular, relativeTo: .footnote)               // 操作项的补充说明（如拍照入口副文案）
         static let compactActionLabel = sans(15, weight: .medium, relativeTo: .subheadline)         // 上传胶囊动作（Camera / Gallery）：无图标时用中等字重建立操作重量
         static let inlineActionLabel = sans(13, weight: .semibold, relativeTo: .footnote)           // 无底框行内动作按钮文字（错误态 Try again，13/600，随 Dynamic Type 缩放）
-        static let feedbackChipLabel = sans(15, weight: .regular, relativeTo: .subheadline)          // 反馈分类标签：常规细字重，保持视觉轻柔收敛（数值与 userBubbleText 巧合相同，两者刻意分开定义，见其注释）
+        /// 反馈分类标签：采用 Gothic A1 14pt Medium (500)，微缩一档更加紧致扎实，与分类图标平齐
+        static let feedbackChipLabel = sans(14, weight: .medium, relativeTo: .subheadline)
         static let chineseFaint   = hiragino(13, weight: .w3, relativeTo: .footnote)             // 中文原文弱化 (冬青黑体)
         static let chineseBody    = hiragino(15, weight: .w3, relativeTo: .subheadline)          // 中文翻译 / 释义（=参考稿 content-zh 14px 灰）
         static let date           = sans(11, weight: .semibold, relativeTo: .caption2)              // 日期分隔
@@ -567,9 +578,35 @@ enum AppTheme {
         static let onboardingLeadSerif = englishPrimary  // Onboarding 各屏副标题（标题下的价值/说明句）：复用内容衬线，与 onboardingHeroSerif 成对；别名而非重声明，避免与例句内容耦合、也不重复定义同值。（tabLabel 已于 2026-09-01 改无衬线，脱离本次换装范围，见需求清单 C11。）
         static let sectionTitleSerif = charter(22, weight: .bold, relativeTo: .title2)           // 分区衬线小标题（Topics in progress / Materials Yours），比页面大标题小一档
         static let compactSectionTitleSerif = charter(20, weight: .bold, relativeTo: .title3)    // 紧凑页面内的小分区标题（如 Onboarding 样例区）
-        static let settingsSectionTitleSerif = charter(15, weight: .regular, relativeTo: .subheadline) // Settings 卡外分组标题：保留衬线编辑感，但退到辅助层（.medium→.regular 显式化：Charter 无中间档，渲染不变）
+        /// Settings 卡外分组标题：Charter 14.5pt Regular 细衬线（方案 D 极简通透，保留衬线编辑感，退到辅助层）
+        static let settingsSectionTitleSerif = charter(14.5, weight: .regular, relativeTo: .subheadline)
         static let settingsPinnedTitleSerif = charter(20, weight: .bold, relativeTo: .title3)    // Settings 家族固定顶栏标题：比系统导航栏字号大一档，仍在 60pt 顶栏内不挤，保留品牌衬线
         static let settingsVersion = charter(12, weight: .regular, relativeTo: .caption)              // Settings 页脚版本号：caption 直立端正衬线（方案 2：严谨书籍出版感）
+        /// Settings 列表行主标签及辅值：采用 Gothic A1 ExtraLight (200)，彻底卸下 CJK Regular 400 骨架过粗的黑块感，呈现轻盈利落的精工工笔感。
+        /// 「粗体文本」无障碍开关只对系统字体自动生效，对自定义字体（Font.custom）
+        /// 不会做任何处理——ExtraLight 200 开着这项设置的用户完全得不到任何收益。
+        /// 因此这里显式读 `legibilityWeight`：开启时切到 Light (300) 的**真实字重文件**
+        /// （而非 `.fontWeight(.bold)` 伪加粗），比 200 明显扎实但仍在细字重家族内，
+        /// 不跳到 400 打破整体纤细基调。调用点需传入 `@Environment(\.legibilityWeight)`。
+        static func settingsRowLabel(legibilityWeight: SwiftUI.LegibilityWeight?) -> SwiftUI.Font {
+            sans(17, weight: legibilityWeight == .bold ? .light : .extraLight, relativeTo: .body)
+        }
+        /// Settings 文稿/说明页标题（如 About AI）：采用 Charter 20pt 直立细衬线（Regular 400），黑度温润雅致，不喧宾夺主
+        static let settingsDocumentTitleSerif = charter(20, weight: .regular, relativeTo: .title3)
+        // settingsDocumentBody / settingsFormInput（本组）与下方 quotaSubtext 当前同为
+        // sans(15, .light, .subheadline)——同值是巧合，不是约束。三者服务不同页面
+        // （About AI 正文 / Feedback 输入框 / 用量弹窗副文），允许各自独立调整字号，
+        // 不因为现在同值就合并成一个通用 token（如 formContentBody）而把三处业务耦合死。
+        // 项目里 statusNote/actionNote/tab2HeroFootrowWords/tab2EmptyStateLine 四个
+        // token 同为 sans(13, .regular, .footnote) 是同一模式的既有先例。
+        /// Settings 文稿/合规说明长正文（如 About AI）：采用 Gothic A1 Light (300) 15pt，字干 60u，比通用 17pt 更舒适透气
+        static let settingsDocumentBody = sans(15, weight: .light, relativeTo: .subheadline)
+        /// Settings 文稿页操作链接（如 Privacy Policy / Terms 外链）：采用 Gothic A1 Medium (500) 15pt，字号与正文协调并具备可点击分量
+        static let settingsDocumentActionLink = sans(15, weight: .medium, relativeTo: .subheadline)
+        /// Settings 表单引导副标题（如 Feedback "Share your ideas..."）：采用 Gothic A1 Light (300) 14.5pt，避免从 20pt 标题剧烈跳崖，温和过渡
+        static let settingsFormIntro = sans(14.5, weight: .light, relativeTo: .subheadline)
+        /// Settings 表单输入框正文及占位符（如 Feedback Details/Email）：采用 Gothic A1 Light (300) 15pt，彻底消除 17pt 倒挂反超组标的病灶，多行书写透气舒展
+        static let settingsFormInput = sans(15, weight: .light, relativeTo: .subheadline)
         static let libraryFooterTagline = charter(12, weight: .regular, relativeTo: .caption)         // Library 页脚品牌收口宣言：caption 直立端正衬线，与标题 Serif 呼应
         static let ctaLabel       = sans(17, weight: .semibold, relativeTo: .body)                  // 主按钮文字（Continue / Get Started）
         static let tab2HeroMeta = sans(12, weight: .semibold, relativeTo: .caption)
@@ -644,7 +681,19 @@ enum AppTheme {
             charterFixed(size, weight: .bold).italic()
         }
 
-        static let quotaHeroNumber = charter(34, weight: .bold, relativeTo: .largeTitle)
+        // 每日额度数字：Charter 24pt Regular 细衬线（方案 2-C，焦黑 #0A0705，告别旧版 34pt 粗黑与警告红）
+        static let quotaHeroNumber = charter(24, weight: .regular, relativeTo: .title2)
+        // 每日额度副文：Gothic A1 15pt Light (/ 5 generations today)
+        // 与 settingsDocumentBody/settingsFormInput 现同值，见二者定义处注释——
+        // 同值是巧合，各自独立演化，不合并。
+        static let quotaSubtext = sans(15, weight: .light, relativeTo: .subheadline)
+        // 每日额度满额标题：Charter 16.5pt Regular 细衬线降重
+        static let quotaReachedTitle = charter(16.5, weight: .regular, relativeTo: .body)
+        // 每日额度满额说明正文：Gothic A1 14pt Light
+        static let quotaReachedBody = sans(14, weight: .light, relativeTo: .subheadline)
+        // 申请邀请码 CTA 胶囊文字：Gothic A1 14pt Medium。与 feedbackChipLabel 现同值——
+        // 同值是巧合，各自独立演化，不合并（同一模式见上）。
+        static let quotaFeedbackAction = sans(14, weight: .medium, relativeTo: .subheadline)
     }
 
     // 排版微调（行距 / 字距 / 动态字号上限）。SwiftUI 的 Font 装不下这些，故单列一层，
@@ -657,6 +706,8 @@ enum AppTheme {
         static let lineBody: CGFloat = 3
         /// 中文 / 多语言正文的额外行距（CJK 更需要放开）。
         static let lineCJK: CGFloat = 6
+        /// Settings 文稿/合规披露页（如 About AI）等长篇说明的额外行距（比通用正文更舒展，保呼吸感）。
+        static let lineDocument: CGFloat = 6
         /// 顶部 Tab 文字的动态字号上限（含本档）。「顶部 Tab 始终显示文字」决策的配套。
         /// 2026-09-01 tabLabel 改无衬线后行宽变窄，AX2 档位在最窄屏（375pt）上还有余量，
         /// 实测封顶档从 AX2 松到了 AX3。用户开到 AX4 及以上时导航文字不再放大，
@@ -804,6 +855,11 @@ enum AppTheme {
         static let wordEntrySpacing: CGFloat     = 2     // 词条行词 + 释义纵向间距
         static let wordListLoadingVPad: CGFloat  = 14    // 词列表加载态垂直内边距
         static let inlineActionIconGlyph: CGFloat = 11   // 行内动作按钮图标字号（错误态 Try again ↻，与 inlineActionLabel 光学配对）
+
+        // ── UsageLimit 每日额度弹窗控件度量（方案 2-C 与方案 1 精细规范）──────
+        static let usageLimitProgressBarHeight: CGFloat = 2.0 // 极薄连续微线轨高度
+        static let usageLimitCTAHeight: CGFloat          = 44.0 // 细线描边胶囊按钮高度
+        static let usageLimitCTABorderWidth: CGFloat     = 0.8  // 细线描边胶囊线宽
 
         // ── AppToast 双模自适应（component-private，仅 toast 使用）──────────
         static let toastFixedWidth: CGFloat = 328          // 普通字号固定卡宽（藏书票等宽条）

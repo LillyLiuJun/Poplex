@@ -70,6 +70,7 @@ struct UsageLimitSheet: View {
     @State private var loadFailed = false
     @State private var isRetrying = false
     private let isPreviewInjected: Bool
+    private let mockIsConnected: Bool?
     /// 反馈提交成功后由宿主展示 toast（FeedbackView 不再自行发全局 toast，审计发现 ④）。
     private let onFeedbackSubmitted: (() -> Void)?
 
@@ -77,11 +78,18 @@ struct UsageLimitSheet: View {
         usedCount: Int? = nil,
         dailyLimit: Int = 5,
         initialLoadFailed: Bool = false,
+        simulateLoading: Bool = false,
+        mockIsConnected: Bool? = nil,
         onFeedbackSubmitted: (() -> Void)? = nil
     ) {
+        self.mockIsConnected = mockIsConnected
         self.onFeedbackSubmitted = onFeedbackSubmitted
         self._loadFailed = State(initialValue: initialLoadFailed)
-        if let count = usedCount {
+        if simulateLoading {
+            self._dailyLimit = State(initialValue: dailyLimit)
+            self._usedCount = State(initialValue: nil)
+            self.isPreviewInjected = true
+        } else if let count = usedCount {
             self._dailyLimit = State(initialValue: dailyLimit)
             self._usedCount = State(initialValue: count)
             self.isPreviewInjected = true
@@ -101,19 +109,25 @@ struct UsageLimitSheet: View {
         }
     }
 
+    private var isConnected: Bool {
+        mockIsConnected ?? NetworkMonitor.shared.isConnected
+    }
+
     private var isLimitReached: Bool {
         guard let usedCount else { return false }
         return usedCount >= dailyLimit
     }
 
     private var sheetHeight: CGFloat {
-        if isLimitReached {
-            return loadFailed ? 405 : 375
-        } else if usedCount == nil && loadFailed {
-            return 310
-        } else {
-            return 260
+        if usedCount == nil && loadFailed {
+            // 状态 05-A 与 05-B 统一包含 Try again 按钮，高度统一为 295pt
+            return 295
         }
+        if isLimitReached {
+            // 状态 2 & 4：额度已达标 (采用方案 1 细线描边胶囊，高度轻量化为 365pt / 离线 395pt)
+            return loadFailed ? 395 : 365
+        }
+        return 260
     }
 
     private func refreshQuota() async {
@@ -137,17 +151,22 @@ struct UsageLimitSheet: View {
         // basedOnSize 让内容不满时不出现橡皮筋拖拽，行为与静态布局相同。
         ScrollView {
             VStack(spacing: AppTheme.Space.paddingCard) {
+                // 1. 顶栏：无多余按键，纯净留白
                 headerRow
 
                 if usedCount == nil && loadFailed {
+                    // 状态 5：冷启动离线空状态卡片（区分 05-A 与 05-B）
                     offlineEmptyCard
                 } else {
+                    // 状态 1 / 2 / 3 / 4 / 6 / 7 主卡片 (方案 2-C 极细精工规范)
                     usageCard
 
                     if isLimitReached {
+                        // 达标说明文案 (去焦虑、舒展排版)
                         limitReachedText
                             .padding(.top, AppTheme.Space.paddingXS)
 
+                        // 申请邀请码高定 CTA 按钮 (方案 1 细线描边胶囊)
                         feedbackCTAButton
 
                         if loadFailed {
@@ -158,8 +177,9 @@ struct UsageLimitSheet: View {
                         offlineCachedNote
                             .padding(.top, AppTheme.Space.paddingS)
                     } else {
+                        // 正常零点刷新注记 (左对齐出版物风)
                         normalFooterNote
-                            .padding(.top, AppTheme.Space.paddingS)
+                            .padding(.top, 2)
                     }
                 }
             }
@@ -193,90 +213,82 @@ struct UsageLimitSheet: View {
         }
     }
 
-    // MARK: - Subviews
+    // MARK: - Subviews & Elements (方案 2-C 与方案 1 全要素落地)
 
+    /// 1. 顶栏：句首大写 Daily limit · Charter 20pt Regular 细衬线 · 移除右上角关闭键
     private var headerRow: some View {
         HStack {
-            Text("Daily Limit")
-                .font(AppTheme.Font.sectionTitleSerif)
+            Text("Daily limit")
+                .font(AppTheme.Font.settingsDocumentTitleSerif)
                 .foregroundStyle(AppTheme.Color.textPrimary)
             Spacer()
-            Button {
-                dismiss()
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(AppTheme.Color.textSecondary)
-                    .frame(width: 32, height: 32)
-                    .surfacePill(in: Circle())
-            }
-            .buttonStyle(.plain)
         }
+        .padding(.top, AppTheme.Space.paddingXS)
     }
 
+    /// 2. 用量卡片 (方案 2-C)：Charter 24pt 细衬线数字 + 15pt Light 副文 + 2.0pt 极薄连续微线 + 0.5pt 边框贴地双层阴影
     private var usageCard: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Space.paddingS) {
-            HStack(alignment: .firstTextBaseline) {
+        VStack(alignment: .leading, spacing: AppTheme.Space.paddingM) {
+            HStack(alignment: .firstTextBaseline, spacing: AppTheme.Space.paddingXS) {
                 if let usedCount {
                     Text("\(usedCount)")
                         .font(AppTheme.Font.quotaHeroNumber)
-                        .foregroundStyle(isLimitReached ? AppTheme.Color.danger : AppTheme.Color.textPrimary)
+                        .foregroundStyle(AppTheme.Color.settingsRowText)
                 } else if loadFailed {
-                    // 断网或加载失败：显示占位破折号，停止无休止的转圈
                     Text("–")
                         .font(AppTheme.Font.quotaHeroNumber)
                         .foregroundStyle(AppTheme.Color.textMuted)
                 } else {
-                    // 服务器数字还没到：轻量加载态，不显示误导性的 0
-                    ProgressView()
-                        .controlSize(.small)
-                        .tint(AppTheme.Color.textSecondary)
-                        .frame(width: 36, height: 36)
+                    ZStack {
+                        Text("0")
+                            .font(AppTheme.Font.quotaHeroNumber)
+                            .hidden()
+                        ProgressView()
+                            .controlSize(.small)
+                            .tint(AppTheme.Color.textSecondary)
+                    }
                 }
+
                 Text("/ \(dailyLimit) generations today")
-                    .font(AppTheme.Font.englishBody)
+                    .font(AppTheme.Font.quotaSubtext)
                     .foregroundStyle(AppTheme.Color.textSecondary)
+
                 Spacer()
             }
 
-            // 进度条
+            // 方案 2-C: 2.0pt 极薄连续微线轨 (绝不抢戏，未满用暖中灰，满额用深焦黑，告别危险红)
             GeometryReader { geo in
                 let ratio = min(max(CGFloat(usedCount ?? 0) / CGFloat(dailyLimit), 0), 1.0)
                 ZStack(alignment: .leading) {
                     Capsule()
-                        .fill(AppTheme.Color.neutralFaint.opacity(0.4))
-                        .frame(height: 6)
+                        .fill(AppTheme.Color.neutralFaint.opacity(0.3))
+                        .frame(height: AppTheme.Size.usageLimitProgressBarHeight)
                     if usedCount != nil {
                         Capsule()
-                            .fill(isLimitReached ? AppTheme.Color.danger : AppTheme.Color.textPrimary)
-                            .frame(width: max(geo.size.width * ratio, 6), height: 6)
+                            .fill(isLimitReached ? AppTheme.Color.settingsRowText : AppTheme.Color.textSecondary)
+                            .frame(
+                                width: max(geo.size.width * ratio, AppTheme.Size.usageLimitProgressBarHeight),
+                                height: AppTheme.Size.usageLimitProgressBarHeight
+                            )
                     }
                 }
             }
-            .frame(height: 6)
+            .frame(height: AppTheme.Size.usageLimitProgressBarHeight)
+            .padding(.top, 2)
         }
         .padding(AppTheme.Space.paddingCard)
-        .background {
-            RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
-                .fill(AppTheme.Color.cardBg)
-        }
-        .shadow(
-            color: AppTheme.Shadow.cardColor,
-            radius: 12,
-            x: 0,
-            y: 4
-        )
+        .surfaceCard(cornerRadius: AppTheme.Radius.large)
     }
 
-    /// 达标文案：去卡片化轻量排版（暖纸底上直接承载，避免双层卡片嵌套造成的厚重感）
+    /// 3. 达标说明段落 (方案 1 细衬线降重)：Charter 16.5pt Regular + Gothic A1 14pt Light
     private var limitReachedText: some View {
         VStack(alignment: .leading, spacing: AppTheme.Space.paddingXS) {
             Text("You've reached today's limit.")
-                .font(AppTheme.Font.cardSentence)
-                .foregroundStyle(AppTheme.Color.textPrimary)
+                .font(AppTheme.Font.quotaReachedTitle)
+                .foregroundStyle(AppTheme.Color.settingsRowText)
 
             Text("Want to keep generating? Send feedback to request an invite code for extra quota.")
-                .font(AppTheme.Font.statusNote)
+                .font(AppTheme.Font.quotaReachedBody)
                 .foregroundStyle(AppTheme.Color.textSecondary)
                 .lineSpacing(AppTheme.Typography.lineBody)
         }
@@ -285,68 +297,76 @@ struct UsageLimitSheet: View {
         .padding(.horizontal, AppTheme.Space.paddingXS)
     }
 
+    /// 4. 申请邀请码 CTA 按钮 (方案 1 细线描边胶囊)：44pt · 暖白底 + 0.8pt 细描边 + 焦黑文字，彻底卸除黑块下沉感
     private var feedbackCTAButton: some View {
         Button {
             showFeedback = true
         } label: {
             HStack(spacing: AppTheme.Space.paddingS) {
                 Image(systemName: "envelope.badge")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.system(size: 14, weight: .medium))
                 Text("Send feedback for invite code")
-                    .font(AppTheme.Font.ctaLabel)
+                    .font(AppTheme.Font.quotaFeedbackAction)
             }
-            .foregroundStyle(AppTheme.Color.textOnChip)
+            .foregroundStyle(AppTheme.Color.settingsRowText)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, AppTheme.Space.paddingCard)
-            .background(AppTheme.Color.interactive, in: Capsule())
+            .frame(height: AppTheme.Size.usageLimitCTAHeight)
+            .background(AppTheme.Color.cardBg, in: Capsule())
+            .overlay {
+                Capsule()
+                    .stroke(AppTheme.Color.cardBorder, lineWidth: AppTheme.Size.usageLimitCTABorderWidth)
+            }
+            .shadow(
+                color: AppTheme.Shadow.pillContactColor,
+                radius: AppTheme.Shadow.pillContactRadius,
+                x: AppTheme.Shadow.pillContactX,
+                y: AppTheme.Shadow.pillContactY
+            )
         }
         .buttonStyle(PressableButtonStyle())
     }
 
+    /// 5. 正常脚注：严格 16pt 左对齐出版物注记风
     private var normalFooterNote: some View {
         Text("Your daily generations refresh every day at midnight.")
-            .font(AppTheme.Font.statusNote)
+            .font(AppTheme.Font.settingsFormIntro)
             .foregroundStyle(AppTheme.Color.textMuted)
-            .multilineTextAlignment(.center)
-            .padding(.horizontal, AppTheme.Space.paddingM)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, AppTheme.Space.paddingXS)
     }
 
-    /// 离线或刷新失败时且已有今日缓存（如 2/5 或 5/5 达标）：
-    /// 真实数字与进度条正常呈现，底部告知网络状态并展示上次同步数据。
+    /// 6. 弱网与离线提示：左对齐，12pt 图标 + 13.5pt 柔和注记
     private var offlineCachedNote: some View {
-        let isConnected = NetworkMonitor.shared.isConnected
-        return HStack(spacing: AppTheme.Space.paddingXS) {
+        HStack(spacing: AppTheme.Space.paddingXS) {
             Image(systemName: isConnected ? "arrow.clockwise" : "wifi.slash")
-                .font(.system(size: 13, weight: .medium))
+                .font(.system(size: 12, weight: .medium))
             Text(isConnected
                 ? "Couldn't refresh. Showing last synced usage."
                 : "You're offline. Showing last synced usage.")
-                .font(AppTheme.Font.statusNote)
+                .font(AppTheme.Font.settingsFormIntro)
         }
         .foregroundStyle(AppTheme.Color.textMuted)
-        .multilineTextAlignment(.center)
-        .padding(.horizontal, AppTheme.Space.paddingM)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, AppTheme.Space.paddingXS)
     }
 
-    /// 冷启动且无今日缓存时的离线/刷新失败专用空状态卡片：
-    /// 拒绝破损的「– / 5」与空轨道，根据实际网络状态呈现精准文案与重试入口。
+    /// 7. 冷启动离线空状态卡片：区分 05-A (真断网) 与 05-B (刷新失败)，均提供 Try again 按钮
     private var offlineEmptyCard: some View {
-        let isConnected = NetworkMonitor.shared.isConnected
-        return VStack(spacing: AppTheme.Space.paddingM) {
+        VStack(spacing: AppTheme.Space.paddingM) {
             Image(systemName: isConnected ? "arrow.clockwise" : "wifi.slash")
-                .font(.system(size: 30, weight: .medium))
+                .font(.system(size: 26, weight: .medium))
                 .foregroundStyle(AppTheme.Color.textSecondary)
-                .frame(width: 44, height: 44)
+                .frame(width: 36, height: 36)
 
             VStack(spacing: AppTheme.Space.paddingXS) {
-                Text(isConnected ? "Couldn't Refresh" : "You're Offline")
-                    .font(AppTheme.Font.cardSentence)
+                Text(isConnected ? "Couldn't refresh" : "You're offline")
+                    .font(AppTheme.Font.settingsDocumentTitleSerif)
                     .foregroundStyle(AppTheme.Color.textPrimary)
 
                 Text(isConnected
                     ? "We couldn't check your remaining quota right now. Please try again."
-                    : "Connect to the internet to check your remaining quota and generate content.")
-                    .font(AppTheme.Font.statusNote)
+                    : "Connect to the internet to check your remaining quota.")
+                    .font(AppTheme.Font.settingsFormIntro)
                     .foregroundStyle(AppTheme.Color.textSecondary)
                     .multilineTextAlignment(.center)
                     .lineSpacing(AppTheme.Typography.lineBody)
@@ -362,33 +382,22 @@ struct UsageLimitSheet: View {
                             .tint(AppTheme.Color.textPrimary)
                     } else {
                         Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.system(size: 12, weight: .semibold))
                     }
                     Text(isRetrying ? "Retrying..." : "Try again")
-                        .font(AppTheme.Font.compactActionLabel)
+                        .font(AppTheme.Font.inlineActionLabel)
                 }
                 .foregroundStyle(AppTheme.Color.textPrimary)
                 .padding(.horizontal, AppTheme.Space.paddingCard)
                 .padding(.vertical, AppTheme.Space.paddingS)
-                .background(AppTheme.Color.neutralFaint.opacity(0.6), in: Capsule())
+                .background(AppTheme.Color.neutralFaint.opacity(0.4), in: Capsule())
             }
             .buttonStyle(PressableButtonStyle())
             .disabled(isRetrying)
-            .padding(.top, AppTheme.Space.paddingXS)
         }
+        .padding(AppTheme.Space.paddingCard)
         .frame(maxWidth: .infinity)
-        .padding(.vertical, AppTheme.Space.paddingPage)
-        .padding(.horizontal, AppTheme.Space.paddingCard)
-        .background {
-            RoundedRectangle(cornerRadius: AppTheme.Radius.large, style: .continuous)
-                .fill(AppTheme.Color.cardBg)
-        }
-        .shadow(
-            color: AppTheme.Shadow.cardColor,
-            radius: 12,
-            x: 0,
-            y: 4
-        )
+        .surfaceCard(cornerRadius: AppTheme.Radius.large)
     }
 }
 
@@ -401,7 +410,7 @@ private struct SheetModalCanvasPreview<Content: View>: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            // 宿主背景模拟（Tab1 页面底色；原 Canvas 光晕层已随 CanvasBackground 一并移除）
+            // 宿主背景模拟（Tab1 页面底色）
             AppTheme.Color.pageBg.ignoresSafeArea()
 
             // 背景暗色遮罩（模拟系统 Sheet 弹出时的 scrim）
@@ -432,33 +441,51 @@ private struct SheetModalCanvasPreview<Content: View>: View {
     }
 }
 
-#Preview("Usage Limit Sheet · Limit Reached (5/5)", traits: .fixedLayout(width: 393, height: 852)) {
-    SheetModalCanvasPreview(sheetHeight: 375) {
-        UsageLimitSheet(usedCount: 5, dailyLimit: 5)
-    }
-}
-
-#Preview("Usage Limit Sheet · Limit Reached Offline (5/5)", traits: .fixedLayout(width: 393, height: 852)) {
-    SheetModalCanvasPreview(sheetHeight: 405) {
-        UsageLimitSheet(usedCount: 5, dailyLimit: 5, initialLoadFailed: true)
-    }
-}
-
-#Preview("Usage Limit Sheet · Normal Online (2/5)", traits: .fixedLayout(width: 393, height: 852)) {
+#Preview("01 · 在线未达标 (2/5 · 260pt)", traits: .fixedLayout(width: 393, height: 852)) {
     SheetModalCanvasPreview(sheetHeight: 260) {
         UsageLimitSheet(usedCount: 2, dailyLimit: 5)
     }
 }
 
-#Preview("Usage Limit Sheet · Offline With Cache (2/5)", traits: .fixedLayout(width: 393, height: 852)) {
-    SheetModalCanvasPreview(sheetHeight: 260) {
-        UsageLimitSheet(usedCount: 2, dailyLimit: 5, initialLoadFailed: true)
+#Preview("02 · 在线已达标 (5/5 · 365pt)", traits: .fixedLayout(width: 393, height: 852)) {
+    SheetModalCanvasPreview(sheetHeight: 365) {
+        UsageLimitSheet(usedCount: 5, dailyLimit: 5)
     }
 }
 
-#Preview("Usage Limit Sheet · Offline Empty State", traits: .fixedLayout(width: 393, height: 852)) {
-    SheetModalCanvasPreview(sheetHeight: 310) {
-        UsageLimitSheet(usedCount: nil, dailyLimit: 5, initialLoadFailed: true)
+#Preview("03 · 离线有缓存未达标 (2/5 · 260pt)", traits: .fixedLayout(width: 393, height: 852)) {
+    SheetModalCanvasPreview(sheetHeight: 260) {
+        UsageLimitSheet(usedCount: 2, dailyLimit: 5, initialLoadFailed: true, mockIsConnected: false)
+    }
+}
+
+#Preview("04 · 离线有缓存且达标 (5/5 · 395pt)", traits: .fixedLayout(width: 393, height: 852)) {
+    SheetModalCanvasPreview(sheetHeight: 395) {
+        UsageLimitSheet(usedCount: 5, dailyLimit: 5, initialLoadFailed: true, mockIsConnected: false)
+    }
+}
+
+#Preview("05-A · 冷启动真断网 (295pt)", traits: .fixedLayout(width: 393, height: 852)) {
+    SheetModalCanvasPreview(sheetHeight: 295) {
+        UsageLimitSheet(usedCount: nil, dailyLimit: 5, initialLoadFailed: true, mockIsConnected: false)
+    }
+}
+
+#Preview("05-B · 冷启动刷新失败 (295pt)", traits: .fixedLayout(width: 393, height: 852)) {
+    SheetModalCanvasPreview(sheetHeight: 295) {
+        UsageLimitSheet(usedCount: nil, dailyLimit: 5, initialLoadFailed: true, mockIsConnected: true)
+    }
+}
+
+#Preview("06 · 初始零使用 (0/5 · 260pt)", traits: .fixedLayout(width: 393, height: 852)) {
+    SheetModalCanvasPreview(sheetHeight: 260) {
+        UsageLimitSheet(usedCount: 0, dailyLimit: 5)
+    }
+}
+
+#Preview("07 · 加载过渡态 (260pt)", traits: .fixedLayout(width: 393, height: 852)) {
+    SheetModalCanvasPreview(sheetHeight: 260) {
+        UsageLimitSheet(simulateLoading: true)
     }
 }
 
@@ -469,7 +496,7 @@ private struct UsageLimitInteractivePreview: View {
 
     var body: some View {
         VStack(spacing: AppTheme.Space.paddingPage) {
-            SheetModalCanvasPreview(sheetHeight: currentCount >= Double(limit) ? 375 : 260) {
+            SheetModalCanvasPreview(sheetHeight: currentCount >= Double(limit) ? 365 : 260) {
                 UsageLimitSheet(usedCount: Int(currentCount), dailyLimit: limit)
             }
             .frame(height: 520)
@@ -490,6 +517,7 @@ private struct UsageLimitInteractivePreview: View {
     }
 }
 
-#Preview("Usage Limit Sheet · Interactive Slider", traits: .fixedLayout(width: 393, height: 700)) {
+#Preview("Usage Limit Sheet · 交互调节滑块", traits: .fixedLayout(width: 393, height: 700)) {
     UsageLimitInteractivePreview()
 }
+

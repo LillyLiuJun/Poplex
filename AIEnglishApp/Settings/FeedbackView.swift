@@ -151,11 +151,11 @@ struct FeedbackView: View {
     private var introHeader: some View {
         VStack(alignment: .leading, spacing: AppTheme.Space.paddingXS) {
             Text("We'd love your feedback")
-                .font(AppTheme.Font.sectionTitleSerif)
+                .font(AppTheme.Font.settingsDocumentTitleSerif)
                 .foregroundStyle(AppTheme.Color.textPrimary)
 
             Text("Share your ideas, report an issue, or request an invite code for extra quota.")
-                .font(AppTheme.Font.statusNote)
+                .font(AppTheme.Font.settingsFormIntro)
                 .foregroundStyle(AppTheme.Color.textSecondary)
                 .lineSpacing(AppTheme.Typography.lineBody)
         }
@@ -248,7 +248,7 @@ struct FeedbackView: View {
                 ZStack(alignment: .topLeading) {
                     if body_.isEmpty {
                         Text("Tell us what happened…")
-                            .font(AppTheme.Font.englishBody)
+                            .font(AppTheme.Font.settingsFormInput)
                             .foregroundStyle(AppTheme.Color.textMuted)
                             .allowsHitTesting(false)
                             .accessibilityHidden(true)
@@ -256,7 +256,7 @@ struct FeedbackView: View {
                     TextField("", text: $body_, axis: .vertical)
                         .accessibilityLabel("Details")
                         .accessibilityHint("Tell us what happened")
-                        .font(AppTheme.Font.englishBody)
+                        .font(AppTheme.Font.settingsFormInput)
                         .foregroundStyle(AppTheme.Color.textPrimary)
                         .tint(AppTheme.Color.interactive)
                         .lineLimit(4...8)
@@ -292,14 +292,14 @@ struct FeedbackView: View {
             ZStack(alignment: .leading) {
                 if email.isEmpty {
                     Text(verbatim: "name@example.com")
-                        .font(AppTheme.Font.englishBody)
+                        .font(AppTheme.Font.settingsFormInput)
                         .foregroundStyle(AppTheme.Color.textMuted)
                         .allowsHitTesting(false)
                         .accessibilityHidden(true)
                 }
                 TextField("", text: $email)
                     .accessibilityLabel("Email, optional")
-                    .font(AppTheme.Font.englishBody)
+                    .font(AppTheme.Font.settingsFormInput)
                     .foregroundStyle(AppTheme.Color.textPrimary)
                     .tint(AppTheme.Color.interactive)
                     .textInputAutocapitalization(.never)

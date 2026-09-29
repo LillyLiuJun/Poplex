@@ -16,7 +16,7 @@ enum FontLoader {
         isRegistered = true
 
         let fontFiles = [
-            "GothicA1-Regular.ttf", "GothicA1-Medium.ttf", "GothicA1-SemiBold.ttf",
+            "GothicA1-ExtraLight.ttf", "GothicA1-Light.ttf", "GothicA1-Regular.ttf", "GothicA1-Medium.ttf", "GothicA1-SemiBold.ttf",
             "Geist-Regular.ttf", "Geist-Medium.ttf", "Geist-SemiBold.ttf",
         ]
         for file in fontFiles {

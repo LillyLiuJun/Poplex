@@ -195,10 +195,9 @@ private struct SettingsChevron: View {
 
 /// 分区：衬线小标题在卡外 + 暖纸内容卡。
 ///
-/// 标题走 **subheadline 衬线 medium + 次要墨色**，明确退到辅助层。
-/// 此前用 title3 semibold，仍会比它所归类的单行内容更显眼；保留衬线编辑感，
-/// 只降低字号与字重后，
-/// 「页面标题 → 分组标题 → 行内容」三级一眼分得开，衬线的杂志感也保住了。
+/// 标题走 **Charter 14.5pt 细衬线 (settingsSectionTitleSerif) + 静音浅灰 (settingsSectionTitle · #7C7773)**，
+/// 落地方案 D 极简通透退让：分组标题作为辅助指引弱化退让，将视觉重心 100% 留给卡片内的主内容。
+/// 「页面标题 (28pt Bold) → 分组标题 (14.5pt Regular 浅灰) → 行内容 (17pt ExtraLight 焦黑)」三级主次分明。
 ///
 struct SettingsCard<Content: View>: View {
     let title: String?
@@ -214,7 +213,7 @@ struct SettingsCard<Content: View>: View {
             if let title {
                 Text(title)
                     .font(AppTheme.Font.settingsSectionTitleSerif)
-                    .foregroundStyle(AppTheme.Color.textSecondary)
+                    .foregroundStyle(AppTheme.Color.settingsSectionTitle)
                     // 让 VoiceOver 的「按标题跳转」能用：不加 header 语义时，
                     // 这行会被当成一段普通文字，读屏用户只能一行行往下听。
                     // h2 是相对页面大标题（h1，见 settingsPageTitleSemantics）而言的，
@@ -241,21 +240,25 @@ struct SettingsCard<Content: View>: View {
 
 // MARK: - Rows
 
-/// 可点行：线性图标 + 标签 + 可选箭头。默认前景近黑、图标暖灰；危险行传 danger。
+/// 可点行：线性图标 + 标签 + 可选箭头。默认前景焦黑、图标退至中灰（与箭头同色卸重）；危险行传 danger。
 struct SettingsActionRow: View {
     let icon: SettingsRowIcon
     let label: String
-    var tint: Color = AppTheme.Color.textPrimary
-    var iconTint: Color = AppTheme.Color.textSecondary
+    var tint: Color = AppTheme.Color.settingsRowText
+    var iconTint: Color = AppTheme.Color.settingsRowIconTint
     var showsChevron: Bool = true
     let action: () -> Void
+
+    /// 传给 settingsRowLabel：ExtraLight 200 对「粗体文本」无障碍开关免疫，
+    /// 需要显式读取后切换真实字重文件，见该 token 定义处注释。
+    @Environment(\.legibilityWeight) private var legibilityWeight
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: AppTheme.Space.paddingCard) {
                 SettingsRowIconView(icon: icon, tint: iconTint)
                 Text(label)
-                    .font(AppTheme.Font.englishBody)
+                    .font(AppTheme.Font.settingsRowLabel(legibilityWeight: legibilityWeight))
                     .foregroundStyle(tint)
                 Spacer()
                 if showsChevron {
@@ -284,26 +287,29 @@ struct SettingsInfoRow: View {
     /// 真机实测最大字号时「Learning / English」断成了「Learn-ing」「Eng-lish」，
     /// 词中间断字比换行更难读。堆叠后每段都能用满整行宽度。
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// 传给 settingsRowLabel：ExtraLight 200 对「粗体文本」无障碍开关免疫，
+    /// 需要显式读取后切换真实字重文件，见该 token 定义处注释。
+    @Environment(\.legibilityWeight) private var legibilityWeight
 
     private var isStacked: Bool { dynamicTypeSize.isAccessibilitySize }
 
     var body: some View {
         // 堆叠时顶对齐：标签+值占三行，图标居中会飘到中间、与它标注的那行脱节。
         HStack(alignment: isStacked ? .top : .center, spacing: AppTheme.Space.paddingCard) {
-            SettingsRowIconView(icon: icon, tint: AppTheme.Color.textSecondary)
+            SettingsRowIconView(icon: icon, tint: AppTheme.Color.settingsRowIconTint)
 
             // 标签近黑、值退灰 —— 与可点行的「标签近黑 + chevron 弱色」同一条规则：
             // **主语在左、附注在右**。此前写反了（标签灰、值近黑），于是这一组的
             // 左侧第一列比其余各组浅一档，两组读起来像两种不同的行。
             textLayout {
                 Text(label)
-                    .font(AppTheme.Font.englishBody)
-                    .foregroundStyle(AppTheme.Color.textPrimary)
+                    .font(AppTheme.Font.settingsRowLabel(legibilityWeight: legibilityWeight))
+                    .foregroundStyle(AppTheme.Color.settingsRowText)
                 if !isStacked {
                     Spacer(minLength: AppTheme.Space.paddingS)
                 }
                 Text(value)
-                    .font(AppTheme.Font.englishBody)
+                    .font(AppTheme.Font.settingsRowLabel(legibilityWeight: legibilityWeight))
                     .foregroundStyle(AppTheme.Color.textMuted)
                     .multilineTextAlignment(isStacked ? .leading : .trailing)
             }

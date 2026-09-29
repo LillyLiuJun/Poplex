@@ -663,10 +663,20 @@ struct NavigationChromeTokenTests {
     }
 }
 
-// MARK: - Gothic A1 字体注册测试（无衬线换装第 2 刀）
-// 断言 FontLoader 注册后，AppTheme.Font.SansWeight 三档的 PostScript 名都能
+// MARK: - Gothic A1 字体注册测试（无衬线换装第 2 刀 + 设置页 ExtraLight 200 工笔演进）
+// 断言 FontLoader 注册后，AppTheme.Font.SansWeight 各档的 PostScript 名都能
 // 用 UIFont(name:) 真取到字体——而不是回退到系统字体却无人察觉。
 struct FontLoaderTests {
+    @Test func gothicA1ExtraLightIsRegisteredAndResolvable() throws {
+        FontLoader.registerCustomFonts()
+        _ = try #require(UIFont(name: AppTheme.Font.SansWeight.extraLight.postScriptName, size: 12))
+    }
+
+    @Test func gothicA1LightIsRegisteredAndResolvable() throws {
+        FontLoader.registerCustomFonts()
+        _ = try #require(UIFont(name: AppTheme.Font.SansWeight.light.postScriptName, size: 12))
+    }
+
     @Test func gothicA1RegularIsRegisteredAndResolvable() throws {
         FontLoader.registerCustomFonts()
         _ = try #require(UIFont(name: AppTheme.Font.SansWeight.regular.postScriptName, size: 12))

@@ -4,30 +4,54 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Settings · 100% 生产对齐全真原型与排印视察 (Production Parity)</title>
+  <!-- 预加载并引入与生产完全一致的 Gothic A1 官方字族 -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Gothic+A1:wght@200;300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
       /* ── 100% 生产环境 Primitive & Semantic 代币 ── */
-      --page-bg: #FCF8F3;         /* Primitive.neutral50 */
-      --card-surface: #FFFDF8;    /* AppTheme.Color.settingsCardSurface */
-      --text-primary: #211811;    /* Primitive.neutral900 (近黑 17.2:1) */
+      --page-bg: #FCF8F3;         /* Primitive.neutral50 (暖米色页面) */
+      --card-surface: #FFFDFB;    /* AppTheme.Color.settingsCardSurface (100% 纯暖白，对齐 Today 卡片) */
+      --card-surface-dim: #FFFDF8;/* 旧版 85% 半透明对照 */
+      --card-bg: #FFFDFB;         /* Primitive.warmWhite (近白暖卡片) */
+      --text-primary: #211811;    /* Primitive.neutral900 (炭黑墨水字 17.2:1) */
+      --text-charcoal-deep: #0A0705; /* Primitive.neutral975 (极致深焦黑 >20:1) */
+      --settings-row-text: var(--text-charcoal-deep); /* AppTheme.Color.settingsRowText */
       --text-secondary: #594C43;  /* Primitive.neutral700 (暖深灰 9.9:1) */
       --text-muted: #7C7773;      /* Primitive.neutral500 (中灰 4.4:1) */
-      --brand-strong: #FF7622;    /* 品牌橙 */
+      --settings-icon-tint: #7C7773; /* 行首 Icon 卸重：默认方案 1 同箭头灰 #7C7773 (4.4:1) */
+      --brand-strong: #FF7622;    /* 种子品牌橙 */
       --brand-ink: #C2410C;       /* 文字用品牌深橙 */
+      --brand-wash: #FFF5EE;      /* Primitive.primary100 (浅橙底) */
+      --brand-tint: rgba(255, 118, 34, 0.28); /* 品牌橙微描边 */
       --danger: #DC2626;          /* 危险红 */
-      --border-card: rgba(230, 225, 218, 0.35);
+      --border-card: rgba(230, 225, 218, 0.6);
       --divider-line: rgba(124, 119, 115, 0.15);
       --row-active-bg: rgba(33, 24, 17, 0.04);
       --scrim-overlay: rgba(33, 24, 17, 0.45);
+
+      /* Toast 专用色值 (AppToast.swift) */
+      --toast-positive-bg: #FFF3EB; /* Primitive.primary100 晨曦暖橙实色 */
+      --toast-blocked-bg: #EFECE6;  /* Primitive.toastPaperGray 沉静暖纸灰实色 */
+      --toast-border-positive: rgba(194, 65, 12, 0.18);
+      --toast-border-blocked: rgba(230, 225, 218, 0.8);
+
+      /* 按钮禁用态 Token (FeedbackView) */
+      --control-disabled-bg: rgba(33, 24, 17, 0.08);
+      --control-disabled-border: rgba(33, 24, 17, 0.12);
+      --control-disabled-text: rgba(33, 24, 17, 0.28);
+      --input-focus-border: #FF7622;
 
       /* 双层微呼吸接触阴影 */
       --card-shadow: 0 1.5px 4px rgba(33, 24, 17, 0.035), 0 4px 8px rgba(46, 40, 32, 0.025);
       --button-shadow: 0 2px 6px rgba(33, 24, 17, 0.06), 0 1px 2px rgba(33, 24, 17, 0.04);
       --sheet-shadow: 0 24px 64px rgba(33, 24, 17, 0.22), 0 4px 16px rgba(33, 24, 17, 0.08);
 
-      /* 字体排印族 */
-      --font-serif: "New York", ui-serif, "Iowan Old Style", "Newsreader", Charter, Georgia, serif;
-      --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Segoe UI", sans-serif;
+      /* 字体排印族三巨头：Charter + Gothic A1 + 冬青黑体 */
+      --font-serif: Charter, "New York", ui-serif, Georgia, "Hiragino Sans GB", serif;
+      --font-sans: "Gothic A1", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Hiragino Sans GB", "PingFang SC", sans-serif;
+      --font-cjk: "Hiragino Sans GB", "PingFang SC", sans-serif;
       --font-mono: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
     }
 
@@ -47,19 +71,19 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 32px 20px 60px;
+      padding: 28px 20px 60px;
     }
 
     /* 顶部控制栏 */
     .top-header {
-      max-width: 980px;
+      max-width: 1020px;
       width: 100%;
       display: flex;
       flex-wrap: wrap;
       align-items: center;
       justify-content: space-between;
       gap: 16px;
-      margin-bottom: 28px;
+      margin-bottom: 24px;
     }
     .badge-wrap {
       display: flex;
@@ -82,16 +106,16 @@
     .header-title {
       font-family: var(--font-serif);
       font-size: 26px;
-      font-weight: 600;
+      font-weight: 700;
       letter-spacing: -0.02em;
     }
     .controls {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 8px;
     }
     .ctrl-btn {
-      padding: 8px 16px;
+      padding: 7px 14px;
       border-radius: 999px;
       border: 1px solid rgba(89, 76, 67, 0.2);
       background: #FFFDF8;
@@ -123,11 +147,11 @@
       justify-content: center;
       gap: 36px;
       width: 100%;
-      max-width: 1140px;
+      max-width: 1060px;
       margin: 0 auto;
     }
 
-    /* iPhone 16 Pro 真机外框 */
+    /* iPhone 16 Pro 真机外框 (393 × 852 pt) */
     .device-frame {
       width: 393px;
       height: 852px;
@@ -144,17 +168,31 @@
       flex-shrink: 0;
     }
 
+    /* 顶部拖拽把手 (SettingsScreen: Capsule 44×4.5pt) */
+    .sheet-drag-handle {
+      position: absolute;
+      top: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 44px;
+      height: 4.5px;
+      background: rgba(89, 76, 67, 0.28);
+      border-radius: 999px;
+      z-index: 105;
+      pointer-events: none;
+    }
+
     /* 灵动岛 */
     .dynamic-island {
       position: absolute;
-      top: 11px;
+      top: 15px;
       left: 50%;
       transform: translateX(-50%);
       width: 124px;
-      height: 36px;
+      height: 35px;
       background: #000000;
       border-radius: 20px;
-      z-index: 99;
+      z-index: 102;
       pointer-events: none;
     }
 
@@ -172,7 +210,7 @@
       font-size: 14.5px;
       font-weight: 600;
       color: var(--text-primary);
-      z-index: 90;
+      z-index: 101;
       pointer-events: none;
     }
     .status-icons {
@@ -181,78 +219,165 @@
       gap: 6px;
     }
 
-    /* 生产环境 SheetTopScrim 柔化遮罩 */
+    /* 生产环境 SheetTopScrim 柔化遮罩 (76pt) */
     .sheet-top-scrim {
       position: absolute;
       top: 0;
       left: 0;
       right: 0;
-      height: 72px;
-      background: linear-gradient(to bottom, #FCF8F3 0%, rgba(252, 248, 243, 0.96) 55%, rgba(252, 248, 243, 0) 100%);
+      height: 80px;
+      background: linear-gradient(to bottom, #FCF8F3 0%, rgba(252, 248, 243, 0.96) 60%, rgba(252, 248, 243, 0) 100%);
       pointer-events: none;
-      z-index: 50;
+      z-index: 60;
     }
 
-    /* 顶栏固定标题与关闭键 */
-    .pinned-bar {
+    /* 顶栏固定导航条 (Navigation Top Bar) */
+    .nav-bar-container {
       position: absolute;
-      top: 54px;
+      top: 50px;
       left: 0;
       right: 0;
       height: 48px;
       display: flex;
       align-items: center;
-      justify-content: center;
-      z-index: 60;
+      justify-content: space-between;
+      padding: 0 20px;
+      z-index: 80;
       pointer-events: none;
     }
-    .pinned-title {
-      font-family: var(--font-serif);
-      font-size: 20px;
-      font-weight: 600;
-      letter-spacing: -0.015em;
-      color: var(--text-primary);
+
+    .nav-left-btn, .nav-right-btn {
       pointer-events: auto;
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
-    .close-btn-wrap {
-      position: absolute;
-      top: 60px;
-      right: 20px;
-      z-index: 70;
+
+    /* 圆形控件 (SettingsCircleButton) 动态样式变量 */
+    :root {
+      --close-btn-bg: var(--card-bg);
+      --close-btn-border: 0.5px solid rgba(230, 225, 218, 0.5);
+      --close-btn-shadow: 0 1px 2.5px rgba(33, 24, 17, 0.04);
     }
-    .close-circle-btn {
+    body.close-style-pill {
+      --close-btn-bg: var(--card-bg);
+      --close-btn-border: 0.5px solid rgba(230, 225, 218, 0.45);
+      --close-btn-shadow: 0 1px 2.5px rgba(33, 24, 17, 0.04);
+    }
+    body.close-style-flat-border {
+      --close-btn-bg: var(--card-bg);
+      --close-btn-border: 0.5px solid rgba(230, 225, 218, 0.75);
+      --close-btn-shadow: none;
+    }
+    body.close-style-flat-clean {
+      --close-btn-bg: var(--card-bg);
+      --close-btn-border: 0.5px solid transparent;
+      --close-btn-shadow: none;
+    }
+    body.close-style-baseline-heavy {
+      --close-btn-bg: var(--card-bg);
+      --close-btn-border: 0.5px solid rgba(230, 225, 218, 0.85);
+      --close-btn-shadow: 0 8px 18px rgba(33, 24, 17, 0.09), 0 2px 4px rgba(33, 24, 17, 0.06);
+    }
+
+    .circle-control-btn {
       width: 36px;
       height: 36px;
       border-radius: 50%;
-      background: var(--page-bg);
-      border: 0.5px solid rgba(230, 225, 218, 0.6);
-      box-shadow: var(--button-shadow);
+      background: var(--close-btn-bg);
+      border: var(--close-btn-border);
+      box-shadow: var(--close-btn-shadow);
       display: flex;
       align-items: center;
       justify-content: center;
       cursor: pointer;
-      transition: all 0.16s ease;
+      color: var(--text-secondary);
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      outline: none;
     }
-    .close-circle-btn:active {
+    .circle-control-btn:active {
       transform: scale(0.92);
       background: #F4ECE3;
     }
 
-    /* 滚动内容区 (SettingsScreen) */
-    .scroll-content {
+    /* 返回按钮状态过渡 */
+    #backButton {
+      opacity: 0;
+      pointer-events: none;
+      transform: translateX(-4px) scale(0.92);
+      transition: all 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    #backButton.visible {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateX(0) scale(1);
+    }
+
+    /* 顶栏固定标题 (Pinned Title) */
+    .nav-pinned-title {
+      font-family: var(--font-serif);
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.015em;
+      color: var(--text-primary);
+      text-align: center;
       flex: 1;
+      transition: opacity 0.2s ease, transform 0.2s ease;
+      pointer-events: auto;
+    }
+
+    /* ── 页面栈容器 (Screens Container) ── */
+    .screens-viewport {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      background: var(--page-bg);
+    }
+
+    /* 通用页面视图容器 */
+    .screen-view {
+      position: absolute;
+      inset: 0;
       overflow-y: auto;
       overflow-x: hidden;
-      padding-top: 104px; /* barHeight(48) + topPadding(32) + 顶边间距 */
-      padding-bottom: 28px; /* pageFooterBottom */
+      padding-top: 104px; /* 顶栏控件与遮罩下沿 */
+      padding-bottom: 34px;
       -webkit-overflow-scrolling: touch;
-      position: relative;
+      transition: transform 0.35s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.35s ease;
+      background: var(--page-bg);
     }
-    .scroll-content::-webkit-scrollbar {
+    .screen-view::-webkit-scrollbar {
       display: none;
     }
 
-    /* 设置卡片外层分组 */
+    /* 页面层叠位置 */
+    .screen-view.root-screen {
+      z-index: 10;
+      transform: translateX(0);
+      opacity: 1;
+    }
+    .screen-view.root-screen.pushed-left {
+      transform: translateX(-26%);
+      opacity: 0.75;
+      pointer-events: none;
+    }
+
+    .screen-view.sub-screen {
+      z-index: 20;
+      transform: translateX(100%);
+      opacity: 0;
+      pointer-events: none;
+      box-shadow: -8px 0 24px rgba(33, 24, 17, 0.08);
+    }
+    .screen-view.sub-screen.active {
+      transform: translateX(0);
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    /* ── Settings 主页组件 ── */
     .settings-section {
       margin-bottom: 32px; /* paddingSection */
       padding: 0 20px;     /* paddingPage */
@@ -260,13 +385,11 @@
     .section-header {
       font-family: var(--font-serif);
       font-size: 15px;      /* subheadline */
-      font-weight: 500;     /* Medium */
+      font-weight: 400;     /* settingsSectionTitleSerif Charter Regular */
       color: var(--text-secondary);
       margin-bottom: 8px;   /* paddingS */
       letter-spacing: -0.01em;
     }
-
-    /* 暖纸内容卡片外壳 (surfaceCard) */
     .settings-card {
       background: var(--card-surface);
       border-radius: 20px;  /* AppTheme.Radius.large */
@@ -274,8 +397,6 @@
       box-shadow: var(--card-shadow);
       overflow: hidden;
     }
-
-    /* 行容器与组件 */
     .settings-row {
       display: flex;
       align-items: center;
@@ -293,8 +414,6 @@
     .settings-row.clickable:active {
       background-color: var(--row-active-bg);
     }
-
-    /* 图标容器 (24×24) */
     .row-icon-col {
       width: 24px;
       height: 24px;
@@ -309,45 +428,42 @@
       stroke-linecap: butt;
       stroke-linejoin: round;
       fill: none;
+      transition: stroke 0.2s ease;
+    }
+    .row-icon-col:not(.delete-icon) svg {
+      stroke: var(--settings-icon-tint) !important;
     }
     .row-icon-col.delete-icon svg {
       stroke-linecap: round;
+      stroke: var(--danger) !important;
     }
-
-    /* 文本排版 */
     .row-label {
       flex: 1;
-      font-size: 17px;       /* AppTheme.Font.englishBody */
-      font-weight: 400;      /* Regular */
-      color: var(--text-primary);
-      letter-spacing: -0.012em;
+      font-size: 17px;       /* AppTheme.Font.settingsRowLabel */
+      font-weight: 200;      /* Gothic A1 ExtraLight (46u 字干，彻底卸除 CJK 400 黑块感) */
+      color: var(--settings-row-text); /* #0A0705 极致深焦黑 (AppTheme.Color.settingsRowText) */
+      letter-spacing: -0.005em;
     }
     .row-label.danger {
       color: var(--danger);
     }
     .row-value {
       font-size: 17px;
-      font-weight: 400;
+      font-weight: 200;      /* Gothic A1 ExtraLight (46u 字干) */
       color: var(--text-muted);
-      letter-spacing: -0.01em;
+      letter-spacing: -0.005em;
     }
-
-    /* 行分割线 (左缩进 56px = 16 + 24 + 16) */
     .row-divider {
       height: 0.5px;
       background: var(--divider-line);
       margin-left: 56px;
     }
-
-    /* Chevron 箭头 (20×20 Canvas 产物) */
     .row-chevron {
       width: 14px;
       height: 14px;
       color: var(--text-muted);
       flex-shrink: 0;
     }
-
-    /* 版本号页脚 (72pt 深度呼吸断层) */
     .version-footer {
       margin-top: 40px;      /* 72 - 32 = 40pt sectionToFooter */
       text-align: center;
@@ -358,7 +474,256 @@
       letter-spacing: 0.01em;
     }
 
-    /* 模拟底部 Home Indicator */
+    /* ── About AI 披露页组件 ── */
+    .about-header-block {
+      padding: 0 20px;
+      margin-bottom: 32px;
+    }
+    .about-page-title {
+      font-family: var(--font-serif);
+      font-size: 22px;       /* sectionTitleSerif */
+      font-weight: 700;      /* Charter Bold */
+      color: var(--text-primary);
+      letter-spacing: -0.015em;
+      margin-bottom: 16px;
+      line-height: 1.25;
+    }
+    .about-body-text {
+      font-size: 17px;       /* englishBody */
+      font-weight: 400;
+      color: var(--text-secondary);
+      line-height: 1.55;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .about-links-stack {
+      padding: 0 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .about-link-row {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 17px;
+      font-weight: 400;
+      color: var(--brand-strong);
+      text-decoration: none;
+      cursor: pointer;
+      user-select: none;
+      width: fit-content;
+      transition: opacity 0.15s ease;
+    }
+    .about-link-row:active {
+      opacity: 0.65;
+    }
+    .about-link-row svg {
+      width: 14px;
+      height: 14px;
+      stroke: var(--brand-strong);
+      stroke-width: 2.2;
+    }
+
+    /* ── Feedback 意见反馈页组件 ── */
+    .feedback-intro-block {
+      padding: 0 20px;
+      margin-bottom: 24px;
+    }
+    .feedback-intro-title {
+      font-family: var(--font-serif);
+      font-size: 20px;       /* settingsDocumentTitleSerif (Charter 20pt Regular) */
+      font-weight: 400;
+      color: var(--text-primary);
+      letter-spacing: -0.01em;
+      margin-bottom: 6px;
+    }
+    .feedback-intro-desc {
+      font-size: 14.5px;     /* settingsFormIntro (Gothic A1 14.5pt Light) */
+      font-weight: 300;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    .feedback-field-group {
+      padding: 0 20px;
+      margin-bottom: 24px;
+    }
+    .feedback-field-label {
+      font-family: var(--font-serif);
+      font-size: 15px;       /* settingsSectionTitleSerif */
+      font-weight: 400;      /* Charter Regular */
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+    }
+
+    /* 分类胶囊选择器 (Category Chips) */
+    .category-chips-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .category-chip {
+      flex: 1;
+      height: 38px;
+      padding: 0 12px;
+      border-radius: 999px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      font-size: 14px;       /* feedbackChipLabel (Gothic A1 14pt Medium) */
+      font-weight: 500;
+      border: 0.5px solid rgba(230, 225, 218, 0.8);
+      background: var(--card-bg);
+      color: var(--text-muted);
+      cursor: pointer;
+      box-shadow: 0 1px 2px rgba(33, 24, 17, 0.03);
+      transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+      user-select: none;
+    }
+    .category-chip:active {
+      transform: scale(0.96);
+    }
+    .category-chip.selected {
+      background: var(--brand-wash);
+      border-color: var(--brand-tint);
+      color: var(--text-secondary);
+      box-shadow: 0 2px 6px rgba(255, 118, 34, 0.08);
+    }
+    .category-chip.selected .chip-icon {
+      color: var(--text-secondary);
+    }
+    .chip-icon {
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* 输入卡片 (Details & Email) */
+    .input-card {
+      background: var(--card-bg);
+      border-radius: 20px;
+      border: 0.8px solid var(--border-card);
+      box-shadow: 0 2px 8px rgba(33, 24, 17, 0.03);
+      padding: 16px;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    .input-card:focus-within {
+      border-color: var(--input-focus-border);
+      box-shadow: 0 0 0 3px rgba(255, 118, 34, 0.12);
+    }
+
+    .detail-textarea {
+      width: 100%;
+      height: 96px;
+      border: none;
+      background: transparent;
+      outline: none;
+      resize: none;
+      font-family: var(--font-sans);
+      font-size: 15px;       /* settingsFormInput (Gothic A1 15pt Light) */
+      font-weight: 300;
+      line-height: 1.55;
+      color: var(--text-primary);
+    }
+    .detail-textarea::placeholder {
+      color: var(--text-muted);
+    }
+    .textarea-footer {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 4px;
+    }
+    .char-counter {
+      font-size: 11px;       /* metaNote */
+      color: var(--text-muted);
+    }
+
+    .email-input {
+      width: 100%;
+      border: none;
+      background: transparent;
+      outline: none;
+      font-family: var(--font-sans);
+      font-size: 15px;       /* settingsFormInput (Gothic A1 15pt Light) */
+      font-weight: 300;
+      color: var(--text-primary);
+    }
+    .email-input::placeholder {
+      color: var(--text-muted);
+    }
+
+    /* 错误提示 */
+    .form-error-row {
+      display: none;
+      align-items: center;
+      gap: 6px;
+      padding: 0 20px;
+      margin-bottom: 12px;
+      color: var(--danger);
+      font-size: 13px;
+    }
+    .form-error-row.show {
+      display: flex;
+    }
+
+    /* 提交按钮 (Send feedback) */
+    .submit-cta-btn {
+      width: calc(100% - 40px);
+      margin: 8px 20px 0;
+      height: 52px;
+      border-radius: 999px;
+      border: none;
+      outline: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-family: var(--font-sans);
+      font-size: 17px;       /* ctaLabel */
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      box-shadow: 0 4px 14px rgba(33, 24, 17, 0.16);
+      background: var(--text-primary);
+      color: #FFFDF8;
+    }
+    .submit-cta-btn:disabled {
+      background: var(--control-disabled-bg);
+      border: 0.8px solid var(--control-disabled-border);
+      color: var(--control-disabled-text);
+      cursor: not-allowed;
+      box-shadow: none;
+      transform: none !important;
+    }
+    .submit-cta-btn:not(:disabled):active {
+      transform: scale(0.97);
+    }
+
+    /* 转圈菊花加载 */
+    .spinner {
+      display: none;
+      width: 20px;
+      height: 20px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-top-color: #FFFDF8;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .submit-cta-btn.loading .btn-content {
+      display: none;
+    }
+    .submit-cta-btn.loading .spinner {
+      display: block;
+    }
+
+    /* 底部安全条指示器 */
     .home-indicator {
       position: absolute;
       bottom: 8px;
@@ -370,34 +735,128 @@
       border-radius: 999px;
       opacity: 0.8;
       pointer-events: none;
-      z-index: 80;
+      z-index: 100;
     }
 
-    /* ── 交互反馈：生产级 Toast 浮层 ── */
-    .toast-pill {
+    /* ── 生产级 AppToast 浮层 (328pt 藏书票便签微圆角 R8) ── */
+    .app-toast-container {
       position: absolute;
-      bottom: 40px;
+      bottom: 32px;
       left: 50%;
-      transform: translateX(-50%) translateY(20px);
+      transform: translateX(-50%) translateY(24px) scale(0.95);
+      width: 328px;
+      height: 42px;
+      border-radius: 8px;   /* R8 微圆角藏书票 */
       opacity: 0;
-      background: var(--text-primary);
-      color: #FFFDF8;
-      padding: 10px 18px;
-      border-radius: 999px;
+      pointer-events: none;
       display: flex;
       align-items: center;
+      justify-content: center;
       gap: 8px;
-      font-size: 14px;
-      font-weight: 500;
-      box-shadow: 0 8px 24px rgba(33, 24, 17, 0.2);
-      pointer-events: none;
-      transition: all 0.28s cubic-bezier(0.16, 1, 0.3, 1);
-      z-index: 100;
-      white-space: nowrap;
+      padding: 0 16px;
+      transition: all 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+      z-index: 120;
     }
-    .toast-pill.show {
-      transform: translateX(-50%) translateY(0);
+    .app-toast-container.show {
+      transform: translateX(-50%) translateY(0) scale(1);
       opacity: 1;
+    }
+    /* 积极态 Toast (positive: 晨曦暖橙实色底) */
+    .app-toast-container.positive {
+      background: var(--toast-positive-bg);
+      border: 0.6px solid var(--toast-border-positive);
+      box-shadow: 0 3px 6px rgba(255, 118, 34, 0.08);
+      color: var(--text-primary);
+    }
+    /* 受阻态 Toast (blocked: 暖纸灰实色底) */
+    .app-toast-container.blocked {
+      background: var(--toast-blocked-bg);
+      border: 0.6px solid var(--toast-border-blocked);
+      box-shadow: 0 3px 8px rgba(33, 24, 17, 0.06);
+      color: var(--text-primary);
+    }
+    .app-toast-icon {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .app-toast-container.positive .app-toast-icon {
+      color: var(--brand-strong);
+      transform: rotate(-10deg); /* 纸飞机向左微旋 */
+    }
+    .app-toast-container.blocked .app-toast-icon {
+      color: var(--text-secondary);
+    }
+    .app-toast-msg {
+      font-size: 13px;       /* statusNote */
+      font-weight: 500;
+      letter-spacing: -0.01em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* ── 模拟原生 SafariView Sheet ── */
+    .safari-sheet-scrim {
+      position: absolute;
+      inset: 0;
+      background: rgba(33, 24, 17, 0.4);
+      backdrop-filter: blur(4px);
+      z-index: 150;
+      display: none;
+      align-items: flex-end;
+    }
+    .safari-sheet-scrim.show {
+      display: flex;
+    }
+    .safari-sheet {
+      width: 100%;
+      height: 85%;
+      background: #FFFFFF;
+      border-radius: 28px 28px 0 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      animation: sheetSlideUp 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+      box-shadow: 0 -8px 32px rgba(0,0,0,0.2);
+    }
+    @keyframes sheetSlideUp {
+      from { transform: translateY(100%); }
+      to { transform: translateY(0); }
+    }
+    .safari-top-bar {
+      height: 52px;
+      border-bottom: 0.5px solid rgba(0,0,0,0.12);
+      background: #F8F8F8;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+    }
+    .safari-domain-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      color: #333333;
+    }
+    .safari-done-btn {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--brand-ink);
+      border: none;
+      background: transparent;
+      cursor: pointer;
+    }
+    .safari-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px 20px;
+      font-size: 14px;
+      line-height: 1.6;
+      color: #333333;
     }
 
     /* ── 模拟系统 Alert 弹窗 ── */
@@ -409,7 +868,7 @@
       display: none;
       align-items: center;
       justify-content: center;
-      z-index: 120;
+      z-index: 140;
       padding: 24px;
     }
     .alert-modal-scrim.show {
@@ -417,7 +876,7 @@
     }
     .alert-box {
       width: 270px;
-      background: rgba(255, 253, 248, 0.94);
+      background: rgba(255, 253, 248, 0.95);
       border-radius: 14px;
       overflow: hidden;
       box-shadow: 0 20px 48px rgba(0,0,0,0.25);
@@ -469,38 +928,71 @@
     /* ── 右侧排印与间距视察面板 (Typography & Spacing Inspector) ── */
     .inspector-panel {
       flex: 1;
-      max-width: 520px;
+      max-width: 500px;
       background: #FFFDF8;
       border-radius: 28px;
       border: 1px solid rgba(89, 76, 67, 0.12);
       box-shadow: var(--card-shadow);
-      padding: 28px;
+      padding: 24px;
       display: flex;
       flex-direction: column;
-      gap: 20px;
+      gap: 16px;
     }
-    .inspector-title {
-      font-family: var(--font-serif);
-      font-size: 20px;
-      font-weight: 600;
-      color: var(--text-primary);
+    .inspector-header-row {
       display: flex;
       align-items: center;
       justify-content: space-between;
     }
+    .inspector-title {
+      font-family: var(--font-serif);
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    /* 页面切换标签 (Page Tabs) */
+    .inspector-tabs {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(89, 76, 67, 0.08);
+      padding: 3px;
+      border-radius: 12px;
+      margin-top: 4px;
+    }
+    .tab-item {
+      flex: 1;
+      text-align: center;
+      padding: 6px 10px;
+      font-size: 13px;
+      font-weight: 500;
+      border-radius: 9px;
+      cursor: pointer;
+      color: var(--text-secondary);
+      transition: all 0.18s ease;
+      user-select: none;
+    }
+    .tab-item.active {
+      background: #FFFDF8;
+      color: var(--text-primary);
+      font-weight: 600;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+
     .inspector-desc {
-      font-size: 14px;
-      line-height: 1.6;
+      font-size: 13.5px;
+      line-height: 1.55;
       color: var(--text-secondary);
     }
+
     .token-table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 13px;
+      font-size: 12.5px;
     }
     .token-table th {
       text-align: left;
-      padding: 8px 10px;
+      padding: 7px 8px;
       border-bottom: 1.5px solid rgba(89, 76, 67, 0.15);
       color: var(--text-muted);
       font-weight: 600;
@@ -509,7 +1001,7 @@
       letter-spacing: 0.05em;
     }
     .token-table td {
-      padding: 10px;
+      padding: 8px;
       border-bottom: 0.5px solid rgba(89, 76, 67, 0.08);
       vertical-align: middle;
     }
@@ -518,7 +1010,7 @@
     }
     .code-tag {
       font-family: var(--font-mono);
-      font-size: 11.5px;
+      font-size: 11px;
       background: rgba(33, 24, 17, 0.05);
       padding: 2px 6px;
       border-radius: 4px;
@@ -538,37 +1030,186 @@
     }
 
     /* 视觉辅助开关：标注框模式 */
-    body.show-overlays .settings-card {
+    body.show-overlays .settings-card,
+    body.show-overlays .input-card {
       outline: 1.5px dashed rgba(255, 118, 34, 0.55);
     }
-    body.show-overlays .section-header {
+    body.show-overlays .section-header,
+    body.show-overlays .feedback-field-label {
       background: rgba(255, 118, 34, 0.08);
       border-radius: 4px;
+    /* ── 方案 A · 高定编辑风 (28pt / 15pt) ── */
+    body.mode-proposal-a .about-page-title,
+    body.mode-proposal-a .feedback-intro-title {
+      font-size: 28px !important;
+      letter-spacing: -0.02em;
+      line-height: 1.2;
     }
-    body.show-overlays .version-footer {
-      background: rgba(75, 70, 64, 0.08);
-      border-radius: 4px;
+    body.mode-proposal-a .about-body-text {
+      font-size: 15px !important;
+      font-weight: 300 !important; /* Light */
+      line-height: 1.65;
+    }
+    body.mode-proposal-a .about-link-row {
+      font-size: 15px !important;
+      font-weight: 500;
+    }
+    body.mode-proposal-a .feedback-intro-desc {
+      font-size: 14.5px !important;
+      line-height: 1.5;
+    }
+    body.mode-proposal-a .feedback-field-label {
+      font-size: 15px !important;
+    }
+    body.mode-proposal-a .category-chip {
+      font-size: 14px !important;
+      font-weight: 500;
+    }
+    body.mode-proposal-a .feedback-textarea,
+    body.mode-proposal-a .feedback-input {
+      font-size: 15px !important;
+    }
+
+    /* ── 方案 B · 轻盈极简风 (22pt / 14pt) ── */
+    body.mode-proposal-b .about-page-title,
+    body.mode-proposal-b .feedback-intro-title {
+      font-size: 22px !important;
+      line-height: 1.25;
+    }
+    body.mode-proposal-b .about-body-text {
+      font-size: 14px !important;
+      font-weight: 400 !important;
+      line-height: 1.5;
+    }
+    body.mode-proposal-b .about-link-row {
+      font-size: 14px !important;
+      font-weight: 500;
+    }
+    body.mode-proposal-b .feedback-intro-desc {
+      font-size: 13px !important;
+      line-height: 1.4;
+    }
+    body.mode-proposal-b .feedback-field-label {
+      font-size: 13px !important;
+    }
+    body.mode-proposal-b .category-chip {
+      font-size: 13.5px !important;
+    }
+    /* ── 方案 C · 雅致轻标 (20pt Regular 细衬线 / 15pt) ── */
+    body.mode-proposal-c .about-page-title,
+    body.mode-proposal-c .feedback-intro-title {
+      font-size: 20px !important;
+      font-weight: 400 !important; /* Regular 细衬线，卸下粗体黑块 */
+      line-height: 1.35;
+      letter-spacing: -0.01em;
+    }
+    body.mode-proposal-c .about-body-text {
+      font-size: 15px !important;
+      font-weight: 300 !important;
+      line-height: 1.65;
+    }
+    body.mode-proposal-c .about-link-row {
+      font-size: 15px !important;
+      font-weight: 500;
+    }
+    body.mode-proposal-c .feedback-intro-desc {
+      font-size: 14.5px !important;
+      line-height: 1.5;
+    }
+    body.mode-proposal-c .feedback-field-label {
+      font-size: 14.5px !important;
+    }
+    body.mode-proposal-c .category-chip {
+      font-size: 14px !important;
+      font-weight: 500;
+    }
+    body.mode-proposal-c .detail-textarea,
+    body.mode-proposal-c .email-input {
+      font-size: 15px !important;
+      font-weight: 300 !important;
+      line-height: 1.55;
+    }
+    /* ── 方案 C1+ · 紧凑加粗标 (20pt Bold 粗衬线 / 15pt) ── */
+    body.mode-proposal-c-bold .about-page-title,
+    body.mode-proposal-c-bold .feedback-intro-title {
+      font-size: 20px !important;
+      font-weight: 700 !important; /* Bold 粗衬线加粗 */
+      line-height: 1.3;
+      letter-spacing: -0.015em;
+    }
+    body.mode-proposal-c-bold .about-body-text {
+      font-size: 15px !important;
+      font-weight: 300 !important;
+      line-height: 1.65;
+    }
+    body.mode-proposal-c-bold .about-link-row {
+      font-size: 15px !important;
+      font-weight: 500;
+    }
+    body.mode-proposal-c-bold .feedback-intro-desc {
+      font-size: 14.5px !important;
+      line-height: 1.5;
+    }
+    body.mode-proposal-c-bold .feedback-field-label {
+      font-size: 15px !important;
+    }
+    body.mode-proposal-c-bold .category-chip {
+      font-size: 14px !important;
+      font-weight: 500;
+    }
+    body.mode-proposal-c-bold .detail-textarea,
+    body.mode-proposal-c-bold .email-input {
+      font-size: 15px !important;
+      font-weight: 400 !important;
     }
   </style>
 </head>
-<body>
+<body class="mode-proposal-c">
 
   <!-- 顶部控制头 -->
   <header class="top-header">
     <div>
       <div class="badge-wrap">
         <span class="badge">Production Parity</span>
-        <span style="font-size: 13px; color: var(--text-muted);">Settings · 100% 生产对齐全真原型</span>
+        <span style="font-size: 13px; color: var(--text-muted);">Settings · About AI · Feedback 全景沙盒</span>
       </div>
-      <h1 class="header-title" style="margin-top: 6px;">Settings Page & Typography Audit</h1>
+      <h1 class="header-title" style="margin-top: 6px;">Settings & Sheet Navigation Architecture</h1>
     </div>
     <div class="controls">
+      <!-- 关闭按钮底纹卸重实验 (本次专项排查) -->
+      <div style="display: flex; align-items: center; gap: 4px; background: rgba(33,24,17,0.06); padding: 3px; border-radius: 999px;">
+        <span style="font-size: 11px; font-weight: 700; padding: 0 6px; color: var(--text-primary); letter-spacing: 0.02em;">关闭键底纹：</span>
+        <button class="ctrl-btn active" id="btnClosePill" style="padding: 5px 9px; font-size: 11px;" onclick="setCloseBtnStyle('pill')">★ 方案A: 顶栏精细微阴影 (单层)</button>
+        <button class="ctrl-btn" id="btnCloseFlatBorder" style="padding: 5px 9px; font-size: 11px;" onclick="setCloseBtnStyle('flat-border')">方案B: 纯平微边框 (无阴影)</button>
+        <button class="ctrl-btn" id="btnCloseFlatClean" style="padding: 5px 9px; font-size: 11px;" onclick="setCloseBtnStyle('flat-clean')">方案C: 纯平无边框</button>
+        <button class="ctrl-btn" id="btnCloseHeavy" style="padding: 5px 9px; font-size: 11px;" onclick="setCloseBtnStyle('baseline-heavy')">现状对照: 16pt大阴影 (双层重)</button>
+      </div>
+
+      <!-- 卡片底色亮度对比 (对齐 Today) -->
+      <div style="display: flex; align-items: center; gap: 4px; background: rgba(33,24,17,0.06); padding: 3px; border-radius: 999px;">
+        <span style="font-size: 11px; font-weight: 700; padding: 0 6px; color: var(--text-primary); letter-spacing: 0.02em;">卡片亮度：</span>
+        <button class="ctrl-btn active" id="btnCardFull" style="padding: 5px 9px; font-size: 11px;" onclick="setCardBrightness('full')">★ 100% 纯暖白 (对齐 Today)</button>
+        <button class="ctrl-btn" id="btnCardDim" style="padding: 5px 9px; font-size: 11px;" onclick="setCardBrightness('dim')">85% 半透明 (旧版偏灰)</button>
+      </div>
+
+      <!-- 行首 Icon 卸重色彩实验 -->
+      <div style="display: flex; align-items: center; gap: 4px; background: rgba(33,24,17,0.06); padding: 3px; border-radius: 999px;">
+        <span style="font-size: 11px; font-weight: 700; padding: 0 6px; color: var(--text-primary); letter-spacing: 0.02em;">行首 Icon 色：</span>
+        <button class="ctrl-btn active" id="btnIconChevron" style="padding: 5px 9px; font-size: 11px;" onclick="setIconTint('chevron')">★ 同箭头灰 #7C7773</button>
+        <button class="ctrl-btn" id="btnIconMedium" style="padding: 5px 9px; font-size: 11px;" onclick="setIconTint('medium')">适中暖灰 #635C55</button>
+        <button class="ctrl-btn" id="btnIconBaseline" style="padding: 5px 9px; font-size: 11px;" onclick="setIconTint('baseline')">深灰 #4B4640</button>
+      </div>
+
+      <!-- 二级页排印切换 -->
+      <div style="display: flex; align-items: center; gap: 4px; background: rgba(33,24,17,0.06); padding: 3px; border-radius: 999px;">
+        <span style="font-size: 11px; font-weight: 700; padding: 0 6px; color: var(--text-primary); letter-spacing: 0.02em;">二级页：</span>
+        <button class="ctrl-btn" id="btnModeBase" style="padding: 5px 8px; font-size: 11px;" onclick="setSubpageMode('baseline')">原版(22粗)</button>
+        <button class="ctrl-btn active" id="btnModeC" style="padding: 5px 8px; font-size: 11px;" onclick="setSubpageMode('proposal-c')">★ C1(20细)</button>
+        <button class="ctrl-btn" id="btnModeCBold" style="padding: 5px 8px; font-size: 11px;" onclick="setSubpageMode('proposal-c-bold')">C1+(20粗)</button>
+      </div>
       <button class="ctrl-btn" id="btnToggleOverlays" onclick="toggleOverlays()">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
-        <span>排版网格视察</span>
-      </button>
-      <button class="ctrl-btn" onclick="triggerToast('Thank you! We\'ll be in touch soon')">
-        <span>测试 Feedback Toast</span>
+        <span>网格视察</span>
       </button>
       <button class="ctrl-btn" onclick="openDeleteAlert()">
         <span style="color: var(--danger);">测试删除弹窗</span>
@@ -581,6 +1222,9 @@
 
     <!-- 1. 原生真机外壳 (iPhone 16 Pro, 393×852) -->
     <div class="device-frame" id="deviceFrame">
+      <!-- 顶部拖拽把手 (Capsule 44×4.5pt) -->
+      <div class="sheet-drag-handle"></div>
+
       <!-- 灵动岛 -->
       <div class="dynamic-island"></div>
 
@@ -596,175 +1240,309 @@
       <!-- 生产环境固定顶栏柔化遮罩 (SheetTopScrim) -->
       <div class="sheet-top-scrim"></div>
 
-      <!-- 固定顶栏 (Pinned Title) -->
-      <div class="pinned-bar">
-        <span class="pinned-title">Settings</span>
+      <!-- 顶栏导航容器 (Navigation Bar) -->
+      <div class="nav-bar-container">
+        <!-- 左侧返回按钮 (SettingsCircleButton .back) -->
+        <div class="nav-left-btn">
+          <button class="circle-control-btn" id="backButton" onclick="navigateBack()" title="Back">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M15 18l-6-6 6-6"/>
+            </svg>
+          </button>
+        </div>
+
+        <!-- 居中固定标题 (Pinned Title) -->
+        <span class="nav-pinned-title" id="pinnedTitle">Settings</span>
+
+        <!-- 右侧关闭按钮 (SettingsCircleButton .close，常驻外层 overlay) -->
+        <div class="nav-right-btn">
+          <button class="circle-control-btn" onclick="triggerCloseSheet()" title="Close Settings">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
       </div>
 
-      <!-- 悬浮右上角关闭按钮 (SettingsCircleButton) -->
-      <div class="close-btn-wrap">
-        <button class="close-circle-btn" onclick="triggerClose()" title="Close Settings">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#211811" stroke-width="2.2" stroke-linecap="round">
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
-          </svg>
-        </button>
-      </div>
+      <!-- 页面栈视口 -->
+      <div class="screens-viewport">
 
-      <!-- 滚动内容区 -->
-      <div class="scroll-content" id="scrollContent">
-
-        <!-- 1. 语言分组 (My language) -->
-        <section class="settings-section">
-          <h2 class="section-header">My language</h2>
-          <div class="settings-card">
-            <!-- Row 1: Target language (只读) -->
-            <div class="settings-row">
-              <div class="row-icon-col">
-                <!-- 地球矢量线条 (SettingsRowIcon.targetLanguage) -->
-                <svg viewBox="0 0 24 24" stroke="#594C43" stroke-width="1.6">
-                  <circle cx="12" cy="12" r="8.5"/>
-                  <line x1="3.5" y1="12" x2="20.5" y2="12"/>
-                  <ellipse cx="12" cy="12" rx="4" ry="8.5"/>
-                </svg>
+        <!-- 页面 1：Settings 主页 (Root Screen) -->
+        <div class="screen-view root-screen" id="screenSettings">
+          <!-- 1. 语言分组 (My language) -->
+          <section class="settings-section">
+            <h2 class="section-header">My language</h2>
+            <div class="settings-card">
+              <!-- Row 1: Target language (只读) -->
+              <div class="settings-row">
+                <div class="row-icon-col">
+                  <svg viewBox="0 0 24 24" stroke="#594C43" stroke-width="1.6">
+                    <circle cx="12" cy="12" r="8.5"/>
+                    <line x1="3.5" y1="12" x2="20.5" y2="12"/>
+                    <ellipse cx="12" cy="12" rx="4" ry="8.5"/>
+                  </svg>
+                </div>
+                <span class="row-label">Target language</span>
+                <span class="row-value">English</span>
               </div>
-              <span class="row-label">Target language</span>
-              <span class="row-value">English</span>
+              <div class="row-divider"></div>
+              <!-- Row 2: Native language (只读) -->
+              <div class="settings-row">
+                <div class="row-icon-col">
+                  <svg viewBox="0 0 24 24" stroke="#594C43" stroke-width="1.6">
+                    <circle cx="12" cy="8.5" r="3.6"/>
+                    <path d="M5 20 C5 16.4, 8.1 14, 12 14 C15.9 14, 19 16.4, 19 20"/>
+                  </svg>
+                </div>
+                <span class="row-label">Native language</span>
+                <span class="row-value">Chinese</span>
+              </div>
             </div>
-            <div class="row-divider"></div>
-            <!-- Row 2: Native language (只读) -->
-            <div class="settings-row">
-              <div class="row-icon-col">
-                <!-- 人像矢量线条 (SettingsRowIcon.nativeLanguage) -->
-                <svg viewBox="0 0 24 24" stroke="#594C43" stroke-width="1.6">
-                  <circle cx="12" cy="8.5" r="3.6"/>
-                  <path d="M5 20 C5 16.4, 8.1 14, 12 14 C15.9 14, 19 16.4, 19 20"/>
-                </svg>
+          </section>
+
+          <!-- 2. 法律条款分组 (Legal) -->
+          <section class="settings-section">
+            <h2 class="section-header">Legal</h2>
+            <div class="settings-card">
+              <!-- Row 1: About AI (点击推入真实子页面) -->
+              <div class="settings-row clickable" onclick="navigateTo('screenAbout')">
+                <div class="row-icon-col">
+                  <svg viewBox="0 0 24 24" stroke="#594C43" stroke-width="1.6">
+                    <polygon points="12,3 13.9,8.1 19,10 13.9,11.9 12,17 10.1,11.9 5,10 10.1,8.1"/>
+                  </svg>
+                </div>
+                <span class="row-label">How AI uses your data</span>
+                <svg class="row-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>
               </div>
-              <span class="row-label">Native language</span>
-              <span class="row-value">Chinese</span>
+              <div class="row-divider"></div>
+              <!-- Row 2: Privacy Policy -->
+              <div class="settings-row clickable" onclick="openSafari('Privacy Policy', 'https://poplex.app/privacy')">
+                <div class="row-icon-col">
+                  <svg viewBox="0 0 24 24" stroke="#594C43" stroke-width="1.6">
+                    <rect x="5" y="10" width="14" height="10" rx="2.4"/>
+                    <path d="M8.2 10V7.2 C8.2 5.1, 9.9 3.4, 12 3.4 C14.1 3.4, 15.8 5.1, 15.8 7.2V10"/>
+                  </svg>
+                </div>
+                <span class="row-label">Privacy Policy</span>
+                <svg class="row-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>
+              </div>
+              <div class="row-divider"></div>
+              <!-- Row 3: Terms of Service -->
+              <div class="settings-row clickable" onclick="openSafari('Terms of Service', 'https://poplex.app/terms')">
+                <div class="row-icon-col">
+                  <svg viewBox="0 0 24 24" stroke="#594C43" stroke-width="1.6">
+                    <path d="M6 3.5h7.5L18 8v12.5H6z"/>
+                    <polyline points="13.5,3.5 13.5,8 18,8"/>
+                    <line x1="9" y1="13" x2="15" y2="13"/>
+                    <line x1="9" y1="16.5" x2="15" y2="16.5"/>
+                  </svg>
+                </div>
+                <span class="row-label">Terms of Service</span>
+                <svg class="row-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>
+              </div>
+            </div>
+          </section>
+
+          <!-- 3. 支持反馈分组 (Support) -->
+          <section class="settings-section">
+            <h2 class="section-header">Support</h2>
+            <div class="settings-card">
+              <!-- Row 1: Send feedback (点击推入真实子页面) -->
+              <div class="settings-row clickable" onclick="navigateTo('screenFeedback')">
+                <div class="row-icon-col">
+                  <svg viewBox="0 0 24 24" stroke="#594C43" stroke-width="1.6">
+                    <path d="M3.5 6.5h17v11h-11L3.5 21z"/>
+                  </svg>
+                </div>
+                <span class="row-label">Send feedback</span>
+                <svg class="row-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>
+              </div>
+            </div>
+          </section>
+
+          <!-- 4. 账号分组 (Account) -->
+          <section class="settings-section">
+            <h2 class="section-header">Account</h2>
+            <div class="settings-card">
+              <!-- Row 1: Delete account -->
+              <div class="settings-row clickable" onclick="openDeleteAlert()">
+                <div class="row-icon-col delete-icon">
+                  <svg viewBox="0 0 24 24" stroke="#DC2626" stroke-width="1.6">
+                    <line x1="4.5" y1="7" x2="19.5" y2="7"/>
+                    <polyline points="9.5,7 9.5,4.2 14.5,4.2 14.5,7"/>
+                    <path d="M6.8 7l1 13.8h8.4l1-13.8"/>
+                  </svg>
+                </div>
+                <span class="row-label danger">Delete account</span>
+              </div>
+            </div>
+          </section>
+
+          <!-- 5. 调试开发者分组 (Developer) -->
+          <section class="settings-section">
+            <h2 class="section-header">Developer</h2>
+            <div class="settings-card">
+              <div class="settings-row clickable" onclick="triggerToast('Library unlock reset.', 'blocked')">
+                <div class="row-icon-col">
+                  <svg viewBox="0 0 24 24" stroke="#594C43" stroke-width="1.6">
+                    <path d="M7 8V4L3 8l4 4"/>
+                    <path d="M7 8c7-5 13-2 13 4c0 5-4 9-8 9"/>
+                  </svg>
+                </div>
+                <span class="row-label">Reset Library unlock</span>
+              </div>
+            </div>
+          </section>
+
+          <!-- 6. 版本号页脚 (72pt 深度呼吸断层) -->
+          <footer class="version-footer">
+            Version 1.0 (Build 1)
+          </footer>
+        </div>
+
+        <!-- 页面 2：About AI 披露页 (AboutAIView) -->
+        <div class="screen-view sub-screen" id="screenAbout">
+          <div class="about-header-block">
+            <h1 class="about-page-title">How AI uses your data</h1>
+            <div class="about-body-text">
+              <p>Poplex creates your English learning content using AI (Google Gemini), based on the text and images you provide. This content is generated automatically and may be inaccurate or inappropriate — it's for learning reference only, not professional advice.</p>
+              <p>To generate content, the text and photos you provide are sent to Google Gemini for processing. We don't collect your real identity or use your data for ads. You can delete all your data anytime in Settings.</p>
             </div>
           </div>
-        </section>
 
-        <!-- 2. 法律条款分组 (Legal) -->
-        <section class="settings-section">
-          <h2 class="section-header">Legal</h2>
-          <div class="settings-card">
-            <!-- Row 1: About AI -->
-            <div class="settings-row clickable" onclick="triggerToast('Opening About AI...')">
-              <div class="row-icon-col">
-                <!-- 四角星芒 (SettingsRowIcon.aiData) -->
-                <svg viewBox="0 0 24 24" stroke="#594C43" stroke-width="1.6">
-                  <polygon points="12,3 13.9,8.1 19,10 13.9,11.9 12,17 10.1,11.9 5,10 10.1,8.1"/>
-                </svg>
+          <div class="about-links-stack">
+            <a class="about-link-row" onclick="openSafari('Privacy Policy', 'https://poplex.app/privacy')">
+              <span>Privacy Policy</span>
+              <svg viewBox="0 0 24 24" fill="none"><path d="M7 17L17 7M17 7H7M17 7V17"/></svg>
+            </a>
+            <a class="about-link-row" onclick="openSafari('Terms of Service', 'https://poplex.app/terms')">
+              <span>Terms of Service</span>
+              <svg viewBox="0 0 24 24" fill="none"><path d="M7 17L17 7M17 7H7M17 7V17"/></svg>
+            </a>
+          </div>
+        </div>
+
+        <!-- 页面 3：Feedback 意见反馈页 (FeedbackView) -->
+        <div class="screen-view sub-screen" id="screenFeedback">
+          <!-- 介绍头部 -->
+          <div class="feedback-intro-block">
+            <h1 class="feedback-intro-title">We'd love your feedback</h1>
+            <p class="feedback-intro-desc">Share your ideas, report an issue, or request an invite code for extra quota.</p>
+          </div>
+
+          <!-- 分类选择 (What's this about?) -->
+          <div class="feedback-field-group">
+            <div class="feedback-field-label">What's this about?</div>
+            <div class="category-chips-row">
+              <!-- Chip 1: Suggestion (默认选中) -->
+              <div class="category-chip selected" id="chipSuggestion" onclick="selectCategory('suggestion')">
+                <span class="chip-icon">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-7 7c0 2.5 1.5 4.5 3 6h8c1.5-1.5 3-3.5 3-6a7 7 0 0 0-7-7z"/></svg>
+                </span>
+                <span>Suggestion</span>
               </div>
-              <span class="row-label">How AI uses your data</span>
-              <svg class="row-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>
-            </div>
-            <div class="row-divider"></div>
-            <!-- Row 2: Privacy Policy -->
-            <div class="settings-row clickable" onclick="triggerToast('Opening Privacy Policy...')">
-              <div class="row-icon-col">
-                <!-- 挂锁 (SettingsRowIcon.privacy) -->
-                <svg viewBox="0 0 24 24" stroke="#594C43" stroke-width="1.6">
-                  <rect x="5" y="10" width="14" height="10" rx="2.4"/>
-                  <path d="M8.2 10V7.2 C8.2 5.1, 9.9 3.4, 12 3.4 C14.1 3.4, 15.8 5.1, 15.8 7.2V10"/>
-                </svg>
+
+              <!-- Chip 2: Bug (MinimalistBugIcon 1.0pt 极简圆弧小甲虫) -->
+              <div class="category-chip" id="chipBug" onclick="selectCategory('bug')">
+                <span class="chip-icon">
+                  <!-- 生产代码 1:1 Canvas 复刻极简小甲虫 (width 12, height 12, stroke 1.0) -->
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round">
+                    <!-- 1. 身体 (柔和圆润椭圆轮廓 cx: 6, cy: 7.2) -->
+                    <rect x="2.8" y="4.0" width="6.4" height="7.2" rx="3.2" ry="3.2" />
+                    <!-- 2. 翅膀分缝微线 -->
+                    <line x1="6" y1="4.8" x2="6" y2="10.4" />
+                    <!-- 3. 两根柔和向上舒展的微触角 -->
+                    <path d="M4.6 4.0 Q 4.2 2.4 3.0 1.4" />
+                    <path d="M7.4 4.0 Q 7.8 2.4 9.0 1.4" />
+                  </svg>
+                </span>
+                <span>Bug</span>
               </div>
-              <span class="row-label">Privacy Policy</span>
-              <svg class="row-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>
-            </div>
-            <div class="row-divider"></div>
-            <!-- Row 3: Terms of Service -->
-            <div class="settings-row clickable" onclick="triggerToast('Opening Terms of Service...')">
-              <div class="row-icon-col">
-                <!-- 文档 (SettingsRowIcon.terms) -->
-                <svg viewBox="0 0 24 24" stroke="#594C43" stroke-width="1.6">
-                  <path d="M6 3.5h7.5L18 8v12.5H6z"/>
-                  <polyline points="13.5,3.5 13.5,8 18,8"/>
-                  <line x1="9" y1="13" x2="15" y2="13"/>
-                  <line x1="9" y1="16.5" x2="15" y2="16.5"/>
-                </svg>
+
+              <!-- Chip 3: Other -->
+              <div class="category-chip" id="chipOther" onclick="selectCategory('other')">
+                <span class="chip-icon">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+                </span>
+                <span>Other</span>
               </div>
-              <span class="row-label">Terms of Service</span>
-              <svg class="row-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>
             </div>
           </div>
-        </section>
 
-        <!-- 3. 支持反馈分组 (Support) -->
-        <section class="settings-section">
-          <h2 class="section-header">Support</h2>
-          <div class="settings-card">
-            <!-- Row 1: Send feedback -->
-            <div class="settings-row clickable" onclick="triggerToast('Thank you! We\'ll be in touch soon')">
-              <div class="row-icon-col">
-                <!-- 气泡 (SettingsRowIcon.feedback) -->
-                <svg viewBox="0 0 24 24" stroke="#594C43" stroke-width="1.6">
-                  <path d="M3.5 6.5h17v11h-11L3.5 21z"/>
-                </svg>
+          <!-- 详情输入 (Details) -->
+          <div class="feedback-field-group">
+            <div class="feedback-field-label">Details</div>
+            <div class="input-card">
+              <textarea class="detail-textarea" id="feedbackDetails" placeholder="Tell us what happened…" oninput="handleDetailsInput()"></textarea>
+              <div class="textarea-footer">
+                <span class="char-counter" id="charCounter">0/1,000</span>
               </div>
-              <span class="row-label">Send feedback</span>
-              <svg class="row-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>
             </div>
           </div>
-        </section>
 
-        <!-- 4. 账号分组 (Account) -->
-        <section class="settings-section">
-          <h2 class="section-header">Account</h2>
-          <div class="settings-card">
-            <!-- Row 1: Delete account (高危红色，无 Chevron) -->
-            <div class="settings-row clickable" onclick="openDeleteAlert()">
-              <div class="row-icon-col delete-icon">
-                <!-- 垃圾桶 (SettingsRowIcon.delete) -->
-                <svg viewBox="0 0 24 24" stroke="#DC2626" stroke-width="1.6">
-                  <line x1="4.5" y1="7" x2="19.5" y2="7"/>
-                  <polyline points="9.5,7 9.5,4.2 14.5,4.2 14.5,7"/>
-                  <path d="M6.8 7l1 13.8h8.4l1-13.8"/>
-                </svg>
-              </div>
-              <span class="row-label danger">Delete account</span>
+          <!-- 邮箱选填 (Email optional) -->
+          <div class="feedback-field-group">
+            <div class="feedback-field-label">Email (optional)</div>
+            <div class="input-card">
+              <input type="email" class="email-input" id="feedbackEmail" placeholder="name@example.com" oninput="clearError()">
             </div>
           </div>
-        </section>
 
-        <!-- 5. 调试开发者分组 (Developer - DEBUG) -->
-        <section class="settings-section">
-          <h2 class="section-header">Developer</h2>
-          <div class="settings-card">
-            <!-- Row 1: Reset Library unlock -->
-            <div class="settings-row clickable" onclick="triggerToast('Library unlock reset.')">
-              <div class="row-icon-col">
-                <!-- 回旋重置箭头 (SettingsRowIcon.reset) -->
-                <svg viewBox="0 0 24 24" stroke="#594C43" stroke-width="1.6">
-                  <path d="M7 8V4L3 8l4 4"/>
-                  <path d="M7 8c7-5 13-2 13 4c0 5-4 9-8 9"/>
-                </svg>
-              </div>
-              <span class="row-label">Reset Library unlock</span>
-            </div>
+          <!-- 错误消息提示 -->
+          <div class="form-error-row" id="feedbackError">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <span id="feedbackErrorMsg">Please check your email address and try again.</span>
           </div>
-        </section>
 
-        <!-- 6. 版本号页脚 (72pt 深度呼吸断层) -->
-        <footer class="version-footer">
-          Version 1.0 (Build 1)
-        </footer>
+          <!-- 提交按钮 (Send feedback) -->
+          <button class="submit-cta-btn" id="btnSubmitFeedback" disabled onclick="submitFeedbackForm()">
+            <span class="spinner" id="submitSpinner"></span>
+            <span class="btn-content" style="display: flex; align-items: center; gap: 8px;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+              </svg>
+              <span>Send feedback</span>
+            </span>
+          </button>
+        </div>
 
       </div>
 
       <!-- 底部安全条指示器 -->
       <div class="home-indicator"></div>
 
-      <!-- 生产 Toast 浮层 -->
-      <div class="toast-pill" id="toastPill">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#FFFDF8" stroke-width="2.2" stroke-linecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-        <span id="toastMsg">Thank you! We'll be in touch soon</span>
+      <!-- 生产环境 AppToast 浮层 (328pt 宽、R8 藏书票便签) -->
+      <div class="app-toast-container positive" id="appToast">
+        <span class="app-toast-icon" id="toastIcon">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+          </svg>
+        </span>
+        <span class="app-toast-msg" id="toastMsg">Thank you for your feedback.</span>
       </div>
 
-      <!-- 原生系统 Alert 模拟 -->
+      <!-- 模拟 SafariView WebSheet -->
+      <div class="safari-sheet-scrim" id="safariScrim">
+        <div class="safari-sheet">
+          <div class="safari-top-bar">
+            <span style="width: 44px;"></span>
+            <div class="safari-domain-pill">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              <span id="safariHost">poplex.app</span>
+            </div>
+            <button class="safari-done-btn" onclick="closeSafari()">Done</button>
+          </div>
+          <div class="safari-body">
+            <h2 id="safariDocTitle" style="font-size: 20px; font-weight: 700; margin-bottom: 12px;">Legal Document</h2>
+            <p style="margin-bottom: 12px; color: #666;">Effective Date: September 2026</p>
+            <p style="margin-bottom: 16px;">This in-app Safari preview demonstrates production App Store 5.1.2(i) compliance integration. External links preserve full context while keeping the user inside the session container.</p>
+            <p style="margin-bottom: 16px;">We do not track users across third-party websites or sell telemetry data. Learning prompts and scene records are strictly isolated under cryptographic user IDs with Row Level Security (RLS).</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 原生系统 Alert 模拟 (Delete account) -->
       <div class="alert-modal-scrim" id="alertScrim">
         <div class="alert-box">
           <div class="alert-content">
@@ -782,134 +1560,363 @@
 
     <!-- 2. 排印与间距审计视察面板 (Typography & Spacing Inspector) -->
     <aside class="inspector-panel">
-      <div class="inspector-title">
-        <span>Settings 排版与设计代币审计</span>
-        <span class="highlight-pill">100% 对齐</span>
+      <div class="inspector-header-row">
+        <span class="inspector-title">设计代币与排印审计</span>
+        <span class="highlight-pill" id="currentScreenPill">Settings</span>
       </div>
-      <p class="inspector-desc">
-        严格遵循 <code>AGENTS.md</code> 规范与 <code>AIEnglishApp/Settings/</code> 生产代码：
-        暖纸底色无大面积彩块，以<strong>纯留白（32/72/28pt）</strong>与<strong>字重/衬线双轴对比</strong>建立温润、克制的出版物级体验。
+
+      <!-- 页面联动切换器 -->
+      <div class="inspector-tabs">
+        <div class="tab-item active" id="tabSettings" onclick="navigateTo('screenSettings')">Settings 主页</div>
+        <div class="tab-item" id="tabAbout" onclick="navigateTo('screenAbout')">About AI</div>
+        <div class="tab-item" id="tabFeedback" onclick="navigateTo('screenFeedback')">Feedback</div>
+      </div>
+
+      <p class="inspector-desc" id="inspectorDesc">
+        严格基于项目最新的“<strong>字体三巨头（铁三角）</strong>”体系：英文衬线 <code>Charter</code> + 英文无衬线 <code>Gothic A1</code> + 中文 <code>冬青黑体</code>。
       </p>
 
-      <!-- 字体 Token 表 -->
-      <table class="token-table">
-        <thead>
-          <tr>
-            <th>界面元素</th>
-            <th>生产 Token 名</th>
-            <th>排印参数与字族</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td><strong>顶栏固定标题</strong></td>
-            <td><span class="code-tag">settingsPinnedTitleSerif</span></td>
-            <td><span class="spec-pill">Serif · title3 · 20pt · 600</span></td>
-          </tr>
-          <tr>
-            <td><strong>卡外分区标题</strong></td>
-            <td><span class="code-tag">settingsSectionTitleSerif</span></td>
-            <td><span class="spec-pill">Serif · subheadline · 15pt · 500</span></td>
-          </tr>
-          <tr>
-            <td><strong>列表行主文字</strong></td>
-            <td><span class="code-tag">englishBody</span></td>
-            <td><span class="spec-pill">Sans · body · 17pt · 400</span></td>
-          </tr>
-          <tr>
-            <td><strong>列表行次要/数值</strong></td>
-            <td><span class="code-tag">englishBody (textMuted)</span></td>
-            <td><span class="spec-pill">Sans · body · 17pt · #7C7773</span></td>
-          </tr>
-          <tr>
-            <td><strong>危险操作文字</strong></td>
-            <td><span class="code-tag">englishBody (danger)</span></td>
-            <td><span class="spec-pill">Sans · body · 17pt · #DC2626</span></td>
-          </tr>
-          <tr>
-            <td><strong>版本号页脚</strong></td>
-            <td><span class="code-tag">settingsVersion</span></td>
-            <td><span class="spec-pill">Serif · caption · 12pt · 400</span></td>
-          </tr>
-        </tbody>
-      </table>
+      <!-- 动态排印 Token 表 -->
+      <div id="inspectorContent">
+        <!-- 默认展示 Settings 表格 -->
+        <table class="token-table">
+          <thead>
+            <tr>
+              <th>界面元素</th>
+              <th>生产 Token 名</th>
+              <th>排印规格与字族</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>顶栏固定标题</strong></td>
+              <td><span class="code-tag">settingsPinnedTitleSerif</span></td>
+              <td><span class="spec-pill">Charter · 20pt · Bold 700</span></td>
+            </tr>
+            <tr>
+              <td><strong>卡外分区标题</strong></td>
+              <td><span class="code-tag">settingsSectionTitleSerif</span></td>
+              <td><span class="spec-pill">Charter · 15pt · Regular 400</span></td>
+            </tr>
+            <tr>
+              <td><strong>列表行主文字</strong></td>
+              <td><span class="code-tag">englishBody</span></td>
+              <td><span class="spec-pill">Gothic A1 · 17pt · Regular 400</span></td>
+            </tr>
+            <tr>
+              <td><strong>列表行次要数值</strong></td>
+              <td><span class="code-tag">englishBody (textMuted)</span></td>
+              <td><span class="spec-pill">Gothic A1 · 17pt · #7C7773</span></td>
+            </tr>
+            <tr>
+              <td><strong>危险操作红字</strong></td>
+              <td><span class="code-tag">englishBody (danger)</span></td>
+              <td><span class="spec-pill">Gothic A1 · 17pt · #DC2626</span></td>
+            </tr>
+            <tr>
+              <td><strong>版本号页脚</strong></td>
+              <td><span class="code-tag">settingsVersion</span></td>
+              <td><span class="spec-pill">Charter · 12pt · Regular 400</span></td>
+            </tr>
+          </tbody>
+        </table>
 
-      <!-- 间距节奏表 -->
-      <table class="token-table" style="margin-top: 4px;">
-        <thead>
-          <tr>
-            <th>间距类型</th>
-            <th>生产 Token 名</th>
-            <th>物理尺寸与设计意图</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td><strong>分区垂直节奏</strong></td>
-            <td><span class="code-tag">AppTheme.Space.paddingSection</span></td>
-            <td><span class="spec-pill"><strong>32pt</strong>（分组卡片之间的呼吸留白）</span></td>
-          </tr>
-          <tr>
-            <td><strong>标题到卡片</strong></td>
-            <td><span class="code-tag">AppTheme.Space.paddingS</span></td>
-            <td><span class="spec-pill"><strong>8pt</strong>（标题与其承载卡片的归属贴合）</span></td>
-          </tr>
-          <tr>
-            <td><strong>卡片内行间距</strong></td>
-            <td><span class="code-tag">AppTheme.Space.paddingCard</span></td>
-            <td><span class="spec-pill"><strong>16pt</strong>（上/下/左/右标准内边距）</span></td>
-          </tr>
-          <tr>
-            <td><strong>卡片到页脚</strong></td>
-            <td><span class="code-tag">AppTheme.Space.pageFooterTop</span></td>
-            <td><span class="spec-pill"><strong>72pt</strong>（打破卡片吸附的深度呼吸断层）</span></td>
-          </tr>
-          <tr>
-            <td><strong>页脚到底部</strong></td>
-            <td><span class="code-tag">AppTheme.Space.pageFooterBottom</span></td>
-            <td><span class="spec-pill"><strong>28pt</strong>（安全区之上的平稳收口留白）</span></td>
-          </tr>
-        </tbody>
-      </table>
+        <!-- 间距节奏表 -->
+        <table class="token-table" style="margin-top: 8px;">
+          <thead>
+            <tr>
+              <th>间距类型</th>
+              <th>生产 Token 名</th>
+              <th>物理尺寸与设计意图</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>分区垂直节奏</strong></td>
+              <td><span class="code-tag">paddingSection</span></td>
+              <td><span class="spec-pill"><strong>32pt</strong>（分组卡片之间的呼吸留白）</span></td>
+            </tr>
+            <tr>
+              <td><strong>卡片到页脚</strong></td>
+              <td><span class="code-tag">pageFooterTop</span></td>
+              <td><span class="spec-pill"><strong>72pt</strong>（打破卡片吸附的深度断层）</span></td>
+            </tr>
+            <tr>
+              <td><strong>页脚收口留白</strong></td>
+              <td><span class="code-tag">pageFooterBottom</span></td>
+              <td><span class="spec-pill"><strong>28pt</strong>（安全区之上的平稳收口）</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </aside>
 
   </main>
 
   <script>
-    // 切换网格线辅助标注
-    function toggleOverlays() {
-      document.body.classList.toggle('show-overlays');
-      const btn = document.getElementById('btnToggleOverlays');
-      btn.classList.toggle('active');
+    // ── 页面状态机与路由 ──
+    let currentScreenId = 'screenSettings';
+
+    const screenData = {
+      screenSettings: {
+        title: 'Settings',
+        pill: 'Settings 主页',
+        tabId: 'tabSettings',
+        desc: '主设置页：以暖纸底色为基调，采用 <strong>Charter</strong> 衬线作为标题与卡外分组导引，行内文字使用 <strong>Gothic A1</strong> 无衬线保证现代易读性。',
+        tokensHtml: `
+          <table class="token-table">
+            <thead><tr><th>界面元素</th><th>生产 Token</th><th>排印规格与墨色</th></tr></thead>
+            <tbody>
+              <tr><td><strong>顶栏固定标题</strong></td><td><span class="code-tag">settingsPinnedTitleSerif</span></td><td><span class="spec-pill">Charter · 20pt · Bold (700)</span></td></tr>
+              <tr><td><strong>卡外分区标题</strong></td><td><span class="code-tag">settingsSectionTitleSerif</span></td><td><span class="spec-pill">Charter · 15pt · Regular (400)</span></td></tr>
+              <tr><td><strong>列表行主文字</strong></td><td><span class="code-tag">settingsRowLabel</span></td><td><span class="spec-pill" style="background:#0A0705; color:#FFFDF8;">★ Gothic A1 · 17pt · ExtraLight 200 · #0A0705 焦黑</span></td></tr>
+              <tr><td><strong>列表行展开箭头</strong></td><td><span class="code-tag">textMuted</span></td><td><span class="spec-pill">Canvas 1.4pt · #7C7773 (4.4:1) · 恰好不抢焦点</span></td></tr>
+              <tr><td><strong>行首 Icon 卸重</strong></td><td><span class="code-tag">textMuted / 方案1</span></td><td><span class="spec-pill" style="border:1px solid #7C7773;">★ #7C7773 (同箭头灰) 彻底化解墨水黑块感</span></td></tr>
+              <tr><td><strong>版本号页脚</strong></td><td><span class="code-tag">settingsVersion</span></td><td><span class="spec-pill">Charter · 12pt · Regular (400)</span></td></tr>
+            </tbody>
+          </table>
+          <table class="token-table" style="margin-top: 8px;">
+            <thead><tr><th>卡片底色亮度对比</th><th>Token 色值</th><th>视觉质感与对比度</th></tr></thead>
+            <tbody>
+              <tr><td><strong>★ 现已对齐 Today (100% 纯暖白)</strong></td><td><span class="code-tag">Primitive.warmWhite (#FFFDFB)</span></td><td><span class="spec-pill" style="color:var(--brand-ink);">完全对齐 Today TAB 卡片，白净通透，边界干净利落</span></td></tr>
+              <tr><td><strong>旧版对照 (85% 半透明)</strong></td><td><span class="code-tag">warmWhite.opacity(0.85)</span></td><td><span class="spec-pill" style="color:var(--text-muted);">底层暖米透出 15%，视觉显暗发灰，卡片偏软</span></td></tr>
+            </tbody>
+          </table>
+          <table class="token-table" style="margin-top: 8px;">
+            <thead><tr><th>对比度与力学审计</th><th>色彩色阶</th><th>视网膜光学体感</th></tr></thead>
+            <tbody>
+              <tr><td><strong>现状：深灰 #4B4640</strong></td><td><span class="code-tag">9.9:1 (textSecondary)</span></td><td><span class="spec-pill" style="color:var(--danger);">闭合图形总面积大，压迫 200 针管笔文字</span></td></tr>
+              <tr><td><strong>★ 方案 1：同箭头灰 #7C7773</strong></td><td><span class="code-tag">4.4:1 (textMuted)</span></td><td><span class="spec-pill" style="color:var(--brand-ink);">轻柔水墨印记，文字立成绝对主角</span></td></tr>
+              <tr><td><strong>方案 2：适中暖灰 #635C55</strong></td><td><span class="code-tag">6.5:1 (过渡档)</span></td><td><span class="spec-pill">退后半步，比箭头略深一点点</span></td></tr>
+            </tbody>
+          </table>
+          <table class="token-table" style="margin-top: 8px;">
+            <thead><tr><th>右上角关闭键底盘</th><th>参数规格</th><th>“双层底纹”根因诊断</th></tr></thead>
+            <tbody>
+              <tr><td><strong>现状对照 (16pt大阴影)</strong></td><td><span class="code-tag">blur 16 / y 6 / 9%</span></td><td><span class="spec-pill" style="color:var(--danger);">⚠️ 44pt小圆挂卡片大阴影，扩散出60pt灰晕，形成双底纹</span></td></tr>
+              <tr><td><strong>★ 方案 A (精细微阴影)</strong></td><td><span class="code-tag">pillContact (blur 3 / y 1)</span></td><td><span class="spec-pill" style="color:var(--brand-ink);">贴地微厚度，轮廓紧凑收敛，彻底杜绝外圈底纹</span></td></tr>
+              <tr><td><strong>方案 B (纯平微边框)</strong></td><td><span class="code-tag">border 0.5px / shadow 0</span></td><td><span class="spec-pill">纯粹无阴影，纯平面纸面感，绝对单一轮廓</span></td></tr>
+              <tr><td><strong>方案 C (纯平无边框)</strong></td><td><span class="code-tag">border 0 / shadow 0</span></td><td><span class="spec-pill">纯暖白实心圆浮于暖纸底，温润极简</span></td></tr>
+            </tbody>
+          </table>
+        `
+      },
+      screenAbout: {
+        title: 'Personal data',
+        pill: 'About AI 披露页',
+        tabId: 'tabAbout',
+        desc: 'App Store 5.1.2(i) 合规第三方 AI 披露页：衬线大标题 + Gothic A1 长文本，外链采用 PM 钦定 <strong>brandStrong (#FF7622)</strong> 种子品牌橙强化品牌认知。',
+        tokensHtml: `
+          <table class="token-table">
+            <thead><tr><th>界面元素</th><th>生产 Token</th><th>排印规格与字族</th></tr></thead>
+            <tbody>
+              <tr><td><strong>顶栏固定路标</strong></td><td><span class="code-tag">settingsPinnedTitleSerif</span></td><td><span class="spec-pill">Charter · 20pt · Bold · "Personal data"</span></td></tr>
+              <tr><td><strong>页面内容大标题</strong></td><td><span class="code-tag">sectionTitleSerif</span></td><td><span class="spec-pill">Charter · 22pt · Bold (700)</span></td></tr>
+              <tr><td><strong>合规说明正文</strong></td><td><span class="code-tag">englishBody</span></td><td><span class="spec-pill">Gothic A1 · 17pt · Regular · lineSpacing 4pt</span></td></tr>
+              <tr><td><strong>纯文字外链标签</strong></td><td><span class="code-tag">brandStrong</span></td><td><span class="spec-pill">Gothic A1 · 17pt · #FF7622 (品牌橙)</span></td></tr>
+            </tbody>
+          </table>
+          <table class="token-table" style="margin-top: 8px;">
+            <thead><tr><th>合规与视觉特性</th><th>规范决策</th><th>实现细节</th></tr></thead>
+            <tbody>
+              <tr><td><strong>外链交互</strong></td><td><span class="code-tag">SafariView</span></td><td><span class="spec-pill">支持 In-app 弹出 sheet 浏览条款</span></td></tr>
+              <tr><td><strong>文字色阶权衡</strong></td><td><span class="code-tag">brandStrong (2.9:1)</span></td><td><span class="spec-pill">PM 拍板品牌辨识度优先，放弃 AA</span></td></tr>
+            </tbody>
+          </table>
+        `
+      },
+      screenFeedback: {
+        title: 'Feedback',
+        pill: 'Feedback 表单页',
+        tabId: 'tabFeedback',
+        desc: '用户反馈表单：轻量分类单选胶囊（含 <strong>1.0pt 极简圆弧小甲虫</strong>），字数实时千分位统计（0/1,000），成功后触发 <strong>晨曦暖橙底 R8 藏书票 Toast</strong>。',
+        tokensHtml: `
+          <table class="token-table">
+            <thead><tr><th>界面元素</th><th>生产 Token</th><th>排印规格与字族</th></tr></thead>
+            <tbody>
+              <tr><td><strong>顶栏固定标题</strong></td><td><span class="code-tag">settingsPinnedTitleSerif</span></td><td><span class="spec-pill">Charter · 20pt · Bold · "Feedback"</span></td></tr>
+              <tr><td><strong>页面内容大标题</strong></td><td><span class="code-tag">sectionTitleSerif</span></td><td><span class="spec-pill">Charter · 22pt · Bold (700)</span></td></tr>
+              <tr><td><strong>输入字段标号</strong></td><td><span class="code-tag">settingsSectionTitleSerif</span></td><td><span class="spec-pill">Charter · 15pt · Regular (400)</span></td></tr>
+              <tr><td><strong>分类胶囊文字</strong></td><td><span class="code-tag">feedbackChipLabel</span></td><td><span class="spec-pill">Gothic A1 · 15pt · Regular (400)</span></td></tr>
+              <tr><td><strong>字数统计小字</strong></td><td><span class="code-tag">metaNote</span></td><td><span class="spec-pill">Gothic A1 · 11pt · #7C7773</span></td></tr>
+              <tr><td><strong>主提交按钮</strong></td><td><span class="code-tag">ctaLabel</span></td><td><span class="spec-pill">Gothic A1 · 17pt · Semibold (600)</span></td></tr>
+            </tbody>
+          </table>
+          <table class="token-table" style="margin-top: 8px;">
+            <thead><tr><th>交互控件</th><th>生产 Token</th><th>视觉表现</th></tr></thead>
+            <tbody>
+              <tr><td><strong>小甲虫图标</strong></td><td><span class="code-tag">MinimalistBugIcon</span></td><td><span class="spec-pill">Canvas 1.0pt 单线圆润椭圆 + 贝塞尔触角</span></td></tr>
+              <tr><td><strong>胶囊选中态</strong></td><td><span class="code-tag">brandWash + brandTint</span></td><td><span class="spec-pill">#FFF5EE 底 + 0.5px 浅橙边 + 深灰字</span></td></tr>
+              <tr><td><strong>反馈成功 Toast</strong></td><td><span class="code-tag">toastPositiveBg</span></td><td><span class="spec-pill">328pt 宽 · R8 藏书票 · 晨曦暖橙底 (#FFF3EB)</span></td></tr>
+            </tbody>
+          </table>
+        `
+      }
+    };
+
+    function updateInspector(screenId) {
+      const data = screenData[screenId];
+      if (!data) return;
+      document.getElementById('currentScreenPill').innerText = data.pill;
+      document.getElementById('inspectorDesc').innerHTML = data.desc;
+      document.getElementById('inspectorContent').innerHTML = data.tokensHtml;
+
+      // 更新标签高亮
+      document.querySelectorAll('.tab-item').forEach(el => el.classList.remove('active'));
+      const activeTab = document.getElementById(data.tabId);
+      if (activeTab) activeTab.classList.add('active');
     }
 
-    // 触发 Toast 提示
+    // 页面跳转路由
+    function navigateTo(targetScreenId) {
+      if (currentScreenId === targetScreenId) return;
+
+      const rootScreen = document.getElementById('screenSettings');
+      const aboutScreen = document.getElementById('screenAbout');
+      const feedbackScreen = document.getElementById('screenFeedback');
+      const backBtn = document.getElementById('backButton');
+      const titleEl = document.getElementById('pinnedTitle');
+
+      if (targetScreenId === 'screenSettings') {
+        // 返回主页
+        aboutScreen.classList.remove('active');
+        feedbackScreen.classList.remove('active');
+        rootScreen.classList.remove('pushed-left');
+        backBtn.classList.remove('visible');
+      } else {
+        // 推入二级页
+        rootScreen.classList.add('pushed-left');
+        if (targetScreenId === 'screenAbout') {
+          feedbackScreen.classList.remove('active');
+          aboutScreen.classList.add('active');
+        } else if (targetScreenId === 'screenFeedback') {
+          aboutScreen.classList.remove('active');
+          feedbackScreen.classList.add('active');
+        }
+        backBtn.classList.add('visible');
+      }
+
+      currentScreenId = targetScreenId;
+      const targetData = screenData[targetScreenId];
+      titleEl.style.opacity = '0';
+      titleEl.style.transform = 'translateY(2px)';
+      setTimeout(() => {
+        titleEl.innerText = targetData.title;
+        titleEl.style.opacity = '1';
+        titleEl.style.transform = 'translateY(0)';
+      }, 150);
+
+      updateInspector(targetScreenId);
+    }
+
+    function navigateBack() {
+      navigateTo('screenSettings');
+    }
+
+    // ── 分类胶囊选择 ──
+    let selectedCategory = 'suggestion';
+    function selectCategory(cat) {
+      selectedCategory = cat;
+      document.querySelectorAll('.category-chip').forEach(el => el.classList.remove('selected'));
+      if (cat === 'suggestion') document.getElementById('chipSuggestion').classList.add('selected');
+      if (cat === 'bug') document.getElementById('chipBug').classList.add('selected');
+      if (cat === 'other') document.getElementById('chipOther').classList.add('selected');
+    }
+
+    // ── Feedback 输入控制与字数计数 ──
+    function handleDetailsInput() {
+      const textarea = document.getElementById('feedbackDetails');
+      let val = textarea.value;
+      if (val.length > 1000) {
+        val = val.substring(0, 1000);
+        textarea.value = val;
+      }
+      const count = val.length;
+      document.getElementById('charCounter').innerText = count.toLocaleString('en-US') + '/1,000';
+
+      const submitBtn = document.getElementById('btnSubmitFeedback');
+      submitBtn.disabled = val.trim().length === 0;
+      clearError();
+    }
+
+    function clearError() {
+      document.getElementById('feedbackError').classList.remove('show');
+    }
+
+    // ── 提交反馈表单 ──
+    function submitFeedbackForm() {
+      const emailVal = document.getElementById('feedbackEmail').value.trim();
+      const errorRow = document.getElementById('feedbackError');
+      const errorMsg = document.getElementById('feedbackErrorMsg');
+
+      // 邮箱校验 (存在且不合法)
+      if (emailVal.length > 0) {
+        const pattern = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+        if (!pattern.test(emailVal)) {
+          errorMsg.innerText = "Please check your email address and try again.";
+          errorRow.classList.add('show');
+          return;
+        }
+      }
+
+      const btn = document.getElementById('btnSubmitFeedback');
+      btn.classList.add('loading');
+      btn.disabled = true;
+
+      // 模拟网络提交延迟
+      setTimeout(() => {
+        btn.classList.remove('loading');
+        // 清空表单
+        document.getElementById('feedbackDetails').value = '';
+        document.getElementById('charCounter').innerText = '0/1,000';
+        document.getElementById('feedbackEmail').value = '';
+        btn.disabled = true;
+
+        // 返回设置主页并弹出晨曦暖橙底 R8 藏书票 Toast
+        navigateBack();
+        triggerToast("Thank you for your feedback.", "positive");
+      }, 750);
+    }
+
+    // ── 生产级 Toast 调度 (AppToast) ──
     let toastTimer = null;
-    function triggerToast(msg) {
-      const pill = document.getElementById('toastPill');
-      const text = document.getElementById('toastMsg');
-      text.innerText = msg;
-      pill.classList.add('show');
+    function triggerToast(msg, semantic = 'positive') {
+      const toast = document.getElementById('appToast');
+      const msgEl = document.getElementById('toastMsg');
+      const iconEl = document.getElementById('toastIcon');
+
+      msgEl.innerText = msg;
+      toast.className = 'app-toast-container ' + semantic;
+
+      if (semantic === 'positive') {
+        iconEl.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>`;
+      } else {
+        iconEl.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`;
+      }
+
+      toast.classList.add('show');
       if (toastTimer) clearTimeout(toastTimer);
       toastTimer = setTimeout(() => {
-        pill.classList.remove('show');
+        toast.classList.remove('show');
       }, 3500);
     }
 
-    // 触发右上角关闭 Sheet 动画
-    function triggerClose() {
-      const frame = document.getElementById('deviceFrame');
-      frame.style.transition = 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)';
-      frame.style.transform = 'translateY(80px) scale(0.96)';
-      frame.style.opacity = '0.4';
-      setTimeout(() => {
-        frame.style.transform = 'translateY(0) scale(1)';
-        frame.style.opacity = '1';
-        triggerToast('Settings Sheet 重置并拉回');
-      }, 400);
+    // ── Safari 弹窗预览 ──
+    function openSafari(title, url) {
+      document.getElementById('safariDocTitle').innerText = title;
+      try {
+        const u = new URL(url);
+        document.getElementById('safariHost').innerText = u.hostname;
+      } catch (e) {
+        document.getElementById('safariHost').innerText = 'poplex.app';
+      }
+      document.getElementById('safariScrim').classList.add('show');
+    }
+    function closeSafari() {
+      document.getElementById('safariScrim').classList.remove('show');
     }
 
-    // 删除弹窗
+    // ── 删除弹窗 ──
     function openDeleteAlert() {
       document.getElementById('alertScrim').classList.add('show');
     }
@@ -918,8 +1925,128 @@
     }
     function confirmDelete() {
       closeDeleteAlert();
-      triggerToast('Account deletion simulated.');
+      triggerToast('Account deletion simulated.', 'blocked');
     }
+
+    // ── 右上角关闭 Sheet 动画 ──
+    function triggerCloseSheet() {
+      const frame = document.getElementById('deviceFrame');
+      frame.style.transition = 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)';
+      frame.style.transform = 'translateY(80px) scale(0.96)';
+      frame.style.opacity = '0.4';
+      setTimeout(() => {
+        frame.style.transform = 'translateY(0) scale(1)';
+        frame.style.opacity = '1';
+        navigateBack();
+        triggerToast('Settings Sheet 重置并拉回', 'blocked');
+      }, 400);
+    }
+
+    // ── 切换网格线辅助标注 ──
+    function toggleOverlays() {
+      document.body.classList.toggle('show-overlays');
+      const btn = document.getElementById('btnToggleOverlays');
+      btn.classList.toggle('active');
+    }
+
+    // ── 切换二级页排印方案 ──
+    function setSubpageMode(mode) {
+      document.body.classList.remove('mode-proposal-a', 'mode-proposal-b', 'mode-proposal-c', 'mode-proposal-c-bold');
+      document.getElementById('btnModeBase').classList.remove('active');
+      document.getElementById('btnModeA').classList.remove('active');
+      document.getElementById('btnModeCBold').classList.remove('active');
+      document.getElementById('btnModeC').classList.remove('active');
+      document.getElementById('btnModeB').classList.remove('active');
+
+      if (mode === 'proposal-a') {
+        document.body.classList.add('mode-proposal-a');
+        document.getElementById('btnModeA').classList.add('active');
+        triggerToast('已切换至【方案 A · 高定大标】(标题 28pt Bold / 正文 15pt)', 'positive');
+      } else if (mode === 'proposal-c-bold') {
+        document.body.classList.add('mode-proposal-c-bold');
+        document.getElementById('btnModeCBold').classList.add('active');
+        triggerToast('已切换至【方案 C1+ · 紧凑加粗标★】(标题 20pt Bold / 正文 15pt)', 'positive');
+      } else if (mode === 'proposal-c') {
+        document.body.classList.add('mode-proposal-c');
+        document.getElementById('btnModeC').classList.add('active');
+        triggerToast('已切换至【方案 C1 · 雅致轻标】(标题 20pt 细衬线 / 正文 15pt)', 'positive');
+      } else if (mode === 'proposal-b') {
+        document.body.classList.add('mode-proposal-b');
+        document.getElementById('btnModeB').classList.add('active');
+        triggerToast('已切换至【方案 B · 轻盈极简】(标题 22pt / 正文 14pt)', 'positive');
+      } else {
+        document.getElementById('btnModeBase').classList.add('active');
+        triggerToast('已切换至【原版生产基线】(标题 22pt / 正文 17pt)', 'blocked');
+      }
+    }
+
+    // ── 切换行首 Icon 卸重色彩 (原位动态切换) ──
+    function setIconTint(mode) {
+      document.getElementById('btnIconChevron').classList.remove('active');
+      document.getElementById('btnIconMedium').classList.remove('active');
+      document.getElementById('btnIconBaseline').classList.remove('active');
+
+      const root = document.documentElement;
+      if (mode === 'chevron') {
+        root.style.setProperty('--settings-icon-tint', '#7C7773');
+        document.getElementById('btnIconChevron').classList.add('active');
+        triggerToast('已切换至【★ 方案 1 · 同箭头灰 #7C7773】(彻底卸下色块重感，中间 200 焦黑文字成为绝对主角)', 'positive');
+      } else if (mode === 'medium') {
+        root.style.setProperty('--settings-icon-tint', '#635C55');
+        document.getElementById('btnIconMedium').classList.add('active');
+        triggerToast('已切换至【方案 2 · 适中暖灰 #635C55】(退后半步，比箭头略深，保留前缀层次)', 'positive');
+      } else {
+        root.style.setProperty('--settings-icon-tint', '#4B4640');
+        document.getElementById('btnIconBaseline').classList.add('active');
+        triggerToast('已切回【当前现状 · 深灰 #4B4640】(9.9:1 墨水总面积偏大，压迫极细文字)', 'blocked');
+      }
+    }
+
+    // ── 切换卡片底色亮度 (100% 对齐 Today vs 85% 旧版透底发灰) ──
+    function setCardBrightness(mode) {
+      document.getElementById('btnCardFull').classList.remove('active');
+      document.getElementById('btnCardDim').classList.remove('active');
+      const root = document.documentElement;
+      if (mode === 'full') {
+        root.style.setProperty('--card-surface', '#FFFDFB');
+        document.getElementById('btnCardFull').classList.add('active');
+        triggerToast('已切换至【★ 100% 纯暖白 #FFFDFB】(完全对齐 Today TAB 卡片，通透明亮，消除发灰感)', 'positive');
+      } else {
+        root.style.setProperty('--card-surface', '#FFFDF8');
+        document.getElementById('btnCardDim').classList.add('active');
+        triggerToast('已切回【旧版 85% 半透明 #FFFDF8】(透出底层暖米色，卡片微偏灰暗)', 'blocked');
+      }
+    }
+
+    // ── 切换右上角关闭按钮底盘样式 (单层利落 vs 纯平 vs 现状双层) ──
+    function setCloseBtnStyle(style) {
+      document.body.classList.remove('close-style-pill', 'close-style-flat-border', 'close-style-flat-clean', 'close-style-baseline-heavy');
+      document.getElementById('btnClosePill').classList.remove('active');
+      document.getElementById('btnCloseFlatBorder').classList.remove('active');
+      document.getElementById('btnCloseFlatClean').classList.remove('active');
+      document.getElementById('btnCloseHeavy').classList.remove('active');
+
+      if (style === 'pill') {
+        document.body.classList.add('close-style-pill');
+        document.getElementById('btnClosePill').classList.add('active');
+        triggerToast('已切换至【★ 方案 A · 顶栏精细微阴影】(0.5pt边框 + 1px贴地微阴影，单层利落，绝无弥散光晕)', 'positive');
+      } else if (style === 'flat-border') {
+        document.body.classList.add('close-style-flat-border');
+        document.getElementById('btnCloseFlatBorder').classList.add('active');
+        triggerToast('已切换至【方案 B · 纯平微边框】(纯平零阴影 + 0.5pt细线，纯净印刷感，消除任何重层错觉)', 'positive');
+      } else if (style === 'flat-clean') {
+        document.body.classList.add('close-style-flat-clean');
+        document.getElementById('btnCloseFlatClean').classList.add('active');
+        triggerToast('已切换至【方案 C · 纯平无边框】(纯平暖白圆漂浮于暖纸底，极简温润)', 'positive');
+      } else {
+        document.body.classList.add('close-style-baseline-heavy');
+        document.getElementById('btnCloseHeavy').classList.add('active');
+        triggerToast('已切换至【现状对照 · 16pt大阴影】(大范围漫反射灰晕，肉眼极易误判为“双层底纹”)', 'blocked');
+      }
+    }
+
+    // 初始化审计面板
+    updateInspector('screenSettings');
   </script>
 </body>
 </html>

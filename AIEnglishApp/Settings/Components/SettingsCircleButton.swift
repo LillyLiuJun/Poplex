@@ -41,6 +41,12 @@ struct SettingsCircleButton: View {
     /// 比圆底还大，图标会顶出圆形背景。同一行的行首图标与 chevron 已按同样理由改过。
     @ScaledMetric(relativeTo: .body) private var side = AppTheme.Size.barControl
 
+    // 不复用 .surfacePill(in: Circle())：那份配方是为汉堡键/用量环/Tab 滑块这类
+    // 「浮于玻璃质感容器上的可交互控件」调的，自带 pillAmbientColor 环境阴影 +
+    // 顶部白色渐隐高光；套在 Settings 这颗 44pt 纯色返回/关闭键上，双层阴影 +
+    // 高光会显脏（发灰的双层底纹）。这里保持单层贴地阴影 + 0.5pt 描边的扁平配方，
+    // 是刻意分道扬镳，不是遗漏未复用。若后续出现第二个「扁平卡片圆按钮」消费者，
+    // 再考虑抽成共享 modifier。
     var body: some View {
         Button(action: action) {
             Image(systemName: kind.systemImage)
@@ -48,10 +54,17 @@ struct SettingsCircleButton: View {
                 .foregroundStyle(AppTheme.Color.textSecondary)
                 .frame(width: side, height: side)
                 .background(AppTheme.Color.cardBg, in: Circle())
-                .shadow(color: AppTheme.Shadow.cardColor,
-                        radius: AppTheme.Shadow.cardRadius / 2,
-                        x: 0,
-                        y: AppTheme.Shadow.cardY / 2)
+                .overlay {
+                    Circle()
+                        .strokeBorder(AppTheme.Color.cardBorder, lineWidth: 0.5)
+                }
+                .shadow(
+                    color: AppTheme.Shadow.pillContactColor,
+                    radius: AppTheme.Shadow.pillContactRadius,
+                    x: AppTheme.Shadow.pillContactX,
+                    y: AppTheme.Shadow.pillContactY
+                )
+                .contentShape(Circle())
         }
         .buttonStyle(.iconControl)
         .accessibilityLabel(kind.accessibilityLabel)
