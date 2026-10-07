@@ -14,6 +14,8 @@ struct AIEnglishAppApp: App {
     @State private var backgroundedAt: Date?
 
     init() {
+        // 字号封顶要在第一个视图渲染之前生效（见 AppDynamicTypeLimit.activate）。
+        AppDynamicTypeLimit.activate()
         // 后台预热 Supabase：把 SDK 首次初始化 + Keychain 读会话赶出主线程，
         // detached 确保它不继承主线程执行器，避免冷启动首屏被这段同步工作卡住。
         // 用 .utility 而非 .high：预热不急，断网时它会挂在网络等待上，不该和
@@ -26,6 +28,8 @@ struct AIEnglishAppApp: App {
     var body: some Scene {
         WindowGroup {
             RootView()
+                .appDynamicTypeCap()            // 字号封顶在「超大」，不支持无障碍那 5 档（见 AppDynamicTypeCap）
+                .onAppear { AppDynamicTypeCapInstaller.install() }
                 .preferredColorScheme(.light)   // 已退出系统自适应，MVP 锁定浅色
                 .task {
                     do {
@@ -91,7 +95,10 @@ struct RootView: View {
             if previewMode {
                 // 刀 6 验收用：`simctl launch <udid> <bundle> -tab2Preview` 直达
                 // Tab2 视觉全形态页（DEBUG-only，不进 Release，不影响首屏路由）。
+                // 预览页类型只在 DEBUG 下存在，引用也必须包在 #if DEBUG 里，否则 Release 编译失败。
+                #if DEBUG
                 Tab2Knife6PreviewView()
+                #endif
             } else if showSplash {
                 SplashScreenView { splashAnimationDone = true }
             } else if onboardingCompletedAt > 0 || skipOnboardingForUITests {
@@ -102,6 +109,7 @@ struct RootView: View {
                 }
             }
         }
+        .modifier(OnboardingRouteFade(isHome: onboardingCompletedAt > 0 || skipOnboardingForUITests))
         // 删号后的「有残留」提示挂在**根一级**：删号会把上面的分支从 ContentView
         // 切到 OnboardingView，挂在 Settings 上的 alert 会随子树一起销毁、显示不出来。
         // RootView 是路由本身，不会被这次切换销毁。
@@ -197,5 +205,22 @@ struct RootView: View {
             // 网络 / 鉴权失败 / 超时 → 不动，默认停在 onboarding（首屏不再因此报错或转圈）。
             print("[RootView] background onboarding check skipped (defaulting to onboarding): \(error)")
         }
+    }
+}
+
+/// 引导页 ↔ 首页的路由切换：交叉淡入淡出，替代瞬间硬切（2026-10-03）。
+///
+/// 必须挂在路由容器上、跟着「是否在首页」这个值走，而不能在完成回调里 withAnimation：
+/// 完成协调器会**先**直接写 UserDefaults 的完成标记，@AppStorage 随之立即切走分支，
+/// 回调里的 withAnimation 执行时切换早已发生（实测此前淡入从未生效）。挂在值上则不论
+/// 标记由谁、何时写入，切换都带动画。删号回到引导页同样淡入淡出。
+struct OnboardingRouteFade: ViewModifier {
+    let isHome: Bool
+
+    func body(content: Content) -> some View {
+        // 必须包一层真实容器：直接挂在 Group 上，动画会被分发到各分支视图自身，
+        // 分支的插入/移除不在动画作用域内，仍是硬切（探针实测）。
+        ZStack { content }
+            .animation(AppTheme.Motion.onboardingExitFade, value: isHome)
     }
 }

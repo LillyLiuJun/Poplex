@@ -4,59 +4,81 @@ import UIKit
 
 // MARK: - Tab2 Unlocked 生产全真正版画布 (Tab2 Unlocked Production Baseline)
 // ⚠️ 规则：【正版以线上生产代码为准——本画布只镜像生产、不做探索改动；
-//    生产变了（如刀 6a 三标题同档），画布随之同步】
+//    生产变了（如刀 6a 三标题同档、More topics to explore 探索区），画布随之同步】
 // 🎯 100% 严格直接对齐线上生产代码架构与视觉设计（绝不改动任何标题、字段或排布）：
 //   1. 视图外壳与框架：
 //      - 顶栏：TopBarProgressiveMask 渐进遮罩 + SettingsMenuButton + TopTabSelector (选中 Library) + UsageLimitButton
 //      - 背景基底：AppTheme.Color.pageBg (#FCF8F3 暖纸底色)
 //      - 顶部预留：topInset 避让浮动顶栏，内容向上平滑滚入毛玻璃遮罩
-//   2. 线上原版三大区块标题体系（原汁原味）：
+//   2. 线上原版四大区块体系（原汁原味）：
 //      - 第 1 区块大标题：Talk about today (AppTheme.Font.sectionTitleSerif, 24pt Charter-Bold, textPrimary)
 //      - 第 2 区块大标题：More to talk about (AppTheme.Font.sectionTitleSerif, 24pt Charter-Bold, textPrimary——刀 6a 三标题同档)
 //      - 第 3 区块大标题：Topics in progress (AppTheme.Font.sectionTitleSerif, 24pt Charter-Bold, textPrimary)
+//      - 第 4 区块大标题：More topics to explore (AppTheme.Font.sectionTitleSerif, 24pt Charter-Bold, textPrimary——全真 3+1 / 两排流式胶囊)
 //   3. 线上原版组件调用：
-//      - Hero：Tab2HeroCard
-//      - More：Tab2ActivityRow
-//      - Topics：CategoryProgressRow
+//      - Hero：Tab2HeroCard (含封面、理由、Recent activities 胶囊组、47 words 与 CTA)
+//      - More：Tab2ActivityRow (含缩略图、帽子、活动胶囊组、38 words)
+//      - Topics：CategoryProgressRow (含类别图标、进度条、WordsPill 胶囊与手风琴展开)
+//      - Explore：Tab2MoreTopicsSection (未开始分类探索区)
 //      - 底部：PoplexWordmark + BottomAuraFooter
+//   4. 胶囊优化专属工具：
+//      - 支持一键开启「胶囊透视检视 (Capsule Focus)」，高亮标注 Activity 胶囊与 Words 胶囊的当前生产尺寸与 Token
 
 struct Tab2UnlockedProductionPreviewView: View {
     @State private var previewScenario: PreviewScenario = .activeUser
     @State private var showTopBarShell: Bool = true
+    @State private var highlightCapsules: Bool = false
+    @State private var showMetricsCard: Bool = false
+    @State private var expandedCategoryId: String? = nil
     @State private var toastMessage: String?
     @State private var selectedTab: AppTab = .mine
 
     enum PreviewScenario: String, CaseIterable, Identifiable {
         var id: String { rawValue }
-        case activeUser = "高频活跃 (3 解锁 + 3 累积)"
+        case activeUser = "典型活跃态 (完整 4 大区)"
+        case expandedAccordion = "手风琴展开态 (查看 WordsPill)"
         case singleTopic = "单话题解锁 (无 More 区)"
-        case quietState = "久未记录 (Quiet 灰胶囊)"
+        case quietState = "久未记录 (Quiet 状态)"
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            // 顶端控制台 (仅供切换场景与顶栏外壳)
+            // 顶端控制台 (仅供切换场景、外壳与胶囊检视)
             controlPanel
 
             Divider().opacity(0.15)
 
-            // 主画布视口
+            // 胶囊透视信息浮条（在开启检视时展开）
+            if highlightCapsules || showMetricsCard {
+                capsuleMetricsBanner
+            }
+
+            // 主画布视口 (100% 对齐 MineView.swift 的 Tab2UnlockedView)
             ZStack(alignment: .top) {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
-                        // 1. 页面大标题：Talk about today
-                        pageTitleSection
+                GeometryReader { geo in
+                    let reservedTop: CGFloat = showTopBarShell ? 56 : AppTheme.Space.paddingPage
+                    let availableHeight = max(geo.size.height - reservedTop, 400)
 
-                        // 2. 核心内容区 (Hero / More / Topics)
-                        contentSections
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 0) {
+                                contentSections(proxy)
+                                    .fixedSize(horizontal: false, vertical: true)
 
-                        // 3. 页面底部收尾宣言
-                        footerSignoff
-                            .padding(.bottom, AppTheme.Space.tab2FooterBottom)
-                    }
-                    .padding(.top, showTopBarShell ? 64 : AppTheme.Space.paddingPage)
-                    .background(alignment: .bottom) {
-                        BottomAuraFooter()
+                                Spacer(minLength: AppTheme.Space.tab2FooterTop)
+
+                                footerSignoff
+                                    .padding(.bottom, AppTheme.Space.tab2FooterBottom)
+                            }
+                            .frame(minHeight: availableHeight, alignment: .top)
+                            .background(alignment: .bottom) {
+                                BottomAuraFooter()
+                            }
+                        }
+                        .safeAreaInset(edge: .top, spacing: 0) {
+                            Color.clear.frame(height: reservedTop)
+                        }
+                        .scrollBounceBehavior(.always, axes: .vertical)
                     }
                 }
                 .background(AppTheme.Color.pageBg.ignoresSafeArea())
@@ -72,6 +94,13 @@ struct Tab2UnlockedProductionPreviewView: View {
                 }
             }
         }
+        .onChange(of: previewScenario) { _, newScenario in
+            if newScenario == .expandedAccordion {
+                expandedCategoryId = ProductionMockStore.inProgressCategories.first?.id
+            } else if previewScenario != .expandedAccordion {
+                expandedCategoryId = nil
+            }
+        }
     }
 
     // MARK: - 顶端控制面板
@@ -79,18 +108,33 @@ struct Tab2UnlockedProductionPreviewView: View {
     private var controlPanel: some View {
         VStack(spacing: 8) {
             HStack {
-                Text("Tab2 Unlocked 生产正版基线 (永远不动)")
-                    .font(AppTheme.Font.sectionLabel)
-                    .foregroundStyle(AppTheme.Color.textPrimary)
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(AppTheme.Color.brandStrong)
+                        .frame(width: 7, height: 7)
+                    Text("Tab2 Unlocked 生产像素级基线")
+                        .font(AppTheme.Font.sectionLabel)
+                        .foregroundStyle(AppTheme.Color.textPrimary)
+                }
 
                 Spacer()
 
-                Toggle("模拟外壳顶栏", isOn: $showTopBarShell)
+                // 胶囊检视开关
+                Toggle("检视胶囊", isOn: $highlightCapsules)
                     .font(AppTheme.Font.pos)
-                    .foregroundStyle(AppTheme.Color.textSecondary)
+                    .foregroundStyle(highlightCapsules ? AppTheme.Color.brandStrong : AppTheme.Color.textSecondary)
+                    .labelsHidden()
+                Text(highlightCapsules ? "胶囊透视 ON" : "胶囊透视 OFF")
+                    .font(AppTheme.Font.metaNote)
+                    .foregroundStyle(highlightCapsules ? AppTheme.Color.brandStrong : AppTheme.Color.textMuted)
+
+                Divider().frame(height: 14)
+
+                Toggle("模拟顶栏", isOn: $showTopBarShell)
+                    .font(AppTheme.Font.pos)
                     .labelsHidden()
                 Text(showTopBarShell ? "含顶栏" : "纯内容")
-                    .font(AppTheme.Font.pos)
+                    .font(AppTheme.Font.metaNote)
                     .foregroundStyle(AppTheme.Color.textMuted)
             }
 
@@ -104,6 +148,64 @@ struct Tab2UnlockedProductionPreviewView: View {
         .padding(.horizontal, AppTheme.Space.paddingPage)
         .padding(.vertical, AppTheme.Space.paddingS)
         .background(AppTheme.Color.cardBg)
+    }
+
+    // MARK: - 胶囊当前生产规格参数展示条
+
+    private var capsuleMetricsBanner: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Image(systemName: "viewfinder")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(AppTheme.Color.brandStrong)
+                Text("当前生产胶囊度量规格 (Target Tokens)")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(AppTheme.Color.textPrimary)
+                Spacer()
+                Button {
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                        showMetricsCard.toggle()
+                    }
+                } label: {
+                    Text(showMetricsCard ? "收起参数" : "展开详细参数")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(AppTheme.Color.brandStrong)
+                }
+            }
+
+            if showMetricsCard {
+                Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 4) {
+                    GridRow {
+                        Text("① Activity 胶囊 (Hero)")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(AppTheme.Color.brandStrong)
+                        Text("Charter 13.5pt · 高 25pt · 内距 9pt · 间距 7pt · 边框 0.5pt (#E2D9CC)")
+                            .font(.system(size: 10))
+                            .foregroundStyle(AppTheme.Color.textSecondary)
+                    }
+                    GridRow {
+                        Text("② Activity 胶囊 (More)")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(AppTheme.Color.brandStrong)
+                        Text("Charter 12pt · 高 22pt · 内距 8pt · 间距 6pt · 边框 0.5pt (#E2D9CC)")
+                            .font(.system(size: 10))
+                            .foregroundStyle(AppTheme.Color.textSecondary)
+                    }
+                    GridRow {
+                        Text("③ Words 胶囊 (WordsPill)")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(AppTheme.Color.interactive)
+                        Text("12pt tabular · 内距 H:8 V:3 · 箭头 8pt · 背景 #F2ECE4 · 边框 0.5pt (#E5DDD2)")
+                            .font(.system(size: 10))
+                            .foregroundStyle(AppTheme.Color.textSecondary)
+                    }
+                }
+                .padding(.top, 2)
+            }
+        }
+        .padding(.horizontal, AppTheme.Space.paddingPage)
+        .padding(.vertical, 8)
+        .background(AppTheme.Color.brandStrong.opacity(0.06))
     }
 
     // MARK: - 浮动顶栏 (100% 对齐 RootTabContainer)
@@ -134,42 +236,68 @@ struct Tab2UnlockedProductionPreviewView: View {
         }
     }
 
-    // MARK: - 页面标题区 (Talk about today)
-
-    private var pageTitleSection: some View {
-        Text("Talk about today")
-            .font(AppTheme.Font.sectionTitleSerif) // 24pt Charter-Bold
-            .foregroundStyle(AppTheme.Color.textPrimary)
-            .padding(.horizontal, AppTheme.Space.paddingPage)
-            .padding(.top, AppTheme.Space.paddingPage)
-            .padding(.bottom, AppTheme.Space.paddingCard)
-    }
-
     // MARK: - 核心内容区块集合 (100% 生产排版)
+    // 严格直接对齐 MineView.swift 的 contentSections 架构：
+    // 每个区块自主管理其大标题 (sectionTitleSerif) + 卡片组，区块之间以 paddingBetweenSections (28pt) 分隔
 
     @ViewBuilder
-    private var contentSections: some View {
+    private func contentSections(_ proxy: ScrollViewProxy) -> some View {
         let scenarioData = currentScenarioData
 
         VStack(alignment: .leading, spacing: AppTheme.Space.paddingBetweenSections) { // 28pt
-            // 1. Hero 卡片
+            // ── 1. Talk about today (Hero 区块) ──
             if let hero = scenarioData.hero {
-                Tab2HeroCard(
-                    category: hero,
-                    onTalk: {
-                        triggerAction("Start conversation: \(hero.englishLabel)")
+                VStack(alignment: .leading, spacing: AppTheme.Space.paddingCard) { // 16pt
+                    HStack {
+                        Text("Talk about today")
+                            .font(AppTheme.Font.sectionTitleSerif) // 24pt Charter-Bold
+                            .foregroundStyle(AppTheme.Color.textPrimary)
+
+                        if highlightCapsules {
+                            Text("Activity 胶囊 × Words")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(AppTheme.Color.brandStrong)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(AppTheme.Color.brandStrong.opacity(0.12), in: Capsule())
+                        }
                     }
-                )
-                .padding(.horizontal, AppTheme.Space.paddingPage)
+                    .padding(.horizontal, AppTheme.Space.paddingPage)
+
+                    Tab2HeroCard(
+                        category: hero,
+                        onTalk: {
+                            triggerAction("Start conversation: \(hero.englishLabel)")
+                        }
+                    )
+                    .overlay {
+                        if highlightCapsules {
+                            RoundedRectangle(cornerRadius: AppTheme.Radius.large)
+                                .strokeBorder(AppTheme.Color.brandStrong.opacity(0.35), lineWidth: 1.5)
+                        }
+                    }
+                    .padding(.horizontal, AppTheme.Space.paddingPage)
+                }
             }
 
-            // 2. More to talk about (推荐行) —— 刀 6a：眉题改回页面级衬线标题
+            // ── 2. More to talk about (推荐行) —— 刀 6a：三标题同档 24pt 衬线 ──
             if !scenarioData.moreCategories.isEmpty {
-                VStack(alignment: .leading, spacing: AppTheme.Space.paddingCard) { // 16pt（同 Topics 标题→内容节奏）
-                    Text("More to talk about")
-                        .font(AppTheme.Font.sectionTitleSerif) // 24pt Charter-Bold（刀 6a 三标题同档）
-                        .foregroundStyle(AppTheme.Color.textPrimary)
-                        .padding(.horizontal, AppTheme.Space.paddingPage)
+                VStack(alignment: .leading, spacing: AppTheme.Space.paddingCard) { // 16pt
+                    HStack {
+                        Text("More to talk about")
+                            .font(AppTheme.Font.sectionTitleSerif) // 24pt Charter-Bold
+                            .foregroundStyle(AppTheme.Color.textPrimary)
+
+                        if highlightCapsules {
+                            Text("Activity 胶囊 (More)")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(AppTheme.Color.brandStrong)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(AppTheme.Color.brandStrong.opacity(0.12), in: Capsule())
+                        }
+                    }
+                    .padding(.horizontal, AppTheme.Space.paddingPage)
 
                     // 推荐列表行
                     VStack(alignment: .leading, spacing: AppTheme.Tab2MoreRow.Layout.rowGap) { // 12pt
@@ -180,21 +308,38 @@ struct Tab2UnlockedProductionPreviewView: View {
                                     triggerAction("Selected topic: \(category.englishLabel)")
                                 }
                             )
+                            .overlay {
+                                if highlightCapsules {
+                                    RoundedRectangle(cornerRadius: AppTheme.Radius.large)
+                                        .strokeBorder(AppTheme.Color.brandStrong.opacity(0.25), lineWidth: 1)
+                                }
+                            }
                         }
                     }
                     .padding(.horizontal, AppTheme.Space.paddingPage)
                 }
             }
 
-            // 3. Topics in progress (积累中话题) —— 生产原版 24pt 衬线标题
+            // ── 3. Topics in progress (手风琴进度卡片) —— 核心包含 WordsPill ──
             if !scenarioData.inProgressCategories.isEmpty {
                 VStack(alignment: .leading, spacing: AppTheme.Space.paddingCard) { // 16pt
-                    Text("Topics in progress")
-                        .font(AppTheme.Font.sectionTitleSerif) // 24pt Charter-Bold
-                        .foregroundStyle(AppTheme.Color.textPrimary)
-                        .padding(.horizontal, AppTheme.Space.paddingPage)
+                    HStack {
+                        Text("Topics in progress")
+                            .font(AppTheme.Font.sectionTitleSerif) // 24pt Charter-Bold
+                            .foregroundStyle(AppTheme.Color.textPrimary)
 
-                    // 进度卡片容器
+                        if highlightCapsules {
+                            Text("WordsPill 核心胶囊")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(AppTheme.Color.interactive)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(AppTheme.Color.interactive.opacity(0.12), in: Capsule())
+                        }
+                    }
+                    .padding(.horizontal, AppTheme.Space.paddingPage)
+
+                    // 进度卡片磨砂玻璃容器
                     VStack(spacing: 0) {
                         ForEach(Array(scenarioData.inProgressCategories.enumerated()), id: \.element.id) { index, cat in
                             CategoryProgressRow(
@@ -216,13 +361,25 @@ struct Tab2UnlockedProductionPreviewView: View {
                     }
                     .padding(.vertical, AppTheme.Space.paddingS)
                     .surfaceCard(cornerRadius: AppTheme.Radius.large)
+                    .overlay {
+                        if highlightCapsules {
+                            RoundedRectangle(cornerRadius: AppTheme.Radius.large)
+                                .strokeBorder(AppTheme.Color.interactive.opacity(0.25), lineWidth: 1)
+                        }
+                    }
                     .padding(.horizontal, AppTheme.Space.paddingPage)
                 }
             }
-        }
-    }
 
-    @State private var expandedCategoryId: String? = nil
+            // ── 4. More topics to explore (2026-10-03 新增探索区) ──
+            // 与待解锁页同一组件，贯穿解锁前后；解锁后不带注脚（规则用户已知）
+            let unstarted = SceneCategory.unstarted(given: scenarioData.allCategories)
+            if !unstarted.isEmpty {
+                Tab2MoreTopicsSection(topics: unstarted, footnote: nil, resetToken: nil)
+            }
+        }
+        .padding(.top, AppTheme.Space.tab2ContentTop)
+    }
 
     // MARK: - 底部收尾
 
@@ -240,7 +397,6 @@ struct Tab2UnlockedProductionPreviewView: View {
                 .foregroundStyle(AppTheme.Color.textMuted.opacity(0.85))
         }
         .frame(maxWidth: .infinity)
-        .padding(.top, AppTheme.Space.tab2FooterTop)
     }
 
     // MARK: - 交互反馈与 Toast
@@ -274,29 +430,45 @@ struct Tab2UnlockedProductionPreviewView: View {
     }
 
     private func loadMockWords(for category: String) async throws -> [Tab2WordEntry] {
-        try? await Task.sleep(nanoseconds: 200_000_000)
+        try? await Task.sleep(nanoseconds: 150_000_000)
         return ProductionMockStore.words(for: category)
     }
 
-    private var currentScenarioData: (hero: Tab2CategoryData?, moreCategories: [Tab2CategoryData], inProgressCategories: [Tab2CategoryData]) {
+    private var currentScenarioData: (
+        hero: Tab2CategoryData?,
+        moreCategories: [Tab2CategoryData],
+        inProgressCategories: [Tab2CategoryData],
+        allCategories: [Tab2CategoryData]
+    ) {
         switch previewScenario {
-        case .activeUser:
+        case .activeUser, .expandedAccordion:
+            let hero = ProductionMockStore.activeHero
+            let more = ProductionMockStore.activeMoreCategories
+            let inProgress = ProductionMockStore.inProgressCategories
             return (
-                hero: ProductionMockStore.activeHero,
-                moreCategories: ProductionMockStore.activeMoreCategories,
-                inProgressCategories: ProductionMockStore.inProgressCategories
+                hero: hero,
+                moreCategories: more,
+                inProgressCategories: inProgress,
+                allCategories: [hero] + more + inProgress
             )
         case .singleTopic:
+            let hero = ProductionMockStore.activeHero
+            let inProgress = ProductionMockStore.inProgressCategories
             return (
-                hero: ProductionMockStore.activeHero,
+                hero: hero,
                 moreCategories: [],
-                inProgressCategories: ProductionMockStore.inProgressCategories
+                inProgressCategories: inProgress,
+                allCategories: [hero] + inProgress
             )
         case .quietState:
+            let hero = ProductionMockStore.quietHero
+            let more = ProductionMockStore.quietMoreCategories
+            let inProgress = ProductionMockStore.inProgressCategories
             return (
-                hero: ProductionMockStore.quietHero,
-                moreCategories: ProductionMockStore.quietMoreCategories,
-                inProgressCategories: ProductionMockStore.inProgressCategories
+                hero: hero,
+                moreCategories: more,
+                inProgressCategories: inProgress,
+                allCategories: [hero] + more + inProgress
             )
         }
     }
@@ -317,15 +489,15 @@ private enum ProductionMockStore {
             activityCount: 7,
             activities: [
                 Tab2Activity(
-                    sceneDetail: "Fixing a device",
+                    sceneDetail: "Morning coffee",
                     occurrenceCount: 3,
                     cover: Tab2Activity.Cover(
                         materialId: "m-hero-1",
-                        imageUrl: "https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=800&auto=format&fit=crop&q=80"
+                        imageUrl: "https://images.unsplash.com/photo-1517256064527-09c73fc73e38?w=800&auto=format&fit=crop&q=80"
                     )
                 ),
-                Tab2Activity(sceneDetail: "Morning coffee", occurrenceCount: 2),
-                Tab2Activity(sceneDetail: "Watering plants", occurrenceCount: 1),
+                Tab2Activity(sceneDetail: "Watering plants", occurrenceCount: 2),
+                Tab2Activity(sceneDetail: "Fixing a device", occurrenceCount: 2),
                 Tab2Activity(sceneDetail: "Tidying bedroom", occurrenceCount: 1)
             ]
         )
@@ -382,7 +554,9 @@ private enum ProductionMockStore {
                         )
                     ),
                     Tab2Activity(sceneDetail: "Making breakfast", occurrenceCount: 2),
-                    Tab2Activity(sceneDetail: "Grocery shopping", occurrenceCount: 1)
+                    Tab2Activity(sceneDetail: "Grocery shopping", occurrenceCount: 1),
+                    Tab2Activity(sceneDetail: "Brewing tea", occurrenceCount: 1),
+                    Tab2Activity(sceneDetail: "Baking bread", occurrenceCount: 1)
                 ]
             ),
             Tab2CategoryData(
@@ -396,7 +570,8 @@ private enum ProductionMockStore {
                 activityCount: 4,
                 activities: [
                     Tab2Activity(sceneDetail: "Taking subway", occurrenceCount: 4, cover: nil),
-                    Tab2Activity(sceneDetail: "Cycling home", occurrenceCount: 1, cover: nil)
+                    Tab2Activity(sceneDetail: "Cycling home", occurrenceCount: 1, cover: nil),
+                    Tab2Activity(sceneDetail: "Walking to station", occurrenceCount: 1, cover: nil)
                 ]
             ),
             Tab2CategoryData(
@@ -417,7 +592,8 @@ private enum ProductionMockStore {
                             imageUrl: "https://images.unsplash.com/photo-1497366216548-37526070297c?w=400&auto=format&fit=crop&q=80"
                         )
                     ),
-                    Tab2Activity(sceneDetail: "Writing report", occurrenceCount: 1)
+                    Tab2Activity(sceneDetail: "Writing report", occurrenceCount: 2),
+                    Tab2Activity(sceneDetail: "Code review", occurrenceCount: 1)
                 ]
             )
         ]
@@ -525,7 +701,7 @@ private enum ProductionMockStore {
 
 // MARK: - Canvas 预览入口
 
-#Preview("Tab2 · 生产正版基线 (永远不动)") {
+#Preview("Tab2 · 生产正版基线 (像素级还原)") {
     Tab2UnlockedProductionPreviewView()
 }
 #endif

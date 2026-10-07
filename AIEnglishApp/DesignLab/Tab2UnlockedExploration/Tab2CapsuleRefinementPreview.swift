@@ -2,6 +2,10 @@
 import SwiftUI
 import UIKit
 
+// 旧方案（预设浅底单色深字，2026-10-06 已废弃）的墨色。线上 Token 已删除，本历史预览自带一份，保持画面不变。
+private let legacyPresetLabelInk = Color(red: 138 / 255, green: 74 / 255, blue: 32 / 255)  // #8A4A20
+private let legacyReasonInkOnLightArt = Color(red: 138 / 255, green: 74 / 255, blue: 32 / 255).opacity(0.72)
+
 // MARK: - Tab2 胶囊尺寸与材质精细化探索画布 (Tab2 Activity Capsule Refinement Sandbox)
 // 🎯 探索目标与解决痛点：
 //   针对当前生产中活动胶囊（Activity Chips）“尺寸偏大（Hero 31pt/More 27pt 像主操作按钮）、
@@ -354,7 +358,7 @@ private struct RefinedHeroCard: View {
         HStack(spacing: 8) {
             Text(category.englishLabel)
                 .font(AppTheme.Font.tab2HeroChipCategory)
-                .foregroundStyle(onLightArt ? AppTheme.Color.tab2HeroPresetLabel : AppTheme.Color.tab2HeroPhotoOverlayText)
+                .foregroundStyle(onLightArt ? legacyPresetLabelInk : AppTheme.Color.tab2HeroPhotoOverlayText)
                 .lineLimit(1)
                 .shadow(
                     color: photoTextShadowColor,
@@ -369,7 +373,7 @@ private struct RefinedHeroCard: View {
             )
             Text(state.text)
                 .font(AppTheme.Font.tab2ReasonPill)
-                .foregroundStyle(onLightArt ? AppTheme.Color.tab2ReasonPillOnLightText : AppTheme.Color.tab2ReasonPillOnPhotoText)
+                .foregroundStyle(onLightArt ? legacyReasonInkOnLightArt : AppTheme.Color.tab2ReasonPillOnPhotoText)
                 .lineLimit(1)
                 .shadow(
                     color: photoTextShadowColor,

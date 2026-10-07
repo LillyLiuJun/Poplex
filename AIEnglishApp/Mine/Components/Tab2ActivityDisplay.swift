@@ -57,7 +57,7 @@ struct Tab2ActivityDisplay {
 /// 胶囊几何的全部来源：名字 / +N 的字号（含 Dynamic Type 缩放后的 UIFont，用
 /// UIFontMetrics 复刻 AppTheme.Font 同名 token 的 relativeTo 缩放）、行高、行距、
 /// 水平内边距。两行槽高 = (行高 × 2 + 行距)——默认档取方案 B 值
-/// （Hero 25×2+7=57 / More 22×2+6=50）；字号放大时行高随字形线高增量同步放大，
+/// （Hero 23×2+6=52 / More 20×2+5=45）；字号放大时行高随字形线高增量同步放大，
 /// 保证大字号不裁字、同行高度依旧一致。
 ///
 /// 胶囊宽度 = 名字单行测量宽 + 2×水平内边距。测量（CoreText CTLine）与渲染
@@ -70,10 +70,10 @@ struct Tab2ActivityCapsuleMetrics: Equatable {
     let nameBaseUIFont: UIFont          // 默认档（未缩放）名字字体，行高增量的基准
     let nameUIFont: UIFont              // Dynamic Type 缩放后的名字字体（测量 + 行高）
     let moreUIFont: UIFont              // Dynamic Type 缩放后的 +N 字体（测量）
-    let baseRowHeight: CGFloat          // 默认档行高（Hero 25 / More 22）
-    let rowGap: CGFloat                 // 行距（Hero 7 / More 6）
-    let namePaddingH: CGFloat           // 名字胶囊水平内边距（Hero 9 / More 8）
-    let morePaddingH: CGFloat           // +N 水平内边距（Hero 6 / More 4）
+    let baseRowHeight: CGFloat          // 默认档行高（Hero 23 / More 20）
+    let rowGap: CGFloat                 // 行距（Hero 6 / More 5）
+    let namePaddingH: CGFloat           // 名字胶囊水平内边距（Hero 8 / More 7）
+    let morePaddingH: CGFloat           // +N 水平内边距（Hero 5 / More 4）
 
     /// 当前字号档下的行高：默认档 = 方案 B 瘦身值；AX 放大档 = 基值 + 字形线高增量
     /// （只加缩放增量，不加绝对线高——CSS line-height:1 的 15+16=31 在 iOS 上
@@ -88,8 +88,23 @@ struct Tab2ActivityCapsuleMetrics: Equatable {
 
     // 与 AppTheme.Font 同名 token 共用的 PostScript 名。基准字号也取自 Font 层常量，
     // relativeTo 档位与 token 定义一致，改动时两侧必须同步（测试会抓渲染高度漂移）。
+    /// 当前字号特征，已按 App 的字号封顶压住（封顶没生效——例如单元测试——时与改前完全一致）。
+    /// 直接用 UIFontMetrics 算尺寸的代码读不到 SwiftUI / 窗口层面的封顶，所以这里要自己压一下，
+    /// 否则胶囊的行高会按系统的无障碍字号算，而里面的文字已被封在「超大」。
+    /// SwiftUI 求值 body 时 UITraitCollection.current 的字号档位常是「未指定」（实测），
+    /// 这时 UIFontMetrics 会回落到系统字号；所以未指定时要改读屏幕的系统字号再压。
+    private static func cappedTraits() -> UITraitCollection {
+        let current = UITraitCollection.current
+        guard AppDynamicTypeLimit.activeCategory != nil else { return current }
+        let base = current.preferredContentSizeCategory == .unspecified
+            ? UIScreen.main.traitCollection.preferredContentSizeCategory
+            : current.preferredContentSizeCategory
+        return UITraitCollection(preferredContentSizeCategory: AppDynamicTypeLimit.clamped(base))
+    }
+
     private static func charter(baseSize: CGFloat, textStyle: UIFont.TextStyle) -> UIFont {
-        UIFontMetrics(forTextStyle: textStyle).scaledFont(for: UIFont(name: "Charter", size: baseSize)!)
+        UIFontMetrics(forTextStyle: textStyle)
+            .scaledFont(for: UIFont(name: "Charter", size: baseSize)!, compatibleWith: cappedTraits())
     }
 
     private static func charterUnscaled(baseSize: CGFloat) -> UIFont {
@@ -97,10 +112,11 @@ struct Tab2ActivityCapsuleMetrics: Equatable {
     }
 
     private static func sansRegular(baseSize: CGFloat, textStyle: UIFont.TextStyle) -> UIFont {
-        UIFontMetrics(forTextStyle: textStyle).scaledFont(for: UIFont(name: AppTheme.Font.SansWeight.regular.postScriptName, size: baseSize)!)
+        UIFontMetrics(forTextStyle: textStyle)
+            .scaledFont(for: UIFont(name: AppTheme.Font.SansWeight.regular.postScriptName, size: baseSize)!, compatibleWith: cappedTraits())
     }
 
-    /// Hero 胶囊组（方案 B）：13.5px / 行 25 / 距 7 / 内边距 9/4。
+    /// Hero 胶囊组（方案 A）：13.5px / 行 23 / 距 6 / 内边距 名字 8、+N 5。
     static func hero() -> Tab2ActivityCapsuleMetrics {
         Tab2ActivityCapsuleMetrics(
             nameBaseUIFont: charterUnscaled(baseSize: AppTheme.Font.tab2HeroCapsuleNameBaseSize),
@@ -113,7 +129,7 @@ struct Tab2ActivityCapsuleMetrics: Equatable {
         )
     }
 
-    /// More 胶囊组（方案 B）：12px / 行 22 / 距 6 / 内边距 8/3.5。
+    /// More 胶囊组（方案 A）：12px / 行 20 / 距 5 / 内边距 名字 7、+N 4。
     static func more() -> Tab2ActivityCapsuleMetrics {
         Tab2ActivityCapsuleMetrics(
             nameBaseUIFont: charterUnscaled(baseSize: AppTheme.Font.tab2MoreRowCapsuleNameBaseSize),
@@ -369,12 +385,10 @@ struct Tab2ActivityCapsuleGroup: View, Equatable {
     }
 }
 
-// MARK: - 空态说明行（刀 6b 空态 v1 .onlywords，Hero 与 More 共用）
-/// 无 activity 时的一行说明（B2 拍板：同一个状态在两处说同一句话、同一档样式）。
-/// 13px 无衬线 muted、单行自然高度——**不占两行槽**（57/50pt 槽是为「多颗胶囊
-/// 可扫视比较」存在的，这里只有一行字，按文本自然高度走，卡片/行比有内容时
-/// 矮，矮得有理由）。不用衬线：衬线是用户内容的标记，这是系统在说明状态。
-/// 文案来自 `Tab2CardLabels.onlyWordsSoFar`（与 reasonLine nil 分支同源）。
+// MARK: - 空态说明行与槽位（Hero 与 More 共用）
+
+/// 无 activity 时的一行说明（同一个状态在两处说同一句话、同一档样式）。
+/// 13px 无衬线 muted（AppTheme.Font.tab2EmptyStateLine），文案来自 `Tab2CardLabels.onlyWordsSoFar`。
 struct Tab2OnlyWordsLine: View {
     var body: some View {
         Text(Tab2CardLabels.onlyWordsSoFar)
@@ -383,3 +397,26 @@ struct Tab2OnlyWordsLine: View {
             .lineLimit(1)
     }
 }
+
+/// 无 activity 时的两行空态槽位（严格保持与两行胶囊完全一致的槽高与留白呼吸感，消除列表高度锯齿）：
+/// - 第一行：放置 `Tab2OnlyWordsLine`，高度对齐当前 metrics 下的单行高（metrics.rowHeight）
+/// - 第二行：留出等高空白，与两行活动胶囊保持一致的纵向节奏
+/// - 总槽高：锁定为 `metrics.twoRowHeight`（默认档 Hero 52pt / More 45pt；Dynamic Type 放大档随字体增量安全放行）
+struct Tab2OnlyWordsSlot: View {
+    let metrics: Tab2ActivityCapsuleMetrics
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: metrics.rowGap) {
+            HStack {
+                Tab2OnlyWordsLine()
+                Spacer(minLength: 0)
+            }
+            .frame(height: metrics.rowHeight)
+
+            Color.clear
+                .frame(height: metrics.rowHeight)
+        }
+        .frame(height: metrics.twoRowHeight)
+    }
+}
+

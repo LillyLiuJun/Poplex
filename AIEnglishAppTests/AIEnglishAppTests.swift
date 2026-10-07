@@ -404,6 +404,133 @@ struct Tab2HomeRequestURLTests {
     }
 }
 
+// MARK: - Tab2 浅灰雾材质统一（胶囊 / 计数胶囊 / 词条图标底纹同为墨黑 @ 4%）
+
+struct Tab2MistMaterialTests {
+    private func rgba(_ color: Color) -> [CGFloat] {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        UIColor(color).getRed(&r, green: &g, blue: &b, alpha: &a)
+        return [r, g, b, a]
+    }
+
+    @Test func wordIconTileUsesTheSameMistAsActivityChip() {
+        let tile = rgba(AppTheme.Color.iconTileBg)
+        let chip = rgba(AppTheme.Color.tab2ActivityChipBg)
+        for (x, y) in zip(tile, chip) { #expect(abs(x - y) < 0.0001) }
+        // 透明度确为 4%，不是旧的 5%。
+        #expect(abs(tile[3] - 0.04) < 0.0001)
+    }
+
+    @Test func progressPillAndActivityChipShareTheSameMist() {
+        let pill = rgba(AppTheme.Color.tab2ProgressPillBg)
+        let chip = rgba(AppTheme.Color.tab2ActivityChipBg)
+        for (x, y) in zip(pill, chip) { #expect(abs(x - y) < 0.0001) }
+    }
+}
+
+// MARK: - Tab swipe arbiter（内部横向滚动区认领手势 → 页签容器不切页）
+
+struct TabSwipeArbiterTests {
+    private func resolve(
+        tab: AppTab,
+        dx: CGFloat,
+        claimed: Bool
+    ) -> RootTabSwipeAction {
+        RootTabSwipeIntent.resolveAction(
+            lock: .horizontal,
+            translation: CGSize(width: dx, height: 0),
+            predictedTranslation: CGSize(width: dx * 2, height: 0),
+            selectedTab: tab,
+            capturedSwipeOpen: false,
+            mineDetailActive: false,
+            claimedByInnerScroll: claimed
+        )
+    }
+
+    // MARK: resolveAction
+
+    @Test func rightSwipeOnMineSwitchesToTodayWhenNotClaimed() {
+        #expect(resolve(tab: .mine, dx: 120, claimed: false) == .switchToToday)
+    }
+
+    @Test func rightSwipeOnMineDoesNothingWhenClaimedByInnerScroll() {
+        // 手指在 More topics 胶囊区里往回拨：胶囊滚动，页面不能被带回 Today。
+        #expect(resolve(tab: .mine, dx: 120, claimed: true) == .none)
+    }
+
+    @Test func fastShortFlickIsAlsoIgnoredWhenClaimed() {
+        // 位移只有 40pt 但惯性预测很大的快甩，同样不触发（整段手势归滚动区）。
+        let action = RootTabSwipeIntent.resolveAction(
+            lock: .horizontal,
+            translation: CGSize(width: 40, height: 0),
+            predictedTranslation: CGSize(width: 300, height: 0),
+            selectedTab: .mine,
+            capturedSwipeOpen: false,
+            mineDetailActive: false,
+            claimedByInnerScroll: true
+        )
+        #expect(action == .none)
+    }
+
+    @Test func leftSwipeOnTodayIsIgnoredWhenClaimed() {
+        #expect(resolve(tab: .today, dx: -120, claimed: true) == .none)
+        #expect(resolve(tab: .today, dx: -120, claimed: false) == .switchToMine)
+    }
+
+    @Test func claimedFlagDefaultsToFalseSoExistingCallersKeepTheirBehaviour() {
+        let action = RootTabSwipeIntent.resolveAction(
+            lock: .horizontal,
+            translation: CGSize(width: 120, height: 0),
+            predictedTranslation: CGSize(width: 240, height: 0),
+            selectedTab: .mine,
+            capturedSwipeOpen: false,
+            mineDetailActive: false
+        )
+        #expect(action == .switchToToday)
+    }
+
+    // MARK: shouldClaim
+
+    @Test func scrollAreaClaimsClearHorizontalDrag() {
+        #expect(RootTabSwipeIntent.shouldClaim(translation: CGSize(width: 30, height: 2), isScrollable: true))
+        #expect(RootTabSwipeIntent.shouldClaim(translation: CGSize(width: -30, height: 2), isScrollable: true))
+    }
+
+    @Test func scrollAreaThatCannotScrollNeverClaims() {
+        // 内容放得下（如只剩 3 个胶囊）：不能滚动，就不该抢手势，右划仍应切回 Today。
+        #expect(!RootTabSwipeIntent.shouldClaim(translation: CGSize(width: 60, height: 0), isScrollable: false))
+    }
+
+    @Test func scrollAreaDoesNotClaimVerticalOrDiagonalDrag() {
+        #expect(!RootTabSwipeIntent.shouldClaim(translation: CGSize(width: 2, height: 40), isScrollable: true))
+        #expect(!RootTabSwipeIntent.shouldClaim(translation: CGSize(width: 50, height: 50), isScrollable: true))
+    }
+
+    @Test func scrollAreaDoesNotClaimBeforeMinimumDistance() {
+        #expect(!RootTabSwipeIntent.shouldClaim(translation: CGSize(width: 9, height: 0), isScrollable: true))
+    }
+
+    // MARK: Arbiter 本体
+
+    @Test func arbiterIsClaimedUntilReleased() {
+        let arbiter = TabSwipeArbiter()
+        #expect(!arbiter.isClaimed())
+        arbiter.claim()
+        #expect(arbiter.isClaimed())
+        arbiter.release()
+        #expect(!arbiter.isClaimed())
+    }
+
+    @Test func staleClaimExpiresSoItCannotBlockTheNextSwipe() {
+        // 手势被系统取消、没有 onEnded 时的兜底：过期的认领不再生效。
+        let arbiter = TabSwipeArbiter()
+        let start = Date()
+        arbiter.claim(now: start)
+        #expect(arbiter.isClaimed(now: start.addingTimeInterval(TabSwipeArbiter.claimLifetime - 0.1)))
+        #expect(!arbiter.isClaimed(now: start.addingTimeInterval(TabSwipeArbiter.claimLifetime + 0.1)))
+    }
+}
+
 // MARK: - Root tab swipe intent tests
 
 struct RootTabSwipeIntentTests {
@@ -5026,10 +5153,10 @@ struct Tab2WordEntryBadgeTests {
         #expect(try entry(granularity: "passage", entryKind: "word").badgeGlyph == .symbol("book.closed"))
     }
 
-    // 短语 / 搭配 / 句型 → link (双环搭扣)
-    @Test func phraseKindUsesLink() throws {
+    // 短语 / 搭配 / 句型 → linkChain (自绘开口链环；不再用 SF Symbol link)
+    @Test func phraseKindUsesLinkChain() throws {
         for kind in ["phrase", "collocation", "pattern"] {
-            #expect(try entry(entryKind: kind).badgeGlyph == .symbol("link"))
+            #expect(try entry(entryKind: kind).badgeGlyph == .linkChain)
         }
     }
 
@@ -5040,10 +5167,10 @@ struct Tab2WordEntryBadgeTests {
         }
     }
 
-    // 未知 entryKind / nil → 默认 link（当短语处理）
-    @Test func unknownOrNilKindDefaultsLink() throws {
-        #expect(try entry(entryKind: "unknown_future_kind").badgeGlyph == .symbol("link"))
-        #expect(try entry(entryKind: nil).badgeGlyph == .symbol("link"))
+    // 未知 entryKind / nil → 默认 linkChain（当短语处理）
+    @Test func unknownOrNilKindDefaultsLinkChain() throws {
+        #expect(try entry(entryKind: "unknown_future_kind").badgeGlyph == .linkChain)
+        #expect(try entry(entryKind: nil).badgeGlyph == .linkChain)
     }
 }
 
@@ -6782,6 +6909,51 @@ struct Tab2EmptyStateTests {
         #expect(!joined.contains("COORDINATING"), "被挡的活动名不得渲染（胶囊组没有画）")
     }
 
+    /// ①b Hero 空时间（lastMaterialAt 为空）：封面理由与卡身空态说明行是同一句 Only words so far，
+    /// 同一张卡上只能出现一次（卡身那句），封面不重复。
+    @Test func heroCoverDoesNotRepeatOnlyWordsSoFar() {
+        let card = heroCard(activityCount: 0)   // lastMaterialAt 默认 nil
+        let joined = renderedTexts(card).joined()
+            .uppercased().replacingOccurrences(of: " ", with: "")
+        let occurrences = joined.components(separatedBy: "ONLYWORDSSOFAR").count - 1
+        #expect(occurrences == 1, "Only words so far 应只在卡身出现一次，实际 \(occurrences) 次")
+    }
+
+    /// ①c 有真实时间时封面理由照常显示（隐藏只针对空时间那一句）。
+    @Test func heroCoverKeepsRealReasonWhenThereIsAMaterialDate() {
+        let card = heroCard(
+            activityCount: 0,
+            lastMaterialAt: Calendar.current.date(byAdding: .day, value: -5, to: Date())
+        )
+        let joined = renderedTexts(card).joined()
+            .uppercased().replacingOccurrences(of: " ", with: "")
+        #expect(joined.contains("NOTHINGNEWIN5DAYS"), "封面理由 Nothing new in 5 days 必须保留")
+    }
+
+    /// ①d 最大无障碍字号下 Hero 卡右下角的 CTA 文字不能被截没（曾显示成 "···→"）。
+    @Test func heroCtaKeepsItsLabelAtTheLargestTextSize() {
+        let card = heroCard(
+            activityCount: 2,
+            activities: [Tab2Activity(sceneDetail: "Meetings", occurrenceCount: 1)],
+            lastMaterialAt: Date()
+        )
+        let joined = renderedTexts(card.environment(\.dynamicTypeSize, .accessibility5)).joined()
+            .uppercased().replacingOccurrences(of: " ", with: "")
+        #expect(joined.contains("STARTTALKING"), "最大字号下 Start talking 必须完整显示，实际识别：\(joined)")
+    }
+
+    /// ①e 默认字号下 CTA 仍在词数右侧同一行（脚行并排，不被换成上下两行）。
+    @Test func heroFootRowStaysOnOneLineAtDefaultSize() {
+        let card = heroCard(
+            activityCount: 2,
+            activities: [Tab2Activity(sceneDetail: "Meetings", occurrenceCount: 1)],
+            lastMaterialAt: Date()
+        )
+        let standard = height(card.environment(\.dynamicTypeSize, .large))
+        // 与加了 Start talking 的上下两行排法相比，并排一行的整卡更矮：高度必须落在并排的区间内。
+        #expect(standard < 330, "默认字号整卡高度应是并排脚行的高度，实际 \(standard)")
+    }
+
     /// ② More 空态：一行 Only words so far + 词数行保留其下；胶囊组不渲染。
     @Test func moreEmptyRowRendersCopyNotCapsules() {
         let row = Tab2ActivityRow(
@@ -6799,36 +6971,23 @@ struct Tab2EmptyStateTests {
         #expect(joined.contains("31WORDS"), "词数行必须保留其下（B2：两处说同一句话、词数不动）")
     }
 
-    /// ③ Hero 空态高度 ≠ 两行槽高度：占位按单行文本自然高度走（空态 v1 关键
-    /// 规则）——有活动卡与空态卡的高度差恰为「两行槽 − 说明行自然高度」，
-    /// 槽位被一行字顶替：既不是留空槽（差 0）、也不是整块消失（差 69）。
-    @Test func heroEmptyStateReplacesSlotWithSingleLineHeight() {
+    /// ③ Hero 空态保持两行槽位与总高度（路线 B · 52pt 槽位）：
+    /// 空态卡与有内容卡高度完全恒定，卡片不随有无活动产生跳动。
+    @Test func heroEmptyStatePreservesSlotAndHeight() {
         let filled = heroCard(
             activityCount: 6,
             activities: [Tab2Activity(sceneDetail: "Meetings", occurrenceCount: 1)],
             lastMaterialAt: Date()
         )
         let empty = heroCard(activityCount: 0)
-        let slot = Tab2ActivityCapsuleMetrics.hero().twoRowHeight
-        let line = height(Tab2OnlyWordsLine())
-
-        // 说明行本身：渲染了（>10）、是单行自然高度（<40）、远非两行槽 69。
-        #expect(line > 10)
-        #expect(line < 40)
-        #expect(abs(line - slot) > 20)
-
         let hFilled = height(filled)
         let hEmpty = height(empty)
-        #expect(hFilled > hEmpty, "空态卡必须比有内容卡矮（矮得有理由）")
-        #expect(
-            abs((hFilled - hEmpty) - (slot - line)) < 0.5,
-            "高度差应恰为两行槽被一行字顶替：filled \(hFilled) empty \(hEmpty) slot \(slot) line \(line)"
-        )
+        #expect(abs(hFilled - hEmpty) < 0.5, "Hero 空态卡片必须保持两行槽位，高度与有内容卡完全恒定")
     }
 
-    /// ④ More 空态行收掉行高下限：有内容行仍稳在 129（既有测试锁定值），
-    /// 空态行矮于下限且不为 0——「行就是矮的」本身是设计。
-    @Test func moreEmptyRowDropsSlotAndFloor() {
+    /// ④ More 空态行保持生产标准高度 rowHeight（路线 B · 45pt 槽位）：
+    /// 无论是否有 activity，均保持两行槽与下限高度，消除列表锯齿与右箭头垂直位移。
+    @Test func moreEmptyRowPreservesSlotAndRowHeight() {
         let filled = moreRow(
             activityCount: 6,
             activities: [Tab2Activity(sceneDetail: "Meetings", occurrenceCount: 1)]
@@ -6836,9 +6995,337 @@ struct Tab2EmptyStateTests {
         let empty = moreRow(activityCount: 0, activities: [])
 
         #expect(height(filled) == AppTheme.Tab2MoreRow.Layout.rowHeight)
-        let hEmpty = height(empty)
-        #expect(hEmpty > 0)
-        #expect(hEmpty < AppTheme.Tab2MoreRow.Layout.rowHeight)
+        #expect(height(empty) == AppTheme.Tab2MoreRow.Layout.rowHeight, "More 空态行必须保持生产标准高度 rowHeight")
+        #expect(height(empty) == height(filled), "More 空态行与有内容行高度必须完全齐平")
+    }
+}
+
+// MARK: - App 字号封顶（2026-10-06）
+//
+// 系统字号超过「超大」（xxxLarge）时，App 里的字停在这一档；普通范围不受影响。
+// 约束同其他渲染测试：UIHostingController 必须主线程。
+
+@MainActor
+struct AppDynamicTypeCapTests {
+    private let sample = Text("Nothing new since yesterday, added three times today")
+        .font(AppTheme.Font.statusNote)
+
+    private func height(_ view: some View, width: CGFloat = 160) -> CGFloat {
+        UIHostingController(rootView: view)
+            .sizeThatFits(in: CGSize(width: width, height: CGFloat.infinity)).height
+    }
+
+    @Test func limitIsXXXLarge() {
+        #expect(AppTheme.Typography.appMaxDynamicTypeSize == .xxxLarge)
+    }
+
+    @Test func accessibilitySizesAreHeldAtTheLimit() {
+        let capped = height(sample.appDynamicTypeCap().environment(\.dynamicTypeSize, .accessibility5))
+        let atLimit = height(sample.environment(\.dynamicTypeSize, .xxxLarge))
+        let uncapped = height(sample.environment(\.dynamicTypeSize, .accessibility5))
+        #expect(abs(capped - atLimit) < 0.5, "封顶后无障碍字号应等同于超大：\(capped) vs \(atLimit)")
+        #expect(uncapped > atLimit + 1, "对照：不封顶时无障碍字号应更高：\(uncapped) vs \(atLimit)")
+    }
+
+    /// 胶囊度量直接用 UIFontMetrics 算尺寸：封顶生效时必须也被压在上限，没生效时照常随字号放大。
+    @Test func capsuleMetricsFollowTheCapOnlyWhileItIsActive() {
+        let ax5 = UITraitCollection(preferredContentSizeCategory: .accessibilityExtraExtraExtraLarge)
+        let xxxl = UITraitCollection(preferredContentSizeCategory: .extraExtraExtraLarge)
+        func nameSize(_ trait: UITraitCollection) -> CGFloat {
+            var size: CGFloat = 0
+            trait.performAsCurrent { size = Tab2ActivityCapsuleMetrics.hero().nameUIFont.pointSize }
+            return size
+        }
+        let saved = AppDynamicTypeLimit.activeCategory
+        defer { AppDynamicTypeLimit.activeCategory = saved }
+
+        AppDynamicTypeLimit.activeCategory = nil
+        #expect(nameSize(ax5) > nameSize(xxxl) + 1, "封顶没生效时胶囊字号应随无障碍字号放大")
+
+        AppDynamicTypeLimit.activeCategory = .extraExtraExtraLarge
+        #expect(abs(nameSize(ax5) - nameSize(xxxl)) < 0.01, "封顶生效时胶囊字号应被压在超大")
+    }
+
+    @Test func normalRangeIsLeftAlone() {
+        for size in [DynamicTypeSize.xSmall, .large, .xxLarge, .xxxLarge] {
+            let capped = height(sample.appDynamicTypeCap().environment(\.dynamicTypeSize, size))
+            let plain = height(sample.environment(\.dynamicTypeSize, size))
+            #expect(abs(capped - plain) < 0.5, "普通范围 \(size) 不应被封顶改变：\(capped) vs \(plain)")
+        }
+    }
+}
+
+// MARK: - Hero 封面标签行：并排 / 放不下换两行（2026-10-06）
+//
+// 大字号下封面的理由曾被截成 "Nothing new sinc…"。Tab2HeroCoverLabels 一行放得下就并排（默认字号与
+// 改前逐像素一致），放不下改成上下两行，理由最多两行、不丢字。约束同 Tab2EmptyStateTests：
+// ImageRenderer / UIHostingController 必须主线程。
+
+@MainActor
+struct Tab2HeroCoverLabelsTests {
+    private let category = "Hobbies & Leisure"
+    private let reason = "Nothing new since yesterday"
+
+    private func labels(reason: String?, size: DynamicTypeSize) -> some View {
+        Tab2HeroCoverLabels(categoryName: category, reasonText: reason)
+            .environment(\.dynamicTypeSize, size)
+    }
+
+    private func height(_ view: some View, width: CGFloat = 350) -> CGFloat {
+        UIHostingController(rootView: view)
+            .sizeThatFits(in: CGSize(width: width, height: CGFloat.infinity)).height
+    }
+
+    /// 白字要放在深底上 OCR 才读得出；组件本身与底色无关。
+    private func ocrText(_ view: some View, width: CGFloat = 350) -> String {
+        let renderer = ImageRenderer(content: view.padding(8).background(Color.black))
+        renderer.proposedSize = ProposedViewSize(width: width, height: nil)
+        renderer.scale = 2
+        guard let image = renderer.uiImage, let cg = image.cgImage else { return "" }
+        let request = VNRecognizeTextRequest()
+        request.recognitionLevel = .accurate
+        request.recognitionLanguages = ["en-US"]
+        try? VNImageRequestHandler(cgImage: cg).perform([request])
+        return (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }
+            .joined().uppercased().replacingOccurrences(of: " ", with: "")
+    }
+
+    /// 预设底只换字色、去阴影，不得改变布局：两种底在默认与大字号下高度必须相同。
+    @Test func presetArtColorsDoNotChangeLayout() {
+        for size in [DynamicTypeSize.large, .xxxLarge] {
+            let photo = height(Tab2HeroCoverLabels(categoryName: category, reasonText: reason, onPresetArt: false)
+                .environment(\.dynamicTypeSize, size))
+            let preset = height(Tab2HeroCoverLabels(categoryName: category, reasonText: reason, onPresetArt: true)
+                .environment(\.dynamicTypeSize, size))
+            #expect(abs(photo - preset) < 0.5, "\(size)：照片底 \(photo) vs 预设底 \(preset)")
+        }
+    }
+
+    @Test func defaultSizeStaysOnOneLine() {
+        let both = height(labels(reason: reason, size: .large))
+        let categoryOnly = height(labels(reason: nil, size: .large))
+        #expect(abs(both - categoryOnly) < 0.5, "默认字号两个标签应并排一行：\(both) vs \(categoryOnly)")
+    }
+
+    @Test func largeSizeWrapsReasonUnderCategory() {
+        let both = height(labels(reason: reason, size: .accessibility1))
+        let categoryOnly = height(labels(reason: nil, size: .accessibility1))
+        #expect(both >= categoryOnly * 1.7, "大字号放不下应换成上下两行：\(both) vs \(categoryOnly)")
+    }
+
+    @Test func largeSizeKeepsTheWholeReason() {
+        let text = ocrText(labels(reason: reason, size: .accessibility1))
+        #expect(text.contains("NOTHINGNEWSINCEYESTERDAY"), "理由必须完整显示，实际识别：\(text)")
+        #expect(!text.contains("…") && !text.contains("..."), "理由不得被截断成省略号：\(text)")
+    }
+
+    @Test func extremeSizeStillKeepsTheWholeReason() {
+        let text = ocrText(labels(reason: reason, size: .accessibility5))
+        #expect(text.contains("NOTHINGNEWSINCEYESTERDAY"), "最大无障碍字号下理由也不能丢字，实际识别：\(text)")
+    }
+
+    @Test func nilReasonShowsOnlyTheCategory() {
+        let text = ocrText(labels(reason: nil, size: .large))
+        #expect(text.contains("HOBBIES"), "类别名必须显示：\(text)")
+        #expect(!text.contains("NOTHING"), "没有理由时不应出现理由文字：\(text)")
+    }
+
+    // ── 封面字色分流（审查第 3 条）：高度类测试看不出颜色传反，这里逐项锁定 ──
+
+    /// 预设底（浅杏色插画）= 深棕字、无阴影；照片底 = 白字 + 阴影。
+    @Test func presetArtGetsDarkBrownWithoutShadow() {
+        let p = Tab2HeroCoverLabels.palette(onPresetArt: true)
+        #expect(p.category == AppTheme.Color.tab2HeroPresetLabelText)
+        #expect(p.reason == AppTheme.Color.tab2HeroPresetReasonText)
+        #expect(!p.hasShadow)
+    }
+
+    @Test func photoArtGetsWhiteWithShadow() {
+        let p = Tab2HeroCoverLabels.palette(onPresetArt: false)
+        #expect(p.category == AppTheme.Color.tab2HeroPhotoOverlayText)
+        #expect(p.reason == AppTheme.Color.tab2ReasonPillOnPhotoText)
+        #expect(p.hasShadow)
+    }
+
+    /// 两种底的字色必须真的不同——防止有人把两支改成同一个 token。
+    @Test func presetAndPhotoPalettesDiffer() {
+        let preset = Tab2HeroCoverLabels.palette(onPresetArt: true)
+        let photo = Tab2HeroCoverLabels.palette(onPresetArt: false)
+        #expect(preset.category != photo.category)
+        #expect(preset.reason != photo.reason)
+    }
+
+    /// 接线：有照片封面 → 照片底（白字）；没有 → 预设底（深棕字）。传反这里就红。
+    @Test func heroCardPicksPresetArtOnlyWithoutPhoto() {
+        func display(cover: Tab2Activity.Cover?) -> Tab2ActivityDisplay {
+            Tab2ActivityDisplay.compute(category: Tab2CategoryData(
+                sceneCategory: "日常起居", wordCount: 47, unlocked: true,
+                activityCount: 1,
+                activities: [Tab2Activity(sceneDetail: "Meetings", occurrenceCount: 1, cover: cover)]
+            ))
+        }
+        let photo = Tab2Activity.Cover(materialId: "m1", imageUrl: "https://x/pic.jpg")
+        #expect(Tab2HeroCard.usesPresetArt(display(cover: photo)) == false)
+        #expect(Tab2HeroCard.usesPresetArt(display(cover: nil)) == true)
+        // 空 imageUrl 视同无图 → 预设底
+        let empty = Tab2Activity.Cover(materialId: "m1", imageUrl: "")
+        #expect(Tab2HeroCard.usesPresetArt(display(cover: empty)) == true)
+    }
+
+    /// WCAG 对比度；前景带透明度时先按 alpha 合成到底色上再算。
+    private func contrast(_ fg: Color, on bg: Color) -> Double {
+        func rgba(_ c: Color) -> [Double] {
+            var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+            UIColor(c).getRed(&r, green: &g, blue: &b, alpha: &a)
+            return [r, g, b, a].map(Double.init)
+        }
+        func luminance(_ rgb: [Double]) -> Double {
+            let l = rgb.map { $0 <= 0.03928 ? $0 / 12.92 : pow(($0 + 0.055) / 1.055, 2.4) }
+            return 0.2126 * l[0] + 0.7152 * l[1] + 0.0722 * l[2]
+        }
+        let f = rgba(fg), b = rgba(bg)
+        let blended = (0..<3).map { f[$0] * f[3] + b[$0] * (1 - f[3]) }
+        let (l1, l2) = (luminance(blended), luminance(Array(b[0..<3])))
+        return (max(l1, l2) + 0.05) / (min(l1, l2) + 0.05)
+    }
+
+    /// 预设底（primary300 浅杏色）上的封面字必须读得清——防止预设字色被换成另一种浅色
+    /// （上面几条只比 token 是否对得上，换色后它们仍全绿）。
+    /// 门槛：类别名 ≥ 4.5（AA 正文）；理由行 ≥ 3.0。理由行现为 3.57:1，低于小字的 AA 4.5，
+    /// 是 PM 2026-10-07 接受的已知取舍（锁现状、不再变浅）；要提到 AA 需先把理由行调深。
+    @Test func presetLabelsStayReadableOnPresetArt() {
+        // 先校准换算本身：纯黑对纯白应为 21:1。
+        #expect(abs(contrast(Color(red: 0, green: 0, blue: 0), on: Color(red: 1, green: 1, blue: 1)) - 21) < 0.1)
+
+        let p = Tab2HeroCoverLabels.palette(onPresetArt: true)
+        let bg = AppTheme.Color.tab2PresetArtBackground
+        let category = contrast(p.category, on: bg)
+        let reason = contrast(p.reason, on: bg)
+        #expect(category >= 4.5, "预设底类别名对比度 \(category)")
+        #expect(reason >= 3.0, "预设底理由行对比度 \(reason)")
+    }
+}
+
+// MARK: - Daily Limit 弹窗状态机（审查第 2 条：此前零测试）
+//
+// 弹窗的内容分支与高度都由 UsageLimitSheetState.resolve 决定。这里把 6 种状态逐个锁住：
+// 任一状态的判定条件或高度（260 / 295 / 365 / 395）被改，对应测试变红。
+// 高度同时断言具体数值——只比 token 的话，token 本身被改了测试也看不出来。
+struct UsageLimitSheetStateTests {
+    private func state(_ used: Int?, limit: Int = 5, failed: Bool) -> UsageLimitSheetState {
+        .resolve(usedCount: used, dailyLimit: limit, loadFailed: failed)
+    }
+
+    @Test func noNumberYetIsLoading() {
+        #expect(state(nil, failed: false) == .loading)
+        #expect(state(nil, failed: false).sheetHeight == 260)
+    }
+
+    @Test func noNumberAndFailedIsUnavailable() {
+        #expect(state(nil, failed: true) == .unavailable)
+        #expect(state(nil, failed: true).sheetHeight == 295)
+    }
+
+    @Test func underLimitIsNormal() {
+        for used in [0, 2, 4] {
+            #expect(state(used, failed: false) == .normal, "used=\(used)")
+        }
+        #expect(state(2, failed: false).sheetHeight == 260)
+    }
+
+    @Test func underLimitWithFailedRefreshShowsCachedNumber() {
+        #expect(state(2, failed: true) == .normalCached)
+        #expect(state(2, failed: true).sheetHeight == 260)
+    }
+
+    /// 恰好用满即达标（>=，不是 >）；超出（服务端上限下调后）也算达标。
+    @Test func atOrOverLimitIsReached() {
+        #expect(state(5, failed: false) == .reached)
+        #expect(state(7, failed: false) == .reached)
+        #expect(state(5, failed: false).sheetHeight == 365)
+    }
+
+    @Test func reachedWithFailedRefreshIsReachedCached() {
+        #expect(state(5, failed: true) == .reachedCached)
+        #expect(state(5, failed: true).sheetHeight == 395)
+    }
+
+    /// 上限不是写死的 5：跟随服务端下发的 dailyLimit。
+    @Test func limitFollowsDailyLimit() {
+        #expect(state(5, limit: 10, failed: false) == .normal)
+        #expect(state(10, limit: 10, failed: false) == .reached)
+    }
+
+    /// 只有两种达标态显示申请邀请码按钮与深色满格进度条。
+    @Test func onlyReachedStatesCountAsLimitReached() {
+        let all: [UsageLimitSheetState] = [.loading, .normal, .normalCached, .reached, .reachedCached, .unavailable]
+        #expect(all.filter(\.isLimitReached) == [.reached, .reachedCached])
+    }
+}
+
+// MARK: - 2026-10-03：More topics to explore（未开启主题推算 + 胶囊排布）
+
+struct Tab2ExploreTopicsTests {
+    /// 排布形态按剩余数量分档：0 隐藏 / 1–3 单排 / 4 上3下1 / ≥5 两排。
+    @Test func layoutModeByCount() {
+        #expect(Tab2ExploreTagLayout.forCount(0) == .hidden)
+        #expect(Tab2ExploreTagLayout.forCount(1) == .singleRow)
+        #expect(Tab2ExploreTagLayout.forCount(3) == .singleRow)
+        #expect(Tab2ExploreTagLayout.forCount(4) == .threePlusOne)
+        #expect(Tab2ExploreTagLayout.forCount(5) == .twoRows)
+        #expect(Tab2ExploreTagLayout.forCount(12) == .twoRows)
+    }
+
+    /// 切排：4 个 = [3, 1]；≥5 个前排取 ceil(n/2)；顺序不变。
+    @Test func rowsSplitKeepsOrder() {
+        #expect(Tab2ExploreTagLayout.rows([Int]()).isEmpty)
+        #expect(Tab2ExploreTagLayout.rows([1, 2, 3]) == [[1, 2, 3]])
+        #expect(Tab2ExploreTagLayout.rows([1, 2, 3, 4]) == [[1, 2, 3], [4]])
+        #expect(Tab2ExploreTagLayout.rows([1, 2, 3, 4, 5]) == [[1, 2, 3], [4, 5]])
+        #expect(Tab2ExploreTagLayout.rows(Array(1...11)).map(\.count) == [6, 5])
+    }
+
+    /// 未开启 = 全部 12 个分类减去有词的；Other 也算一个主题且恒在最后。
+    @Test func unstartedExcludesStartedAndKeepsOtherLast() {
+        let cats = [
+            Tab2CategoryData(sceneCategory: "Food & Drink", wordCount: 3, unlocked: false),
+            Tab2CategoryData(sceneCategory: "Work & Study", wordCount: 24, unlocked: true),
+        ]
+        let result = SceneCategory.unstarted(given: cats)
+        #expect(result.count == 10)
+        #expect(!result.contains(.food))
+        #expect(!result.contains(.workStudy))
+        #expect(result.last == .other)
+        #expect(result.first == .homeFamily)
+    }
+
+    /// 0 词的分类不算已开始；旧中文键归一后再比对。
+    @Test func unstartedTreatsZeroWordsAsUnstartedAndMapsLegacyKeys() {
+        let cats = [
+            Tab2CategoryData(sceneCategory: "Shopping", wordCount: 0, unlocked: false),
+            Tab2CategoryData(sceneCategory: "出行交通", wordCount: 2, unlocked: false),
+        ]
+        let result = SceneCategory.unstarted(given: cats)
+        #expect(result.contains(.shopping))
+        #expect(!result.contains(.gettingAround))
+        #expect(result.count == 11)
+    }
+
+    /// Other 与其他主题同规则：有词就不出现；只有 Other 有词时其余 11 个照常列出。
+    @Test func otherWithWordsIsNotUnstarted() {
+        let cats = [Tab2CategoryData(sceneCategory: "Other", wordCount: 2, unlocked: false)]
+        let result = SceneCategory.unstarted(given: cats)
+        #expect(!result.contains(.other))
+        #expect(result.count == 11)
+        #expect(result.last == .social)
+    }
+
+    /// 全部开始 → 空 → 区块隐藏。
+    @Test func allStartedYieldsEmpty() {
+        let cats = SceneCategory.allCases.map {
+            Tab2CategoryData(sceneCategory: $0.rawValue, wordCount: 1, unlocked: false)
+        }
+        #expect(SceneCategory.unstarted(given: cats).isEmpty)
     }
 }
 
@@ -9286,6 +9773,28 @@ struct AICardBodySpacingTests {
         )
         #expect(!express.hasMeaningfulRevision)
         #expect(express.displayableGrammarNote == nil)
+    }
+
+    @Test func sentenceCardSpacingRendersInnerBlockSeparation() {
+        let revised = CardContent(
+            granularity: "sentence",
+            direction: "comprehend",
+            revisionType: "error",
+            userOriginal: "I am very sleep today",
+            targetExpression: "I'm very sleepy today",
+            nativeMeaning: "我今天很困",
+            grammarNote: "sleepy is adjective"
+        )
+        let host = UIHostingController(
+            rootView: AICardBody(content: revised)
+                .environment(\.sizeCategory, .medium)
+        )
+        let size = host.sizeThatFits(
+            in: CGSize(width: 358, height: UIView.layoutFittingExpandedSize.height)
+        )
+        // With 16pt (AppTheme.Space.paddingCard) between sentenceOriginalBlock -> polishSection -> noteSection,
+        // the 2 internal gaps add 32pt of vertical spacing.
+        #expect(size.height > 200)
     }
 
     @Test func passageCardStructureAndLimit() {

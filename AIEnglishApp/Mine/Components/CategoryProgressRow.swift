@@ -183,7 +183,8 @@ struct CategoryProgressRow: View {
             expandToggle
             if isExpanded {
                 wordList
-                    .padding(.top, AppTheme.Space.paddingXS)
+                    .padding(.top, AppTheme.Size.categoryProgressToWords)
+                    .padding(.bottom, AppTheme.Space.listRowVertical)
                     .drawingGroup()
                     .clipped()
             }
@@ -257,16 +258,17 @@ struct CategoryProgressRow: View {
                     progressBar
                 }
             }
-            .padding(.vertical, AppTheme.Space.listRowVertical)
+            .padding(.top, AppTheme.Space.listRowVertical)
+            .padding(.bottom, isExpanded ? 0 : AppTheme.Space.listRowVertical)
         }
         .buttonStyle(.plain)
     }
 
-    // MARK: - Category badge（描边字形 · 15pt medium · 20×20 纯线条垂直居中）
+    // MARK: - Category badge（描边字形 · 14pt regular · 20×20 纯线条垂直居中，方案 3-B 细线轻挺）
 
     private var categoryBadge: some View {
         Image(systemName: SceneCategory.from(category.sceneCategory).iconName)
-            .font(.system(size: AppTheme.Size.categoryIconGlyph, weight: .medium))
+            .font(.system(size: AppTheme.Size.categoryIconGlyph, weight: .regular))
             .foregroundStyle(AppTheme.Color.textMuted)
             .frame(width: AppTheme.Size.categoryBadge, height: AppTheme.Size.categoryBadge)
             .scaleEffect(milestoneScale)
@@ -307,12 +309,11 @@ struct CategoryProgressRow: View {
             }
                 .transition(.opacity)
         } else {
-            VStack(spacing: AppTheme.Space.paddingS) {
+            VStack(spacing: AppTheme.Size.categoryWordListSpacing) {
                 ForEach(wordsLoader.words) { entry in
                     WordEntryRow(entry: entry)
                 }
             }
-            .padding(.vertical, AppTheme.Space.paddingXS)
             // 子项只做一个轻微台阶缩进，和分类头拉出层级但不推太远
             .padding(.leading, AppTheme.Space.paddingCard)
             .transition(.opacity.combined(with: .offset(y: 4)))
@@ -453,8 +454,7 @@ private struct WordEntryRow: View {
 
             Spacer(minLength: 0)
         }
-        // 扁平行：去掉每行的白卡与阴影，避免"白卡套白卡"的层叠感
-        .padding(.vertical, AppTheme.Space.paddingS)
+        // 扁平行：间距由父容器 categoryWordListSpacing (16pt) 统一定义，消除多层累加
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -485,7 +485,7 @@ private struct WordEntryRow: View {
         }
     }
 
-    // 类型图标：描边 SF Symbol、垂直引用树线（习语/俚语）或衬线字母。均走暖灰 muted、退后作弱提示。
+    // 类型图标：描边 SF Symbol、垂直引用树线（习语/俚语）、开口链环（短语/搭配/句型）。均走暖灰 muted、退后作弱提示。
     @ViewBuilder
     private var badgeGlyphView: some View {
         switch entry.badgeGlyph {
@@ -495,6 +495,8 @@ private struct WordEntryRow: View {
                 .foregroundStyle(AppTheme.Color.textMuted)
         case .quoteBlock:
             quoteBlockGlyphView
+        case .linkChain:
+            Tab2LinkChainGlyphView()
         }
     }
 
@@ -550,7 +552,7 @@ private struct ShimmerWordSkeletonList: View {
     ]
 
     var body: some View {
-        VStack(spacing: AppTheme.Space.paddingS) {
+        VStack(spacing: AppTheme.Size.categoryWordListSpacing) {
             ForEach(0..<barConfigs.count, id: \.self) { index in
                 skeletonRow(
                     wordWidth: barConfigs[index].wordWidth,
@@ -558,7 +560,6 @@ private struct ShimmerWordSkeletonList: View {
                 )
             }
         }
-        .padding(.vertical, AppTheme.Space.paddingXS)
         .padding(.leading, AppTheme.Space.paddingCard)
         .onAppear {
             if !reduceMotion {
@@ -599,7 +600,6 @@ private struct ShimmerWordSkeletonList: View {
 
             Spacer(minLength: 0)
         }
-        .padding(.vertical, AppTheme.Space.paddingS)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 

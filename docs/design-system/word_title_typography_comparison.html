@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Word 词条大标题 4 档全矩阵字具体验 (含两行标题专项对比)</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --page-bg: #FCF8F3;         /* Primitive.neutral50: 暖米色纸面 */
+      --card-bg: #FFFDFB;         /* Primitive.warmWhite: 近白暖卡片 */
+      --bubble-user-bg: #F0EDE6;  /* Primitive.neutral100: 用户气泡暖灰底 */
+      --date-chip-bg: rgba(230, 225, 218, 0.6);
+
+      --text-primary: #211811;    /* Primitive.neutral900: 染色近黑 17.2:1 */
+      --text-secondary: #4B4640;  /* Primitive.neutral700: 次要正文 9.9:1 */
+      --text-muted: #7C7773;      /* Primitive.neutral500: 标注/词性/小标 4.4:1 */
+      --text-faint: #C7C3BD;
+
+      --brand-strong: #FF7622;    /* 满饱和品牌橙 */
+      --brand-ink: #C2410C;       /* 橙文字 */
+      --brand-wash: #FFF5ED;      /* 浅橙底 */
+
+      --card-border: 0.5px solid rgba(230, 225, 218, 0.45);
+      --card-shadow: 
+        0 1.5px 4px rgba(33, 24, 17, 0.035),
+        0 4px 8px rgba(46, 40, 32, 0.025);
+
+      --font-serif: 'Newsreader', 'New York', Georgia, serif;
+      --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "PingFang SC", sans-serif;
+      --font-mono: 'SF Mono', 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background-color: #121214;
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      -webkit-font-smoothing: antialiased;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      padding: 32px 16px;
+    }
+
+    .main-wrapper {
+      width: 100%;
+      max-width: 1200px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    /* 顶部控制面板 */
+    .hero-panel {
+      background: #1C1C1E;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 18px;
+      padding: 24px;
+      color: #F5F5F7;
+    }
+
+    .badge-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(255, 118, 34, 0.15);
+      color: #FF7622;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      margin-bottom: 12px;
+      font-family: var(--font-mono);
+    }
+
+    .hero-title {
+      font-size: 22px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      letter-spacing: -0.3px;
+    }
+
+    .hero-desc {
+      font-size: 13.5px;
+      line-height: 1.6;
+      color: #A1A1A6;
+    }
+
+    .toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #1C1C1E;
+      padding: 12px 18px;
+      border-radius: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .tab-pills {
+      display: flex;
+      background: rgba(0, 0, 0, 0.35);
+      padding: 3px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+
+    .pill-btn {
+      background: transparent;
+      border: none;
+      color: #8E8E93;
+      padding: 6px 12px;
+      font-size: 12.5px;
+      font-weight: 500;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .pill-btn.active {
+      background: #3A3A3C;
+      color: #FFFFFF;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+
+    .filter-checkbox-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #FF7622;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .filter-checkbox-wrap input {
+      accent-color: #FF7622;
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+    }
+
+    /* 画布外框 */
+    .canvas-board {
+      background: var(--page-bg);
+      border-radius: 24px;
+      padding: 28px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.35);
+      border: 1px solid rgba(230, 225, 218, 0.3);
+      display: flex;
+      flex-direction: column;
+      gap: 36px;
+    }
+
+    .sample-group {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      border-bottom: 1px solid rgba(33, 24, 17, 0.08);
+      padding-bottom: 28px;
+    }
+
+    .sample-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      padding: 0 4px;
+    }
+
+    .sample-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .two-line-tag {
+      font-size: 11px;
+      font-family: var(--font-mono);
+      font-weight: 700;
+      background: var(--brand-wash);
+      color: var(--brand-ink);
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 0.5px solid rgba(255, 118, 34, 0.3);
+    }
+
+    /* 4 列并排网格 */
+    .cards-grid-4 {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+    }
+
+    @media (max-width: 1040px) {
+      .cards-grid-4 {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 600px) {
+      .cards-grid-4 {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* 真实 Word 卡片 */
+    .word-card {
+      background: var(--card-bg);
+      border-radius: 18px;
+      border: var(--card-border);
+      box-shadow: var(--card-shadow);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    .card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .card-chip {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-muted);
+      background: rgba(230, 225, 218, 0.45);
+      padding: 3px 8px;
+      border-radius: 999px;
+    }
+
+    .config-badge {
+      font-size: 10px;
+      font-family: var(--font-mono);
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    .badge-baseline {
+      background: rgba(124, 119, 115, 0.12);
+      color: var(--text-secondary);
+    }
+
+    .badge-22reg {
+      background: rgba(0, 122, 255, 0.1);
+      color: #007AFF;
+      border: 0.5px solid rgba(0, 122, 255, 0.2);
+    }
+
+    .badge-20semi {
+      background: var(--brand-wash);
+      color: var(--brand-ink);
+      border: 0.5px solid rgba(255, 118, 34, 0.3);
+    }
+
+    .badge-20reg {
+      background: rgba(48, 176, 199, 0.1);
+      color: #0E7090;
+      border: 0.5px solid rgba(48, 176, 199, 0.25);
+    }
+
+    /* 4 档字具体现 */
+    .word-heading {
+      font-family: var(--font-serif);
+      color: var(--text-primary);
+      margin-bottom: 4px;
+      word-break: break-word;
+      line-height: 1.22;
+    }
+
+    /* 档位 1：22pt Semibold (线上) */
+    .typo-22semi {
+      font-size: 22px;
+      font-weight: 600;
+      letter-spacing: -0.2px;
+    }
+
+    /* 档位 2：22pt Regular */
+    .typo-22reg {
+      font-size: 22px;
+      font-weight: 400;
+      letter-spacing: -0.1px;
+    }
+
+    /* 档位 3：20pt Semibold (⭐新增) */
+    .typo-20semi {
+      font-size: 20px;
+      font-weight: 600;
+      letter-spacing: -0.15px;
+    }
+
+    /* 档位 4：20pt Regular */
+    .typo-20reg {
+      font-size: 20px;
+      font-weight: 400;
+      letter-spacing: -0.05px;
+    }
+
+    .phonetic-pos-row {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+    }
+
+    .phonetic-txt {
+      font-family: var(--font-mono);
+      font-size: 13.5px;
+      color: var(--text-muted);
+    }
+
+    .pos-txt {
+      font-size: 12.5px;
+      font-style: italic;
+      color: var(--text-muted);
+    }
+
+    .meaning-txt {
+      font-size: 14px;
+      line-height: 1.45;
+      color: var(--text-secondary);
+      margin-bottom: 16px;
+    }
+
+    .section-lbl {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.6px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      margin-bottom: 8px; /* 8pt */
+    }
+
+    .example-en {
+      font-size: 14px;
+      line-height: 1.4;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+
+    .example-zh {
+      font-size: 13px;
+      line-height: 1.4;
+      color: var(--text-muted);
+      margin-bottom: 16px;
+    }
+
+    .note-txt {
+      font-size: 13px;
+      line-height: 1.45;
+      color: var(--text-secondary);
+    }
+
+    /* 深度总结卡片 */
+    .summary-card {
+      background: var(--card-bg);
+      border-radius: 18px;
+      border: var(--card-border);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .summary-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 14px;
+    }
+
+    @media (max-width: 768px) {
+      .summary-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .summary-box {
+      padding: 14px;
+      border-radius: 12px;
+      background: rgba(240, 237, 230, 0.4);
+      border-left: 3.5px solid #8E8E93;
+      font-size: 13px;
+      line-height: 1.55;
+      color: var(--text-secondary);
+    }
+
+    .summary-box.highlight {
+      border-left-color: var(--brand-strong);
+      background: var(--brand-wash);
+      color: #6C2E0B;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="main-wrapper">
+    <!-- 头部说明 -->
+    <div class="hero-panel">
+      <div class="badge-chip">TAB1 DESIGN LAB · TYPOGRAPHY EXPERIMENT</div>
+      <h1 class="hero-title">Word 词条大标题 4 档全矩阵字具体验</h1>
+      <p class="hero-desc">
+        对比 4 种方案：<br>
+        <strong>① 22pt Semibold (线上)</strong> · <strong>② 22pt Regular (降字重)</strong> · <strong>③ 20pt Semibold (降字号·新增⭐)</strong> · <strong>④ 20pt Regular (双降)</strong><br>
+        特别关注：长短语、习语及超长单词<strong>折成两行</strong>时的行高、黑度与空间占用。
+      </p>
+    </div>
+
+    <!-- 模式控制工具条 -->
+    <div class="toolbar">
+      <div class="tab-pills">
+        <button class="pill-btn active" onclick="switchMode('grid')">🔬 4 档横向并排对比</button>
+        <button class="pill-btn" onclick="switchMode('single-22semi')">22pt Semibold (线上)</button>
+        <button class="pill-btn" onclick="switchMode('single-22reg')">22pt Regular (降字重)</button>
+        <button class="pill-btn" onclick="switchMode('single-20semi')">20pt Semibold (⭐新增)</button>
+        <button class="pill-btn" onclick="switchMode('single-20reg')">20pt Regular (双降)</button>
+      </div>
+
+      <label class="filter-checkbox-wrap">
+        <input type="checkbox" id="twoLineFilter" onchange="toggleTwoLineFilter()">
+        <span>⭐ 仅看两行标题重点测试用例 (4 组)</span>
+      </label>
+    </div>
+
+    <!-- 画板主体 -->
+    <div class="canvas-board" id="boardContent">
+      <!-- 动态生成 -->
+    </div>
+
+    <!-- 底部总结分析卡 -->
+    <div class="summary-card">
+      <div class="summary-title">💡 4 档字具体验与「两行情况」深度分析</div>
+      
+      <div class="summary-grid">
+        <div class="summary-box">
+          <strong>1. 22pt Semibold（当前线上基准）：</strong><br>
+          • <strong>两行痛点：</strong>当折成两行时，由于 22pt 字符粗黑且行宽大，两行紧密相叠形成一个面积过大的“黑墨块”，给整张卡片带来明显的“头重脚轻”下压感，抢夺了下方例句和释义的视觉关注度。
+        </div>
+
+        <div class="summary-box">
+          <strong>2. 22pt Regular（方案一 · 保持 22pt 降字重）：</strong><br>
+          • <strong>两行表现：</strong>字号依然大气，但去掉粗黑油墨后，两行文字有了通透的行内空气感，呈现出高级文艺杂志书籍的优雅排版感，不再“堵死”视线。
+        </div>
+
+        <div class="summary-box highlight">
+          <strong>3. 20pt Semibold（方案二 · 降字号保留半粗 · ⭐新增）：</strong><br>
+          • <strong>⭐ 绝妙折中：</strong>字号由 22pt 微调至 20pt 后，字符宽度缩减约 8~10%，很多原本两行非常局促的短语（如 <i>bring someone up to speed</i>），第一行能容纳更多字符，第二行变短，折行比例更加协调匀称；<br>
+          • 同时保留 Semibold 的分量感，依然是卡片第一眼绝对的主视觉焦点，但因为字号减小，两行堆叠时的总墨量明显比 22pt 轻盈得多！
+        </div>
+
+        <div class="summary-box">
+          <strong>4. 20pt Regular（方案三 · 紧凑小号双降）：</strong><br>
+          • <strong>两行表现：</strong>极简克制，两行总高度最矮、黑度最轻；适合追求极简现代平视感、希望最大化省出屏幕空间的场景。
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const samples = [
+      // 两行重点测试用例
+      {
+        category: "⭐ 两行场景 1 · 职场高频 5 词短语",
+        word: "bring someone up to speed",
+        phonetic: "",
+        pos: "phrase / idiom",
+        meaning: "向某人同步最新进展，使某人了解全貌",
+        exEn: "Could you bring me up to speed before the client call?",
+        exZh: "在给客户开电话会之前，你能帮我同步一下现状吗？",
+        note: "职场最常见折成两行的短语，重点观察两行之间的行距与黑度。",
+        isTwoLine: true
+      },
+      {
+        category: "⭐ 两行场景 2 · 经典口语 4 词习语",
+        word: "a blessing in disguise",
+        phonetic: "",
+        pos: "idiom",
+        meaning: "因祸得福，塞翁失马焉知非福",
+        exEn: "Losing that job turned out to be a blessing in disguise.",
+        exZh: "丢了那份工作结果反倒成了塞翁失马的好事。",
+        note: "第一行较短、第二行较长的自然折行结构。",
+        isTwoLine: true
+      },
+      {
+        category: "⭐ 两行场景 3 · 20字母超长单词强制折断",
+        word: "uncharacteristically",
+        phonetic: "/ˌʌnˌkærəktəˈrɪstɪkli/",
+        pos: "adv.",
+        meaning: "反常地，不合寻常地",
+        exEn: "He was uncharacteristically quiet during the whole meeting.",
+        exZh: "他在整场会议中表现得反常地安静。",
+        note: "20个字母的超长单词，在窄卡片内会被迫折成两行，考验断字美感。",
+        isTwoLine: true
+      },
+      {
+        category: "⭐ 两行场景 4 · 饱满双行短语",
+        word: "touch base tomorrow morning",
+        phonetic: "",
+        pos: "phrase",
+        meaning: "明天一早先碰一下互通情况",
+        exEn: "Let's touch base tomorrow morning first thing.",
+        exZh: "我们明天一早先碰一下互通情况。",
+        note: "上下两行字数接近（touch base / tomorrow morning），考验对称两行感。",
+        isTwoLine: true
+      },
+
+      // 常规单行/多行用例
+      {
+        category: "常规对比 · 短单词",
+        word: "thrive",
+        phonetic: "/θraɪv/",
+        pos: "v.",
+        meaning: "茁壮成长；繁荣，兴旺",
+        exEn: "Small creative studios can thrive in this environment.",
+        exZh: "小型创意工作室在这种环境下能够蓬勃发展。",
+        note: "常与 on / in 搭配使用，强调在某种特定挑战中越活越好。",
+        isTwoLine: false
+      },
+      {
+        category: "常规对比 · 10字母中长词",
+        word: "streamline",
+        phonetic: "/ˈstriːmlaɪn/",
+        pos: "v.",
+        meaning: "简化；使……效率更高，精简流程",
+        exEn: "We need to streamline our weekly review meetings.",
+        exZh: "我们需要精简每周的复盘会议。",
+        note: "源于流线型设计，引申为消除多余冗余步骤。",
+        isTwoLine: false
+      },
+      {
+        category: "常规对比 · 17字母长词",
+        word: "counterproductive",
+        phonetic: "/ˌkaʊntərprəˈdʌktɪv/",
+        pos: "adj.",
+        meaning: "适得其反的，产生反效果的",
+        exEn: "Working late every night can be completely counterproductive.",
+        exZh: "每天熬夜加班可能会适得其反。",
+        note: "接近单行极限的长词，考验字宽对换行的敏感度。",
+        isTwoLine: false
+      },
+      {
+        category: "常规对比 · 7词极限习语",
+        word: "kill two birds with one stone",
+        phonetic: "",
+        pos: "idiom",
+        meaning: "一举两得，一石二鸟",
+        exEn: "By biking to work, I get exercise and save money — killing two birds with one stone.",
+        exZh: "骑车上班既能锻炼又能省钱，真是一举两得。",
+        note: "7个英文单词构成的完整固定习语，考验卡片标题区的空间占用。",
+        isTwoLine: false
+      }
+    ];
+
+    let currentMode = 'grid';
+    let filterTwoLineOnly = false;
+
+    function renderCards() {
+      const container = document.getElementById('boardContent');
+      container.innerHTML = '';
+
+      const filtered = filterTwoLineOnly ? samples.filter(s => s.isTwoLine) : samples;
+
+      filtered.forEach((s) => {
+        const group = document.createElement('div');
+        group.className = 'sample-group';
+
+        group.innerHTML = `
+          <div class="sample-header">
+            <span class="sample-title">词条：「${s.word}」</span>
+            ${s.isTwoLine ? '<span class="two-line-tag">两行测试场景</span>' : `<span style="font-size:12px; color:var(--text-muted);">${s.category}</span>`}
+          </div>
+          <div class="${currentMode === 'grid' ? 'cards-grid-4' : ''}">
+            ${renderSingleCard(s, '22semi', currentMode)}
+            ${renderSingleCard(s, '22reg', currentMode)}
+            ${renderSingleCard(s, '20semi', currentMode)}
+            ${renderSingleCard(s, '20reg', currentMode)}
+          </div>
+        `;
+        container.appendChild(group);
+      });
+    }
+
+    function renderSingleCard(s, type, mode) {
+      if (mode === 'single-22semi' && type !== '22semi') return '';
+      if (mode === 'single-22reg' && type !== '22reg') return '';
+      if (mode === 'single-20semi' && type !== '20semi') return '';
+      if (mode === 'single-20reg' && type !== '20reg') return '';
+
+      let typoClass = 'typo-22semi';
+      let badgeHtml = '<span class="config-badge badge-baseline">22pt · Semibold (线上)</span>';
+
+      if (type === '22reg') {
+        typoClass = 'typo-22reg';
+        badgeHtml = '<span class="config-badge badge-22reg">22pt · Regular</span>';
+      } else if (type === '20semi') {
+        typoClass = 'typo-20semi';
+        badgeHtml = '<span class="config-badge badge-20semi">20pt · Semibold (⭐新增)</span>';
+      } else if (type === '20reg') {
+        typoClass = 'typo-20reg';
+        badgeHtml = '<span class="config-badge badge-20reg">20pt · Regular</span>';
+      }
+
+      return `
+        <div class="word-card">
+          <div class="card-top">
+            <span class="card-chip">Word</span>
+            ${badgeHtml}
+          </div>
+
+          <div class="word-heading ${typoClass}">${s.word}</div>
+
+          ${(s.phonetic || s.pos) ? `
+            <div class="phonetic-pos-row">
+              ${s.phonetic ? `<span class="phonetic-txt">${s.phonetic}</span>` : ''}
+              ${s.pos ? `<span class="pos-txt">${s.pos}</span>` : ''}
+            </div>
+          ` : ''}
+
+          <div class="meaning-txt">${s.meaning}</div>
+
+          ${s.exEn ? `
+            <div class="section-lbl">EXAMPLES</div>
+            <div class="example-en">${s.exEn}</div>
+            <div class="example-zh">${s.exZh}</div>
+          ` : ''}
+
+          ${s.note ? `
+            <div class="section-lbl">NOTE</div>
+            <div class="note-txt">${s.note}</div>
+          ` : ''}
+        </div>
+      `;
+    }
+
+    function switchMode(mode) {
+      currentMode = mode;
+      const btns = document.querySelectorAll('.pill-btn');
+      btns.forEach(b => b.classList.remove('active'));
+      event.target.classList.add('active');
+      renderCards();
+    }
+
+    function toggleTwoLineFilter() {
+      filterTwoLineOnly = document.getElementById('twoLineFilter').checked;
+      renderCards();
+    }
+
+    renderCards();
+  </script>
+</body>
+</html>

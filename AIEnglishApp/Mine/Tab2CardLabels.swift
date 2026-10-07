@@ -93,10 +93,11 @@ enum Tab2CardLabels {
     }
 
     /// 刀 6b：Hero 理由胶囊文案 + 两态判定（§二② + v12 .opill，图上）。
-    /// - isHot（暖橙态）= newMaterialCount ≥ 1 且 d == 0：深色半透明托底上
-    ///   暖橙点 #FF8A4C + 暖奶油字 #FFE4D2——暖橙只表示「今天有新东西」
-    /// - quiet（久未态）= 其余一切（count == 0 / 防御命中 / lastMaterialAt 为 nil）：
-    ///   同底、白 82% 字 + 白 55% 点，同一位置同一形体只换颜色
+    /// - isHot = newMaterialCount ≥ 1 且 d == 0（今天有新东西）
+    /// - quiet = 其余一切（count == 0 / 防御命中 / lastMaterialAt 为 nil）
+    /// 视觉上两态已不再变色（2026-09-22 起）：封面理由是同一套白字 + 阴影，文案本身已经说完状态，
+    /// isHot 只给需要区分「今天有没有新东西」的调用方用。lastMaterialAt 为 nil 时返回
+    /// onlyWordsSoFar，Hero 封面不显示这一句（卡身空态说明行已经说过，见 Tab2HeroCard.coverReasonText）。
     /// 防御规则与 `reasonLine` 同源（§12）：跨午夜后 count ≥ 1 但 d ≥ 1 时以 d 为准，
     /// 落 quiet 态，绝不把「今天」说错。
     static func reasonPillState(

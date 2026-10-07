@@ -5,12 +5,13 @@ import SwiftUI
 ///
 /// 结构（v12 + 空态 v1，2026-09-22 视觉回归 main 基线 §2.4/§2.5 更新图上标签材质）：
 /// - 顶部 = 第一条**有效**活动的封面照片（无 → 类别预设图）；图上左上角一行
-///   （.toprow）两颗标签：类别 chip（{类别英文名} 11.5/600，§二①）+
+///   （.toprow）两颗标签：类别名（13/400，§二①）+
 ///   理由胶囊 opill（§二②：hot/quiet 两态同一位置、同一文案，不再变色——
 ///   文案已经把状态说完，颜色不重复说第二遍）。两者均无托底胶囊，裸文字 +
-///   shadow，可读性靠照片层顶部 scrim 压出来（main 基线做法）。预设图
-///   （photoCover == nil）是浅底 → 两颗标签换单色深字、无 shadow（空态 v1
-///   .onlight：深色投影是给不可控照片准备的，浅底上不需要）
+///   shadow，可读性靠照片层顶部 scrim 压出来（main 基线做法）。
+///   封面标签颜色：照片底 = 纯白字 + 柔焦微阴影；预设底（浅杏色）= 深棕字、无阴影（2026-10-06 起分流，见 Tab2HeroCoverLabels）。
+///   已知取舍：预设底理由行 72% 深棕约 3.6:1（类别名 6.6:1），PM 看过真机渲染后接受。
+///   排布（并排 / 大字号放不下换两行）在 Tab2HeroCoverLabels。
 /// - 卡身 = 「Recent activities」区内小标题（11/600 无衬线大写，v12 .seclab）→
 ///   活动胶囊组（15pt Charter、固定两行槽高、一行一颗胶囊、+N more 无底尾随，
 ///   v12 .achips）→ 脚行（左 47 words 13px muted 表格数字、右 Start talking
@@ -32,11 +33,17 @@ struct Tab2HeroCard: View {
     private var display: Tab2ActivityDisplay {
         Tab2ActivityDisplay.compute(category: category)
     }
-    /// 图上标签走浅底深字一套的判定：无封面 = 预设浅底图（#F3EDE6）——深色
-    /// 半透明托底是给不可控照片准备的，浅底上会突兀（空态 v1 .onlight）。
-    /// 空态必无封面，但反过来不成立：有活动却无封面同样落在预设浅底上，
-    /// 判定跟图走、不跟活动走，两类浅底保持一致。
-    private var onLightArt: Bool { display.photoCover == nil }
+    /// 是否用预设艺术图（没有可信照片）：只用于控制卡身与艺术图的几何间距（预设图为 primary300 实底、
+    /// 底边硬边无渐变，不做卡身上叠）；文字颜色另由 onPresetArt 传给 Tab2HeroCoverLabels。
+    private var usesPresetArt: Bool { Self.usesPresetArt(display) }
+
+    /// 没有可信照片就用预设图——封面字色（深棕 / 白字）也跟着它走，单测锁定这条接线。
+    static func usesPresetArt(_ display: Tab2ActivityDisplay) -> Bool { display.photoCover == nil }
+    /// 卡身上叠进图片的距离：照片底部有淡出渐变，卡身可以上叠；预设图是
+    /// primary300 实底、底边是硬边，上叠会让小标题贴着色块（只剩约 2pt），故不叠。
+    private var artTextOverlap: CGFloat {
+        usesPresetArt ? 0 : AppTheme.Tab2Hero.Layout.artTextOverlap
+    }
 
     var body: some View {
         Button(action: onTalk) {
@@ -53,10 +60,12 @@ struct Tab2HeroCard: View {
                     photoTopRow
                         .padding(.top, AppTheme.Tab2Hero.Layout.chipTopLeading)
                         .padding(.leading, AppTheme.Tab2Hero.Layout.chipTopLeading)
+                        // 右侧留同样的边距：一行并排时文字不会贴到卡片右缘，放不下就换成两行。
+                        .padding(.trailing, AppTheme.Tab2Hero.Layout.chipTopLeading)
                 }
             bottomContent
-                .offset(y: AppTheme.Tab2Hero.Layout.artTextOverlap)
-                .padding(.bottom, AppTheme.Tab2Hero.Layout.artTextOverlap)
+                .offset(y: artTextOverlap)
+                .padding(.bottom, artTextOverlap)
         }
         .frame(maxWidth: .infinity)
         .background(AppTheme.Color.warmGlassSurface)
@@ -80,64 +89,20 @@ struct Tab2HeroCard: View {
         }
     }
 
-    /// 图上左上角一行（v12 .toprow）：类别 chip + 理由胶囊，裸文字 + shadow
-    /// （2026-09-22 视觉回归 main 基线 §2.4，无托底胶囊）。
+    /// 图上左上角一行（v12 .toprow）：类别名 + 理由，裸文字 + shadow，无托底胶囊。
+    /// 排布（并排 / 放不下换两行）、颜色与阴影都在 `Tab2HeroCoverLabels`。
     private var photoTopRow: some View {
-        HStack(spacing: 8) {
-            categoryChip
-            reasonPill
-        }
+        Tab2HeroCoverLabels(categoryName: category.englishLabel, reasonText: coverReasonText, onPresetArt: usesPresetArt)
     }
 
-    /// 类别标签（§二①）。v12 起不再带词数段（词数随 .footrow 移到卡身脚行左端）。
-    /// 2026-09-22 视觉回归 main 基线（§2.4）：去掉托底胶囊，改裸文字 + shadow——
-    /// main 没有任何图上标签托底，可读性靠照片层顶部 scrim（`HeroCollageView`）压出来；
-    /// 预设浅底上无 shadow（浅底不需要）。
-    private var categoryChip: some View {
-        Text(category.englishLabel)
-            .font(AppTheme.Font.tab2HeroChipCategory)
-            .foregroundStyle(onLightArt
-                             ? AppTheme.Color.tab2HeroPresetLabel
-                             : AppTheme.Color.tab2HeroPhotoOverlayText)
-            .lineLimit(1)
-            .shadow(
-                color: photoTextShadowColor,
-                radius: AppTheme.Tab2Hero.Layout.photoOverlayShadowRadius,
-                x: 0,
-                y: AppTheme.Tab2Hero.Layout.photoOverlayShadowY
-            )
-    }
-
-    /// 理由胶囊（刀 6b v12 .opill）。2026-09-22 视觉回归 main 基线（§2.4 去托底 +
-    /// §2.5 去 hot/quiet 变色）：`Tab2CardLabels.reasonLine` 的文案已经把状态说完了
-    /// （hot → "Added 3 times today"，quiet → "Nothing new in 2 weeks"），再用颜色
-    /// 染一遍是同一信息说两次——两态改共用同一套配色（取原 quiet 值），托底圆点一并
-    /// 去掉。`onLightArt` 判定仍保留：用户照片颜色不可控，不区分底色会在亮照片上丢字。
-    private var reasonPill: some View {
+    /// 封面理由文案。lastMaterialAt 为空时理由就是 "Only words so far"，与卡身空态说明行
+    /// （Tab2OnlyWordsSlot）是同一句话，同一张卡上会说两遍；封面不显示，说明行由卡身负责。
+    private var coverReasonText: String? {
         let state = Tab2CardLabels.reasonPillState(
             lastMaterialAt: category.lastMaterialAt,
             newMaterialCount: category.newMaterialCount
         )
-        return Text(state.text)
-            .font(AppTheme.Font.tab2ReasonPill)
-            .foregroundStyle(onLightArt
-                             ? AppTheme.Color.tab2ReasonPillOnLightText
-                             : AppTheme.Color.tab2ReasonPillOnPhotoText)
-            .lineLimit(1)
-            .shadow(
-                color: photoTextShadowColor,
-                radius: AppTheme.Tab2Hero.Layout.photoOverlayShadowRadius,
-                x: 0,
-                y: AppTheme.Tab2Hero.Layout.photoOverlayShadowY
-            )
-    }
-
-    /// 图上标签投影色：照片底用近黑 50% 投影保可读性；预设浅底不需要投影
-    /// （main HeroTopOverlay 的 `.preset` 分支 shadow 透明度为 0）。
-    private var photoTextShadowColor: Color {
-        onLightArt
-            ? AppTheme.Color.tab2HeroPhotoOverlayShadow.opacity(AppTheme.Tab2Hero.Opacity.transparent)
-            : AppTheme.Color.tab2HeroPhotoOverlayShadow.opacity(AppTheme.Tab2Hero.Opacity.photoTextShadow)
+        return state.text == Tab2CardLabels.onlyWordsSoFar ? nil : state.text
     }
 
     // MARK: - 卡身文字区（v12 .hbody 16/18/18）
@@ -154,10 +119,10 @@ struct Tab2HeroCard: View {
         .padding(.bottom, AppTheme.Tab2Hero.Layout.bodyBottomInset)
     }
 
-    /// 「Recent activities」区内小标题（v12 .seclab：11/600 无衬线大写、字距 .09em）
+    /// 「Recent activities」区内小标题（11/600 无衬线大写、字距 .09em、textMuted）
     /// + 内容。有活动 → 胶囊组；无活动（activityCount = 0 或全部被挡）→ 标题保留、
-    /// 一行「Only words so far」占位（空态 v1 .onlywords：单行自然高度，不占两行槽）。
-    /// 标题与内容间距同 9（.seclab 下距 9 对两种内容通用）。
+    /// Tab2OnlyWordsSlot 占位（保持 52pt 两行槽高，与正常态卡片高度 100% 恒定）。
+    /// 标题与内容间距（.seclab 下距 sectionLabelToCapsules 对两种内容通用）。
     private var activitySection: some View {
         VStack(alignment: .leading, spacing: AppTheme.Tab2Hero.Layout.sectionLabelToCapsules) {
             Text("Recent activities")
@@ -177,30 +142,42 @@ struct Tab2HeroCard: View {
                 )
                 .equatable()
             } else {
-                Tab2OnlyWordsLine()
+                Tab2OnlyWordsSlot(metrics: Tab2ActivityCapsuleMetrics.hero())
             }
         }
     }
 
     /// 脚行（v12 .footrow）：左词数 13px muted 表格数字，右 CTA。
+    /// 一行放得下就并排（这一支与改前完全一致，含固定高度的 CTA）；放不下（大字号）改成上下两行：
+    /// 词数在上、CTA 在下靠右，CTA 的文字不再被挤成 "···"，药丸高度也允许随文字增高。
     private var footRow: some View {
-        HStack(alignment: .center, spacing: AppTheme.Space.paddingS) {
-            Text(Tab2CardLabels.words(category.wordCount))
-                .font(AppTheme.Font.tab2HeroFootrowWords)
-                .foregroundStyle(AppTheme.Color.textMuted)
-                .monospacedDigit()
-                .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)
-                .layoutPriority(1)
-
-            Spacer(minLength: 0)
-
-            ctaPill
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .center, spacing: AppTheme.Space.paddingS) {
+                wordsLabel
+                Spacer(minLength: 0)
+                ctaPill(growsWithText: false)
+            }
+            VStack(alignment: .leading, spacing: AppTheme.Space.paddingS) {
+                wordsLabel
+                ctaPill(growsWithText: true)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            }
         }
     }
 
-    private var ctaPill: some View {
-        HStack(spacing: AppTheme.Tab2Hero.Layout.ctaContentGap) {
+    private var wordsLabel: some View {
+        Text(Tab2CardLabels.words(category.wordCount))
+            .font(AppTheme.Font.tab2HeroFootrowWords)
+            .foregroundStyle(AppTheme.Color.textMuted)
+            .monospacedDigit()
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
+            .layoutPriority(1)
+    }
+
+    /// growsWithText = false：固定高度（默认字号，与改前一致）；true：最小高度，文字变高时药丸跟着长。
+    private func ctaPill(growsWithText: Bool) -> some View {
+        let label = HStack(spacing: AppTheme.Tab2Hero.Layout.ctaContentGap) {
             Text("Start talking")
             Image(systemName: "arrow.right")
                 .imageScale(.small)
@@ -208,7 +185,13 @@ struct Tab2HeroCard: View {
         .font(AppTheme.Font.tab2HeroCTA)
         .foregroundStyle(AppTheme.Color.textOnChip)
         .padding(.horizontal, AppTheme.Tab2Hero.Layout.ctaHorizontalInset)
-        .frame(height: AppTheme.Tab2Hero.Layout.ctaHeight)
+        return Group {
+            if growsWithText {
+                label.frame(minHeight: AppTheme.Tab2Hero.Layout.ctaHeight)
+            } else {
+                label.frame(height: AppTheme.Tab2Hero.Layout.ctaHeight)
+            }
+        }
         .background(
             AppTheme.Color.interactive,
             in: RoundedRectangle(

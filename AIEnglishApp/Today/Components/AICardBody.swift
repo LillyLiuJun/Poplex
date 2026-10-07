@@ -137,7 +137,9 @@ struct AICardBody: View {
                     if let note = content.displayableGrammarNote { noteSection(note: note) }
                 }
             } else {
-                sentenceContent
+                VStack(alignment: .leading, spacing: AppTheme.Space.paddingCard) {
+                    sentenceContent
+                }
             }
         }
         .padding(AppTheme.Space.paddingCard)
@@ -409,12 +411,12 @@ struct AICardBody: View {
                 ForEach(Array(content.examples.prefix(2).enumerated()), id: \.offset) { _, ex in
                     VStack(alignment: .leading, spacing: AppTheme.Space.paddingXS) {
                         Text(ex.en)
-                            .font(AppTheme.Font.chineseBody)
+                            .font(AppTheme.Font.exampleSentence)
                             .foregroundStyle(AppTheme.Color.textPrimary)
                             .fixedSize(horizontal: false, vertical: true)
                         if !ex.zh.isEmpty {
                             Text(ex.zh)
-                                .font(AppTheme.Font.chineseFaint)
+                                .font(AppTheme.Font.chineseBody)
                                 .foregroundStyle(AppTheme.Color.textMuted)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
@@ -429,7 +431,7 @@ struct AICardBody: View {
         VStack(alignment: .leading, spacing: AppTheme.Space.paddingXS) {
             CardSectionLabel("Note")
             Text(note)
-                .font(AppTheme.Font.chineseBody)
+                .font(AppTheme.Font.noteBody)
                 .foregroundStyle(AppTheme.Color.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }

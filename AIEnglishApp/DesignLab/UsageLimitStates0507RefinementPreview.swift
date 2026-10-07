@@ -76,7 +76,7 @@ struct LoadingCard07View: View {
             // 顶栏
             HStack {
                 Text("Daily limit")
-                    .font(AppTheme.Font.settingsDocumentTitleSerif)
+                    .font(AppTheme.Font.usageLimitSheetTitleSerif)
                     .foregroundStyle(AppTheme.Color.textPrimary)
 
                 if style == .optionB && !isDataLoaded {
@@ -231,7 +231,7 @@ struct OfflineEmpty05View: View {
             // 顶栏
             HStack {
                 Text("Daily limit")
-                    .font(AppTheme.Font.settingsDocumentTitleSerif)
+                    .font(AppTheme.Font.usageLimitSheetTitleSerif)
                     .foregroundStyle(AppTheme.Color.textPrimary)
                 Spacer()
             }

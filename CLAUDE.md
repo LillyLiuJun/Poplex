@@ -111,6 +111,14 @@ processes), not by "two views of the same content".
   Full rules + worked examples: `Tab1_Prompt与输出结构_改造方案_v2.md` §4.1.
 - **Brand**: primary `#FF7622` (keep the saturation, do not tone it down);
   neutrals are warm paper-grey (H 24–30°). See `design-system/`.
+- **Dynamic Type 封顶（2026-10-06 PM 拍板）**: the whole app is capped at `xxxLarge`
+  (超大); the 5 system "accessibility" text sizes (AX1–AX5) are not supported. The normal
+  range (xSmall … xxxLarge) still follows the system. Implemented in
+  `Theme/AppDynamicTypeCap.swift` (SwiftUI modifier + window-level UIKit trait override +
+  UIFontMetrics clamp), switched on in `AIEnglishAppApp`. To support AX sizes later, remove the
+  `AppDynamicTypeLimit.activate()` / `appDynamicTypeCap()` / `AppDynamicTypeCapInstaller.install()`
+  calls there (AX layout work already done stays valid). System-drawn alerts/menus still follow
+  the system size. Debug pages can preview AX sizes via explicit `.environment(\.dynamicTypeSize, …)`.
 - **Growth layer states current facts only** — no scoring, no anxiety-inducing
   framing, even for negative gaps.
 - **Tab2 is word-centred**; scenes appear as a word's source context. Browsing

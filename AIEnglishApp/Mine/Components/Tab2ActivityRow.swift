@@ -57,20 +57,19 @@ struct Tab2ActivityRow: View {
 
                 HStack(alignment: .center, spacing: 0) {
                     VStack(alignment: .leading, spacing: 0) {
-                        if display.valid.isEmpty {
-                            // 空态 v1 B2：原位一行 Only words so far（与 Hero 同句同档），
-                            // 词数行保留其下、上距收紧（说明行与词数行说的是同一件事）。
-                            Tab2OnlyWordsLine()
-                                .padding(.top, AppTheme.Tab2MoreRow.Layout.categoryToActivity)
-                            wordsLine
-                                .padding(.top, AppTheme.Tab2MoreRow.Layout.emptyLineToWords)
-                        } else {
-                            activityBlock
-                                .padding(.top, AppTheme.Tab2MoreRow.Layout.categoryToActivity)
-                            wordsLine
-                                .padding(.top, AppTheme.Tab2MoreRow.Layout.activityToWords)
+                        Group {
+                            if display.valid.isEmpty {
+                                Tab2OnlyWordsSlot(metrics: Tab2ActivityCapsuleMetrics.more())
+                            } else {
+                                activityBlock
+                            }
                         }
+                        .padding(.top, AppTheme.Tab2MoreRow.Layout.categoryToActivity)
+
+                        wordsLine
+                            .padding(.top, AppTheme.Tab2MoreRow.Layout.activityToWords)
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.trailing, AppTheme.Tab2MoreRow.Layout.contentTrailingInset)
 
                     arrow
@@ -81,12 +80,12 @@ struct Tab2ActivityRow: View {
             .padding(.bottom, AppTheme.Tab2MoreRow.Layout.contentBottomInset)
             .padding(.leading, AppTheme.Tab2MoreRow.Layout.contentLeadingInset)
         }
-        // minHeight，不是 height：默认字号下内容天然就是这个高度，行会稳稳停在
+        // minHeight，不是 height：默认字号下内容天然略低于这个高度（见 Layout.rowHeight 注释），行会稳稳停在
         // 这——多数用户看到的观感等同固定行高。字号调大到内容超出这个下限时，
         // minHeight 自然放行长高，不裁文字；不需要按字号档位另外分支判断。
-        // 空态行不设下限：胶囊组与 60pt 槽一并收掉，「行就是矮的」本身是设计
-        // （空态 v1：高的行有内容、矮的行只有词，两种行高混排不乱）。
-        .frame(minHeight: display.valid.isEmpty ? 0 : AppTheme.Tab2MoreRow.Layout.rowHeight)
+        // 空态行（路线 B）：通过 Tab2OnlyWordsSlot 保留 45pt 槽高与呼吸留白，行高同样
+        // 锁定 rowHeight 下限，消除列表高度锯齿与右侧箭头垂直错位。
+        .frame(minHeight: AppTheme.Tab2MoreRow.Layout.rowHeight)
         .frame(maxWidth: .infinity)
         .background(AppTheme.Color.warmGlassSurface)
         .compositingGroup()

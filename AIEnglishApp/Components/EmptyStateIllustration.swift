@@ -1,44 +1,90 @@
 import SwiftUI
 
-/// Tab2 零素材空状态插画：两张自然叠放的纸片。
+/// Tab2 零素材空状态插画：极简手账便签卡（手账 B 原版方案）。
 ///
-/// 视觉语法与 Onboarding 相机插画同源：奶油橙底片 + 暖白前卡 + 暖灰结构线。
-/// 前卡使用三行抽象内容痕迹；中间一行由「短线—圆点—短线」构成一个整体，
-/// 横线在圆点两侧止住，不从圆点底下穿过。
+/// 视觉设计语言：
+/// - 纯粹的 Modern Flat Papercraft：温暖透气的品牌晨曦漫射底光 + -3° 自然倾斜的纯白便签卡；
+/// - 纯净克制的纸张微接触阴影与 0.8pt 微细边线，彻底摒弃厚重拟物浮雕感；
+/// - 卡面内以品牌暖橙呼吸圆点（#FF7622）引导首行焦点，底部带有淡橙色 Poplex 品牌压印微徽标。
 struct EmptyStateIllustration: View {
     var scale: CGFloat = 1.0
 
     var body: some View {
         ZStack {
-            paperCard(
-                color: AppTheme.Color.brandTint,
-                rotation: AppTheme.Rotation.emptyStateCardBack
+            // 背部晨曦漫射柔光（暖意呼吸氛围）
+            LinearGradient(
+                stops: [
+                    .init(color: AppTheme.Color.brandTint.opacity(AppTheme.Opacity.emptyStateGlowTint), location: AppTheme.Size.emptyStateGlowStopTint),
+                    .init(color: AppTheme.Color.brandStrong.opacity(AppTheme.Opacity.emptyStateGlowBrand), location: AppTheme.Size.emptyStateGlowStopBrand),
+                    .init(color: AppTheme.Color.emptyStateGlowFade, location: AppTheme.Size.emptyStateGlowStopFade)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
             )
-            .offset(
-                x: AppTheme.Size.emptyStateCardBackOffsetX,
-                y: AppTheme.Size.emptyStateCardBackOffsetY
-            )
+            .frame(width: AppTheme.Size.emptyStateGlowWidth, height: AppTheme.Size.emptyStateGlowHeight)
+            .blur(radius: AppTheme.Size.emptyStateGlowBlur)
+            .offset(x: AppTheme.Size.emptyStateGlowOffset, y: AppTheme.Size.emptyStateGlowOffset)
 
-            ZStack {
-                paperCard(
-                    color: AppTheme.Color.cardBg,
-                    rotation: AppTheme.Rotation.emptyStateCardFront,
-                    showsHairline: true
-                )
+            // 便签卡本体（微倾斜 -3°，纯净现代纸感）
+            ZStack(alignment: .topLeading) {
+                RoundedRectangle(cornerRadius: AppTheme.Radius.emptyStateNote)
+                    .fill(AppTheme.Color.cardBg)
+                    .frame(width: AppTheme.Size.emptyStateNoteWidth, height: AppTheme.Size.emptyStateNoteHeight)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: AppTheme.Radius.emptyStateNote)
+                            .strokeBorder(
+                                AppTheme.Color.cardBorder.opacity(AppTheme.Opacity.emptyStateNoteBorder),
+                                lineWidth: AppTheme.Size.emptyStateNoteHairline
+                            )
+                    }
+                    .shadow(
+                        color: AppTheme.Shadow.emptyStateNoteColor,
+                        radius: AppTheme.Shadow.emptyStateNoteRadius,
+                        x: AppTheme.Shadow.emptyStateNoteX,
+                        y: AppTheme.Shadow.emptyStateNoteY
+                    )
 
-                contentGlyph
-                    .rotationEffect(.degrees(AppTheme.Rotation.emptyStateCardFront))
+                VStack(alignment: .leading, spacing: AppTheme.Size.emptyStateNoteRowSpacing) {
+                    // 首行焦点：品牌暖橙呼吸圆点 + 浅灰首行线
+                    HStack(spacing: AppTheme.Size.emptyStateFocusGap) {
+                        Circle()
+                            .fill(AppTheme.Color.brandStrong)
+                            .frame(width: AppTheme.Size.emptyStateFocusDot, height: AppTheme.Size.emptyStateFocusDot)
+
+                        Capsule()
+                            .fill(AppTheme.Color.textSecondary.opacity(AppTheme.Opacity.emptyStateFocusLine))
+                            .frame(width: AppTheme.Size.emptyStateFocusLineWidth, height: AppTheme.Size.emptyStateFocusLineHeight)
+                    }
+
+                    // 中行文字痕迹
+                    Capsule()
+                        .fill(AppTheme.Color.textSecondary.opacity(AppTheme.Opacity.emptyStateMiddleLine))
+                        .frame(width: AppTheme.Size.emptyStateMiddleLineWidth, height: AppTheme.Size.emptyStateTraceLineHeight)
+
+                    // 底行文字痕迹
+                    Capsule()
+                        .fill(AppTheme.Color.textSecondary.opacity(AppTheme.Opacity.emptyStateBottomLine))
+                        .frame(width: AppTheme.Size.emptyStateBottomLineWidth, height: AppTheme.Size.emptyStateTraceLineHeight)
+
+                    Spacer(minLength: 0)
+
+                    // 右下角品牌压印微徽标 (P Stamp)
+                    HStack {
+                        Spacer()
+                        Circle()
+                            .stroke(AppTheme.Color.brandStrong.opacity(AppTheme.Opacity.emptyStateStampRing), lineWidth: AppTheme.Size.emptyStateStampStroke)
+                            .frame(width: AppTheme.Size.emptyStateStampDiameter, height: AppTheme.Size.emptyStateStampDiameter)
+                            .overlay {
+                                Text("P")
+                                    .font(AppTheme.Font.emptyStateStampGlyph)
+                                    .foregroundStyle(AppTheme.Color.brandStrong)
+                            }
+                    }
+                }
+                .padding(AppTheme.Size.emptyStateNotePadding)
             }
-            .offset(
-                x: AppTheme.Size.emptyStateCardFrontOffsetX,
-                y: AppTheme.Size.emptyStateCardFrontOffsetY
-            )
-            .shadow(
-                color: AppTheme.Shadow.emptyStateFrontColor,
-                radius: AppTheme.Shadow.emptyStateFrontRadius,
-                x: AppTheme.Shadow.emptyStateFrontX,
-                y: AppTheme.Shadow.emptyStateFrontY
-            )
+            .frame(width: AppTheme.Size.emptyStateNoteWidth, height: AppTheme.Size.emptyStateNoteHeight)
+            .rotationEffect(.degrees(AppTheme.Rotation.emptyStateNote))
         }
         .frame(
             width: AppTheme.Size.emptyStateIllustrationWidth,
@@ -47,76 +93,11 @@ struct EmptyStateIllustration: View {
         .scaleEffect(scale)
         .accessibilityHidden(true)
     }
-
-    private func paperCard(
-        color: Color,
-        rotation: CGFloat,
-        showsHairline: Bool = false
-    ) -> some View {
-        RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
-            .fill(color)
-            .frame(
-                width: AppTheme.Size.emptyStateCardWidth,
-                height: AppTheme.Size.emptyStateCardHeight
-            )
-            .overlay {
-                if showsHairline {
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
-                        .strokeBorder(
-                            AppTheme.Color.border.opacity(
-                                AppTheme.Opacity.illustrationHairline
-                            ),
-                            lineWidth: AppTheme.Size.emptyStateCardHairlineWidth
-                        )
-                }
-            }
-            .rotationEffect(.degrees(rotation))
-    }
-
-    private var contentGlyph: some View {
-        VStack(spacing: AppTheme.Size.emptyStateGlyphLineSpacing) {
-            glyphLine(width: AppTheme.Size.emptyStateGlyphTopLineWidth)
-                .offset(x: AppTheme.Size.emptyStateGlyphTopLineOffsetX)
-
-            HStack(spacing: AppTheme.Size.emptyStateGlyphFocusGap) {
-                glyphLine(width: AppTheme.Size.emptyStateGlyphFocusLeftLineWidth)
-                focusDot
-                glyphLine(width: AppTheme.Size.emptyStateGlyphFocusRightLineWidth)
-            }
-
-            glyphLine(width: AppTheme.Size.emptyStateGlyphBottomLineWidth)
-                .offset(x: AppTheme.Size.emptyStateGlyphBottomLineOffsetX)
-        }
-    }
-
-    private var focusDot: some View {
-        Circle()
-            .fill(AppTheme.Color.brandStrong)
-            .frame(
-                width: AppTheme.Size.emptyStateGlyphFocusDot,
-                height: AppTheme.Size.emptyStateGlyphFocusDot
-            )
-            .overlay {
-                Circle()
-                    .fill(AppTheme.Color.brandWashLight)
-                    .frame(
-                        width: AppTheme.Size.emptyStateGlyphFocusCore,
-                        height: AppTheme.Size.emptyStateGlyphFocusCore
-                    )
-            }
-    }
-
-    private func glyphLine(width: CGFloat) -> some View {
-        Capsule()
-            .fill(AppTheme.Color.emptyStateIllustrationOutline)
-            .frame(width: width, height: AppTheme.Size.emptyStateGlyphLineHeight)
-    }
 }
 
 #Preview {
-    ZStack(alignment: .leading) {
+    ZStack {
         AppTheme.Color.pageBg.ignoresSafeArea()
         EmptyStateIllustration()
-            .padding(.leading, AppTheme.Space.paddingPage)
     }
 }

@@ -172,10 +172,10 @@ struct DailyLimitSheetProposal2: View {
     var body: some View {
         ScrollView {
             VStack(spacing: AppTheme.Space.paddingCard) {
-                // 方案 C 纯净顶栏：句首大写 + 20pt 细衬线 + 移除右上角关闭键
+                // 方案 C 纯净顶栏：句首大写 + Charter 22pt Bold 粗衬线（增强定力压轴） + 移除右上角关闭键
                 HStack {
                     Text("Daily limit")
-                        .font(AppTheme.Font.settingsDocumentTitleSerif)
+                        .font(AppTheme.Font.usageLimitSheetTitleSerif)
                         .foregroundStyle(AppTheme.Color.textPrimary)
                     Spacer()
                 }

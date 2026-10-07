@@ -167,11 +167,11 @@ struct UsageLimitSheetProposalC: View {
 
     // MARK: - Subviews & Elements (方案 2-C 全要素落地)
 
-    /// 1. 顶栏：句首大写 Daily limit · Charter 20pt Regular 细衬线 · 移除右上角关闭键
+    /// 1. 顶栏：句首大写 Daily limit · Charter 22pt Bold 粗衬线（增强定力压轴） · 移除右上角关闭键
     private var headerRow: some View {
         HStack {
             Text("Daily limit")
-                .font(AppTheme.Font.settingsDocumentTitleSerif) // Charter 20pt Regular
+                .font(AppTheme.Font.usageLimitSheetTitleSerif) // Charter 22pt Bold
                 .foregroundStyle(AppTheme.Color.textPrimary)
             Spacer()
         }

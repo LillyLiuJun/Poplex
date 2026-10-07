@@ -21,6 +21,10 @@ struct MineView: View {
     @State private var heroSelection: Tab2CategoryData? = nil
     @State private var isRadiantAscentActive: Bool = false
     @State private var lockedBottomBarHeight: CGFloat = 0
+    /// 离开 Tab2（切到 Today）时换新值 → 竖向滚动回顶、More topics 横滑归位。
+    /// 在「离开」而非「回来」时归位：此时页面已不可见，用户回来看到的就是初始状态，
+    /// 不会撞见一次跳动。进对话页再返回、App 退后台都不触发（isActive 不变），保持原位。
+    @State private var leaveResetToken = UUID()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// 解锁前有沉底操作栏时，Toast 自动上浮避让按钮高度与呼吸间距；解锁后沉底栏销毁，自然归零
@@ -60,6 +64,10 @@ struct MineView: View {
         NavigationStack(path: $path) {
             ZStack {
                 mainContent
+                    // 挂在 mainContent 上而非 body 修饰链末尾：body 链已长到编译器类型推断超时。
+                    .onChange(of: isActive) { _, nowActive in
+                        if !nowActive { leaveResetToken = UUID() }
+                    }
 
                 // 品牌色温润升腾柔光：跨越 Locked → Unlocked 转场全生命周期
                 if isRadiantAscentActive && !reduceMotion {
@@ -209,6 +217,7 @@ struct MineView: View {
             hero: heroSelection,
             topInset: topInset,
             listResetToken: listResetToken,
+            leaveResetToken: leaveResetToken,
             milestonePresentations: visibleMilestonePresentations,
             onTalk: { cat in
                 if FeatureFlags.conversationEnabled {
@@ -225,6 +234,7 @@ struct MineView: View {
             vm: vm,
             topInset: topInset,
             listResetToken: listResetToken,
+            leaveResetToken: leaveResetToken,
             milestonePresentations: visibleMilestonePresentations,
             onCapture: { onSwitchToToday?() },
             onStartAscent: { triggerRadiantAscent() }
@@ -272,10 +282,16 @@ private enum UnlockState {
     case releasing  // 舒张释放：蓬勃膨胀至1.14，光晕绽放，图标旋转放大
 }
 
+/// Tab2 竖向滚动的回顶锚点（挂在 ScrollView 首个 0 高子视图上）。
+private enum Tab2ScrollAnchor {
+    static let top = "tab2ScrollTop"
+}
+
 private struct Tab2LockedView: View {
     let vm: Tab2HomeViewModel
     var topInset: CGFloat = 0
     var listResetToken: UUID = UUID()
+    var leaveResetToken: UUID? = nil
     var milestonePresentations: [CategoryMilestonePresentation] = []
     let onCapture: () -> Void
     var onStartAscent: (() -> Void)? = nil
@@ -326,14 +342,30 @@ private struct Tab2LockedView: View {
                         ScrollView {
                             WarmRefreshControlHelper(haptics: refreshHaptics)
                                 .frame(width: 0, height: 0)
+                                .id(Tab2ScrollAnchor.top)
+                            // 2026-10-03：去掉「Not open yet」外壳，与解锁页同骨架——
+                            // Topics in progress 与 More topics to explore 两个平级一级标题。
                             VStack(alignment: .leading, spacing: AppTheme.Space.paddingSection) {
-                                headerSection
-
-                                VStack(spacing: AppTheme.Space.paddingPage) {
+                                VStack(alignment: .leading, spacing: AppTheme.Tab2ExploreTopics.Layout.tagsToFootnote) {
                                     topicsCard(proxy)
+
+                                    Tab2Footnote(iconName: "lightbulb", text: "Any topic with \(wordTarget) words unlocks speaking.")
+                                        .padding(.horizontal, AppTheme.Space.paddingPage)
+                                }
+
+                                let unstarted = SceneCategory.unstarted(given: vm.data?.categories ?? [])
+                                if !unstarted.isEmpty {
+                                    Tab2MoreTopicsSection(
+                                        topics: unstarted,
+                                        footnote: Tab2Footnote(
+                                            iconName: "square.grid.2x2",
+                                            text: "Moments you capture will automatically sort into these life themes."
+                                        ),
+                                        resetToken: leaveResetToken
+                                    )
                                 }
                             }
-                            .padding(.top, AppTheme.Space.paddingSection)     // 顶部呼吸
+                            .padding(.top, AppTheme.Space.tab2ContentTop)     // 与解锁页同一标题起点
                             .padding(.bottom, AppTheme.Space.paddingPage)
                             .frame(minHeight: availableHeight, alignment: .top)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -345,6 +377,9 @@ private struct Tab2LockedView: View {
                         .refreshable {
                             refreshHaptics.fire()
                             await vm.load(showFailureHint: true)
+                        }
+                        .onChange(of: leaveResetToken) { _, _ in
+                            proxy.scrollTo(Tab2ScrollAnchor.top, anchor: .top)
                         }
                     }
                 }
@@ -403,28 +438,6 @@ private struct Tab2LockedView: View {
             measuredBottomBarHeight = newHeight
         }
         .preference(key: Tab2LockedBottomBarHeightKey.self, value: measuredBottomBarHeight)
-    }
-
-    // ── 待解锁 header ────────────────────────────────────────────────────
-    private var headerSection: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Space.onboardingTitleToLead) {
-            Text("Not open yet")
-                .font(AppTheme.Font.pageTitleSerif)
-                .tracking(AppTheme.Typography.trackingDisplay)
-                .foregroundStyle(AppTheme.Color.textPrimary)
-            
-            hintText
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(.horizontal, AppTheme.Space.paddingPage)
-        .padding(.bottom, AppTheme.Space.paddingS)
-    }
-
-    private var hintText: some View {
-        Text("Reach 20 words in any topic to start talking.")
-            .font(AppTheme.Font.englishBody)
-            .foregroundStyle(AppTheme.Color.textSecondary)
-            .lineSpacing(AppTheme.Typography.lineBody)
     }
 
     // ── 无数据空状态（Warm Minimalism 减法设计）───────────────────────────
@@ -711,6 +724,7 @@ private struct Tab2UnlockedView: View {
     var hero: Tab2CategoryData? = nil
     var topInset: CGFloat = 0
     var listResetToken: UUID = UUID()
+    var leaveResetToken: UUID? = nil
     var milestonePresentations: [CategoryMilestonePresentation] = []
     let onTalk: (String) -> Void
     var footerTopSpace: CGFloat = AppTheme.Space.tab2FooterTop
@@ -751,6 +765,7 @@ private struct Tab2UnlockedView: View {
                     ScrollView {
                         WarmRefreshControlHelper(haptics: refreshHaptics)
                             .frame(width: 0, height: 0)
+                            .id(Tab2ScrollAnchor.top)
                         VStack(alignment: .leading, spacing: 0) {
                             // visibility == nil ⟺ vm.data == nil（未加载）：整块不渲染，
                             // 不会闪空态。见 visibility 属性的注释。
@@ -791,6 +806,9 @@ private struct Tab2UnlockedView: View {
                     .refreshable {
                         refreshHaptics.fire()
                         await vm.load(showFailureHint: true)
+                    }
+                    .onChange(of: leaveResetToken) { _, _ in
+                        proxy.scrollTo(Tab2ScrollAnchor.top, anchor: .top)
                     }
                     .task {
                         // 刀 6 截图验收：预览直达 Topics 行（initialScrollTarget 生产恒 nil，不触发）。
@@ -896,9 +914,16 @@ private struct Tab2UnlockedView: View {
                     .padding(.horizontal, AppTheme.Space.paddingPage)
                 }
             }
+
+            // ── More topics to explore（2026-10-03）──
+            // 与待解锁页同一组件，贯穿解锁前后；解锁后不带注脚（规则用户已知）。
+            let unstarted = SceneCategory.unstarted(given: vm.data?.categories ?? [])
+            if !unstarted.isEmpty {
+                Tab2MoreTopicsSection(topics: unstarted, resetToken: leaveResetToken)
+            }
         }
-        // 无 Hero 时首块顶距由这里补齐（有 Hero 时标题自带 top paddingPage）。
-        .padding(.top, visibility.showsTalk ? 0 : AppTheme.Space.paddingPage)
+        // 首个标题（Talk about today 或 Topics in progress）统一落在同一高度，与待解锁页一致。
+        .padding(.top, AppTheme.Space.tab2ContentTop)
     }
 
     private var footerSignoff: some View {
@@ -1428,7 +1453,7 @@ private struct Tab2FullPagePreviewView: View {
 /// 视觉形态——Hero（照片标签 chip / hot 理由胶囊 / 活动块上标与 +N 让位 / 预设底图）、
 /// More 行（层级反转 / 时间帽 / 词数行 / 预设图标缩略图）、Topics in progress
 /// （words 胶囊 + 恒中性进度）。刀 6a 起加 `-tab2PreviewState 1|2|3|4` 切换
-/// 状态矩阵四行（默认 4 = 全形态）。刀 6b 加 6–16：一页一格、逐格截图——
+/// 状态矩阵四行（默认 4 = 全形态）。2026-10-03 加 20–24 = 待解锁页 More topics 五档。刀 6b 加 6–16：一页一格、逐格截图——
 /// 6–9 = 胶囊溢出四连拍（More 行，与 v12「两行，装得下几个就几个」demo 同名
 /// 同数据），10–12 = Hero 理由胶囊三档文案，13–15 = 空态 v1 三连拍
 /// （Hero 空态 / More 空态 / 四行混排），16 = hot-onlight 组合（空态 +
@@ -1549,8 +1574,33 @@ struct Tab2Knife6PreviewView: View {
         return vm
     }
 
+    /// 2026-10-03 More topics to explore 验收夹具（20–24 = 待解锁页）：
+    /// 已开始主题数 1 / 8 / 9 / 11 / 12 → 剩 11（两排）/ 4（3+1）/ 3 / 1（单排）/ 0（隐藏）。
+    private var lockedPreviewVM: Tab2HomeViewModel {
+        let startedCount: Int
+        switch stateRow {
+        case 20: startedCount = 1
+        case 21: startedCount = 8
+        case 22: startedCount = 9
+        case 23: startedCount = 11
+        default: startedCount = 12
+        }
+        let vm = Tab2HomeViewModel()
+        // 先从 Digital & Tech 往前开始，Other 最后才开始——让「Other 恒在末尾」在各档夹具里都看得见。
+        let startOrder: [SceneCategory] = [.tech, .social, .weather, .leisure, .healthFitness, .gettingAround,
+                                           .shopping, .food, .dailyRoutines, .workStudy, .homeFamily, .other]
+        let started = startOrder.prefix(startedCount)
+        vm.data = Tab2HomeData(unlocked: false, inputCount: startedCount, categories: started.enumerated().map { index, cat in
+            Tab2CategoryData(sceneCategory: cat.rawValue, wordCount: index == 0 ? 5 : 1, unlocked: false)
+        })
+        return vm
+    }
+
     var body: some View {
-        if (6...16).contains(stateRow) {
+        if stateRow >= 20 {
+            Tab2LockedView(vm: lockedPreviewVM, onCapture: {})
+                .environment(\.colorScheme, .light)
+        } else if (6...16).contains(stateRow) {
             knife6bFixture
                 .environment(\.colorScheme, .light)
         } else {

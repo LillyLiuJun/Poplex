@@ -59,11 +59,50 @@ struct UsageGaugeIcon: View {
     }
 }
 
+/// Daily Limit 弹窗当前呈现哪一种状态。弹窗的内容分支与弹窗高度都只读这一处判定，
+/// 单测按状态逐个锁定（改任一状态的高度或分支条件，测试会变红）。
+///
+/// 「离线」与「刷新失败」两种原因不在这里区分：它们布局、高度相同，只是图标与文案不同，
+/// 由视图按网络状态挑文案。
+enum UsageLimitSheetState: Equatable {
+    /// 首次取数中：数字位置是菊花（usedCount 尚无值、也没失败）。
+    case loading
+    /// 正常：已知用量、未用完，脚注是「零点刷新」。
+    case normal
+    /// 已知用量、未用完，但这次刷新失败 / 离线：显示上次同步的数字 + 「Showing last synced usage」。
+    case normalCached
+    /// 已用完：达标说明 + 申请邀请码按钮。
+    case reached
+    /// 已用完，且这次刷新失败 / 离线：达标说明 + 按钮 + 「Showing last synced usage」。
+    case reachedCached
+    /// 从未取到过数字且这次失败：整张卡换成空态（You're offline / Couldn't refresh）+ Try again。
+    case unavailable
+
+    static func resolve(usedCount: Int?, dailyLimit: Int, loadFailed: Bool) -> Self {
+        guard let usedCount else { return loadFailed ? .unavailable : .loading }
+        if usedCount >= dailyLimit { return loadFailed ? .reachedCached : .reached }
+        return loadFailed ? .normalCached : .normal
+    }
+
+    var isLimitReached: Bool { self == .reached || self == .reachedCached }
+
+    /// 弹窗（detent）高度。
+    var sheetHeight: CGFloat {
+        switch self {
+        case .unavailable:   AppTheme.Size.usageLimitSheetHeightLoadFailed
+        case .reached:       AppTheme.Size.usageLimitSheetHeightReached
+        case .reachedCached: AppTheme.Size.usageLimitSheetHeightReachedOffline
+        case .loading, .normal, .normalCached: AppTheme.Size.usageLimitSheetHeight
+        }
+    }
+}
+
 /// 额度与使用次数轻量展示 Sheet。
 /// 数字来自服务端（check_generation_quota RPC，经 UsageQuotaStore）：
 /// usedCount/dailyLimit 是服务器口径的「成功生成次数 / 有效上限」。
 struct UsageLimitSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.legibilityWeight) private var legibilityWeight
     @State private var dailyLimit: Int
     @State private var usedCount: Int?
     @State private var showFeedback = false
@@ -113,22 +152,13 @@ struct UsageLimitSheet: View {
         mockIsConnected ?? NetworkMonitor.shared.isConnected
     }
 
-    private var isLimitReached: Bool {
-        guard let usedCount else { return false }
-        return usedCount >= dailyLimit
+    private var state: UsageLimitSheetState {
+        .resolve(usedCount: usedCount, dailyLimit: dailyLimit, loadFailed: loadFailed)
     }
 
-    private var sheetHeight: CGFloat {
-        if usedCount == nil && loadFailed {
-            // 状态 05-A 与 05-B 统一包含 Try again 按钮，高度统一为 295pt
-            return 295
-        }
-        if isLimitReached {
-            // 状态 2 & 4：额度已达标 (采用方案 1 细线描边胶囊，高度轻量化为 365pt / 离线 395pt)
-            return loadFailed ? 395 : 365
-        }
-        return 260
-    }
+    private var isLimitReached: Bool { state.isLimitReached }
+
+    private var sheetHeight: CGFloat { state.sheetHeight }
 
     private func refreshQuota() async {
         guard !isPreviewInjected else { return }
@@ -154,14 +184,14 @@ struct UsageLimitSheet: View {
                 // 1. 顶栏：无多余按键，纯净留白
                 headerRow
 
-                if usedCount == nil && loadFailed {
+                if state == .unavailable {
                     // 状态 5：冷启动离线空状态卡片（区分 05-A 与 05-B）
                     offlineEmptyCard
                 } else {
                     // 状态 1 / 2 / 3 / 4 / 6 / 7 主卡片 (方案 2-C 极细精工规范)
                     usageCard
 
-                    if isLimitReached {
+                    if state.isLimitReached {
                         // 达标说明文案 (去焦虑、舒展排版)
                         limitReachedText
                             .padding(.top, AppTheme.Space.paddingXS)
@@ -169,17 +199,17 @@ struct UsageLimitSheet: View {
                         // 申请邀请码高定 CTA 按钮 (方案 1 细线描边胶囊)
                         feedbackCTAButton
 
-                        if loadFailed {
+                        if state == .reachedCached {
                             offlineCachedNote
                                 .padding(.top, AppTheme.Space.paddingXS)
                         }
-                    } else if loadFailed {
+                    } else if state == .normalCached {
                         offlineCachedNote
                             .padding(.top, AppTheme.Space.paddingS)
                     } else {
                         // 正常零点刷新注记 (左对齐出版物风)
                         normalFooterNote
-                            .padding(.top, 2)
+                            .padding(.top, AppTheme.Size.usageLimitSectionNudge)
                     }
                 }
             }
@@ -191,6 +221,7 @@ struct UsageLimitSheet: View {
         .background(AppTheme.Color.pageBg)
         .presentationDetents([.height(sheetHeight)])
         .presentationDragIndicator(.visible)
+        .presentationBackground(AppTheme.Color.pageBg)
         .sheet(isPresented: $showFeedback) {
             NavigationStack {
                 FeedbackView(
@@ -215,11 +246,11 @@ struct UsageLimitSheet: View {
 
     // MARK: - Subviews & Elements (方案 2-C 与方案 1 全要素落地)
 
-    /// 1. 顶栏：句首大写 Daily limit · Charter 20pt Regular 细衬线 · 移除右上角关闭键
+    /// 1. 顶栏：句首大写 Daily limit · Charter 22pt Bold 粗衬线（增强定力压轴） · 移除右上角关闭键
     private var headerRow: some View {
         HStack {
             Text("Daily limit")
-                .font(AppTheme.Font.settingsDocumentTitleSerif)
+                .font(AppTheme.Font.usageLimitSheetTitleSerif)
                 .foregroundStyle(AppTheme.Color.textPrimary)
             Spacer()
         }
@@ -239,29 +270,39 @@ struct UsageLimitSheet: View {
                         .font(AppTheme.Font.quotaHeroNumber)
                         .foregroundStyle(AppTheme.Color.textMuted)
                 } else {
-                    ZStack {
-                        Text("0")
-                            .font(AppTheme.Font.quotaHeroNumber)
-                            .hidden()
-                        ProgressView()
-                            .controlSize(.small)
-                            .tint(AppTheme.Color.textSecondary)
-                    }
+                    // 加载态占位：隐藏的数字（与数字态同一字体）撑出同样的行高、基线与宽度，数据返回时
+                    // 副文纵横都不位移；菊花以 overlay 居中叠在其上——overlay 不参与布局，微调 offset
+                    // 不会再改变行布局（此前菊花自己占位：行顶被副文贴住、副文比数字态高 9pt，
+                    // 且 22pt 槽比数字宽，副文还会向左挪约 7pt）。
+                    Text("0")
+                        .font(AppTheme.Font.quotaHeroNumber)
+                        .hidden()
+                        .overlay {
+                            ProgressView()
+                                .controlSize(.small)
+                                .tint(AppTheme.Color.textSecondary)
+                                .frame(
+                                    width: AppTheme.Size.usageLimitSpinnerSlotSize,
+                                    height: AppTheme.Size.usageLimitSpinnerSlotSize
+                                )
+                                .offset(y: AppTheme.Size.usageLimitSpinnerOpticalOffset)
+                        }
                 }
 
                 Text("/ \(dailyLimit) generations today")
-                    .font(AppTheme.Font.quotaSubtext)
-                    .foregroundStyle(AppTheme.Color.textSecondary)
+                    .font(AppTheme.Font.quotaSubtext(legibilityWeight: legibilityWeight))
+                    .foregroundStyle(AppTheme.Color.settingsRowText)
 
                 Spacer()
             }
+            .frame(minHeight: AppTheme.Size.usageLimitQuotaRowMinHeight)
 
-            // 方案 2-C: 2.0pt 极薄连续微线轨 (绝不抢戏，未满用暖中灰，满额用深焦黑，告别危险红)
+            // 方案 A 官方规范: 3.0pt 饱满通透连续微线轨 (底槽 opacity 0.20 通透纸感，满额深焦黑，未满次级灰)
             GeometryReader { geo in
                 let ratio = min(max(CGFloat(usedCount ?? 0) / CGFloat(dailyLimit), 0), 1.0)
                 ZStack(alignment: .leading) {
                     Capsule()
-                        .fill(AppTheme.Color.neutralFaint.opacity(0.3))
+                        .fill(AppTheme.Color.usageLimitProgressTrack)
                         .frame(height: AppTheme.Size.usageLimitProgressBarHeight)
                     if usedCount != nil {
                         Capsule()
@@ -274,10 +315,13 @@ struct UsageLimitSheet: View {
                 }
             }
             .frame(height: AppTheme.Size.usageLimitProgressBarHeight)
-            .padding(.top, 2)
+            .padding(.top, AppTheme.Size.usageLimitSectionNudge)
         }
         .padding(AppTheme.Space.paddingCard)
-        .surfaceCard(cornerRadius: AppTheme.Radius.large)
+        .surfaceCard(
+            cornerRadius: AppTheme.Radius.large,
+            fillColor: AppTheme.Color.settingsCardSurface
+        )
     }
 
     /// 3. 达标说明段落 (方案 1 细衬线降重)：Charter 16.5pt Regular + Gothic A1 14pt Light
@@ -297,30 +341,30 @@ struct UsageLimitSheet: View {
         .padding(.horizontal, AppTheme.Space.paddingXS)
     }
 
-    /// 4. 申请邀请码 CTA 按钮 (方案 1 细线描边胶囊)：44pt · 暖白底 + 0.8pt 细描边 + 焦黑文字，彻底卸除黑块下沉感
+    /// 4. 申请邀请码 CTA 按钮 (选型 4 温润暖灰次级胶囊)：44pt · 暖灰底 + 细描边 + 焦黑文字，与纯净暖白卡片形成舒适明度差
     private var feedbackCTAButton: some View {
         Button {
             showFeedback = true
         } label: {
             HStack(spacing: AppTheme.Space.paddingS) {
                 Image(systemName: "envelope.badge")
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.system(size: AppTheme.Size.usageLimitCTAIconGlyph, weight: .medium))
                 Text("Send feedback for invite code")
                     .font(AppTheme.Font.quotaFeedbackAction)
             }
             .foregroundStyle(AppTheme.Color.settingsRowText)
             .frame(maxWidth: .infinity)
             .frame(height: AppTheme.Size.usageLimitCTAHeight)
-            .background(AppTheme.Color.cardBg, in: Capsule())
+            .background(AppTheme.Color.usageLimitCTASecondaryBg, in: Capsule())
             .overlay {
                 Capsule()
-                    .stroke(AppTheme.Color.cardBorder, lineWidth: AppTheme.Size.usageLimitCTABorderWidth)
+                    .stroke(AppTheme.Color.usageLimitCTASecondaryBorder, lineWidth: AppTheme.Size.usageLimitCTABorderWidth)
             }
             .shadow(
-                color: AppTheme.Shadow.pillContactColor,
-                radius: AppTheme.Shadow.pillContactRadius,
-                x: AppTheme.Shadow.pillContactX,
-                y: AppTheme.Shadow.pillContactY
+                color: AppTheme.Color.usageLimitCTAShadow,
+                radius: AppTheme.Size.usageLimitCTAShadowRadius,
+                x: 0,
+                y: AppTheme.Size.usageLimitCTAShadowY
             )
         }
         .buttonStyle(PressableButtonStyle())
@@ -339,7 +383,7 @@ struct UsageLimitSheet: View {
     private var offlineCachedNote: some View {
         HStack(spacing: AppTheme.Space.paddingXS) {
             Image(systemName: isConnected ? "arrow.clockwise" : "wifi.slash")
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(size: AppTheme.Size.usageLimitNoteIconGlyph, weight: .medium))
             Text(isConnected
                 ? "Couldn't refresh. Showing last synced usage."
                 : "You're offline. Showing last synced usage.")
@@ -354,9 +398,9 @@ struct UsageLimitSheet: View {
     private var offlineEmptyCard: some View {
         VStack(spacing: AppTheme.Space.paddingM) {
             Image(systemName: isConnected ? "arrow.clockwise" : "wifi.slash")
-                .font(.system(size: 26, weight: .medium))
+                .font(.system(size: AppTheme.Size.usageLimitEmptyIconGlyph, weight: .medium))
                 .foregroundStyle(AppTheme.Color.textSecondary)
-                .frame(width: 36, height: 36)
+                .frame(width: AppTheme.Size.usageLimitEmptyIconFrame, height: AppTheme.Size.usageLimitEmptyIconFrame)
 
             VStack(spacing: AppTheme.Space.paddingXS) {
                 Text(isConnected ? "Couldn't refresh" : "You're offline")
@@ -382,7 +426,7 @@ struct UsageLimitSheet: View {
                             .tint(AppTheme.Color.textPrimary)
                     } else {
                         Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.system(size: AppTheme.Size.usageLimitNoteIconGlyph, weight: .semibold))
                     }
                     Text(isRetrying ? "Retrying..." : "Try again")
                         .font(AppTheme.Font.inlineActionLabel)
@@ -390,14 +434,17 @@ struct UsageLimitSheet: View {
                 .foregroundStyle(AppTheme.Color.textPrimary)
                 .padding(.horizontal, AppTheme.Space.paddingCard)
                 .padding(.vertical, AppTheme.Space.paddingS)
-                .background(AppTheme.Color.neutralFaint.opacity(0.4), in: Capsule())
+                .background(AppTheme.Color.usageLimitRetryPillBg, in: Capsule())
             }
             .buttonStyle(PressableButtonStyle())
             .disabled(isRetrying)
         }
         .padding(AppTheme.Space.paddingCard)
         .frame(maxWidth: .infinity)
-        .surfaceCard(cornerRadius: AppTheme.Radius.large)
+        .surfaceCard(
+            cornerRadius: AppTheme.Radius.large,
+            fillColor: AppTheme.Color.settingsCardSurface
+        )
     }
 }
 
@@ -442,49 +489,49 @@ private struct SheetModalCanvasPreview<Content: View>: View {
 }
 
 #Preview("01 · 在线未达标 (2/5 · 260pt)", traits: .fixedLayout(width: 393, height: 852)) {
-    SheetModalCanvasPreview(sheetHeight: 260) {
+    SheetModalCanvasPreview(sheetHeight: AppTheme.Size.usageLimitSheetHeight) {
         UsageLimitSheet(usedCount: 2, dailyLimit: 5)
     }
 }
 
 #Preview("02 · 在线已达标 (5/5 · 365pt)", traits: .fixedLayout(width: 393, height: 852)) {
-    SheetModalCanvasPreview(sheetHeight: 365) {
+    SheetModalCanvasPreview(sheetHeight: AppTheme.Size.usageLimitSheetHeightReached) {
         UsageLimitSheet(usedCount: 5, dailyLimit: 5)
     }
 }
 
 #Preview("03 · 离线有缓存未达标 (2/5 · 260pt)", traits: .fixedLayout(width: 393, height: 852)) {
-    SheetModalCanvasPreview(sheetHeight: 260) {
+    SheetModalCanvasPreview(sheetHeight: AppTheme.Size.usageLimitSheetHeight) {
         UsageLimitSheet(usedCount: 2, dailyLimit: 5, initialLoadFailed: true, mockIsConnected: false)
     }
 }
 
 #Preview("04 · 离线有缓存且达标 (5/5 · 395pt)", traits: .fixedLayout(width: 393, height: 852)) {
-    SheetModalCanvasPreview(sheetHeight: 395) {
+    SheetModalCanvasPreview(sheetHeight: AppTheme.Size.usageLimitSheetHeightReachedOffline) {
         UsageLimitSheet(usedCount: 5, dailyLimit: 5, initialLoadFailed: true, mockIsConnected: false)
     }
 }
 
 #Preview("05-A · 冷启动真断网 (295pt)", traits: .fixedLayout(width: 393, height: 852)) {
-    SheetModalCanvasPreview(sheetHeight: 295) {
+    SheetModalCanvasPreview(sheetHeight: AppTheme.Size.usageLimitSheetHeightLoadFailed) {
         UsageLimitSheet(usedCount: nil, dailyLimit: 5, initialLoadFailed: true, mockIsConnected: false)
     }
 }
 
 #Preview("05-B · 冷启动刷新失败 (295pt)", traits: .fixedLayout(width: 393, height: 852)) {
-    SheetModalCanvasPreview(sheetHeight: 295) {
+    SheetModalCanvasPreview(sheetHeight: AppTheme.Size.usageLimitSheetHeightLoadFailed) {
         UsageLimitSheet(usedCount: nil, dailyLimit: 5, initialLoadFailed: true, mockIsConnected: true)
     }
 }
 
 #Preview("06 · 初始零使用 (0/5 · 260pt)", traits: .fixedLayout(width: 393, height: 852)) {
-    SheetModalCanvasPreview(sheetHeight: 260) {
+    SheetModalCanvasPreview(sheetHeight: AppTheme.Size.usageLimitSheetHeight) {
         UsageLimitSheet(usedCount: 0, dailyLimit: 5)
     }
 }
 
 #Preview("07 · 加载过渡态 (260pt)", traits: .fixedLayout(width: 393, height: 852)) {
-    SheetModalCanvasPreview(sheetHeight: 260) {
+    SheetModalCanvasPreview(sheetHeight: AppTheme.Size.usageLimitSheetHeight) {
         UsageLimitSheet(simulateLoading: true)
     }
 }
@@ -496,7 +543,7 @@ private struct UsageLimitInteractivePreview: View {
 
     var body: some View {
         VStack(spacing: AppTheme.Space.paddingPage) {
-            SheetModalCanvasPreview(sheetHeight: currentCount >= Double(limit) ? 365 : 260) {
+            SheetModalCanvasPreview(sheetHeight: currentCount >= Double(limit) ? AppTheme.Size.usageLimitSheetHeightReached : AppTheme.Size.usageLimitSheetHeight) {
                 UsageLimitSheet(usedCount: Int(currentCount), dailyLimit: limit)
             }
             .frame(height: 520)

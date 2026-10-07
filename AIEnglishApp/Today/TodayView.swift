@@ -8,8 +8,8 @@ struct TodayView: View {
     @State private var viewModel = TodayViewModel(service: LiveAIService())
 
     /// InputBar 外层的实时渲染高度（含胶囊、缩略图/多行增长与底部 padding）。
-    /// 首帧用单行基础态 52 + 8 = 60pt，实测回调随后接管；配合 32pt 内容净空，
-    /// 基础态停靠线仍是此前验收过的 92pt。
+    /// 首帧用单行基础态 52 + 8 = 60pt，实测回调随后接管；配合 52pt 停靠净空
+    /// （timelineInputClearance），基础态停靠线为 112pt。
     @State private var inputBarHeight = AppTheme.Size.inputBarMinHeight + AppTheme.Space.paddingS
     @State private var refreshHaptics = PullToRefreshHaptics()
     @State private var timelineViewportFrame: CGRect = .zero
@@ -154,7 +154,7 @@ struct TodayView: View {
         ScrollViewReader { proxy in
             InitialBottomScrollView(
                 topContentMargin: topInset,
-                bottomContentInset: inputBarHeight + AppTheme.Space.paddingSection
+                bottomContentInset: inputBarHeight + AppTheme.Space.timelineInputClearance
             ) {
                 WarmRefreshControlHelper(haptics: refreshHaptics)
                     .frame(width: 0, height: 0)
@@ -199,15 +199,18 @@ struct TodayView: View {
                         .padding(.bottom, Self.timelineSpacing(after: index, in: viewModel.entries))
                     }
                 }
-                .padding(AppTheme.Space.paddingPage)
+                // 底部不留边距：最后一条内容下方的全部间距都由下方 safeAreaInset 承担。
+                // 若内容区自带底边距，scrollTo(last, .bottom) 会把它压到输入框后面，
+                // 与布局级底部锚点 / 手动滑到底的停靠线差出这段距离（冷启动下跳的根因）。
+                .padding([.top, .horizontal], AppTheme.Space.paddingPage)
             }
             // InputBar 是 ZStack 中的悬浮兄弟视图。把它应占的高度声明为 ScrollView
             // 的安全区域，才能让 scrollTo(last, .bottom) 与用户手动滚到底时的停靠线
             // 一致；不再依赖屏外的透明目标视图（LazyVStack 下该目标会不可靠）。
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                // 实测 InputBar 高度 + 固定视觉净空。InputBar 的多行/缩略图状态或
-                // 后续重设计改变几何时，停靠线自动同步，不再依赖 92pt 经验常数。
-                Color.clear.frame(height: inputBarHeight + AppTheme.Space.paddingSection)
+                // 实测 InputBar 高度 + 固定视觉净空（52pt）。InputBar 的多行/缩略图状态或
+                // 后续重设计改变几何时，停靠线自动同步，不再依赖经验常数。
+                Color.clear.frame(height: inputBarHeight + AppTheme.Space.timelineInputClearance)
             }
             .onGeometryChange(for: CGRect.self) { proxy in
                 proxy.frame(in: .global)
@@ -243,13 +246,17 @@ struct TodayView: View {
             })
             .onAppear {
                 if let request = viewModel.pendingScrollRequest {
-                    // 首次进入的底部位置已经由 InitialBottomScrollView 在第一轮布局中
-                    // 建立；这里只消费请求，避免再走一次「出现后纠正」的命令式滚动。
-                    if request.reason == .initialEntry {
-                        viewModel.consumeScrollRequest(id: request.id)
-                    } else {
-                        executeScrollRequest(request, with: proxy)
-                    }
+                    // 首次进入也必须真正执行一次滚动（2026-10-04 真机定位）：
+                    // InitialBottomScrollView 的 `.defaultScrollAnchor(.bottom, for: .initialOffset)`
+                    // 只负责首帧把位置放对；在长时间线上（真机 645 条，内容约 7 万 pt，
+                    // LazyVStack 高度靠估算、首帧内反复校正）SwiftUI 会把最后几条放到正确
+                    // 坐标却漏掉首次绘制——整片白屏，要等一次真实滚动才补画。
+                    // `scrollTo` 是真实滚动，会触发绘制。两者停靠在同一条线
+                    // （timelineInputClearance，7b1b5dc 已统一并有布局测试锁定），所以这次
+                    // 滚动没有可见位移，不会出现「先显示、再跳一下」。
+                    // 不能反过来只留 scrollTo、去掉初始锚点：真机实测首帧会先露出最早的历史，
+                    // 等数据返回才跳到底部。
+                    executeScrollRequest(request, with: proxy)
                 }
             }
             .onChange(of: viewModel.pendingScrollRequest) { _, newRequest in
@@ -383,7 +390,27 @@ struct InitialBottomScrollView<Content: View>: View {
                         alignment: .top
                     )
             }
-            .defaultScrollAnchor(.bottom)
+            .modifier(TimelineScrollAnchors())
+        }
+    }
+}
+
+/// 时间线滚动锚点，按系统分版本（2026-10-03）。
+///
+/// `defaultScrollAnchor(.bottom)` 在 iOS 17 只决定「初始滚动位置」；iOS 18 起它同时
+/// 决定「内容不足一屏时的对齐方式」，短内容会被推到底部，上方留出一大块空白
+/// （实测 iOS 26：487pt 内容被系统加了 263pt 顶部内边距）。所以 iOS 18+ 拆开角色：
+/// 初始位置与内容长高时仍贴底（与此前行为一致），短内容对齐改为贴顶。
+/// iOS 17 没有角色化 API，原调用本来就只影响初始位置，保持不变。
+private struct TimelineScrollAnchors: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content
+                .defaultScrollAnchor(.bottom, for: .initialOffset)
+                .defaultScrollAnchor(.bottom, for: .sizeChanges)
+                .defaultScrollAnchor(.top, for: .alignment)
+        } else {
+            content.defaultScrollAnchor(.bottom)
         }
     }
 }

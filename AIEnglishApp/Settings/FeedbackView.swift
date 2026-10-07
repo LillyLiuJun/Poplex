@@ -288,7 +288,7 @@ struct FeedbackView: View {
     }
 
     private var emailField: some View {
-        formField("Email (optional)") {
+        formField("Email") {
             ZStack(alignment: .leading) {
                 if email.isEmpty {
                     Text(verbatim: "name@example.com")
@@ -298,7 +298,7 @@ struct FeedbackView: View {
                         .accessibilityHidden(true)
                 }
                 TextField("", text: $email)
-                    .accessibilityLabel("Email, optional")
+                    .accessibilityLabel("Email")
                     .font(AppTheme.Font.settingsFormInput)
                     .foregroundStyle(AppTheme.Color.textPrimary)
                     .tint(AppTheme.Color.interactive)

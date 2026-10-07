@@ -236,6 +236,7 @@ struct Tab2WordEntry: Decodable, Identifiable {
 enum Tab2BadgeGlyph: Equatable, Hashable {
     case symbol(String)       // SF Symbol 描边图标
     case quoteBlock           // 地道引语垂直树线 (专供习语/俚语)
+    case linkChain            // 开口链环 (专供短语/搭配/句型，自绘；见 Tab2LinkChainGlyph)
 }
 
 // MARK: - Badge & image helpers (internal for testability)
@@ -251,7 +252,7 @@ extension Tab2WordEntry {
     ///   · 查词（.word）→ magnifyingglass 放大镜；对话（.dialogue，未上线）→ waveform 声波
     ///   · 句子/段落里的单词 → book.closed 纯净极简小书本
     ///   · 习语/俚语 → quoteBlock 垂直引语线
-    ///   · 短语/搭配/句型 → link 词语双环搭扣
+    ///   · 短语/搭配/句型 → linkChain 开口链环（自绘；SF Symbol `link` 太大太挤，见 Tab2LinkChainGlyph）
     /// 图片走 imageUrl，不经此。
     var badgeGlyph: Tab2BadgeGlyph {
         switch sourceTag {
@@ -261,7 +262,7 @@ extension Tab2WordEntry {
             switch entryKind {
             case "word":            return .symbol("book.closed")
             case "idiom", "slang":  return .quoteBlock
-            default:                return .symbol("link")
+            default:                return .linkChain
             }
         }
     }

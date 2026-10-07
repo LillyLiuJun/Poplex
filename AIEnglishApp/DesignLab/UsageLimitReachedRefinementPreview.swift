@@ -300,10 +300,10 @@ struct UsageLimitSheetRefined: View {
 
     var body: some View {
         VStack(spacing: AppTheme.Space.paddingCard) {
-            // 1. 顶栏：句首大写 Daily limit · Charter 20pt Regular 细衬线
+            // 1. 顶栏：句首大写 Daily limit · Charter 22pt Bold 粗衬线（增强定力压轴）
             HStack {
                 Text("Daily limit")
-                    .font(AppTheme.Font.settingsDocumentTitleSerif)
+                    .font(AppTheme.Font.usageLimitSheetTitleSerif)
                     .foregroundStyle(AppTheme.Color.textPrimary)
                 Spacer()
             }

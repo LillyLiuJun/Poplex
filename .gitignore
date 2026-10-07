@@ -3,6 +3,7 @@ DerivedData/
 *.xcuserstate
 # Xcode 工作区级用户本地状态（窗口布局等），不进版本库
 AIEnglishApp.xcodeproj/project.xcworkspace/xcuserdata/
+AIEnglishApp.xcodeproj/xcuserdata/
 supabase/.temp/
 
 # 每个 worktree 各自维护本地端口（如端口相撞时改这里）；CI 与全新检出

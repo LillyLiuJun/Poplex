@@ -21,6 +21,7 @@ the fact** — fix the doc and say so.
 |---|---|
 | `prd/整体架构_两个Tab与对话页_v1.md` | **Upper-level framework.** Responsibilities of Tab1 / Tab2 / dialogue page. No feature doc may conflict with it |
 | `prd/Agent内容组织与成长系统_PRD_v2.md` | Tab2 (practice & growth), the **lexicon ledger** (3 new tables), dialogue page, growth layer |
+| `prd/Tab2_探索区与待解锁态重构_需求与设计规格_v1.md` | Tab2 待解锁态双标题重构、`More topics to explore` 未开启生活分类探索区（贯穿解锁前与解锁后）权威设计与数据契约规格 |
 | `prd/Tab1_Prompt与输出结构_改造方案_v2.md` | Tab1 prompt + output structure. **Supersedes `输入到成长` §1** |
 | `prd/Tab1_Prompt改造_第1刀验收样例_v1.md` | Acceptance criteria for the slice currently in flight |
 | `prd/输入到成长_链路现状与待敲定_v1.md` | §二 extraction/tagging rules, §三 recording & summarising — **still open, not yet decided** |

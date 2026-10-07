@@ -46,9 +46,12 @@ enum RootTabSwipeIntent {
         predictedTranslation: CGSize,
         selectedTab: AppTab,
         capturedSwipeOpen: Bool,
-        mineDetailActive: Bool
+        mineDetailActive: Bool,
+        claimedByInnerScroll: Bool = false
     ) -> RootTabSwipeAction {
         guard lock == .horizontal else { return .none }
+        // 内部横向滚动区（如 More topics to explore）已认领这次手势：整段归它，不切页。
+        guard !claimedByInnerScroll else { return .none }
 
         let dx = translation.width
         let predictedDx = predictedTranslation.width
@@ -96,6 +99,7 @@ struct RootTabContainer: View {
     @State private var capturedSwipeOpen = false
     @State private var captureRecorded = false
     @State private var swipeLock: RootTabSwipeLock = .undetermined
+    @State private var swipeArbiter = TabSwipeArbiter()
     // Fullscreen image preview — lifted to root so it covers the top bar
     @State private var previewImage: UIImage?
     @State private var previewAnchor: UnitPoint = .center
@@ -148,17 +152,17 @@ struct RootTabContainer: View {
             .allowsHitTesting(previewImage != nil)
         }
         .overlay {
-            // Settings sheet 弹出期间，给呈现视图叠一层暖调遮罩（neutral950 @ 25%）。
+            // Settings / UsageLimit sheet 弹出期间，给呈现视图叠一层暖调遮罩（neutral950 @ 25%）。
             // 系统的调暗层压在其上时，底下暖调染过的底色会让合成结果显著偏暖，
             // 消除系统冷灰中性遮罩在顶部露出的生硬感，同时完全保留原生 sheet 下拉手势。
-            if showSettings {
+            if showSettings || showUsageLimit {
                 AppTheme.Color.scrimOverlay
                     .ignoresSafeArea()
                     .transition(.opacity)
                     .allowsHitTesting(false)
             }
         }
-        .animation(.easeInOut(duration: 0.28), value: showSettings)
+        .animation(.easeInOut(duration: 0.28), value: showSettings || showUsageLimit)
         .onPreferenceChange(TopBarHeightKey.self) { topBarHeight = $0 }
         .background(AppTheme.Color.pageBg)
         .sheet(isPresented: $showSettings) {
@@ -214,6 +218,7 @@ struct RootTabContainer: View {
                 .allowsHitTesting(selectedTab == .mine)
         }
         .contentShape(Rectangle())
+        .environment(\.tabSwipeArbiter, swipeArbiter)
         .coordinateSpace(name: RootTabContainerLayout.space)
         .simultaneousGesture(
             DragGesture(minimumDistance: 24, coordinateSpace: .named(RootTabContainerLayout.space))
@@ -234,7 +239,8 @@ struct RootTabContainer: View {
                         predictedTranslation: value.predictedEndTranslation,
                         selectedTab: selectedTab,
                         capturedSwipeOpen: capturedSwipeOpen,
-                        mineDetailActive: mineDetailActive
+                        mineDetailActive: mineDetailActive,
+                        claimedByInnerScroll: swipeArbiter.isClaimed()
                     )
                     swipeLock = .undetermined
                     captureRecorded = false

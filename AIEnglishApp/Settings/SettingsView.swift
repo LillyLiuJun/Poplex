@@ -22,6 +22,8 @@ struct SettingsView: View {
     @State private var scrollToTopToken = 0
     #if DEBUG
     @State private var showResetUnlockAlert = false
+    @State private var showUsageLimitJumpTest = false
+    @State private var showHeroCoverTest = false
     @State private var debugToast: String?
     #endif
 
@@ -115,6 +117,7 @@ struct SettingsView: View {
             }
         }
         .presentationDragIndicator(.hidden)
+        .presentationBackground(AppTheme.Color.pageBg)
         #if DEBUG
         .alert("Reset Library unlock?", isPresented: $showResetUnlockAlert) {
             Button("Reset", role: .destructive) { resetLibraryUnlock() }
@@ -211,6 +214,22 @@ struct SettingsView: View {
                               showsChevron: false) {
                 showResetUnlockAlert = true
             }
+            SettingsActionRow(icon: .aiData,
+                              label: "Daily limit jump test",
+                              showsChevron: false) {
+                showUsageLimitJumpTest = true
+            }
+            SettingsActionRow(icon: .aiData,
+                              label: "Hero cover test",
+                              showsChevron: false) {
+                showHeroCoverTest = true
+            }
+        }
+        .fullScreenCover(isPresented: $showUsageLimitJumpTest) {
+            UsageLimitJumpTestView()
+        }
+        .fullScreenCover(isPresented: $showHeroCoverTest) {
+            Tab2HeroCoverTestView()
         }
     }
 
