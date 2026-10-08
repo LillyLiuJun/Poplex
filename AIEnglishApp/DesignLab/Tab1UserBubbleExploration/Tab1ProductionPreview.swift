@@ -8,7 +8,7 @@ import UIKit
 //   1. 视图外壳与框架：
 //      - 顶栏：TopBarProgressiveMask 渐进遮罩 + SettingsMenuButton + TopTabSelector (选中 Today) + UsageLimitButton
 //        —— 与 RootTabContainer.floatingTopBar 逐行同构（同一套 Token/偏移量）
-//      - 背景基底：AppTheme.Color.pageBg (#FCF8F3 暖纸底色)
+//      - 背景基底：AppTheme.Color.pageBg (#FBF8F5 暖纸底色)
 //      - 底部输入：真实 InputBar 浮动胶囊 + VariableBlurBackdrop 真实暖纸微光渐变承托底
 //      - ⚠️ 内容区顶部留白用的是写死的 64pt（见 body 内 .padding(.top,...)），生产 TodayView
 //        实际用 GeometryReader 动态推导的 topInset（随安全区/顶栏实际高度变化）——这一处只是

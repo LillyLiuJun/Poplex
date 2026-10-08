@@ -21,7 +21,7 @@ import SwiftUI
 ///   占位不是两行槽——槽是为「多颗胶囊可扫视比较」存在的，只有一行字就按
 ///   文本自然高度走，卡片比有内容时矮一点，矮得有理由（空态 v1 规则表）
 /// - CTA 仍弹 Coming soon（本轮不动）；CTA 底改 v12 .cta 的 --btn #17120C
-///   （interactive），字改 #FCF8F3（textOnChip）
+///   （interactive），字改 #FBF8F5（textOnChip）
 ///
 /// Hero 由 MineView 进入页面时求值一次传入（一次浏览之内不换），
 /// 本卡内没有任何选取逻辑。折叠/取图口径见 `Tab2ActivityDisplay`。

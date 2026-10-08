@@ -67,19 +67,6 @@ struct EmptyStateIllustration: View {
                         .frame(width: AppTheme.Size.emptyStateBottomLineWidth, height: AppTheme.Size.emptyStateTraceLineHeight)
 
                     Spacer(minLength: 0)
-
-                    // 右下角品牌压印微徽标 (P Stamp)
-                    HStack {
-                        Spacer()
-                        Circle()
-                            .stroke(AppTheme.Color.brandStrong.opacity(AppTheme.Opacity.emptyStateStampRing), lineWidth: AppTheme.Size.emptyStateStampStroke)
-                            .frame(width: AppTheme.Size.emptyStateStampDiameter, height: AppTheme.Size.emptyStateStampDiameter)
-                            .overlay {
-                                Text("P")
-                                    .font(AppTheme.Font.emptyStateStampGlyph)
-                                    .foregroundStyle(AppTheme.Color.brandStrong)
-                            }
-                    }
                 }
                 .padding(AppTheme.Size.emptyStateNotePadding)
             }

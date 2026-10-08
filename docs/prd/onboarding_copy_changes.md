@@ -8,8 +8,9 @@
 
 * **Title 词汇修改**：
   * **原代码**：`Build your expression / from work & life.`
-  * **修改后**：`Build your language / from work & life.`
-  * *（仅将 expression 替换为 language）*
+  * **中间版本**：`Build your language / from work & life.`（仅将 expression 替换为 language）
+  * **曾用（2026-10-07，已撤回）**：`Build language from your life.`（写死三行：`Build` / `language` / `from your life.`）
+  * **现行文案（2026-10-07 起，以代码为准）**：`Build your language` / `from work & life.`（写死两行，`OnboardingScreen1View.swift`）
 
 ---
 

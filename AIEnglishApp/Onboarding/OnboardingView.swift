@@ -108,6 +108,8 @@ struct OnboardingCompletionCoordinator {
 struct OnboardingView: View {
     @State private var step: OnboardingStep = .screen1
     @State private var viewModel = OnboardingViewModel()
+    /// 开屏动画交棒用：开屏收尾之前 S1 不入场。默认值 = 不受开屏影响。
+    var screen1Ready: Bool = true
     var onComplete: () -> Void
 
     private var index: Int { step.rawValue }  // screen1=0, screen2=1, screen4=2
@@ -121,7 +123,10 @@ struct OnboardingView: View {
             // so direction is always correct and pages never overlap or ghost.
             GeometryReader { geo in
                 HStack(spacing: 0) {
-                    OnboardingScreen1View(isActive: step == .screen1, onForward: advance)
+                    OnboardingScreen1View(
+                        isActive: step == .screen1 && screen1Ready,
+                        onForward: advance
+                    )
                         .frame(width: geo.size.width, height: geo.size.height)
 
                     OnboardingScreen2View(isActive: step == .screen2, onBack: back, onForward: advance)

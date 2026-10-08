@@ -27,11 +27,15 @@ the fact** — fix the doc and say so.
 | `prd/Agent系统PRD_逻辑审查_v1.md` | Review record behind the v1→v2 revision (rationale, historical reference) |
 | `优化需求全量清单_v1.md` | Unified index of all low-priority / deferred / pending-decision items, trigger-gated (not a schedule) |
 | `engineering/CI.md` | Pull-request verification commands, required checks, and database privilege-test maintenance |
-| `design-system/*` | Brand colour (`#FF7622`, warm paper-grey neutrals) and typography |
+| `design-system/*` | Typography and component specs. **Colour values are NOT authoritative here** — the source of truth for every colour is `AIEnglishApp/Theme/Theme.swift`, brand colours in `brand/README.md` |
 | `design-system/底部暖光规范_v1.md` | Three-tier warm glow spec (A/B/C tier, background vs ellipse vs none) |
-| `brand/README.md` | **Brand assets** — logo, app icon, wordmark, splash. Start there for anything visual-identity related. Note: the *source of truth is code* (`PoplexPShape`, `PoplexWordmarkMetrics`, `AppTheme.Motion.Splash`), the SVGs under `brand/assets/` are exports |
+| `brand/README.md` | **Brand assets** — logo, app icon, wordmark, splash. Start there for anything visual-identity related. Note: assets are authoritative as the SVGs under `docs/brand/assets/` (the old P-with-dot brand is retired; archived under `brand/archive/`) |
 
 **Treat with care — partly outdated:**
+
+- `design-system/品牌色彩系统规范-FF7622.md` and `…-v2-暖纸灰修订.md` — **superseded, do not cite**
+  (marked 2026-10-08). Their neutral ramp and page background never matched the code.
+  Read colours from `Theme.swift` instead.
 
 - `architecture/全局数据架构审计报告_v1.md` — dated 2026-07-04. Several findings
   are already fixed (user_id isolation, missing migrations). See
@@ -110,7 +114,8 @@ processes), not by "two views of the same content".
   describing the user's situation accurately, not from emotional words.
   Full rules + worked examples: `Tab1_Prompt与输出结构_改造方案_v2.md` §4.1.
 - **Brand**: primary `#FF7622` (keep the saturation, do not tone it down);
-  neutrals are warm paper-grey (H 24–30°). See `design-system/`.
+  neutrals are warm paper-grey (H 24–30°). Values live in `Theme.swift`
+  (page background = brand paper `#FBF8F5`); see `brand/README.md`.
 - **Dynamic Type 封顶（2026-10-06 PM 拍板）**: the whole app is capped at `xxxLarge`
   (超大); the 5 system "accessibility" text sizes (AX1–AX5) are not supported. The normal
   range (xSmall … xxxLarge) still follows the system. Implemented in

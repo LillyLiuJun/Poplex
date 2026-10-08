@@ -2,19 +2,40 @@ import SwiftUI
 
 /// Onboarding 第一页：品牌第一印象 + 价值主张。
 /// 视觉 = 顶部品牌字标「Poplex.」报头（左对齐、与标题共左轴）+ 居中纯黑衬线封面大
-/// 标题 + 一句灰副标题。报头用共享的 `PoplexWordmark`（与开屏 / 图标同源、同度量，
+/// 标题 + 一句灰副标题。报头用共享的 `PoplexLockupMark`（横排组合，
 /// 不漂移）。背景沿用 OnboardingView 的共享背景（暖纸 + 圆点 + 极淡底部光晕），
 /// 与 Screen2 / Capture 三屏一致。
 struct OnboardingScreen1View: View {
     var isActive: Bool = true
     var onForward: () -> Void
+    var mastheadMarkHeight: CGFloat = AppTheme.Size.onboardingS1MastheadMarkHeight
+
+    init(
+        isActive: Bool = true,
+        mastheadMarkHeight: CGFloat = AppTheme.Size.onboardingS1MastheadMarkHeight,
+        onForward: @escaping () -> Void
+    ) {
+        self.isActive = isActive
+        self.mastheadMarkHeight = mastheadMarkHeight
+        self.onForward = onForward
+    }
 
     @State private var appeared = false
     @State private var scrollOffset: CGFloat = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// 报头字标的 P 字高。
-    private let mastheadCapHeight: CGFloat = 20
+    /// 放大前的报头 frame 高（= 规范下限）。图形的可见上沿 / 左沿以它为基准定位，
+    /// 放大只向下、向右长，不挪动图形原来的左上角。
+    private let mastheadReferenceFrameHeight: CGFloat = PoplexLockupMark.minimumHeight
+
+    /// 组合的 frame 相对基准 frame 多出来的留白：用负偏移吃掉，让可见图形的左上角留在原位。
+    private var mastheadInsets: (top: CGFloat, leading: CGFloat) {
+        let lockup = PoplexLockupMark(markHeight: mastheadMarkHeight)
+        return (
+            top: lockup.topInset - mastheadReferenceFrameHeight * PoplexLockupMark.topInsetRatio,
+            leading: lockup.leadingInset - mastheadReferenceFrameHeight * PoplexLockupMark.leadingInsetRatio
+        )
+    }
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -23,28 +44,20 @@ struct OnboardingScreen1View: View {
             GeometryReader { geo in
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 0) {
-                        // 品牌报头（长版字标 Poplex.，与开屏 / 图标同源）。左对齐、与标题共左轴。
-                        // 顶部位置由 onboardingS1MastheadTop 一个数决定：报头是刊头、不是页面标题，
-                        // 且本页没有返回按钮，故比其余三页的标题线低 16（封面留白大于内页）。
-                        // 横滑 S1→S2 时报头与标题会错开 16，已确认接受。
-                        PoplexWordmark(capHeight: mastheadCapHeight)
-                            .padding(.leading, AppTheme.Space.paddingPage)
-                            .padding(.top, AppTheme.Size.onboardingS1MastheadTop)
+                        // 品牌报头（横排组合：单图形 + 暖墨字标）。左对齐、与标题共左轴。
+                        PoplexLockupMark(markHeight: mastheadMarkHeight)
+                            .padding(.leading, AppTheme.Space.paddingPage - mastheadInsets.leading)
+                            .padding(.top, AppTheme.Size.onboardingS1MastheadTop - mastheadInsets.top)
                             .onboardingEntrance(appeared: appeared, reduceMotion: reduceMotion, delay: 0.0)
 
-                        // 上方留白弹性吸收机型差异（下限 = 组间距）。
+                        // 上方弹性留白吸收机型差异
                         Spacer(minLength: AppTheme.Space.onboardingHeaderToContent)
 
                         textBlock
                             .padding(.horizontal, AppTheme.Space.paddingPage)
 
-                        // 锚定 CTA：文字组下缘 → Continue 上缘 = onboardingHeroToCTA。
-                        // 尾块 = 该距离 + 按钮自身占位（下边距 + 高），因此这里不再叠加
-                        // onboardingContentBottomClearance，否则同一段空白记两次账。
-                        // 已知局限：inputBarMinHeight 是按钮的**最小**高，超大字号下按钮会长高，
-                        // 尾块按 52 预留就会少留那一截，实际间距小于 200（不会重叠，因为按钮
-                        // 是从屏底往上长、而上方留白由弹性 Spacer 吸收）。要做到严格 200 得把
-                        // 按钮实测高经 preference 喂回来，代价大于收益，故记录而不实现。
+                        // 方案 1 锚定 CTA：文字组下缘 → Continue 上缘 = onboardingHeroToCTA (160pt，下沉40pt)。
+                        // 尾块 = 该距离 + 按钮自身占位（下边距 + 高）
                         Color.clear.frame(
                             height: AppTheme.Size.onboardingHeroToCTA
                                 + AppTheme.Size.onboardingContinueBottom
@@ -106,9 +119,23 @@ struct OnboardingScreen1View: View {
     }
 }
 
-#Preview {
+#Preview("Onboarding S1 · 定稿 (36pt Logo)") {
     ZStack {
         OnboardingAuraBackground()
         OnboardingScreen1View(onForward: {})
+    }
+}
+
+#Preview("Onboarding S1 · 32pt Logo (轻巧秀气)") {
+    ZStack {
+        OnboardingAuraBackground()
+        OnboardingScreen1View(mastheadMarkHeight: 32, onForward: {})
+    }
+}
+
+#Preview("Onboarding S1 · 40pt Logo (原版)") {
+    ZStack {
+        OnboardingAuraBackground()
+        OnboardingScreen1View(mastheadMarkHeight: 40, onForward: {})
     }
 }

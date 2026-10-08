@@ -76,8 +76,6 @@ private enum Primitive {
     // Primary Deep — 比种子更深的橘（用于浅橘底上承载文字 / 深橘强调，
     // 渐白色阶里没有更深的档，单列一枚 shade）
     static let primaryDeep = Color(hex: 0xC2410C)
-    /// 深琥珀老墨（晨曦暖光品牌收尾印记，为品牌橙 #FF7622 同源深阶压暗版）
-    static let primaryAmberDark = Color(hex: 0x9E4A1C)
     /// 深棕：浅杏色预设底上承载文字（与 primary300 底的对比度 6.6:1）
     static let primaryBrownInk = Color(hex: 0x7A3E18)
 
@@ -85,7 +83,10 @@ private enum Primitive {
     // Neutral — 品牌染色中性（Warm Editorial）：深色端从种子橙 FF7622 掺入橙色相
     //   （黑带暖底，H≈24°），中/浅灰去棕回灰（低彩度、只留一丝暖），暖纸页面。
     //   深色有温度、大面积灰干净。深色模式数值未导出，勿自行补。
-    static let neutral50  = Color(hex: 0xFCF8F3)  // 暖纸页面（pageBg）
+    // 暖纸 = 页面底 = 启动屏 / 开屏动画底 = 图标图形色，统一为这一枚（2026-10-08 PM 拍板，
+    // 页面底由旧暖米色改为此值，ΔE≈1.08、色相 30°，消除启动屏 → 首页的换色接缝）。
+    // 改动前请同步改 docs/brand/assets/ 的 SVG 与 LaunchBackground.colorset。
+    static let neutral50  = Color(hex: 0xFBF8F5)  // 暖纸（pageBg / startupBg / 图标图形）
     static let neutral100 = Color(hex: 0xF0EDE6)  // 用户气泡 / 图片占位底（#F0EDE6，暖度 10）
     static let neutral200 = Color(hex: 0xE6E1DA)  // 描边 / 分割（同步加暖提亮）
     static let neutral300 = Color(hex: 0xC7C3BD)  // 最弱文字（faint）
@@ -167,7 +168,7 @@ private enum Primitive {
     static let info900 = Color(hex: 0x4679D1)
     static let info950 = Color(hex: 0x3065C0)
 
-    // ── 暖近白卡片：比暖纸页面（neutral50 #FCF8F3）更亮，带一丝暖底，
+    // ── 暖近白卡片：比暖纸页面（neutral50 #FBF8F5）更亮，带一丝暖底，
     //    靠"描边 + 双层紧阴影"分层；不用纯白，避免冷白跳出整套暖色系 ──
     static let warmWhite = Color(hex: 0xFFFDFB)
 
@@ -176,13 +177,11 @@ private enum Primitive {
     // 安静填充（quiet 胶囊圆点 + Topics 进度条填充共用，两个独立组件 → primitive）
     static let quietFill = Color(hex: 0xCFC7BC)
 
-    // ── App 图标资产色 ────────────────────────────────────────────────────
-    // 开屏动画的第 0 帧必须与 iOS 图标放大转场的最后一帧一致，否则启动会闪一下。
-    // 故这两枚直接取 AppIcon.appiconset 母版里的实际色值，单列、不与 neutral50
-    // (#FBF6F1) / neutral900 (#211811) 合并 —— 差值虽小，合并就会在接缝处露出来。
-    // 改动前请同步改 Assets.xcassets/AppIcon.appiconset/poplex_icon_master.svg。
-    static let iconGround = Color(hex: 0xFBF8F5)  // 图标底 = 开屏底
-    static let iconInk    = Color(hex: 0x2A2320)  // 图标墨点 = 开屏墨点
+    // ── 品牌资产色（暖墨）────────────────────────────────────────────────
+    // 暖纸 = 页面底 = 启动屏底 = 图标图形色，统一为 neutral50（#FBF8F5），见上方 Neutral 色阶。
+    // 暖墨 = 字标（poplex-wordmark-ink.svg）的颜色，单列，不与 neutral900 (#211811) 合并。
+    // 改动前请同步改 docs/brand/assets/ 的 SVG。
+    static let iconInk    = Color(hex: 0x2A2320)  // 暖墨：字标
     static let pillWarmBrown = Color(hex: 0x4B3621) // 药丸柔光暖棕
 
     // ── 覆盖在实时媒体（相机画面 / 用户照片）上的控件 ────────────────────────
@@ -224,6 +223,10 @@ enum AppTheme {
         /// Tab2 解锁态收尾页脚留白（打破卡片吸附感，96pt 营造呼吸断层；52pt 踏光上浮沉底）
         static let tab2FooterTop: CGFloat       = Primitive.space96
         static let tab2FooterBottom: CGFloat    = Primitive.space52
+        /// Tab2 页脚灰标与灰色字标横向间距（方案 5 定稿：4.5pt）。
+        static let tab2FooterMarkSpacing: CGFloat = 4.5
+        /// Tab2 页脚品牌签名行与下方 Tagline 垂直间距（6pt）。
+        static let tab2FooterBrandToTagline: CGFloat = 6
         /// 沉底操作栏按钮距离安全区底部的间距（Tab2 待解锁底栏等；与 Onboarding 具有相同数值但用途独立演化）
         static let bottomBarActionBottom: CGFloat = Primitive.space12
 
@@ -288,20 +291,24 @@ enum AppTheme {
 
     enum Color {
         // 背景（暖米色页面 + 近白暖卡片，靠描边 + 紧阴影分层）
-        static let pageBg   = Primitive.neutral50   // 暖米色页面（非纯白 #FCF8F3）
+        static let pageBg   = Primitive.neutral50   // 暖纸页面（非纯白 #FBF8F5，与启动屏同色）
         // Tab1 输入框底部背板暖色补偿（中和冷感并承担 Tab1 底部承托暖光，初值 5.5%）
         static let inputBackdropWarmTint = Primitive.primary950.opacity(0.055)
         static let cardBg   = Primitive.warmWhite   // 近白暖卡片（#FFFDFB）
         static let inputBg  = Primitive.warmWhite
 
-        // 文字（由重到轻，全部 ≥4.4:1 WCAG AA 合规）
-        // 三档已覆盖所有文字层次；textFaint(1.73:1) / textLabel(2.55:1) 均不合规，已删除。
-        static let textPrimary   = Primitive.neutral900  // 17.2:1
-        static let textSecondary = Primitive.neutral700  // 9.9:1
-        static let textMuted     = Primitive.neutral500  // 4.4:1
+        // 文字（由重到轻）。对比度按 WCAG 相对亮度公式，「页面底 #FBF8F5 / 卡片底 #FFFDFB」，2026-10-08 复核。
+        // 三档已覆盖所有文字层次；textFaint(1.73:1) / textLabel(2.56:1，卡片底) 均不合规，已删除。
+        static let textPrimary   = Primitive.neutral900  // 16.49:1 / 17.20:1
+        static let textSecondary = Primitive.neutral700  // 8.82:1 / 9.20:1
+        // ⚠️ 已知取舍，非疏漏：4.18:1 / 4.36:1，略低于 WCAG AA 对小字的 4.5:1。
+        // PM 2026-10-08 看过像素级对照（候选 #76716D 可达 4.56 / 4.75，同色相只暗 2.4%）后，
+        // 选择保留现在较浅的观感。最受影响的是 AI 卡片里的中文译文（学习内容本身）；
+        // 若有用户反馈译文偏淡，或日后要做无障碍合规，优先换成 #76716D（改 neutral500 一处即可）。
+        static let textMuted     = Primitive.neutral500  // 4.18:1 / 4.36:1
         /// Settings 列表行主文本专用焦墨色：采用 Primitive.neutral975 (#0A0705)，极致深焦墨，弥补 ExtraLight 200 纤细笔画在视网膜上的光通量，呈现锐利工笔针管笔质感
         static let settingsRowText = Primitive.neutral975
-        /// Settings 列表行首图标专用中灰色彩：采用 Primitive.neutral500 (#7C7773，4.4:1 同展开箭头色)，
+        /// Settings 列表行首图标专用中灰色彩：采用 Primitive.neutral500 (#7C7773，同展开箭头色，见 textMuted 的对比度说明)，
         /// 彻底化解几何封闭图形在 200 极细文字旁的墨水重感与黑块压迫，与右侧展开箭头达成呼吸呼应，聚焦行内文字
         static let settingsRowIconTint = Primitive.neutral500
         /// Settings 卡外分组标题专用色彩（方案 D · 极简通透）：采用 Primitive.neutral500 (#7C7773，同 textMuted)，
@@ -331,12 +338,6 @@ enum AppTheme {
 
         static let textOnChip    = Primitive.neutral50   // chip 胶囊 / 深底按钮上的浅色文字
 
-        // 页面收尾印记专用轻量色（Tab2 底部字标与宣言，深琥珀老墨同源双阶，融入晨曦暖光）
-        /// 底部品牌字标（深琥珀老墨 #9E4A1C，透明度 0.42）
-        static let footerSignoffPrimary = Primitive.primaryAmberDark.opacity(0.42)
-        /// 底部副标 tagline（同色 #9E4A1C，透明度 0.30）
-        static let footerSignoffSecondary = Primitive.primaryAmberDark.opacity(0.30)
-
         // 品牌 / 交互
         // 橙按「做什么」分档，不按「好不好看」调透明度：
         //   brandInk   — 橙做文字的唯一出口（5.09:1）：≤24pt 文字
@@ -358,8 +359,8 @@ enum AppTheme {
         static let interactive   = Primitive.neutral950
 
         // 用户气泡（温润书卷：半透暖纸灰底 68% + 书卷石墨暖深灰字 + 0.5pt 细微边缘，消除暗块与浓墨感，凸显 AI 学习卡）
-        // 对比度：文字与「气泡底色 68% 叠加在 pageBg 上」的实际合成色，按 WCAG 相对亮度公式核算 ≈8.25:1，
-        // 超过 AAA 门槛 7:1（2026-09-29 复核；若改动 bubbleUserBg/pageBg 任一色值需重新核算，别直接照抄这个数字）
+        // 对比度：文字与「气泡底色 68% 叠加在 pageBg 上」的实际合成色（#F4F1EB），按 WCAG 相对亮度公式核算 ≈8.28:1，
+        // 超过 AAA 门槛 7:1（2026-10-08 pageBg 改 #FBF8F5 后重算；若改动 bubbleUserBg/pageBg 任一色值需重新核算，别直接照抄这个数字）
         static let bubbleUserBg     = Primitive.neutral100.opacity(0.68)
         static let bubbleUserText   = Primitive.neutral700
         static let bubbleUserBorder = Primitive.neutral200.opacity(0.55)
@@ -481,10 +482,9 @@ enum AppTheme {
         static let progressFill  = Primitive.quietFill
         static let glassHairline = Primitive.neutral900.opacity(0.045)
 
-        // 开屏（= App 图标资产色，用于和图标转场无缝衔接）
-        // 字母本身走 brandStrong（= 种子橙 FF7622，与图标里的 P 同色），不另立 token。
-        static let splashBg  = Primitive.iconGround
-        static let splashDot = Primitive.iconInk
+        // 启动屏 / 开屏动画底色（= LaunchBackground.colorset，二者必须同值，否则启动会闪一下）。
+        // 与 pageBg 同一枚 primitive：开屏退场后露出的页面底不再换色。
+        static let startupBg = Primitive.neutral50
 
         // 相机全屏表面 + 覆盖控件（白控件浮在实时画面上，与浅色主题无关）
         static let cameraBg        = Primitive.mediaSurface
@@ -524,8 +524,8 @@ enum AppTheme {
             return SwiftUI.Font.custom(name, size: size, relativeTo: style)
         }
 
-        /// 固定字号变体（不随 Dynamic Type 缩放）。品牌资产专用（字标 / 开屏封面大标题），
-        /// 放大会撑破居中构图、且不承载可读信息，理由见 splashWordmark 注释。
+        /// 固定字号变体（不随 Dynamic Type 缩放）。品牌资产专用（Onboarding 封面大标题），
+        /// 放大会撑破居中构图、且不承载可读信息。
         private static func charterFixed(_ size: CGFloat, weight: CharterWeight = .regular) -> SwiftUI.Font {
             FontLoader.registerCustomFonts()
             return SwiftUI.Font.custom(weight == .bold ? "Charter-Bold" : "Charter", fixedSize: size)
@@ -582,7 +582,6 @@ enum AppTheme {
         /// 15pt 与中文正文同大，字字清朗、舒展易读，消除断崖式小字感；坚决不挪用 chineseBody（冬青黑体西文粗钝）。
         static let noteBody       = sans(15, weight: .regular, relativeTo: .subheadline)
         static let statusNote     = sans(13, weight: .regular, relativeTo: .footnote)                // 加载态 / 空态 / 系统提示性短句
-        static let statusNoteSerif = charter(13, weight: .regular, relativeTo: .footnote)             // 衬线小字状态提示（如手风琴展开 loading "Gathering words…"）
         static let growthStatus   = sans(13, weight: .semibold, relativeTo: .footnote)              // 成长线状态（如「0 pops so far」）
         static let actionNote     = sans(13, weight: .regular, relativeTo: .footnote)               // 操作项的补充说明（如拍照入口副文案）
         static let compactActionLabel = sans(15, weight: .medium, relativeTo: .subheadline)         // 上传胶囊动作（Camera / Gallery）：无图标时用中等字重建立操作重量
@@ -635,7 +634,6 @@ enum AppTheme {
         static let libraryFooterTagline = charter(12, weight: .regular, relativeTo: .caption)         // Library 页脚品牌收口宣言：caption 直立端正衬线，与标题 Serif 呼应
         static let ctaLabel       = sans(17, weight: .semibold, relativeTo: .body)                  // 主按钮文字（Continue / Get Started）
         static let tab2HeroMeta = sans(12, weight: .semibold, relativeTo: .caption)
-        static let tab2HeroWord = charter(15, weight: .bold, relativeTo: .subheadline)
         static let tab2HeroWordPartOfSpeech = sans(11, weight: .regular, relativeTo: .caption2).italic()
         static let tab2HeroWordMeaning = hiragino(13, weight: .w3, relativeTo: .footnote)
         static let tab2HeroCTA = sans(15, weight: .semibold, relativeTo: .subheadline)
@@ -693,24 +691,6 @@ enum AppTheme {
         static let cardSentence   = charter(17, weight: .bold, relativeTo: .body)
         static let feedbackTitleSerif = cardSentence
         static let onboardingUploadTitle = charter(17, weight: .regular, relativeTo: .body)  // (.medium→.regular 显式化：Charter 无中间档，渲染不变)
-        // 开屏字标「oplex」：与内容同族（Charter Bold + italic 呼应 PoplexPShape 的 -6° 斜切）。
-        // 品牌资产特例——固定字号、不随 Dynamic Type 变化（放大后会撑破居中构图，
-        // 且开屏不承载可读信息，无可访问性损失）。
-        // 字号改动需同步 SplashScreenView.wordmarkSize，两者必须一致，
-        // 否则 P 的字高（由字号算 cap height）会和 oplex 对不上。
-        static let splashWordmark = wordmark(size: 56)
-
-        // 空态便签右下角的「P」压印：固定字号、不随 Dynamic Type 变化——它被画在 10pt 的
-        // 圆环里，放大就会溢出圆环；且整幅插画对读屏隐藏、不承载可读信息，无可访问性损失。
-        static let emptyStateStampGlyph = SwiftUI.Font.system(size: 6, weight: .bold)
-
-        /// 字标专用字体。品牌资产特例：**尺寸由字标度量推算**，所以这里是函数不是常量，
-        /// 也不随 Dynamic Type 变化（字标放大会撑破构图，且不承载可读信息）。
-        /// 除 `PoplexWordmark` / `SplashScreenView` 外不要调用它写正文。
-        static func wordmark(size: CGFloat) -> SwiftUI.Font {
-            charterFixed(size, weight: .bold).italic()
-        }
-
         /// 每日额度弹窗顶栏标题：Charter 22pt Bold（沉稳压轴定力，别名绑定 sectionTitleSerif，不与 settingsDocumentTitleSerif 耦合）
         static let usageLimitSheetTitleSerif = sectionTitleSerif
 
@@ -778,8 +758,6 @@ enum AppTheme {
         static let emptyStateFocusLine: CGFloat  = 0.30
         static let emptyStateMiddleLine: CGFloat = 0.18
         static let emptyStateBottomLine: CGFloat = 0.14
-        /// 右下角 P 压印的圆环（brandStrong）。
-        static let emptyStateStampRing: CGFloat  = 0.35
     }
 
     /// 静态几何旋转角（度）。
@@ -875,8 +853,6 @@ enum AppTheme {
         /// Passage 内部滚动视口上下缘的同色柔化高度。
         static let passageScrollEdgeFadeHeight: CGFloat = Primitive.space24
         // brandMark（84pt 圆形 app-icon 报头直径）已随 Settings 删除品牌报头一并移除。
-        // brandGlyph 在此之前就已无消费者，属既有债务，留待 token 体检时统一清理。
-        static let brandGlyph: CGFloat = Primitive.size36  // 报头里 PoplexPShape 的字高
 
         // ── Settings 行矢量图标（对应视觉规范 §04 的 24×24 描边资产）──────────
         static let settingsRowIconGlyph: CGFloat = 20  // 行前导图标绘制尺寸
@@ -969,8 +945,6 @@ enum AppTheme {
         static let emptyStateMiddleLineWidth: CGFloat       = 52   // 中行文字痕迹
         static let emptyStateBottomLineWidth: CGFloat       = 40   // 底行文字痕迹
         static let emptyStateTraceLineHeight: CGFloat       = 1.8  // 中行 / 底行线粗
-        static let emptyStateStampDiameter: CGFloat         = 10   // 右下角 P 压印圆环
-        static let emptyStateStampStroke: CGFloat           = 1.0
         static let emptyStateSubtitleMaxWidth: CGFloat      = 300  // EmptyStateView 副标最大宽度（保证两行断句）
 
         // ── Onboarding 顶部节奏（N-1）────────────────────────────────────
@@ -982,11 +956,20 @@ enum AppTheme {
         // S1 是品牌页：没有返回按钮，那条线上方的 44pt 触区是空的，报头贴在内页标题线上会显得被顶到天花板。
         // 刊头惯例是封面留白大于内页，故单开一档。代价：横滑 S1→S2 时报头与标题错开 16pt（已确认接受，
         // 验收「三页标题同高」不含 S1）。若真机觉得仍不够，下一档是 80，不要取中间值。
+        /// 注意这是**布局**顶距：以 32pt 基准框定位，图形放大时保持基准框的可见左上角不动，
+        /// 所以 36pt 图形的可见上沿实际在安全区下 ≈ 66.7pt（64 + 32 × 33.35/400）、可见左沿 ≈ 21pt，
+        /// 与衬线标题的字形左沿（≈ 21pt）对齐。这是 OnboardingS1 实验室定稿的位置，不是偏差。
         static let onboardingS1MastheadTop: CGFloat         = 64
-        // S1 hero 文字组下缘 → Continue 上缘。文字组由「几何居中」改为「锚定 CTA」：
-        // 居中的参照系（视口）随机型变，而封面页真正要恒定的是标题到行动召唤的距离；
-        // 机型差异被赶到上方留白（没人盯着看的地方）。与 F-6 在结果页的取舍同源。
-        static let onboardingHeroToCTA: CGFloat             = 200
+        /// S1 报头图形可见高（36pt，品牌规范下限 32pt 与原始 40pt 之间的黄金平衡，左轴对齐标题）。
+        static let onboardingS1MastheadMarkHeight: CGFloat  = Primitive.size36
+        /// 开屏动画里组合在屏幕中央停住时的图形可见高（实验室 48/56/64 三档对比，PM 未改默认）。组件私有。
+        static let launchSplashSettledMarkHeight: CGFloat   = 56
+        /// Tab2 页脚灰色字标的 P 字高（方案 5 定稿：由 12.5pt 收缩至 9.0pt，安静退后不抢内容）。
+        static let tab2FooterWordmarkCapHeight: CGFloat     = 9.0
+        /// Tab2 页脚灰色嫩芽 Logo 高度（方案 5 定稿：11.0pt 协调微缩）。
+        static let tab2FooterSproutHeight: CGFloat          = 11.0
+        /// S1 hero 文字组下缘 → Continue 上缘（方案 1 定稿：由 200pt 微调收缩 40pt 至 160pt，视觉重心稳健下沉至黄金分割线，天顶更显开阔从容）。
+        static let onboardingHeroToCTA: CGFloat             = 160
         // 返回按钮 leading：触区 44 宽、arrow.left 字形约 22 宽居中 → 字形左缘 = leading + 11。
         // 要字形左缘落在页面左轴 20（用户看到的是墨、不是触区），故 leading = 20 - 11 = 9。
         // 此前用 paddingM(12)，字形左缘落在 23，左轴因此有两个值。
@@ -1158,12 +1141,6 @@ enum AppTheme {
             static let categoryToActivity: CGFloat = Primitive.space10
             /// 胶囊组 → 词数行的距离（方案 B：统一 10pt 呼吸步进，与帽行→胶囊距离保持严谨镜像对齐）。
             static let activityToWords: CGFloat = Primitive.space10
-            /// 空态说明行 → 词数行的距离（刀 6b 空态 v1 B2 .rwords.tight 上距 6px）。
-            /// 比有胶囊的 8 更紧——说明行与词数行说的是同一件事，距离收窄。组件私有。
-            /// 现状（2026-10-07）：正式页面已不再使用，只剩 DesignLab 里两份冻结的旧版复刻稿
-            /// （Tab2CapsuleRefinementPreview / Tab2UnlockedWarmBaselinePreview）引用。它们要的就是旧值，
-            /// 所以不要按「孤立即删」删掉，也不要改值——删复刻稿时再一并删除。
-            static let emptyLineToWords: CGFloat = 6
             /// 纯查词行内「词—释义—·—词—释义」的均匀间距（= 释义紧跟词的左距 4）。
             static let wordGap: CGFloat = Primitive.space4
             static let arrowGlyph: CGFloat = 15
@@ -1301,25 +1278,44 @@ enum AppTheme {
         static let onboardingPhotoToastLifetime: Duration = .seconds(3)
         static let milestoneToastLifetime: Duration = .milliseconds(2200)
 
-        /// 开屏动画时间表（方案 A · 总长 1.00s）。
-        /// 多出来的时间全部给了 `holdEnd` 前那一拍静止 —— 词写完后完整停 0.10s，
-        /// 这是「名字被看清」的时间。若要缩短，**不要按比例压缩各段**（会毁掉那一拍），
-        /// 正确做法是整体换成 reduceMotion 分支的纯淡入。
-        enum Splash {
-            static let holdStart: Double     = 0.08   // 承接图标：大 P 静止
-            static let shrinkDuration: Double = 0.32  // P 收到字标字号
-            static let lettersStart: Double  = 0.26   // oplex 开始逐字长出
-            static let letterStagger: Double = 0.046  // 字母间隔
-            static let letterDuration: Double = 0.22
-            static let dotStart: Double      = 0.48   // 墨点从左滑到词尾
-            static let dotDuration: Double   = 0.28
-            static let exitStart: Double     = 0.86   // 静止一拍后开始淡出
-            static let exitDuration: Double  = 0.14
-            static var total: Double { exitStart + exitDuration }   // 1.00
+        /// 开屏动画（2026-10-07 定稿生长版；2026-10-08 PM 改：首次打开不再飞入 S1 报头，改为原地淡出、
+        /// 把视线交给 S1 中间的标题；日常打开改为静态组合）。单位秒，均从开屏第 0 帧起算。
+        /// 实现：Components/LaunchSplashView.swift（自带 Canvas 预览）。
+        enum Launch {
+            // 首次打开
+            static let stemStart  = 0.05, stemDuration  = 0.35   // 主干与大拱从底部长出
+            static let leafStart  = 0.25, leafDuration  = 0.25   // 左侧嫩叶从根部展开
+            static let budStart   = 0.40, budDuration   = 0.22   // 芽心最后点出
+            static let shiftStart = 0.55, shiftDuration = 0.40   // 嫩芽左移让出字标位置
+            static let wipeStart  = 0.58, wipeDuration  = 0.40   // 字标从左往右擦出
+            /// 居中组合停稳的时刻。后台身份确认没出结果时就停在这一帧等。
+            static let holdPoint  = 1.10
+            /// 收尾（新用户与重装老用户相同）：组合原地上移淡出，暖纸底随后淡出。
+            static let exitDuration = 0.30
+            static let exitRise: CGFloat = 10
+            static let backgroundFadeDuration = 0.35
+            /// 收尾开始后多久让 S1 入场：先让视线留在中间的组合上，标题再在同一区域接上。
+            static let screen1Lead = 0.08
 
-            /// 「减弱动态效果」开启时的降级版：无位移、只淡入，总长 0.45s。
-            static let reducedFadeIn: Double = 0.20
-            static let reducedTotal: Double  = 0.45
+            // 日常打开（1.2s 柔和，2026-10-08 PM 定）：全部慢进慢出，不长、不擦
+            // 进场：嫩芽先浮现、字标晚 0.08s 跟上，同时从 97% 放大到 100%
+            static let dailySproutInStart = 0.0, dailyWordInStart = 0.08, dailyInDuration = 0.35
+            static let dailyEntryScale: CGFloat = 0.97
+            /// 全程再缓慢放大 4%（线性），停留时隐约能感到在往前推，画面不「死」。
+            static let dailyDrift: CGFloat = 0.04
+            // 退场分两层：组合先淡出并上浮 6pt；暖纸底晚 0.08s 起、用更长时间退；
+            // 主界面同时从 98% 放大到位，像「浮上来」接住视线
+            static let dailyLockupOutStart = 0.80, dailyLockupOutDuration = 0.30
+            static let dailyExitRise: CGFloat = 6
+            static let dailyBackgroundOutStart = 0.88, dailyBackgroundOutDuration = 0.32
+            static let dailyContentFromScale: CGFloat = 0.98
+            static var dailyTotal: Double { dailyBackgroundOutStart + dailyBackgroundOutDuration }   // 1.20
+            static let dailyContentSettle: Animation = .easeInOut(duration: dailyBackgroundOutDuration)
+
+            // 减弱动态效果：不长、不移，暖纸底直接淡出
+            static let reducedHoldPoint = 0.10
+            static let reducedFadeDuration = 0.35
+            static let reducedDailyFadeDuration = 0.20
         }
     }
 }

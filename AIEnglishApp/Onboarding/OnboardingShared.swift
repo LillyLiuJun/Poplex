@@ -41,7 +41,7 @@ struct OnboardingPrimaryButton: View {
 // MARK: - 返回按钮：裸 arrow.left 细线（N-1 + F-1）
 //
 // 曾是白圆+阴影（与 Settings 子页 backRow 同配方），已去掉：白圆 cardBg 压在
-// pageBg 上对比仅 1.06:1，圆形本身几乎不可见，形完全靠阴影撑出——「靠阴影定义
+// pageBg 上对比仅 1.04:1（2026-10-08 按 #FBF8F5 重算），圆形本身几乎不可见，形完全靠阴影撑出——「靠阴影定义
 // 的形」在视觉层级里读作"浮在最上层"＝最重要，但返回是本页最不重要的控件。
 // 它也是整个 onboarding 里唯一的圆形（其余全为胶囊/圆角矩形），形状独一即抓眼；
 // 44pt 直径与 Camera/Gallery 胶囊高度相当，次要动作占用了主控件体量。
@@ -52,9 +52,9 @@ struct OnboardingPrimaryButton: View {
 // 形态语言不同族。细线 arrow 呼应衬线字的细横线，横杆给出更明确的方向感。
 // 若真机上 .regular 的笔画仍偏粗，退回自绘 Path（22×22，lineWidth 1.6，.round 线帽）。
 //
-// 颜色（F-4）：textSecondary(8.69:1) → textPrimary(16.25:1)。去掉白底和阴影后
-// 箭头是左上角唯一的墨迹，8.69 是「次要文字」的重量，撑不起「这里有个可点控件」。
-// 中间档 neutral800(13.57:1) 观感也可以，但色板里没有对应语义 token——
+// 颜色（F-4）：textSecondary(8.82:1) → textPrimary(16.49:1)（对 pageBg #FBF8F5，2026-10-08 重算）。
+// 去掉白底和阴影后箭头是左上角唯一的墨迹，8.82 是「次要文字」的重量，撑不起「这里有个可点控件」。
+// 中间档 neutral800(13.78:1) 观感也可以，但色板里没有对应语义 token——
 // 不直接引用 Primitive，本轮用 textPrimary。
 
 struct OnboardingBackButton: View {

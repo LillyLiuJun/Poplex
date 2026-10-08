@@ -8,7 +8,7 @@ import UIKit
 // 🎯 100% 严格直接对齐线上生产代码架构与视觉设计（绝不改动任何标题、字段或排布）：
 //   1. 视图外壳与框架：
 //      - 顶栏：TopBarProgressiveMask 渐进遮罩 + SettingsMenuButton + TopTabSelector (选中 Library) + UsageLimitButton
-//      - 背景基底：AppTheme.Color.pageBg (#FCF8F3 暖纸底色)
+//      - 背景基底：AppTheme.Color.pageBg (#FBF8F5 暖纸底色)
 //      - 顶部预留：topInset 避让浮动顶栏，内容向上平滑滚入毛玻璃遮罩
 //   2. 线上原版四大区块体系（原汁原味）：
 //      - 第 1 区块大标题：Talk about today (AppTheme.Font.sectionTitleSerif, 24pt Charter-Bold, textPrimary)
@@ -20,7 +20,7 @@ import UIKit
 //      - More：Tab2ActivityRow (含缩略图、帽子、活动胶囊组、38 words)
 //      - Topics：CategoryProgressRow (含类别图标、进度条、WordsPill 胶囊与手风琴展开)
 //      - Explore：Tab2MoreTopicsSection (未开始分类探索区)
-//      - 底部：PoplexWordmark + BottomAuraFooter
+//      - 底部：PoplexWordmarkMono + tagline + BottomAuraFooter
 //   4. 胶囊优化专属工具：
 //      - 支持一键开启「胶囊透视检视 (Capsule Focus)」，高亮标注 Activity 胶囊与 Words 胶囊的当前生产尺寸与 Token
 
@@ -384,14 +384,20 @@ struct Tab2UnlockedProductionPreviewView: View {
     // MARK: - 底部收尾
 
     private var footerSignoff: some View {
-        VStack(spacing: 6) {
-            PoplexWordmark(
-                capHeight: 12.5,
-                style: .mono(AppTheme.Color.textMuted),
-                showsPeriod: true
-            )
+        VStack(spacing: AppTheme.Space.tab2FooterBrandToTagline) {
+            HStack(spacing: AppTheme.Space.tab2FooterMarkSpacing) {
+                PoplexSproutMark(
+                    height: AppTheme.Size.tab2FooterSproutHeight,
+                    tintColor: AppTheme.Color.textMuted
+                )
 
-            Text("English from your everyday life.")
+                PoplexWordmarkMono(
+                    capHeight: AppTheme.Size.tab2FooterWordmarkCapHeight,
+                    color: AppTheme.Color.textMuted
+                )
+            }
+
+            Text(MineView.footerTagline())
                 .font(AppTheme.Font.libraryFooterTagline)
                 .tracking(0.5)
                 .foregroundStyle(AppTheme.Color.textMuted.opacity(0.85))

@@ -32,9 +32,9 @@ struct AIConsentView: View {
                             .font(AppTheme.Font.buddy)
                             // 文字走种子品牌橙 brandStrong（#FF7622）—— PM 明确指定用品牌色。
                             //
-                            // ⚠️ 已知代价，非疏漏：#FF7622 对暖纸底约 2.9:1，达不到 WCAG AA
+                            // ⚠️ 已知代价，非疏漏：#FF7622 对暖纸底（#FBF8F5）约 2.52:1（2026-10-08 重算），达不到 WCAG AA
                             // 对正文的 4.5:1；brandStrong 的 token 注释原文写的是「满饱和图形…永不做文字」，
-                            // 橙做文字的合规出口本是 brandInk（#C2410C，5.09:1）。
+                            // 橙做文字的合规出口本是 brandInk（#C2410C，对暖纸底 4.89:1）。
                             // 权衡由 PM 拍板：品牌辨识度优先。若日后无障碍审查要换回合规档，
                             // 把此处 brandStrong 改成 brandInk 即可，无其他连带。
                             .foregroundStyle(AppTheme.Color.brandStrong)

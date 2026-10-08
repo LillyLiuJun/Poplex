@@ -6937,8 +6937,11 @@ struct Tab2EmptyStateTests {
             activities: [Tab2Activity(sceneDetail: "Meetings", occurrenceCount: 1)],
             lastMaterialAt: Date()
         )
+        // 只保留字母数字再比对：最大字号下「Start talking」会折成两行，箭头落在两行之间，
+        // iOS 17 的 OCR 会按「START → TALKING」的顺序读出（iOS 18 读成「START TALKING →」）。
+        // 去掉符号不放松防截断：被截成「Start talk…」或「···」时仍拼不出 STARTTALKING。
         let joined = renderedTexts(card.environment(\.dynamicTypeSize, .accessibility5)).joined()
-            .uppercased().replacingOccurrences(of: " ", with: "")
+            .uppercased().filter { $0.isLetter || $0.isNumber }
         #expect(joined.contains("STARTTALKING"), "最大字号下 Start talking 必须完整显示，实际识别：\(joined)")
     }
 
