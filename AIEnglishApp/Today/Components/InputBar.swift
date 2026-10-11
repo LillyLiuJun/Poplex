@@ -329,6 +329,17 @@ struct InputBar: View {
         }
         .onAppear {
             recomputeMultiLine()
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("-screenshotInput") ||
+               ProcessInfo.processInfo.environment["SCREENSHOT_INPUT"] == "1" {
+                if image == nil {
+                    image = UIImage(named: "card_scene_1")
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                    isFocused = true
+                }
+            }
+            #endif
         }
     }
 

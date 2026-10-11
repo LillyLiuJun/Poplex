@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+import SwiftUI
 import CryptoKit
 
 /// 统一时间线滚动请求模型（单一真实源）
@@ -132,6 +133,28 @@ final class TodayViewModel {
         self.isConnected = isConnected ?? { NetworkMonitor.shared.isConnected }
         self.isConsentGranted = isConsentGranted
         self.localCache = localCache ?? .shared
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-screenshotInput") ||
+           ProcessInfo.processInfo.environment["SCREENSHOT_INPUT"] == "1" {
+            self.entries = []
+            self.inputText = "它一看到球就疯了"
+            self.pendingImage = UIImage(named: "card_scene_1")
+        } else if ProcessInfo.processInfo.arguments.contains("-screenshotStore05") ||
+                  ProcessInfo.processInfo.environment["SCREENSHOT_STORE05"] == "1" {
+            self.entries = Self.makeStore05FeedEntries()
+            self.inputText = ""
+            self.pendingImage = nil
+            if ProcessInfo.processInfo.arguments.contains("-exportStore05Modules") ||
+               ProcessInfo.processInfo.environment["EXPORT_STORE05_MODULES"] == "1" {
+                Self.exportStore05Modules()
+            }
+        } else if ProcessInfo.processInfo.arguments.contains("-screenshotTab1Feed") ||
+                  ProcessInfo.processInfo.environment["SCREENSHOT_TAB1_FEED"] == "1" {
+            self.entries = Self.makeScreenshotFeedEntries()
+            self.inputText = ""
+            self.pendingImage = nil
+        }
+        #endif
         startEntryAlignmentSession(reason: .initialEntry)
     }
 
@@ -139,6 +162,15 @@ final class TodayViewModel {
 
     /// 开启进入首页对齐窗口（冷启动/切回 Tab1 调用）
     func startEntryAlignmentSession(reason: TimelineScrollRequest.Reason = .initialEntry) {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-screenshotTab1Feed") ||
+           ProcessInfo.processInfo.environment["SCREENSHOT_TAB1_FEED"] == "1" ||
+           ProcessInfo.processInfo.arguments.contains("-screenshotStore05") ||
+           ProcessInfo.processInfo.environment["SCREENSHOT_STORE05"] == "1" {
+            // 截图模式：保持内容自然自顶向下排布，不强制滚底
+            return
+        }
+        #endif
         let sessionId = UUID()
         activeEntrySessionId = sessionId
         hasUserScrolledInCurrentSession = false
@@ -202,6 +234,35 @@ final class TodayViewModel {
     // MARK: - History
 
     func loadHistory(showFailureHint: Bool = false) async {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-screenshotInput") ||
+           ProcessInfo.processInfo.environment["SCREENSHOT_INPUT"] == "1" {
+            self.offlineHint = nil
+            self.entries = []
+            self.inputText = "它一看到球就疯了"
+            self.pendingImage = UIImage(named: "card_scene_1")
+            self.isLoadingHistory = false
+            return
+        }
+        if ProcessInfo.processInfo.arguments.contains("-screenshotStore05") ||
+           ProcessInfo.processInfo.environment["SCREENSHOT_STORE05"] == "1" {
+            self.offlineHint = nil
+            self.entries = Self.makeStore05FeedEntries()
+            self.inputText = ""
+            self.pendingImage = nil
+            self.isLoadingHistory = false
+            return
+        }
+        if ProcessInfo.processInfo.arguments.contains("-screenshotTab1Feed") ||
+           ProcessInfo.processInfo.environment["SCREENSHOT_TAB1_FEED"] == "1" {
+            self.offlineHint = nil
+            self.entries = Self.makeScreenshotFeedEntries()
+            self.inputText = ""
+            self.pendingImage = nil
+            self.isLoadingHistory = false
+            return
+        }
+        #endif
         // 新一轮加载已经开始，上一轮失败提示不再代表当前状态。
         // 若本次仍失败，后续分支会写入本次对应的新提示。
         offlineHint = nil
@@ -1248,4 +1309,208 @@ final class TodayViewModel {
         return UUID(uuid: (b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7],
                            b[8], b[9], b[10], b[11], b[12], b[13], b[14], b[15]))
     }
+
+    #if DEBUG
+    static func makeScreenshotFeedEntries() -> [TimelineEntry] {
+        let card1 = CardContent(
+            granularity: "word",
+            direction: "express",
+            userOriginal: "摸鱼",
+            targetExpression: "slack off",
+            nativeMeaning: "摸鱼，偷懒",
+            phonetic: "/slæk ɔ:f/",
+            pos: ["v."],
+            examples: [
+                BilingualExample(
+                    en: "Stop slacking off and get back to work.",
+                    zh: "别摸鱼了，回去干活。"
+                )
+            ]
+        )
+
+        let card2 = CardContent(
+            granularity: "sentence",
+            direction: "express",
+            userOriginal: "热水器又坏了，能找人来修一下吗？",
+            targetExpression: "The water heater's acting up again. Could you get someone to take a look?",
+            nativeMeaning: "热水器又出毛病了，能找人来看看吗？"
+        )
+
+        let card3 = CardContent(
+            granularity: "sentence",
+            direction: "comprehend",
+            userOriginal: "Running 10 min late, be there soon!",
+            targetExpression: "Running 10 min late, be there soon!",
+            nativeMeaning: "会迟到大概十分钟，马上就到！"
+        )
+
+        return [
+            TimelineEntry.userBubble(text: "摸鱼", image: nil),
+            TimelineEntry.aiCard(.card(card1)),
+            TimelineEntry.userBubble(text: "热水器又坏了，能找人来修一下吗？", image: nil),
+            TimelineEntry.aiCard(.card(card2)),
+            TimelineEntry.userBubble(text: "Running 10 min late, be there soon!", image: nil),
+            TimelineEntry.aiCard(.card(card3))
+        ]
+    }
+
+    static func makeStore05FeedEntries() -> [TimelineEntry] {
+        let card1 = CardContent(
+            granularity: "sentence",
+            direction: "express",
+            userOriginal: "它叼着球冲回来的样子太好笑了",
+            targetExpression: "The way he sprinted back with the ball in his mouth was hilarious.",
+            nativeMeaning: "它叼着球冲回来的样子太好笑了"
+        )
+
+        let card2 = CardContent(
+            granularity: "sentence",
+            direction: "express",
+            userOriginal: "带它去打疫苗，扎针那一下它看我的眼神，好像我背叛了它",
+            targetExpression: "Took him for his shots, and the look he gave me when the needle went in—like I totally betrayed him.",
+            nativeMeaning: "带它去打疫苗，扎针那一下它看我的眼神，好像我背叛了它"
+        )
+
+        return [
+            TimelineEntry(id: UUID(), createdAt: .now, content: .dateSeparator("Today")),
+            TimelineEntry.userBubble(text: "它叼着球冲回来的样子太好笑了", image: UIImage(named: "card_scene_1")),
+            TimelineEntry.aiCard(.card(card1)),
+            TimelineEntry.userBubble(text: "带它去打疫苗，扎针那一下它看我的眼神，好像我背叛了它", image: nil),
+            TimelineEntry.aiCard(.card(card2))
+        ]
+    }
+
+    @MainActor
+    static func exportStore05Modules() {
+        let card1 = CardContent(
+            granularity: "sentence",
+            direction: "express",
+            userOriginal: "它叼着球冲回来的样子太好笑了",
+            targetExpression: "The way he sprinted back with the ball in his mouth was hilarious.",
+            nativeMeaning: "它叼着球冲回来的样子太好笑了"
+        )
+
+        let card2 = CardContent(
+            granularity: "sentence",
+            direction: "express",
+            userOriginal: "带它去打疫苗，扎针那一下它看我的眼神，好像我背叛了它",
+            targetExpression: "Took him for his shots, and the look he gave me when the needle went in—like I totally betrayed him.",
+            nativeMeaning: "带它去打疫苗，扎针那一下它看我的眼神，好像我背叛了它"
+        )
+
+        if let dogImg = UIImage(named: "card_scene_1") {
+            ImageCache.shared.set(dogImg, forKey: "card_scene_1")
+        }
+
+        let catData = Tab2CategoryData(
+            sceneCategory: "Hobbies & Leisure",
+            wordCount: 16,
+            unlocked: true,
+            lastMaterialAt: Date(),
+            activityCount: 2,
+            activities: [
+                Tab2Activity(
+                    sceneDetail: "Playing fetch with dog",
+                    occurrenceCount: 2,
+                    cover: Tab2Activity.Cover(materialId: "card_scene_1", imageUrl: "card_scene_1")
+                ),
+                Tab2Activity(
+                    sceneDetail: "Taking dog for shots",
+                    occurrenceCount: 1,
+                    cover: nil
+                )
+            ]
+        )
+
+        let docURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let outDir = docURL.appendingPathComponent("store05_modules")
+        try? FileManager.default.createDirectory(at: outDir, withIntermediateDirectories: true)
+
+        // 模块 1: 组1整体（气泡 + AI卡片）
+        let mod1View = VStack(alignment: .trailing, spacing: AppTheme.Space.timelineUserToAI) {
+            TimelineRow(entry: TimelineEntry.userBubble(text: "它叼着球冲回来的样子太好笑了", image: UIImage(named: "card_scene_1")))
+            TimelineRow(entry: TimelineEntry.aiCard(.card(card1)))
+        }
+        .frame(width: 408)
+        .fixedSize(horizontal: true, vertical: true)
+
+        let r1 = ImageRenderer(content: mod1View)
+        r1.scale = 3.0
+        r1.isOpaque = false
+        if let ui = r1.uiImage, let data = ui.pngData() {
+            try? data.write(to: outDir.appendingPathComponent("mod_scene1_group@3x.png"))
+            print("📸 [Export] mod_scene1_group@3x.png saved (\(ui.size))")
+        }
+
+        // 模块 2: 组2整体（气泡 + AI卡片）
+        let mod2View = VStack(alignment: .trailing, spacing: AppTheme.Space.timelineUserToAI) {
+            TimelineRow(entry: TimelineEntry.userBubble(text: "带它去打疫苗，扎针那一下它看我的眼神，好像我背叛了它", image: nil))
+            TimelineRow(entry: TimelineEntry.aiCard(.card(card2)))
+        }
+        .frame(width: 408)
+        .fixedSize(horizontal: true, vertical: true)
+
+        let r2 = ImageRenderer(content: mod2View)
+        r2.scale = 3.0
+        r2.isOpaque = false
+        if let ui = r2.uiImage, let data = ui.pngData() {
+            try? data.write(to: outDir.appendingPathComponent("mod_scene2_group@3x.png"))
+            print("📸 [Export] mod_scene2_group@3x.png saved (\(ui.size))")
+        }
+
+        // 话题行: Hobbies & Leisure
+        let rowView = Tab2ActivityRow(category: catData, onTap: {})
+            .frame(width: 408)
+            .fixedSize(horizontal: true, vertical: true)
+
+        let r3 = ImageRenderer(content: rowView)
+        r3.scale = 3.0
+        r3.isOpaque = false
+        if let ui = r3.uiImage, let data = ui.pngData() {
+            try? data.write(to: outDir.appendingPathComponent("library_activity_row_dog@3x.png"))
+            print("📸 [Export] library_activity_row_dog@3x.png saved (\(ui.size))")
+        }
+
+        // 独立气泡与独立卡片备用
+        let bubble1View = TimelineRow(entry: TimelineEntry.userBubble(text: "它叼着球冲回来的样子太好笑了", image: UIImage(named: "card_scene_1")))
+            .frame(width: 408, alignment: .trailing)
+            .fixedSize(horizontal: true, vertical: true)
+        let rb1 = ImageRenderer(content: bubble1View)
+        rb1.scale = 3.0
+        rb1.isOpaque = false
+        if let ui = rb1.uiImage, let data = ui.pngData() {
+            try? data.write(to: outDir.appendingPathComponent("mod_scene1_bubble_only@3x.png"))
+        }
+
+        let card1View = TimelineRow(entry: TimelineEntry.aiCard(.card(card1)))
+            .frame(width: 408)
+            .fixedSize(horizontal: true, vertical: true)
+        let rc1 = ImageRenderer(content: card1View)
+        rc1.scale = 3.0
+        rc1.isOpaque = false
+        if let ui = rc1.uiImage, let data = ui.pngData() {
+            try? data.write(to: outDir.appendingPathComponent("mod_scene1_card_only@3x.png"))
+        }
+
+        let bubble2View = TimelineRow(entry: TimelineEntry.userBubble(text: "带它去打疫苗，扎针那一下它看我的眼神，好像我背叛了它", image: nil))
+            .frame(width: 408, alignment: .trailing)
+            .fixedSize(horizontal: true, vertical: true)
+        let rb2 = ImageRenderer(content: bubble2View)
+        rb2.scale = 3.0
+        rb2.isOpaque = false
+        if let ui = rb2.uiImage, let data = ui.pngData() {
+            try? data.write(to: outDir.appendingPathComponent("mod_scene2_bubble_only@3x.png"))
+        }
+
+        let card2View = TimelineRow(entry: TimelineEntry.aiCard(.card(card2)))
+            .frame(width: 408)
+            .fixedSize(horizontal: true, vertical: true)
+        let rc2 = ImageRenderer(content: card2View)
+        rc2.scale = 3.0
+        rc2.isOpaque = false
+        if let ui = rc2.uiImage, let data = ui.pngData() {
+            try? data.write(to: outDir.appendingPathComponent("mod_scene2_card_only@3x.png"))
+        }
+    }
+    #endif
 }

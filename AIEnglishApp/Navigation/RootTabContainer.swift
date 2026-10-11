@@ -84,8 +84,14 @@ private struct TopBarHeightKey: PreferenceKey {
 struct RootTabContainer: View {
     // DEBUG 启动参数：START_TAB=mine 时首屏直接落在 Tab2，方便 UI 走查/截图
     #if DEBUG
-    @State private var selectedTab: AppTab =
-        ProcessInfo.processInfo.environment["START_TAB"] == "mine" ? .mine : .today
+    @State private var selectedTab: AppTab = {
+        let env = ProcessInfo.processInfo.environment
+        let args = ProcessInfo.processInfo.arguments
+        if env["START_TAB"] == "today" || args.contains("-startTabToday") || args.contains("-screenshotTab1Feed") {
+            return .today
+        }
+        return .mine
+    }()
     #else
     @State private var selectedTab: AppTab = .today
     #endif

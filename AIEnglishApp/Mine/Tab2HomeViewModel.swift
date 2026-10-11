@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 /// Tab2 解锁状态的 UserDefaults 键名——单一真源。
 ///
@@ -345,6 +346,181 @@ final class Tab2HomeViewModel {
             errorMessage = nil
         }
         defer { finishCurrentLoad() }
+
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-screenshotStore05") ||
+           ProcessInfo.processInfo.environment["SCREENSHOT_STORE05"] == "1" {
+            self.isPermanentlyUnlocked = true
+            if let dogImg = UIImage(named: "card_scene_1") {
+                ImageCache.shared.set(dogImg, forKey: "card_scene_1")
+            }
+            self.data = Tab2HomeData(
+                unlocked: true,
+                inputCount: 24,
+                categories: [
+                    Tab2CategoryData(
+                        sceneCategory: "Hobbies & Leisure",
+                        wordCount: 46,
+                        unlocked: true,
+                        lastMaterialAt: Date(),
+                        newMaterialCount: 2,
+                        activityCount: 6,
+                        activities: [
+                            Tab2Activity(
+                                sceneDetail: "Playing with pets",
+                                occurrenceCount: 3,
+                                cover: Tab2Activity.Cover(materialId: "card_scene_1", imageUrl: "card_scene_1")
+                            ),
+                            Tab2Activity(sceneDetail: "Weekend hiking", occurrenceCount: 2),
+                            Tab2Activity(sceneDetail: "Learning guitar", occurrenceCount: 1),
+                            Tab2Activity(sceneDetail: "Camping trip", occurrenceCount: 1),
+                            Tab2Activity(sceneDetail: "Cooking new recipe", occurrenceCount: 1),
+                            Tab2Activity(sceneDetail: "Photography walk", occurrenceCount: 1)
+                        ]
+                    ),
+                    Tab2CategoryData(
+                        sceneCategory: "Work & Study",
+                        wordCount: 38,
+                        unlocked: true,
+                        lastMaterialAt: Date().addingTimeInterval(-86400),
+                        newMaterialCount: 0,
+                        activityCount: 5,
+                        activities: [
+                            Tab2Activity(sceneDetail: "Team meetings", occurrenceCount: 4),
+                            Tab2Activity(sceneDetail: "Code reviews", occurrenceCount: 3),
+                            Tab2Activity(sceneDetail: "Weekly report", occurrenceCount: 2),
+                            Tab2Activity(sceneDetail: "Job interview", occurrenceCount: 1),
+                            Tab2Activity(sceneDetail: "Online course", occurrenceCount: 1)
+                        ]
+                    ),
+                    Tab2CategoryData(
+                        sceneCategory: "Travel & Commute",
+                        wordCount: 26,
+                        unlocked: true,
+                        lastMaterialAt: Date().addingTimeInterval(-3 * 86400),
+                        newMaterialCount: 0,
+                        activityCount: 4,
+                        activities: [
+                            Tab2Activity(sceneDetail: "Running late", occurrenceCount: 3),
+                            Tab2Activity(sceneDetail: "Taking the subway", occurrenceCount: 2),
+                            Tab2Activity(sceneDetail: "Airport check-in", occurrenceCount: 1),
+                            Tab2Activity(sceneDetail: "Asking for directions", occurrenceCount: 1)
+                        ]
+                    ),
+                    Tab2CategoryData(
+                        sceneCategory: "Home & Family",
+                        wordCount: 21,
+                        unlocked: true,
+                        lastMaterialAt: Date().addingTimeInterval(-8 * 86400),
+                        newMaterialCount: 0,
+                        activityCount: 2,
+                        activities: [
+                            Tab2Activity(sceneDetail: "Fixing the water heater", occurrenceCount: 2),
+                            Tab2Activity(sceneDetail: "Weekend cleaning", occurrenceCount: 1)
+                        ]
+                    ),
+                    Tab2CategoryData(
+                        sceneCategory: "Food & Drink",
+                        wordCount: 24,
+                        unlocked: true,
+                        lastMaterialAt: Date().addingTimeInterval(-9 * 86400),
+                        newMaterialCount: 0,
+                        activityCount: 3,
+                        activities: [
+                            Tab2Activity(sceneDetail: "Ordering coffee", occurrenceCount: 3),
+                            Tab2Activity(sceneDetail: "Cooking dinner", occurrenceCount: 2),
+                            Tab2Activity(sceneDetail: "Grocery run", occurrenceCount: 1)
+                        ]
+                    )
+                ]
+            )
+            self.errorMessage = nil
+            self.isLoading = false
+            return
+        } else {
+            // 商店图截图分支：DEBUG 模式下默认直接提供 store04 完整数据，无论如何启动均有内容
+            self.isPermanentlyUnlocked = true
+            let store04Words = [
+                Tab2WordEntry(
+                    lemma: "Boston Terrier",
+                    entryKind: "phrase",
+                    granularity: "phrase",
+                    sourceType: "material",
+                    nativeMeaning: "波士顿梗犬",
+                    imageUrl: "card_scene_1"
+                ),
+                Tab2WordEntry(
+                    lemma: "plaid",
+                    entryKind: "word",
+                    granularity: "word",
+                    sourceType: "material",
+                    nativeMeaning: "苏格兰格子",
+                    imageUrl: "card_scene_1"
+                ),
+                Tab2WordEntry(
+                    lemma: "harness",
+                    entryKind: "word",
+                    granularity: "word",
+                    sourceType: "material",
+                    nativeMeaning: "胸背带",
+                    imageUrl: "card_scene_1"
+                ),
+                Tab2WordEntry(
+                    lemma: "grassy field",
+                    entryKind: "phrase",
+                    granularity: "phrase",
+                    sourceType: "material",
+                    nativeMeaning: "草地",
+                    imageUrl: "card_scene_1"
+                )
+            ]
+            self.wordCache["Hobbies & Leisure"] = store04Words
+            self.data = Tab2HomeData(
+                unlocked: true,
+                inputCount: 24,
+                categories: [
+                    Tab2CategoryData(
+                        sceneCategory: "Hobbies & Leisure",
+                        wordCount: 14,
+                        unlocked: false
+                    ),
+                    Tab2CategoryData(
+                        sceneCategory: "Daily Routine",
+                        wordCount: 16,
+                        unlocked: false
+                    ),
+                    Tab2CategoryData(
+                        sceneCategory: "Work & Study",
+                        wordCount: 12,
+                        unlocked: false
+                    ),
+                    Tab2CategoryData(
+                        sceneCategory: "Home & Family",
+                        wordCount: 9,
+                        unlocked: false
+                    ),
+                    Tab2CategoryData(
+                        sceneCategory: "Food & Drink",
+                        wordCount: 7,
+                        unlocked: false
+                    ),
+                    Tab2CategoryData(
+                        sceneCategory: "Travel & Commute",
+                        wordCount: 5,
+                        unlocked: false
+                    ),
+                    Tab2CategoryData(
+                        sceneCategory: "Social & Feelings",
+                        wordCount: 4,
+                        unlocked: false
+                    )
+                ]
+            )
+            self.errorMessage = nil
+            self.isLoading = false
+            return
+        }
+        #endif
 
         // 同步 UserDefaults → 支持 debug reset（清除 UserDefaults 后 load 能感知）
         if !defaults.bool(forKey: kUnlockedKey) && isPermanentlyUnlocked {

@@ -212,9 +212,17 @@ struct MineView: View {
     }
 
     private var unlockedView: some View {
-        Tab2UnlockedView(
+        #if DEBUG
+        let isTab2Screenshot = ProcessInfo.processInfo.arguments.contains("-screenshotTab2") || ProcessInfo.processInfo.environment["SCREENSHOT_TAB2"] == "1"
+        let scrollTarget = isTab2Screenshot ? "Hobbies & Leisure" : nil
+        let heroToPass = isTab2Screenshot ? nil : heroSelection
+        #else
+        let scrollTarget: String? = nil
+        let heroToPass = heroSelection
+        #endif
+        return Tab2UnlockedView(
             vm: vm,
-            hero: heroSelection,
+            hero: heroToPass,
             topInset: topInset,
             listResetToken: listResetToken,
             leaveResetToken: leaveResetToken,
@@ -225,7 +233,8 @@ struct MineView: View {
                 } else {
                     comingSoonToast = "Speaking mode will be available soon."
                 }
-            }
+            },
+            initialScrollTarget: scrollTarget
         )
     }
 
@@ -738,9 +747,23 @@ private struct Tab2UnlockedView: View {
     var initialScrollTarget: String? = nil
 
     // 单开手风琴：同时只展开一个 Topics-in-Progress 主题；切回 Mine 时回收起。
-    @State private var expandedCategoryId: String?
+    @State private var expandedCategoryId: String? = {
+        #if DEBUG
+        return "Hobbies & Leisure"
+        #else
+        return nil
+        #endif
+    }()
     @State private var refreshHaptics = PullToRefreshHaptics()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var isScreenshotStore04: Bool {
+        #if DEBUG
+        !ProcessInfo.processInfo.arguments.contains("-screenshotStore05")
+        #else
+        false
+        #endif
+    }
 
     /// 刀 6a：区块显隐的单源决策。
     /// 数据未就绪（vm.data == nil）时返回 nil → body 里 `if let visibility` 整块
@@ -791,7 +814,7 @@ private struct Tab2UnlockedView: View {
                                 // Spacer 与宣言是一对——负责把短内容的宣言推到底部
                                 // 贴暖光，两个必须一起在 Hero 分支里；只挪宣言会在
                                 // 空态页面底部多出一段撑开的空白。
-                                if visibility.showsTalk {
+                                if visibility.showsTalk || isScreenshotStore04 {
                                     Spacer(minLength: footerTopSpace)
 
                                     footerSignoff
@@ -825,6 +848,9 @@ private struct Tab2UnlockedView: View {
             }
         }
         .onAppear {
+            #if DEBUG
+            expandedCategoryId = "Hobbies & Leisure"
+            #endif
             if vm.isFirstUnlock {
                 Task {
                     try? await Task.sleep(nanoseconds: 500_000_000)
@@ -833,6 +859,10 @@ private struct Tab2UnlockedView: View {
             }
         }
         .onChange(of: listResetToken) { _, _ in
+            #if DEBUG
+            expandedCategoryId = "Hobbies & Leisure"
+            return
+            #endif
             expandedCategoryId = nil   // 切回 Mine：回到初始收起
         }
     }
@@ -923,7 +953,7 @@ private struct Tab2UnlockedView: View {
             // ── More topics to explore（2026-10-03）──
             // 与待解锁页同一组件，贯穿解锁前后；解锁后不带注脚（规则用户已知）。
             let unstarted = SceneCategory.unstarted(given: vm.data?.categories ?? [])
-            if !unstarted.isEmpty {
+            if !unstarted.isEmpty && !isScreenshotStore04 {
                 Tab2MoreTopicsSection(topics: unstarted, resetToken: leaveResetToken)
             }
         }

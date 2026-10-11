@@ -1595,7 +1595,28 @@ private struct SurfaceCardModifier: ViewModifier {
 
 extension View {
     /// 卡片双层紧阴影（contact 贴地接触 + ambient 浅层环境）
+    @ViewBuilder
     func cardShadow() -> some View {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-noShadow") ||
+           ProcessInfo.processInfo.environment["NO_SHADOW"] == "1" {
+            self
+        } else {
+            self
+                .shadow(
+                    color: AppTheme.Shadow.cardContactColor,
+                    radius: AppTheme.Shadow.cardContactRadius,
+                    x: AppTheme.Shadow.cardContactX,
+                    y: AppTheme.Shadow.cardContactY
+                )
+                .shadow(
+                    color: AppTheme.Shadow.cardAmbientColor,
+                    radius: AppTheme.Shadow.cardAmbientRadius,
+                    x: AppTheme.Shadow.cardAmbientX,
+                    y: AppTheme.Shadow.cardAmbientY
+                )
+        }
+        #else
         self
             .shadow(
                 color: AppTheme.Shadow.cardContactColor,
@@ -1609,6 +1630,7 @@ extension View {
                 x: AppTheme.Shadow.cardAmbientX,
                 y: AppTheme.Shadow.cardAmbientY
             )
+        #endif
     }
 
     /// 内容容器：暖纸卡配方，默认 28pt 容器圆角、`warmGlassSurface` 底色。

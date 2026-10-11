@@ -288,4 +288,13 @@ struct LearnableUnit: Decodable {
         note      = (try? c.decode(String.self, forKey: .note)) ?? ""
         isPrimary = (try? c.decode(Bool.self, forKey: .isPrimary)) ?? false
     }
+
+    #if DEBUG
+    init(form: String, kind: String = "phrase", note: String = "", isPrimary: Bool = false) {
+        self.form = form
+        self.kind = kind
+        self.note = note
+        self.isPrimary = isPrimary
+    }
+    #endif
 }
