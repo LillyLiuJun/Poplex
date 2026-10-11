@@ -86,7 +86,7 @@ struct RootView: View {
                 #if DEBUG
                 Tab2Knife6PreviewView()
                 #endif
-            } else if onboardingCompletedAt > 0 || skipOnboardingForUITests || isScreenshotMode {
+            } else if onboardingCompletedAt > 0 || skipOnboardingForUITests {
                 ContentView()
             } else {
                 OnboardingView(screen1Ready: splash?.screen1Ready ?? true) {
@@ -94,7 +94,7 @@ struct RootView: View {
                 }
             }
         }
-        .modifier(OnboardingRouteFade(isHome: onboardingCompletedAt > 0 || skipOnboardingForUITests || isScreenshotMode))
+        .modifier(OnboardingRouteFade(isHome: onboardingCompletedAt > 0 || skipOnboardingForUITests))
         // 日常打开：主界面在开屏底下先缩在 98%，开屏退场时放大到位（「浮上来」接住视线）
         .scaleEffect(splash?.contentSettled == false ? AppTheme.Motion.Launch.dailyContentFromScale : 1)
         .animation(AppTheme.Motion.Launch.dailyContentSettle, value: splash?.contentSettled)
@@ -125,7 +125,10 @@ struct RootView: View {
     init() {
         let completed = UserDefaults.standard.double(forKey: "onboarding_completed_at") > 0
         #if DEBUG
-        let skipSplash = true
+        // Tab2 预览模式与 UI 测试的 onboarding 绕过都不播开屏：开屏期间覆盖层会吞掉点击，
+        // 自动化测试的点击时序不该依赖开屏时长。
+        let skipSplash = ProcessInfo.processInfo.arguments.contains("-tab2Preview")
+            || ProcessInfo.processInfo.environment["UITEST_SKIP_ONBOARDING"] == "1"
         #else
         let skipSplash = false
         #endif
@@ -143,15 +146,6 @@ struct RootView: View {
     }
     #else
     private var previewMode: Bool { false }
-    #endif
-
-    #if DEBUG
-    private var isScreenshotMode: Bool {
-        // 商店图专用分支：DEBUG 模式下默认跳过引导页直达主界面，确保每次运行均有完整内容
-        true
-    }
-    #else
-    private var isScreenshotMode: Bool { false }
     #endif
 
     /// UI 测试专用 onboarding 绕过（DEBUG-only，Release 恒 false）。只改路由判断，

@@ -462,31 +462,18 @@ private struct WordEntryRow: View {
     @ViewBuilder
     private var leftSlot: some View {
         if let urlStr = entry.imageUrl, !urlStr.isEmpty {
-            if let localImg = UIImage(named: urlStr) {
-                Image(uiImage: localImg)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: AppTheme.Size.entryThumbnail, height: AppTheme.Size.entryThumbnail)
-                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.small))
-                    .saturation(0.75)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: AppTheme.Radius.small)
-                            .fill(AppTheme.Color.imageWarmOverlay)
-                    )
-            } else {
-                let stableKey = entry.stableImageKey ?? urlStr
-                CachedRemoteImage(signedUrl: urlStr, stableKey: stableKey) {
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.small)
-                        .fill(AppTheme.Color.imagePlaceholderBg)
-                }
-                .frame(width: AppTheme.Size.entryThumbnail, height: AppTheme.Size.entryThumbnail)
-                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.small))
-                .saturation(0.75)
-                .overlay(
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.small)
-                        .fill(AppTheme.Color.imageWarmOverlay)
-                )
+            let stableKey = entry.stableImageKey ?? urlStr
+            CachedRemoteImage(signedUrl: urlStr, stableKey: stableKey) {
+                RoundedRectangle(cornerRadius: AppTheme.Radius.small)
+                    .fill(AppTheme.Color.imagePlaceholderBg)
             }
+            .frame(width: AppTheme.Size.entryThumbnail, height: AppTheme.Size.entryThumbnail)
+            .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.small))
+            .saturation(0.75)
+            .overlay(
+                RoundedRectangle(cornerRadius: AppTheme.Radius.small)
+                    .fill(AppTheme.Color.imageWarmOverlay)
+            )
         } else {
             ZStack {
                 RoundedRectangle(cornerRadius: AppTheme.Radius.small)
