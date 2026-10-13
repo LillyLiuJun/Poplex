@@ -37,3 +37,6 @@ supabase/functions/reconcile-orphan-images/supabase/
 
 # Supabase CLI 的本地分支快照产物
 supabase/.branches/
+
+# Claude 生成的中间产物草稿（设计稿、一次性执行 prompt），不入库；要长期保留的素材请移到 docs/brand/assets/
+Claude outputs/

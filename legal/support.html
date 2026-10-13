@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Poplex Support</title>
+<style>
+  :root {
+    --accent: #FF7622;
+    --text-primary: #2A2320;
+    --text-secondary: #6B5F55;
+    --bg: #FBF7F3;
+    --card-bg: #FFFFFF;
+    --border: #EAE0D6;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+    line-height: 1.7;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 48px 24px 96px; }
+  header { margin-bottom: 40px; }
+  h1 { font-size: 28px; margin: 0 0 8px; }
+  .meta { color: var(--text-secondary); font-size: 14px; }
+  .lang-toggle { margin: 24px 0 40px; display: flex; gap: 8px; }
+  .lang-btn {
+    padding: 8px 16px; border-radius: 20px; border: 1px solid var(--border);
+    background: var(--card-bg); color: var(--text-primary); cursor: pointer; font-size: 14px;
+  }
+  .lang-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  section { margin-bottom: 28px; }
+  h2 { font-size: 18px; margin: 0 0 10px; color: var(--text-primary); }
+  p, li { color: var(--text-primary); font-size: 15px; }
+  ul { padding-left: 20px; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .lang-block { display: none; }
+  .lang-block.active { display: block; }
+  hr { border: none; border-top: 1px solid var(--border); margin: 40px 0; }
+  .faq h3 { font-size: 16px; margin: 20px 0 6px; }
+  .contact { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 20px 24px; }
+  footer { color: var(--text-secondary); font-size: 13px; text-align: center; margin-top: 60px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1 id="title">Poplex Support</h1>
+    <div class="meta" id="meta">We usually reply within 2 business days.</div>
+  </header>
+
+  <div class="lang-toggle">
+    <button class="lang-btn active" data-set="en">English</button>
+    <button class="lang-btn" data-set="zh">中文</button>
+  </div>
+
+  <!-- EN -->
+  <div class="lang-block active" data-lang="en">
+    <section class="contact">
+      <h2>Contact us</h2>
+      <p>Questions, bug reports or feedback? Email us at <strong><a href="mailto:poplex.help@outlook.com">poplex.help@outlook.com</a></strong>.</p>
+      <p>To help us look into a problem, please include your iPhone model, iOS version and a short description or screenshot.</p>
+    </section>
+
+    <section class="faq">
+      <h2>FAQ</h2>
+
+      <h3>How do I delete my account and data?</h3>
+      <p>In the App, go to <strong>Settings → Account → Delete account</strong>. This permanently deletes your account and all associated data, including your entries, photos and saved words. Because sign-in is anonymous, deleted data cannot be recovered.</p>
+
+      <h3>Do I need to create an account?</h3>
+      <p>No. Poplex uses anonymous sign-in. We don't ask for your name, email or phone number.</p>
+
+      <h3>Is the AI-generated English always correct?</h3>
+      <p>Poplex uses AI to turn your text and photos into English. It's usually accurate, but it can occasionally make mistakes. If you spot a wrong result, please let us know by email.</p>
+
+      <h3>Where is my data stored?</h3>
+      <p>Your learning data is stored securely with our cloud provider, and the text and photos you submit are processed by Google's Gemini API to generate learning content. See our <a href="/privacy.html">Privacy Policy</a> for details.</p>
+    </section>
+
+    <section>
+      <h2>Legal</h2>
+      <p><a href="/privacy.html">Privacy Policy</a> · <a href="/terms.html">Terms of Service</a></p>
+    </section>
+  </div>
+
+  <!-- ZH -->
+  <div class="lang-block" data-lang="zh">
+    <section class="contact">
+      <h2>联系我们</h2>
+      <p>使用中遇到问题、发现 bug 或有建议，请发邮件到 <strong><a href="mailto:poplex.help@outlook.com">poplex.help@outlook.com</a></strong>。</p>
+      <p>为了方便排查，请附上 iPhone 型号、iOS 版本，以及问题描述或截图。</p>
+    </section>
+
+    <section class="faq">
+      <h2>常见问题</h2>
+
+      <h3>怎么删除账号和数据？</h3>
+      <p>在 App 里进入 <strong>Settings → Account → Delete account</strong>。删除后，你的账号和全部数据（记录、图片、收藏的词）都会被永久删除。因为是匿名登录，删除后无法恢复。</p>
+
+      <h3>需要注册账号吗？</h3>
+      <p>不需要。Poplex 使用匿名登录，不收集你的姓名、邮箱或手机号。</p>
+
+      <h3>AI 生成的英文一定对吗？</h3>
+      <p>Poplex 用 AI 把你的文字和图片变成英文，大多数情况下是准确的，但偶尔也会出错。发现错误欢迎发邮件告诉我们。</p>
+
+      <h3>我的数据存在哪里？</h3>
+      <p>你的学习数据安全地存储在我们的云服务商；你提交的文字和图片会交给 Google Gemini API 处理，用于生成学习内容。详见<a href="/privacy.html">隐私政策</a>。</p>
+    </section>
+
+    <section>
+      <h2>法律信息</h2>
+      <p><a href="/privacy.html">隐私政策</a> · <a href="/terms.html">服务条款</a></p>
+    </section>
+  </div>
+
+  <footer>© 2026 Poplex · JUN LIU</footer>
+</div>
+
+<script>
+  const buttons = document.querySelectorAll('.lang-btn');
+  const title = document.getElementById('title');
+  const meta = document.getElementById('meta');
+  buttons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      buttons.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const lang = btn.dataset.set;
+      document.querySelectorAll('.lang-block').forEach(block => {
+        block.classList.toggle('active', block.dataset.lang === lang);
+      });
+      if (lang === 'en') {
+        title.textContent = 'Poplex Support';
+        meta.textContent = 'We usually reply within 2 business days.';
+      } else {
+        title.textContent = 'Poplex 帮助与支持';
+        meta.textContent = '我们通常会在 2 个工作日内回复。';
+      }
+    });
+  });
+</script>
+</body>
+</html>
