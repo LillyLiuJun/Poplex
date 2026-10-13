@@ -293,9 +293,21 @@ stage_cleanup() {
     if [ "$CURRENT_BRANCH" != "main" ]; then
       git checkout main 2>/dev/null || refuse "主仓库无法切到 main（可能有未提交改动），请人工处理"
     fi
+    # 分支可能正被某个 worktree 占用（在 main 上执行时本脚本的 CURRENT_WORKTREE
+    # 就是主仓库，拿不到那个 worktree），必须先按分支名找出并移除占用 worktree，
+    # 否则删本地分支会被 git 拒绝。进程替换让循环留在当前 shell，refuse 才能真正终止。
+    while IFS= read -r wt; do
+      [ -n "$wt" ] || continue
+      echo "⚠️  即将移除 worktree: $wt"
+      echo "    请确认 Xcode 已关闭该工程、没有其他会话正在该目录工作。"
+      git worktree remove "$wt" || refuse "worktree 删除被 git 拒绝（目录含未跟踪/修改文件或被占用）。现场保留，人工检查后再删"
+    done < <(git worktree list --porcelain | awk -v b="refs/heads/$BRANCH_NAME" '
+      /^worktree / { p = substr($0, 10) }
+      /^branch / && $2 == b { print p }
+    ')
     if git show-ref --verify --quiet "refs/heads/$BRANCH_NAME"; then
       git branch -D "$BRANCH_NAME"
-      echo "🎉 清理完成：远端与本地分支已删除，主仓库停在 main"
+      echo "🎉 清理完成：远端与本地分支已删除，占用 worktree（如有）已移除，主仓库停在 main"
     else
       echo "🎉 清理完成：远端分支已删除，本地分支 $BRANCH_NAME 已不存在（合并时已删除），主仓库停在 main"
     fi
