@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Tab2 Hero 卡没有可信照片时的类别预设图（2026-10-04 方案 A「色阶实心」定稿，
-/// 设计稿 `design/tab2_preset_12_categories.html`）。
+/// Tab2 Hero 卡没有可信照片时的类别预设图（2026-10-04 方案 A「色阶实心」定稿；
+/// 全景对照见 `Tab2PresetCardsMatrixPreview`）。
 ///
 /// 构图规则（12 个类别同一套）：
 /// - 底：primary300 纯色，无渐变、光晕、阴影

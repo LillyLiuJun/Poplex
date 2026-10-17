@@ -7,7 +7,7 @@ private let legacyReasonInkOnLightArt = Color(red: 138 / 255, green: 74 / 255, b
 
 /// Tab2 12个生活分类预设卡（Hero卡 vs More行）全景视觉实验室
 ///
-/// 对应设计稿 `design/tab2_preset_12_categories.html` 与生产代码：
+/// 对应生产代码（原 HTML 设计稿已随 design/ 清理移除）：
 /// - 生产绘制：`CategoryPresetArtView.swift` (150pt Hero 画布)
 /// - 生产缩略图：`RowPresetThumb.swift` (76×119pt More 列表行缩略图，由 Hero 裁出)
 /// - 生产组件：`Tab2HeroCard.swift` & `Tab2ActivityRow.swift`

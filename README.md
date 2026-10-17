@@ -94,9 +94,9 @@ Edge Function 依赖的服务端环境变量（**只配在 Supabase 服务端，
 - Tab1 PRD：[`docs/prd/Tab1_PRD_v1.md`](docs/prd/Tab1_PRD_v1.md) ｜ [多轮对话设计](docs/prd/Tab1_多轮对话设计_v1.md) ｜ [AI 回复卡片需求](docs/prd/Tab1_AI回复卡片需求设计_v1.md) ｜ [图片输入方案 B](docs/prd/Tab1_图片输入_方案B设计文档_v3.md)
 - Tab2 PRD：[`docs/prd/Tab2_PRD_v1.md`](docs/prd/Tab2_PRD_v1.md) ｜ [数据逻辑梳理](docs/prd/Tab2_数据逻辑梳理_v1.md)
 - 架构：[`docs/architecture/全局数据架构审计报告_v1.md`](docs/architecture/全局数据架构审计报告_v1.md)
-- 协作笔记：[`docs/notes/AI协作手册.md`](docs/notes/AI协作手册.md)
+- 协作笔记：[`docs/architecture/AI协作手册.md`](docs/architecture/AI协作手册.md)
 - 归档（历史版本）：`docs/archive/`
-- 设计规范：[`design-system/aienglishapp/MASTER.md`](design-system/aienglishapp/MASTER.md)
+- 设计规范：`docs/design-system/`（颜色以 `AIEnglishApp/Theme/Theme.swift` 为准）
 
 ## 开发规范
 
