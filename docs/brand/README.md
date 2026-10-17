@@ -22,7 +22,7 @@
 
 1. **App 图标**（`assets/AppIcon.svg`）：橙底 + 暖纸图形。图形占图标高度 65%，按视觉重心居中。只有默认版，深色版和着色版暂不做（iOS 18 下系统会自动处理）。
 2. **单图形**（`assets/poplex-mark-orange.svg` / `poplex-mark-paper.svg`）：橙色版用在浅色背景上，暖纸版用在橙色或深色背景上。
-3. **字标**（`assets/poplex-wordmark-ink.svg` / `-paper.svg` / `-orange.svg`）：「Poplex」，Literata Regular，首字母大写，已转曲。暖墨版用在浅色背景上，暖纸版用在橙色背景上。
+3. **字标**（`assets/poplex-wordmark-ink.svg` / `-paper.svg` / `-orange.svg`）：「Poplex」，首字母大写，已转曲。暖墨版用在浅色背景上，暖纸版用在橙色背景上。
 4. **横排组合**：
    - 图标 + 字标（`assets/poplex-lockup-icon.svg`）：App Store、官网、分享图。
    - 单图形 + 字标（`assets/poplex-lockup-mark.svg`）：App 内页头、文档抬头。
@@ -33,10 +33,10 @@
 ## 开屏
 
 - **系统启动屏**：纯暖纸底（`LaunchBackground`），不放图形（2026-10-07 定）。
-- **首次打开**（约 1.45s）：嫩芽按「主干 → 嫩叶 → 芽心」逐部件长出 → 左移、字标擦出 → 居中停一拍（后台确认身份期间停在这一帧，最多 3s）→ 组合原地上移淡出，露出 Onboarding S1（标题在屏幕中间接上视线）或主界面（重装的已完成用户）。不飞入 S1 报头：那会把视线拉到角落，抢 S1 文案的注意力。
+- **首次打开**（约 1.45s）：嫩芽按「主干 → 嫩叶 → 芽心」逐部件长出 → 左移、字标擦出 → 居中停一拍（后台确认身份期间停在这一帧，等结果出来）→ 组合原地上移淡出，露出 Onboarding S1（标题在屏幕中间接上视线）或主界面（重装的已完成用户）。不飞入 S1 报头：那会把视线拉到角落，抢 S1 文案的注意力。
 - **日常打开**（1.2s 柔和）：嫩芽、字标错峰浮现 → 停留时缓慢前推 4% → 组合先淡出上浮、暖纸底随后退，主界面同时从 98% 浮上来。全程慢进慢出，不长、不擦。
 - **减弱动态效果**：不长、不移，只做淡出。
-- 实现 `AIEnglishApp/Components/LaunchSplashView.swift`，时间参数 `AppTheme.Motion.Launch`。开屏实验室（DesignLab）已于 2026-10-08 定稿后删除，历次方案见 git 历史。
+- 实现 `AIEnglishApp/Components/LaunchSplashView.swift`，时间参数 `AppTheme.Motion.Launch`。
 
 ---
 
@@ -51,7 +51,7 @@
 
 - 改颜色（唯一例外见下）、拉伸、旋转、加阴影 / 描边 / 渐变 / 投影。
 - 把橙色图形放在橙色背景上。
-- 用 Literata 实时排版代替字标文件。
+- 用文字实时排版代替字标文件。
 - 重新使用旧品牌（斜体衬线 P + 墨点）的任何元素。
 
 **例外**：Tab2 页脚签名可使用灰色单色字标（使用页脚灰色 token），这是唯一允许改色的场景。
@@ -64,8 +64,7 @@
 brand/
 ├── README.md       ← 你在这里
 ├── assets/         ← 品牌矢量素材（事实来源）
-├── references/     ← 预览图、行业参考（只供人看）
-└── archive/        ← 旧品牌与探索过程，全部作废
+└── archive/        ← 旧品牌（斜体衬线 P + 墨点）资料与字标预览图，全部作废
 ```
 
 App 图标切图在 `AIEnglishApp/Assets.xcassets/AppIcon.appiconset/`（单尺寸 1024×1024，由 Xcode 派生其余尺寸）。
@@ -74,5 +73,4 @@ App 图标切图在 `AIEnglishApp/Assets.xcassets/AppIcon.appiconset/`（单尺�
 
 ## 来源
 
-- 图形：PM 定稿的 W1-A 原稿，按原稿描成矢量后做了去锯齿处理，骨架未改动。
-- 字体：Literata，SIL Open Font License，可商用、可用于 logo。
+- 图形：品牌定稿方案，已描成矢量并做去锯齿处理，骨架未改动。

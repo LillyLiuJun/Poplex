@@ -13,6 +13,15 @@ import SwiftUI
 //   减弱动态效果：不长、不移，暖纸底直接淡出。
 //
 // 时间参数在 AppTheme.Motion.Launch；时间轴由 TimelineView 按 t 逐帧计算。
+//
+// 关于系统启动屏（Config/LaunchScreen.plist）——说明写在这里，不写在 plist 里：
+//   · 决定：纯暖纸底、不放图形（2026-10-07 PM 拍板）；开屏动画从这幅空白画面起步，嫩芽在 App 里逐部件长出。
+//   · 为什么用显式 plist：Xcode 的 INFOPLIST_KEY_UILaunchScreen_* 生成设置只会写出一个空字典（底色和图都丢），
+//     所以用这个显式片段，由 INFOPLIST_FILE 与生成的 Info.plist 合并。
+//   · 为什么说明不放进 plist：Xcode 每次打开 / 构建工程都会重写该文件并抹掉 XML 注释（2026-10-13 起多次复现），
+//     写进去只会变成 git 里反复出现的无意义改动。
+//   · 底色：LaunchBackground.colorset = AppTheme.Color.startupBg = pageBg（neutral50 #FBF8F5），
+//     三者必须同值，否则启动时会闪一下；改色要同步改 colorset（见 Theme.swift 的注释）。
 
 // MARK: - 控制器：时间轴 + 与路由的交棒
 

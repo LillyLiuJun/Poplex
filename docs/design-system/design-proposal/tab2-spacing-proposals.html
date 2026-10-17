@@ -1,0 +1,1258 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tab2 Library 间距与字体规范演进全景对比 · Poplex</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --brand: #FF7622;
+    --brand-strong: #FF7622;
+    --brand-tint: rgba(255, 118, 34, 0.10);
+    --brand-tint-strong: rgba(255, 118, 34, 0.18);
+    --page-bg: #FAF8F5;
+    --card-bg: #FFFFFF;
+    --text-primary: #1C1917;
+    --text-secondary: #78716C;
+    --text-muted: #A8A29E;
+    --border-subtle: rgba(0, 0, 0, 0.06);
+    --font-serif: "Instrument Serif", "Playfair Display", Georgia, serif;
+    --font-sans: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
+    --font-mono: "JetBrains Mono", monospace;
+  }
+
+  * { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+  body {
+    margin: 0;
+    padding: 0;
+    background: #0D0C0B;
+    color: #E6E2DE;
+    font-family: var(--font-sans);
+    min-height: 100vh;
+  }
+
+  .container {
+    max-width: 1780px;
+    margin: 0 auto;
+    padding: 36px 32px 100px;
+  }
+
+  header.header {
+    margin-bottom: 24px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    padding-bottom: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  .header-left h1 {
+    font-size: 28px;
+    font-weight: 700;
+    margin: 0 0 8px;
+    color: #FFF;
+    letter-spacing: -0.5px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .badge-tag {
+    background: rgba(255,118,34,0.15);
+    color: var(--brand);
+    border: 1px solid rgba(255,118,34,0.3);
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .header p {
+    color: #9C9690;
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.6;
+    max-width: 900px;
+  }
+
+  /* Spacing Hierarchy Flow Banner */
+  .hierarchy-banner {
+    background: #161514;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 16px;
+    padding: 14px 20px;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .hierarchy-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #FFF;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .hierarchy-chain {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+  }
+  .node-pill {
+    background: #262422;
+    color: #FFF;
+    padding: 4px 10px;
+    border-radius: 8px;
+    font-weight: 600;
+    border: 1px solid rgba(255,255,255,0.1);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .node-pill.highlight {
+    background: rgba(255,118,34,0.15);
+    color: var(--brand);
+    border-color: rgba(255,118,34,0.35);
+  }
+  .font-tag-mini {
+    font-size: 10px;
+    opacity: 0.85;
+    background: rgba(0,0,0,0.3);
+    padding: 1px 5px;
+    border-radius: 4px;
+  }
+  .space-arrow {
+    color: #9C9690;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-weight: 600;
+  }
+  .space-val {
+    color: var(--brand);
+    font-weight: 700;
+    background: rgba(255,118,34,0.12);
+    padding: 1px 6px;
+    border-radius: 4px;
+  }
+
+  /* Controls Toolbar */
+  .toolbar {
+    background: #181716;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 16px;
+    padding: 14px 20px;
+    margin-bottom: 28px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  .mode-tabs {
+    display: flex;
+    background: #100F0E;
+    padding: 4px;
+    border-radius: 12px;
+    gap: 4px;
+  }
+  .mode-btn {
+    background: transparent;
+    border: none;
+    color: #9C9690;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .mode-btn.active {
+    background: #2D2A27;
+    color: #FFF;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  }
+  .mode-btn.active.proposed {
+    background: var(--brand);
+    color: #FFF;
+  }
+  .toggles {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+  .switch-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: #C7C2BC;
+    cursor: pointer;
+    user-select: none;
+  }
+  .switch-label input {
+    accent-color: var(--brand);
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+  }
+
+  /* Comparison Grid */
+  .grid-layout {
+    display: grid;
+    grid-template-columns: 390px 390px 390px 1fr;
+    gap: 24px;
+    align-items: start;
+  }
+
+  @media (max-width: 1680px) {
+    .grid-layout {
+      grid-template-columns: 390px 390px 1fr;
+    }
+  }
+  @media (max-width: 1280px) {
+    .grid-layout {
+      grid-template-columns: 390px 1fr;
+    }
+  }
+  @media (max-width: 860px) {
+    .grid-layout {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  /* Phone Mockup Frame */
+  .phone-card {
+    background: #141312;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 36px;
+    padding: 10px;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.6);
+    position: relative;
+  }
+  .phone-label {
+    text-align: center;
+    margin-bottom: 10px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  .phone-label.main { color: #60A5FA; }
+  .phone-label.current { color: #F87171; }
+  .phone-label.proposed { color: var(--brand); }
+
+  .iphone-screen {
+    width: 370px;
+    height: 770px;
+    background: var(--page-bg);
+    border-radius: 28px;
+    overflow: hidden;
+    position: relative;
+    color: var(--text-primary);
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.06);
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Dynamic Canvas Background Aura */
+  .canvas-aura {
+    position: absolute;
+    bottom: -60px;
+    right: -40px;
+    width: 240px;
+    height: 240px;
+    background: radial-gradient(circle, rgba(255,118,34,0.09) 0%, rgba(255,118,34,0) 70%);
+    pointer-events: none;
+  }
+
+  /* Status Bar & Top Pill */
+  .status-bar {
+    height: 44px;
+    padding: 0 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    z-index: 10;
+  }
+  .top-tab-wrapper {
+    display: flex;
+    justify-content: center;
+    padding: 2px 0 8px;
+    z-index: 10;
+  }
+  .top-tab-selector {
+    background: rgba(255,255,255,0.85);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(0,0,0,0.05);
+    border-radius: 30px;
+    padding: 4px;
+    display: flex;
+    gap: 4px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+  }
+  .tab-pill {
+    padding: 5px 13px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--text-secondary);
+  }
+  .tab-pill.active {
+    background: #FFF;
+    color: var(--text-primary);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  }
+
+  /* Scrollable Content Area */
+  .scroll-content {
+    flex: 1;
+    overflow-y: auto;
+    padding-bottom: 30px;
+    position: relative;
+  }
+  .scroll-content::-webkit-scrollbar { display: none; }
+
+  /* Section Title Elements with Anchor Badges & Font Specs */
+  .title-header-group {
+    padding: 12px 18px 0;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+  .title-large {
+    font-family: var(--font-serif);
+    font-size: 34px; /* 34pt LargeTitle Semibold */
+    font-weight: 600;
+    line-height: 1.15;
+    letter-spacing: -0.5px;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .title-subtitle {
+    font-size: 17px; /* 17pt Body */
+    color: var(--text-muted);
+    margin-top: 4px;
+    line-height: 1.4;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .section-title {
+    font-family: var(--font-serif);
+    font-size: 22px; /* 22pt Title2 Semibold */
+    font-weight: 600;
+    line-height: 1.2;
+    color: var(--text-primary);
+    padding: 0 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  
+  /* Specification Anchor Tag */
+  .anchor-tag {
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    font-weight: 700;
+    background: rgba(0,0,0,0.06);
+    color: var(--text-secondary);
+    padding: 2px 6px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    letter-spacing: 0px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+  .anchor-tag.proposed-tag {
+    background: rgba(255,118,34,0.14);
+    color: var(--brand-strong);
+    border: 1px solid rgba(255,118,34,0.25);
+  }
+  .font-size-label {
+    font-weight: 800;
+  }
+
+  /* Spacing Guide Ruler Line */
+  .ruler-guide {
+    position: relative;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    transition: all 0.25s ease;
+  }
+  .guide-line {
+    position: absolute;
+    left: 18px;
+    right: 18px;
+    height: 100%;
+    background: rgba(239, 68, 68, 0.12);
+    border-left: 2px dashed #EF4444;
+    border-right: 2px dashed #EF4444;
+    display: none;
+  }
+  .guide-line.main-line {
+    background: rgba(96, 165, 250, 0.12);
+    border-left: 2px dashed #60A5FA;
+    border-right: 2px dashed #60A5FA;
+  }
+  .guide-line.good {
+    background: rgba(255, 118, 34, 0.12);
+    border-left: 2px dashed var(--brand);
+    border-right: 2px dashed var(--brand);
+  }
+  .guide-badge {
+    position: relative;
+    background: #EF4444;
+    color: #FFF;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 8px;
+    display: none;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+    z-index: 5;
+    white-space: nowrap;
+  }
+  .guide-badge.main-badge {
+    background: #2563EB;
+  }
+  .guide-badge.good {
+    background: var(--brand);
+  }
+  .show-guides .guide-line,
+  .show-guides .guide-badge {
+    display: flex;
+  }
+
+  /* Horizontal Card Carousel */
+  .carousel-wrapper {
+    width: 100%;
+    overflow-x: auto;
+    padding: 0 18px;
+    display: flex;
+    gap: 12px;
+  }
+  .carousel-wrapper::-webkit-scrollbar { display: none; }
+
+  .hero-card {
+    min-width: 300px;
+    background: rgba(255,255,255,0.92);
+    border-radius: 18px;
+    border: 1px solid rgba(255,255,255,0.8);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.06);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .hero-card-art {
+    height: 95px;
+    background: linear-gradient(135deg, #FFE8D6 0%, #FFD2B3 100%);
+    padding: 12px 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    position: relative;
+  }
+  .category-pill {
+    background: rgba(255,255,255,0.9);
+    backdrop-filter: blur(8px);
+    border-radius: 10px;
+    padding: 3px 8px;
+    font-size: 10.5px;
+    font-weight: 700;
+    color: var(--brand-strong);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .pops-badge {
+    background: rgba(0,0,0,0.6);
+    color: #FFF;
+    border-radius: 8px;
+    padding: 2px 7px;
+    font-size: 10px;
+    font-weight: 600;
+  }
+  .hero-card-body {
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .meta-moment {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .hero-sentence {
+    font-family: var(--font-serif);
+    font-size: 15.5px;
+    font-weight: 600;
+    line-height: 1.35;
+    color: var(--text-primary);
+  }
+  .hero-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 4px;
+  }
+  .native-hint {
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+  .cta-btn {
+    background: var(--brand);
+    color: #FFF;
+    border: none;
+    border-radius: 12px;
+    padding: 5px 12px;
+    font-size: 11.5px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  /* Topics in Progress List Card */
+  .list-card-container {
+    margin: 0 18px;
+    background: rgba(255,255,255,0.85);
+    backdrop-filter: blur(20px);
+    border-radius: 18px;
+    border: 1px solid rgba(255,255,255,0.8);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.04);
+    padding: 2px 0;
+  }
+  .progress-row {
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    border-bottom: 1px solid rgba(0,0,0,0.04);
+  }
+  .progress-row:last-child { border-bottom: none; }
+  .row-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .row-title {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .row-count {
+    font-size: 11.5px;
+    font-weight: 700;
+    color: var(--brand-strong);
+  }
+  .progress-bar-bg {
+    width: 100%;
+    height: 4.5px;
+    background: rgba(0,0,0,0.06);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .progress-bar-fill {
+    height: 100%;
+    background: var(--brand);
+    border-radius: 3px;
+  }
+
+  /* Detail Panel & Analysis */
+  .analysis-panel {
+    background: #161514;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 24px;
+    padding: 24px;
+  }
+  .analysis-panel h2 {
+    font-size: 18px;
+    margin: 0 0 14px;
+    color: #FFF;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .card-box {
+    background: #100F0E;
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 16px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  .card-box h3 {
+    font-size: 14px;
+    font-weight: 600;
+    margin: 0 0 10px;
+    color: #FFF;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .diff-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  .diff-table th {
+    text-align: left;
+    color: #9C9690;
+    padding: 6px 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    font-weight: 600;
+  }
+  .diff-table td {
+    padding: 8px 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    color: #D6D1CC;
+    vertical-align: top;
+  }
+  .tag-blue {
+    color: #60A5FA;
+    font-family: var(--font-mono);
+    font-weight: 600;
+    background: rgba(96,165,250,0.12);
+    padding: 2px 5px;
+    border-radius: 5px;
+  }
+  .tag-danger {
+    color: #F87171;
+    font-family: var(--font-mono);
+    font-weight: 600;
+    background: rgba(248,113,113,0.12);
+    padding: 2px 5px;
+    border-radius: 5px;
+  }
+  .tag-good {
+    color: var(--brand);
+    font-family: var(--font-mono);
+    font-weight: 600;
+    background: rgba(255,118,34,0.15);
+    padding: 2px 5px;
+    border-radius: 5px;
+  }
+
+  /* Slider Controls for Custom Tuning */
+  .slider-group {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-top: 12px;
+  }
+  .slider-item {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .slider-header {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12.5px;
+    color: #C7C2BC;
+  }
+  .slider-header span.val {
+    font-family: var(--font-mono);
+    color: var(--brand);
+    font-weight: 600;
+  }
+  input[type="range"] {
+    width: 100%;
+    accent-color: var(--brand);
+    cursor: pointer;
+  }
+
+  .code-block {
+    background: #0B0A09;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    line-height: 1.5;
+    color: #E2DDD7;
+    overflow-x: auto;
+  }
+  .token-highlight { color: var(--brand); font-weight: 600; }
+  .comment { color: #78716C; }
+</style>
+</head>
+<body class="show-guides">
+
+<div class="container">
+  <header class="header">
+    <div class="header-left">
+      <h1>Tab2 间距与字体规范演进全景对比 <span class="badge-tag">Specs & Rhythm</span></h1>
+      <p>清晰标注 <strong>Library（34pt 大标题）</strong>、<strong>Your topics（22pt 分区1）</strong>、<strong>Topics in progress（22pt 分区2）</strong> 的字体定义与间距链路。</p>
+    </div>
+  </header>
+
+  <!-- Visual Spacing Hierarchy Flow Banner with Font Sizes -->
+  <div class="hierarchy-banner">
+    <div class="hierarchy-title">
+      <span>📐 推荐方案：字体规范与间距链路全景图</span>
+    </div>
+    <div class="hierarchy-chain">
+      <span class="node-pill highlight">
+        <span>Library</span>
+        <span class="font-tag-mini">34pt · Serif Semibold</span>
+      </span>
+      <span class="space-arrow">── <span class="space-val">24pt</span> ──▶</span>
+      <span class="node-pill highlight">
+        <span>Your topics</span>
+        <span class="font-tag-mini">22pt · Serif Semibold</span>
+      </span>
+      <span class="space-arrow">── <span class="space-val">12pt</span> ──▶</span>
+      <span class="node-pill">Hero 轮播卡</span>
+      <span class="space-arrow">── <span class="space-val">28pt</span> ──▶</span>
+      <span class="node-pill highlight">
+        <span>Topics in progress</span>
+        <span class="font-tag-mini">22pt · Serif Semibold</span>
+      </span>
+      <span class="space-arrow">── <span class="space-val">12pt</span> ──▶</span>
+      <span class="node-pill">磨砂列表卡</span>
+    </div>
+  </div>
+
+  <!-- Toolbar Controls -->
+  <div class="toolbar">
+    <div class="mode-tabs">
+      <button class="mode-btn active" id="btn-3way" onclick="setViewMode('all')">三屏全景对比 (3-Way Comparison)</button>
+      <button class="mode-btn" id="btn-main-vs-prop" onclick="setViewMode('main-vs-prop')">main基线 vs 推荐方案</button>
+      <button class="mode-btn" id="btn-curr-vs-prop" onclick="setViewMode('curr-vs-prop')">当前分支 vs 推荐方案</button>
+      <button class="mode-btn" id="btn-proposed-only" onclick="setViewMode('proposed')">仅看推荐方案 (Proposed)</button>
+    </div>
+
+    <div class="toggles">
+      <label class="switch-label">
+        <input type="checkbox" id="toggle-guides" checked onchange="toggleGuides(this.checked)">
+        <span>显示设计标尺与详细间距标注 (Show Spacing Guides)</span>
+      </label>
+    </div>
+  </div>
+
+  <!-- Comparison Layout -->
+  <div class="grid-layout" id="main-grid">
+    
+    <!-- 1. Main Baseline Phone Frame -->
+    <div class="phone-card" id="frame-main">
+      <div class="phone-label main">🔵 1. main 基线分支 (Baseline)</div>
+      <div class="iphone-screen">
+        <div class="canvas-aura"></div>
+        <div class="status-bar">
+          <span>9:41</span>
+          <span>􀋒 􀋌 􀛨</span>
+        </div>
+
+        <div class="top-tab-wrapper">
+          <div class="top-tab-selector">
+            <div class="tab-pill"><span>􀆮</span> Today</div>
+            <div class="tab-pill active"><span>􀤌</span> Mine</div>
+          </div>
+        </div>
+
+        <div class="scroll-content">
+          <!-- Node 1: Main Title Group -->
+          <div class="title-header-group">
+            <div class="title-large">
+              <span>Talk about something</span>
+              <span class="anchor-tag"><span class="font-size-label">34pt</span> · pageTitleSerif</span>
+            </div>
+            <div class="title-subtitle">
+              <span>Scenarios built from your daily moments.</span>
+              <span class="anchor-tag" style="font-size: 8.5px;"><span class="font-size-label">17pt</span> · englishBody</span>
+            </div>
+          </div>
+
+          <!-- Spacing 1: Title Group to Section 1 (main: 24pt) -->
+          <div class="ruler-guide" style="height: 24px;">
+            <div class="guide-line main-line"></div>
+            <div class="guide-badge main-badge">24pt 【主标题组】→【Your materials】</div>
+          </div>
+
+          <!-- Node 2: Section 1 (Your materials) -->
+          <div class="section-title">
+            <span>Your materials</span>
+            <span class="anchor-tag"><span class="font-size-label">22pt</span> · sectionTitleSerif</span>
+          </div>
+
+          <!-- Spacing 2: Title to Carousel (main: 12pt stack + 16pt padding = 28pt!) -->
+          <div class="ruler-guide" style="height: 28px;">
+            <div class="guide-line main-line"></div>
+            <div class="guide-badge main-badge">28pt ⚠️ 【Your materials】→【Hero卡】</div>
+          </div>
+
+          <!-- Carousel -->
+          <div class="carousel-wrapper">
+            <div class="hero-card">
+              <div class="hero-card-art">
+                <div class="category-pill"><span>􀣵</span> Coffee & Cafes</div>
+                <div class="pops-badge">24 pops</div>
+              </div>
+              <div class="hero-card-body">
+                <div class="meta-moment">FEATURED MOMENT · MORNING</div>
+                <div class="hero-sentence">"A flat white with oat milk, extra hot please."</div>
+                <div class="hero-footer">
+                  <div class="native-hint">热燕麦拿铁</div>
+                  <button class="cta-btn"><span>􀊄</span> Talk</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Spacing 3: Carousel to Section 2 (main: 16pt padding + 24pt stack = 40pt!) -->
+          <div class="ruler-guide" style="height: 40px;">
+            <div class="guide-line main-line"></div>
+            <div class="guide-badge main-badge">40pt ⚠️ 【Hero卡底】→【Topics in progress】</div>
+          </div>
+
+          <!-- Node 3: Section 2 (Topics in progress) -->
+          <div class="section-title">
+            <span>Topics in progress</span>
+            <span class="anchor-tag"><span class="font-size-label">22pt</span> · sectionTitleSerif</span>
+          </div>
+
+          <!-- Spacing 4: Title to List Card (main: titleToContent = 24pt!) -->
+          <div class="ruler-guide" style="height: 24px;">
+            <div class="guide-line main-line"></div>
+            <div class="guide-badge main-badge">24pt 【Topics in progress】→【列表卡】</div>
+          </div>
+
+          <!-- Progress List -->
+          <div class="list-card-container">
+            <div class="progress-row">
+              <div class="row-top">
+                <span class="row-title">Daily Commute</span>
+                <span class="row-count">14/20 pops</span>
+              </div>
+              <div class="progress-bar-bg">
+                <div class="progress-bar-fill" style="width: 70%;"></div>
+              </div>
+            </div>
+            <div class="progress-row">
+              <div class="row-top">
+                <span class="row-title">Team Standup</span>
+                <span class="row-count">8/20 pops</span>
+              </div>
+              <div class="progress-bar-bg">
+                <div class="progress-bar-fill" style="width: 40%;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. Current Phone Frame -->
+    <div class="phone-card" id="frame-current">
+      <div class="phone-label current">🔴 2. 当前分支现状 (Current)</div>
+      <div class="iphone-screen">
+        <div class="canvas-aura"></div>
+        <div class="status-bar">
+          <span>9:41</span>
+          <span>􀋒 􀋌 􀛨</span>
+        </div>
+
+        <div class="top-tab-wrapper">
+          <div class="top-tab-selector">
+            <div class="tab-pill"><span>􀆮</span> Today</div>
+            <div class="tab-pill active"><span>􀤌</span> Library</div>
+          </div>
+        </div>
+
+        <div class="scroll-content">
+          <!-- Node 1: Library Title -->
+          <div class="title-header-group">
+            <div class="title-large">
+              <span>Library</span>
+              <span class="anchor-tag"><span class="font-size-label">34pt</span> · pageTitleSerif</span>
+            </div>
+          </div>
+
+          <!-- Spacing 1: Title to Section 1 (Current: 16pt only) -->
+          <div class="ruler-guide" style="height: 16px;">
+            <div class="guide-line"></div>
+            <div class="guide-badge">16pt ⚠️ 【Library】→【Your topics】</div>
+          </div>
+
+          <!-- Node 2: Section 1 (Your topics) -->
+          <div class="section-title">
+            <span>Your topics</span>
+            <span class="anchor-tag"><span class="font-size-label">22pt</span> · sectionTitleSerif</span>
+          </div>
+
+          <!-- Spacing 2: Title to Carousel (Current: 8pt stack + 16pt padding = 24pt!) -->
+          <div class="ruler-guide" style="height: 24px;">
+            <div class="guide-line"></div>
+            <div class="guide-badge">24pt 🔴 【Your topics】→【Hero卡】(3倍失衡)</div>
+          </div>
+
+          <!-- Carousel -->
+          <div class="carousel-wrapper">
+            <div class="hero-card">
+              <div class="hero-card-art">
+                <div class="category-pill"><span>􀣵</span> Coffee & Cafes</div>
+                <div class="pops-badge">24 pops</div>
+              </div>
+              <div class="hero-card-body">
+                <div class="meta-moment">FEATURED MOMENT · MORNING</div>
+                <div class="hero-sentence">"A flat white with oat milk, extra hot please."</div>
+                <div class="hero-footer">
+                  <div class="native-hint">热燕麦拿铁</div>
+                  <button class="cta-btn"><span>􀊄</span> Talk</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Spacing 3: Carousel to Section 2 (Current: 16pt padding + 16pt stack = 32pt) -->
+          <div class="ruler-guide" style="height: 32px;">
+            <div class="guide-line"></div>
+            <div class="guide-badge">32pt 【Hero卡底】→【Topics in progress】</div>
+          </div>
+
+          <!-- Node 3: Section 2 (Topics in progress) -->
+          <div class="section-title">
+            <span>Topics in progress</span>
+            <span class="anchor-tag"><span class="font-size-label">22pt</span> · sectionTitleSerif</span>
+          </div>
+
+          <!-- Spacing 4: Title to List Card (Current: 8pt only!) -->
+          <div class="ruler-guide" style="height: 8px;">
+            <div class="guide-line"></div>
+            <div class="guide-badge">8pt 🔴 【Topics in progress】→【列表卡】(过于紧贴)</div>
+          </div>
+
+          <!-- Progress List -->
+          <div class="list-card-container">
+            <div class="progress-row">
+              <div class="row-top">
+                <span class="row-title">Daily Commute</span>
+                <span class="row-count">14/20 pops</span>
+              </div>
+              <div class="progress-bar-bg">
+                <div class="progress-bar-fill" style="width: 70%;"></div>
+              </div>
+            </div>
+            <div class="progress-row">
+              <div class="row-top">
+                <span class="row-title">Team Standup</span>
+                <span class="row-count">8/20 pops</span>
+              </div>
+              <div class="progress-bar-bg">
+                <div class="progress-bar-fill" style="width: 40%;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. Proposed Phone Frame -->
+    <div class="phone-card" id="frame-proposed">
+      <div class="phone-label proposed">🟢 3. 推荐统一方案 (Proposed)</div>
+      <div class="iphone-screen">
+        <div class="canvas-aura"></div>
+        <div class="status-bar">
+          <span>9:41</span>
+          <span>􀋒 􀋌 􀛨</span>
+        </div>
+
+        <div class="top-tab-wrapper">
+          <div class="top-tab-selector">
+            <div class="tab-pill"><span>􀆮</span> Today</div>
+            <div class="tab-pill active"><span>􀤌</span> Library</div>
+          </div>
+        </div>
+
+        <div class="scroll-content">
+          <!-- Node 1: Library / Main Title -->
+          <div class="title-header-group">
+            <div class="title-large">
+              <span>Talk about today</span>
+              <span class="anchor-tag proposed-tag"><span class="font-size-label">34pt</span> · pageTitleSerif</span>
+            </div>
+          </div>
+
+          <!-- Spacing 1: Title to Section 1 (Proposed: 24pt) -->
+          <div class="ruler-guide prop-space-header" style="height: 24px;">
+            <div class="guide-line good"></div>
+            <div class="guide-badge good" id="badge-header">24pt 【Library】→【Your topics】</div>
+          </div>
+
+          <!-- Node 2: Section 1 (Your topics) -->
+          <div class="section-title">
+            <span>Your topics</span>
+            <span class="anchor-tag proposed-tag"><span class="font-size-label">22pt</span> · sectionTitleSerif</span>
+          </div>
+
+          <!-- Spacing 2: Title to Carousel (Proposed: 12pt) -->
+          <div class="ruler-guide prop-space-card" style="height: 12px;">
+            <div class="guide-line good"></div>
+            <div class="guide-badge good" id="badge-card1">12pt 【Your topics】→【Hero卡】</div>
+          </div>
+
+          <!-- Carousel -->
+          <div class="carousel-wrapper">
+            <div class="hero-card">
+              <div class="hero-card-art">
+                <div class="category-pill"><span>􀣵</span> Coffee & Cafes</div>
+                <div class="pops-badge">24 pops</div>
+              </div>
+              <div class="hero-card-body">
+                <div class="meta-moment">FEATURED MOMENT · MORNING</div>
+                <div class="hero-sentence">"A flat white with oat milk, extra hot please."</div>
+                <div class="hero-footer">
+                  <div class="native-hint">热燕麦拿铁</div>
+                  <button class="cta-btn"><span>􀊄</span> Talk</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Spacing 3: Carousel to Section 2 (Proposed: 28pt) -->
+          <div class="ruler-guide prop-space-section" style="height: 28px;">
+            <div class="guide-line good"></div>
+            <div class="guide-badge good" id="badge-section">28pt 【Hero卡底】→【Topics in progress】</div>
+          </div>
+
+          <!-- Node 3: Section 2 (Topics in progress) -->
+          <div class="section-title">
+            <span>Topics in progress</span>
+            <span class="anchor-tag proposed-tag"><span class="font-size-label">22pt</span> · sectionTitleSerif</span>
+          </div>
+
+          <!-- Spacing 4: Title to List Card (Proposed: 12pt) -->
+          <div class="ruler-guide prop-space-card" style="height: 12px;">
+            <div class="guide-line good"></div>
+            <div class="guide-badge good" id="badge-card2">12pt 【Topics in progress】→【列表卡】</div>
+          </div>
+
+          <!-- Progress List -->
+          <div class="list-card-container">
+            <div class="progress-row">
+              <div class="row-top">
+                <span class="row-title">Daily Commute</span>
+                <span class="row-count">14/20 pops</span>
+              </div>
+              <div class="progress-bar-bg">
+                <div class="progress-bar-fill" style="width: 70%;"></div>
+              </div>
+            </div>
+            <div class="progress-row">
+              <div class="row-top">
+                <span class="row-title">Team Standup</span>
+                <span class="row-count">8/20 pops</span>
+              </div>
+              <div class="progress-bar-bg">
+                <div class="progress-bar-fill" style="width: 40%;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. Analysis & Interactive Tuning Panel -->
+    <div class="analysis-panel">
+      <h2>🔍 标题字体与间距 Spec 全量规范</h2>
+
+      <!-- Typography Spec Card -->
+      <div class="card-box">
+        <h3>🔤 核心标题字体规范 (Typography Tokens)</h3>
+        <table class="diff-table">
+          <thead>
+            <tr>
+              <th>标题层级</th>
+              <th>字号 / 字重 / 风格</th>
+              <th>Design Token</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Library</strong><br><small>页面大标题 (Level 1)</small></td>
+              <td><span class="tag-good">34pt</span> Semibold Serif<br><small>New York 衬线</small></td>
+              <td><code>AppTheme.Font.pageTitleSerif</code><br><small>(.largeTitle, weight: .semibold)</small></td>
+            </tr>
+            <tr>
+              <td><strong>Your topics</strong><br><small>第一分区标题 (Level 2)</small></td>
+              <td><span class="tag-good">22pt</span> Semibold Serif<br><small>New York 衬线</small></td>
+              <td><code>AppTheme.Font.sectionTitleSerif</code><br><small>(.title2, weight: .semibold)</small></td>
+            </tr>
+            <tr>
+              <td><strong>Topics in progress</strong><br><small>第二分区标题 (Level 2)</small></td>
+              <td><span class="tag-good">22pt</span> Semibold Serif<br><small>New York 衬线</small></td>
+              <td><code>AppTheme.Font.sectionTitleSerif</code><br><small>(.title2, weight: .semibold)</small></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card-box">
+        <h3>三版本实测间距对照 (精确到各标题节点)</h3>
+        <table class="diff-table">
+          <thead>
+            <tr>
+              <th>间距测量路径</th>
+              <th>① main 基线</th>
+              <th>② 当前分支</th>
+              <th>③ 推荐方案</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>【Library/大标题】<br>▼<br>【Your topics】</strong></td>
+              <td><span class="tag-blue">24pt</span> (含副标题)</td>
+              <td><span class="tag-danger">16pt</span> (偏紧)</td>
+              <td><span class="tag-good">24pt</span> (舒适过渡)</td>
+            </tr>
+            <tr>
+              <td><strong>【Your topics】<br>▼<br>【Hero 轮播卡】</strong></td>
+              <td><span class="tag-blue">28pt</span> (虚增)</td>
+              <td><span class="tag-danger">24pt</span> (3倍虚增)</td>
+              <td><span class="tag-good">12pt</span> (紧凑抱团)</td>
+            </tr>
+            <tr>
+              <td><strong>【Hero 卡底】<br>▼<br>【Topics in progress】</strong></td>
+              <td><span class="tag-blue">40pt</span> (过松)</td>
+              <td><span class="tag-danger">32pt</span> (偏松)</td>
+              <td><span class="tag-good">28pt</span> (清晰分界)</td>
+            </tr>
+            <tr>
+              <td><strong>【Topics in progress】<br>▼<br>【磨砂列表卡】</strong></td>
+              <td><span class="tag-blue">24pt</span> (偏宽)</td>
+              <td><span class="tag-danger">8pt</span> (过于拥挤)</td>
+              <td><span class="tag-good">12pt</span> (1:1 对称)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Interactive Workshop Sliders -->
+      <div class="card-box">
+        <h3>🎛️ 实时参数微调工坊 (Live Playground)</h3>
+        <div class="slider-group">
+          <div class="slider-item">
+            <div class="slider-header">
+              <span>1. 分区标题到卡片 (【Your topics/Topics in progress】→ 卡片)</span>
+              <span class="val" id="val-card">12pt</span>
+            </div>
+            <input type="range" min="6" max="24" value="12" step="1" oninput="updateSpacing('card', this.value)">
+          </div>
+
+          <div class="slider-item">
+            <div class="slider-header">
+              <span>2. 大标题到第一分区 (【Library】→【Your topics】)</span>
+              <span class="val" id="val-header">24pt</span>
+            </div>
+            <input type="range" min="12" max="36" value="24" step="2" oninput="updateSpacing('header', this.value)">
+          </div>
+
+          <div class="slider-item">
+            <div class="slider-header">
+              <span>3. 分区与分区之间 (【Hero卡底】→【Topics in progress】)</span>
+              <span class="val" id="val-section">28pt</span>
+            </div>
+            <input type="range" min="16" max="44" value="28" step="2" oninput="updateSpacing('section', this.value)">
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+</div>
+
+<script>
+  function toggleGuides(show) {
+    if (show) {
+      document.body.classList.add('show-guides');
+    } else {
+      document.body.classList.remove('show-guides');
+    }
+  }
+
+  function setViewMode(mode) {
+    document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active', 'proposed'));
+    const frameMain = document.getElementById('frame-main');
+    const frameCurrent = document.getElementById('frame-current');
+    const frameProposed = document.getElementById('frame-proposed');
+    const grid = document.getElementById('main-grid');
+
+    if (mode === 'all') {
+      document.getElementById('btn-3way').classList.add('active');
+      frameMain.style.display = 'block';
+      frameCurrent.style.display = 'block';
+      frameProposed.style.display = 'block';
+      grid.style.gridTemplateColumns = '390px 390px 390px 1fr';
+    } else if (mode === 'main-vs-prop') {
+      document.getElementById('btn-main-vs-prop').classList.add('active');
+      frameMain.style.display = 'block';
+      frameCurrent.style.display = 'none';
+      frameProposed.style.display = 'block';
+      grid.style.gridTemplateColumns = '390px 390px 1fr';
+    } else if (mode === 'curr-vs-prop') {
+      document.getElementById('btn-curr-vs-prop').classList.add('active');
+      frameMain.style.display = 'none';
+      frameCurrent.style.display = 'block';
+      frameProposed.style.display = 'block';
+      grid.style.gridTemplateColumns = '390px 390px 1fr';
+    } else if (mode === 'proposed') {
+      document.getElementById('btn-proposed-only').classList.add('active', 'proposed');
+      frameMain.style.display = 'none';
+      frameCurrent.style.display = 'none';
+      frameProposed.style.display = 'block';
+      grid.style.gridTemplateColumns = '390px 1fr';
+    }
+  }
+
+  function updateSpacing(type, value) {
+    if (type === 'card') {
+      document.getElementById('val-card').textContent = value + 'pt';
+      document.querySelectorAll('.prop-space-card').forEach(el => el.style.height = value + 'px');
+      document.getElementById('badge-card1').textContent = value + 'pt 【Your topics】→【Hero卡】';
+      document.getElementById('badge-card2').textContent = value + 'pt 【Topics in progress】→【列表卡】';
+    } else if (type === 'header') {
+      document.getElementById('val-header').textContent = value + 'pt';
+      document.querySelector('.prop-space-header').style.height = value + 'px';
+      document.getElementById('badge-header').textContent = value + 'pt 【Library】→【Your topics】';
+    } else if (type === 'section') {
+      document.getElementById('val-section').textContent = value + 'pt';
+      document.querySelector('.prop-space-section').style.height = value + 'px';
+      document.getElementById('badge-section').textContent = value + 'pt 【Hero卡底】→【Topics in progress】';
+    }
+  }
+</script>
+
+</body>
+</html>

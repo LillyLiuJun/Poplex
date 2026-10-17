@@ -2,10 +2,6 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- 系统启动屏：纯暖纸底，不放图形（2026-10-07 PM 拍板）。开屏动画从这幅空白画面起步，
-	     嫩芽在 App 里逐部件长出，见 AIEnglishApp/Components/LaunchSplashView.swift。
-	     Xcode 的 INFOPLIST_KEY_UILaunchScreen_* 生成设置只会写出一个空字典（底色和图都丢），
-	     所以这里用显式片段，由 INFOPLIST_FILE 与生成的 Info.plist 合并。 -->
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIColorName</key>
