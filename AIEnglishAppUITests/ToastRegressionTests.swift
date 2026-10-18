@@ -138,18 +138,26 @@ final class ToastRegressionTests: XCTestCase {
         let app = launchApp(env: ["TOAST_PROBE_BLOCKED": "1"])
         try requireReachedMine(in: app)
         let t = toast(blockedText, in: app)
-        // load 成功才触发；无网络环境（load 失败）跳过，不误报。
-        let appeared = t.waitForExistence(timeout: 12)
-        if !appeared {
-            // load 失败时 Tab2 显示整页错误态（Tab2LoadErrorView，文案 "Something went wrong."）。
-            // 旧文案 "Failed to load" 只是 view model 内部的 errorMessage，已不再渲染成文字。
-            // 无真实后端（如开源仓库的占位符配置）或无网络都会走到这里。
-            let loadFailed = app.staticTexts["Something went wrong."].exists
-                || app.staticTexts["Failed to load"].exists
-            if loadFailed {
+        // load 成功才触发。load 失败时 Tab2 显示整页错误态（Tab2LoadErrorView，文案
+        // "Something went wrong."；旧文案 "Failed to load" 只是 view model 内部的
+        // errorMessage，已不再渲染成文字）。无真实后端（开源仓库的占位符配置）或无网络
+        // 都会走到这里，此时没有触发条件，XCTSkip 而不是 XCTFail。
+        //
+        // 不能只等固定 12 秒再判断：load 失败要先等匿名登录（最长约 10s）再等 Tab2 加载
+        // 超时（8s），整页错误态最迟约 18s 才出现，所以这里轮询「toast 出现」与「错误态
+        // 出现」二者之一，总预算 30s。
+        let errorPage = app.staticTexts["Something went wrong."]
+        let legacyError = app.staticTexts["Failed to load"]
+        var appeared = false
+        let deadline = Date().addingTimeInterval(30)
+        while Date() < deadline {
+            if t.waitForExistence(timeout: 1) { appeared = true; break }
+            if errorPage.exists || legacyError.exists {
                 throw XCTSkip("load 未成功（无网络或未配置后端），blocked 探针无触发条件")
             }
-            XCTFail("blocked 探针 toast 12s 未出现（load 成功却无触发）")
+        }
+        guard appeared else {
+            XCTFail("blocked 探针 toast 30s 未出现，且 Tab2 也没有进入错误态")
             return
         }
         requireToastDisappears(t)
