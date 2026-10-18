@@ -141,8 +141,13 @@ final class ToastRegressionTests: XCTestCase {
         // load 成功才触发；无网络环境（load 失败）跳过，不误报。
         let appeared = t.waitForExistence(timeout: 12)
         if !appeared {
-            if app.staticTexts["Failed to load"].exists {
-                throw XCTSkip("load 未成功（无网络环境），blocked 探针无触发条件")
+            // load 失败时 Tab2 显示整页错误态（Tab2LoadErrorView，文案 "Something went wrong."）。
+            // 旧文案 "Failed to load" 只是 view model 内部的 errorMessage，已不再渲染成文字。
+            // 无真实后端（如开源仓库的占位符配置）或无网络都会走到这里。
+            let loadFailed = app.staticTexts["Something went wrong."].exists
+                || app.staticTexts["Failed to load"].exists
+            if loadFailed {
+                throw XCTSkip("load 未成功（无网络或未配置后端），blocked 探针无触发条件")
             }
             XCTFail("blocked 探针 toast 12s 未出现（load 成功却无触发）")
             return
