@@ -1,6 +1,6 @@
 begin;
 
-select plan(33);
+select plan(36);
 
 select ok(
   not has_function_privilege('anon', 'public.get_category_words(uuid,text)', 'EXECUTE'),
@@ -199,6 +199,20 @@ select ok(
   not has_schema_privilege('anon', 'public', 'CREATE')
   and not has_schema_privilege('authenticated', 'public', 'CREATE'),
   'fixed public search_path is safe from API-role object injection'
+);
+
+-- Legacy word-list RPCs were dropped in 20261018000000; nothing may recreate them.
+select hasnt_function(
+  'public', 'get_lexicon_entries_tab2', array['uuid', 'integer'],
+  'legacy get_lexicon_entries_tab2 does not exist'
+);
+select hasnt_function(
+  'public', 'exclude_lexicon_entry', array['uuid', 'uuid'],
+  'legacy exclude_lexicon_entry does not exist'
+);
+select hasnt_function(
+  'public', 'restore_lexicon_entry', array['uuid', 'uuid'],
+  'legacy restore_lexicon_entry does not exist'
 );
 
 select * from finish();
