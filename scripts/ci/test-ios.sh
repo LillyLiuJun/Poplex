@@ -52,10 +52,12 @@ fi
 
 # The Xcode-generated launch-performance sample exercises no product flow and
 # is unstable on hosted simulators. The UI launch assertion still runs.
+# The identifier must be Target/Class/Method. The earlier two-part form
+# (AIEnglishAppUITests/testLaunchPerformance) matched nothing, so the sample ran every time.
 xcodebuild test \
   -project "$project" \
   -scheme "$scheme" \
   -destination "$destination" \
-  -skip-testing:AIEnglishAppUITests/testLaunchPerformance \
+  -skip-testing:AIEnglishAppUITests/AIEnglishAppUITests/testLaunchPerformance \
   -clonedSourcePackagesDirPath "$source_packages_path" \
   -derivedDataPath "$derived_data_path"

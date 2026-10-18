@@ -1087,10 +1087,10 @@ More 行是**并列可比的一组**，行高一致是它们能被扫视比较�
 这与 §8.2「截图取信前先核二进制 UUID」是同一条原则的两个面：
 **结果属于谁，必须先证明，再解读。**
 
-### 14.3 附带发现（未修）
+### 14.3 附带发现（已于 2026-10-18 修复）
 
 CI 脚本里 `-skip-testing:AIEnglishAppUITests/testLaunchPerformance` 写法与测试类名不匹配，
-一直未生效——launch 性能测试每轮都在跑。比要求更严，无害，留待清理。
+一直未生效——launch 性能测试每轮都在跑。当时判断无害；后来它在云端偶发变红（C18），2026-10-18 改为三段式 `AIEnglishAppUITests/AIEnglishAppUITests/testLaunchPerformance` 后才真正被跳过。
 
 ---
 
