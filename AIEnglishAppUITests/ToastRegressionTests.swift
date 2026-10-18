@@ -33,6 +33,19 @@ final class ToastRegressionTests: XCTestCase {
 
     // MARK: - helpers
 
+    /// 开源仓库的 `SupabaseConfig.swift` 是占位符，没有真实后端。此时 Tab2 的加载既不会成功，
+    /// 也不一定能在固定预算内进入错误态（并行跑完整测试时实测 40s 仍停在空态），
+    /// 靠「等错误页出现」判断环境不稳。这里直接读源码里的占位符，在启动 app 之前就跳过。
+    /// 读不到文件（路径不可达）就返回 false，退回原来的运行时判断。
+    private func backendIsPlaceholder(filePath: String = #filePath) -> Bool {
+        let config = URL(fileURLWithPath: filePath)
+            .deletingLastPathComponent()      // AIEnglishAppUITests/
+            .deletingLastPathComponent()      // 仓库根目录
+            .appendingPathComponent("AIEnglishApp/Services/SupabaseConfig.swift")
+        guard let text = try? String(contentsOf: config, encoding: .utf8) else { return false }
+        return text.contains("YOUR-PROJECT-REF")
+    }
+
     @MainActor
     private func launchApp(env: [String: String]) -> XCUIApplication {
         let app = XCUIApplication()
@@ -135,6 +148,9 @@ final class ToastRegressionTests: XCTestCase {
 
     @MainActor
     func testBlockedToastProbeFullChain() throws {
+        if backendIsPlaceholder() {
+            throw XCTSkip("SupabaseConfig 仍是占位符（未配置后端），blocked 探针需要 load 成功，无触发条件")
+        }
         let app = launchApp(env: ["TOAST_PROBE_BLOCKED": "1"])
         try requireReachedMine(in: app)
         let t = toast(blockedText, in: app)
