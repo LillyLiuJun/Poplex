@@ -40,3 +40,13 @@ supabase/.branches/
 
 # Claude 生成的中间产物草稿（设计稿、一次性执行 prompt），不入库；要长期保留的素材请移到 docs/brand/assets/
 Claude outputs/
+
+# FUSE leftovers (sshfs / VPS workspace)
+.fuse_hidden*
+
+# App Store screenshot workspace (once committed by accident, then reverted)
+store_screenshots/
+
+# Python bytecode
+__pycache__/
+*.pyc
