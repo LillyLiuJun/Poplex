@@ -1,103 +1,117 @@
-# AIEnglishApp
+# Poplex (AIEnglishApp)
 
-一款 AI native 的 iOS 英语学习 App，核心理念是 **从用户自己的生活取材来学英语**。
+**Learn English from your own life.** Poplex is an AI-native iOS app that turns the
+moments around you — a photo, a few words, a passing thought — into scene-based
+English you can actually say out loud.
 
-用户通过文字、语音、拍照或相册，把身边的场景或此刻的想法发给 AI；AI 据此生成与这个场景相关的英语内容（轻词典、句子分析、地道翻译、场景手帐等结构化卡片），用户还能就同一场景继续追问、逐步深入。生成的素材会被 AI 自动分类整理，沉淀到用户自己的素材库中，从听、说、读、写各方面（尤其是口语）帮助用户提升英语表达能力。
+[中文说明](README.zh-CN.md)
 
-产品分为两个主 Tab：
+## What it does
 
-- **Tab1 / Today —— 内容捕捉与生成**：负责输入 → AI 生成 → 追问深入。
-- **Tab2 / Mine —— 内容组织与练习**：接收 Tab1 生成的素材，按「场景维度 + 语言素材维度（单词/句子/段落）」自动分类，并承载练习功能（Tab2 本身不生成内容）。
+Poplex turns the moments of your life into English that is yours: the expressions
+you actually need, organised for you automatically — so everything you capture
+becomes something you can use.
 
-## 技术栈
+### Today (Tab 1) — capture and generate
 
-| 层 | 技术 | 说明 |
-|----|------|------|
-| 前端 | Swift 5.0 + SwiftUI | 原生开发，非 UIKit/Storyboard |
-| 平台 | iOS 17+ | 使用 `@Observable`、`NavigationStack` 等特性 |
-| 构建 | Xcode 工程（`AIEnglishApp.xcodeproj`） | |
-| 后端 | Supabase | 数据库 + Storage + Edge Functions（Deno / TypeScript） |
-| AI | Google Gemini（`gemini-2.5-flash`） | 仅在 Edge Function 服务端调用，密钥不下发客户端 |
+Type a sentence or add a photo (camera or gallery). The AI turns it into a learning
+card: natural English for that scene with an explanation in your own language — or,
+if you wrote in your own language, the English you would have wanted to say. You can
+keep asking about the same scene.
 
-## 项目结构
+### Library (Tab 2) — your material, organised for you
+
+Nothing to sort by hand. Everything you capture is organised automatically:
+
+- **Auto-categorised** into life topics.
+- **Scenes grouped automatically**, so moments from the same situation sit together.
+- **Broken down into expressions** — words, phrases, collocations, idioms, sentence
+  patterns — de-duplicated across everything you capture, each remembering the scenes
+  it came from.
+
+A topic unlocks once it has collected 20 expressions.
+
+### Anonymous by design
+
+No sign-up, no email: the app signs in anonymously on first launch and everything a
+user creates stays private to that account. Account deletion removes the account and
+all of its data.
+
+The interface is English; learning content is English with explanations in the
+learner's native language (Chinese for the first release). Prompts and field names
+speak of a "target" and a "native" language instead of hard-coding either.
+
+## Architecture
 
 ```
-AIEnglishApp/              # iOS 源码
-├── AIEnglishAppApp.swift  #   App 入口
-├── ContentView.swift      #   根视图 / Tab 容器
-├── Onboarding/            #   引导页（介绍核心价值 + 询问 English Level）
-├── Today/                 #   Tab1：内容捕捉与生成
-├── Mine/                  #   Tab2：素材库（场景详情、词汇本）与练习
-├── Models/                #   数据模型（Material / Message / AIResponse 等）
-├── Services/              #   AI 调用、Supabase 客户端、相机/相册、会话上下文、埋点
-├── Theme/                 #   设计 token（颜色/字体/间距，集中定义）
-└── Assets.xcassets/       #   图片与颜色资源
-
-AIEnglishAppTests/         # 单元测试
-AIEnglishAppUITests/       # UI 测试
-supabase/                  # 后端：Edge Functions + 数据库 migrations
-docs/                      # 项目文档（PRD、架构、笔记、归档）
-design-system/             # 设计规范（颜色/字体/组件规则）
-assets/                    # 设计/演示素材（示例场景图等）
-config/                    # 预留配置目录
-CLAUDE.md                  # 面向 AI 协作的开发规范（详见文末）
+iOS app (SwiftUI, iOS 17+)
+   │  HTTPS, user JWT
+   ▼
+Supabase Edge Functions (Deno / TypeScript)   ← the only place that talks to the AI provider
+   │                         │
+   ▼                         ▼
+Postgres (RLS) + Storage     Google Gemini (gemini-3.7-flash)
 ```
 
-### 后端做了什么（`supabase/`）
+- **The app never holds an AI key.** Every AI request goes through an Edge Function;
+  the provider key exists only in the function's environment.
+- **Edge Functions verify the caller's JWT** against Supabase Auth, write
+  `user_id`, and filter every read by it. Tables have row-level security as defence
+  in depth.
+- Swapping the AI provider only touches the Edge Functions.
 
-**Edge Functions**（`supabase/functions/`）：
+| Layer | Technology |
+|---|---|
+| App | Swift 5, SwiftUI, `@Observable`, `NavigationStack`, iOS 17+, iPhone only |
+| Backend | Supabase: Postgres, Auth (anonymous), Storage, Edge Functions |
+| AI | Google Gemini, called server-side only |
+| Tests | Swift Testing + XCTest (UI launch / toast regression), Deno tests, pgTAP |
 
-- `generate` —— 核心函数。接收输入，服务端携 `GEMINI_API_KEY` 调用 Gemini，产出 5 类结构化卡片（s1/s2/s3/s4/chat），并将可提取的素材两阶段写入 `materials` 表。
-- `get-materials` / `get-vocabs` —— 供 Tab2 读取场景素材 / 词汇本（按用户 `user_id` 隔离，图片按需签发临时 Storage 签名 URL）。
-- `get-messages` —— 供 Tab1 读取历史消息（按时间排序、前端按日期分组）。
-- `delete-material` / `restore-material` —— 素材软删除与恢复。
-- `log-event` —— 埋点事件写入 `analytics_events`。
+### Edge Functions (`supabase/functions/`)
 
-**数据库 migrations**（`supabase/migrations/`）：建立 `materials`、`messages`、`analytics_events` 等表，为 `materials` 开启行级安全（RLS）做用户隔离，并有 `image_url`、软删除等增量变更。
+| Function | Role |
+|---|---|
+| `generate` | Core pipeline: input → learning cards → materials, plus lexicon accounting |
+| `get-messages`, `get-materials`, `get-vocabs`, `get-tab2-home`, `get-category-words` | Reads for Tab 1 and Tab 2 |
+| `save-preset-card`, `delete-material`, `restore-material` | Writes on materials |
+| `backfill-lexicon`, `reconcile-orphan-images` | Manual maintenance jobs |
+| `delete-account`, `submit-feedback`, `log-event` | Account, feedback and analytics |
 
-## 如何运行
+Schema changes live in `supabase/migrations/` (replayed from scratch by CI).
 
-### 1. 运行 iOS App
+## Repository layout
+
+```
+AIEnglishApp/          iOS app — Today/ (Tab 1), Mine/ (Tab 2), Onboarding/, Settings/,
+                       Services/, Models/, Theme/ (design tokens)
+AIEnglishAppTests/     unit tests
+AIEnglishAppUITests/   UI launch and toast regression tests
+supabase/              Edge Functions, SQL migrations, database tests
+scripts/ci/            verification and PR scripts used locally and by CI
+docs/                  PRDs, architecture, design system, brand, engineering notes
+legal/                 privacy policy, terms and support pages
+CLAUDE.md, AGENTS.md   project briefs for AI coding assistants
+```
+
+Most documents under `docs/` are written in Chinese. Start here:
+
+- [`docs/prd/整体架构_两个Tab与对话页_v1.md`](docs/prd/整体架构_两个Tab与对话页_v1.md) — product structure (Tab 1 / Tab 2)
+- [`docs/prd/Agent内容组织与成长系统_PRD_v2.md`](docs/prd/Agent内容组织与成长系统_PRD_v2.md) — Tab 2, the lexicon ledger, growth layer
+- [`docs/engineering/CI.md`](docs/engineering/CI.md) — pull-request verification
+- [`docs/architecture/AI协作手册.md`](docs/architecture/AI协作手册.md) — how work is split between the owner and AI assistants
+- [`docs/brand/README.md`](docs/brand/README.md) — brand assets and rules
+- [`docs/design-system/`](docs/design-system/) — typography and component specs (colours: `AIEnglishApp/Theme/Theme.swift`)
+- [`CLAUDE.md`](CLAUDE.md) — design rules, working method, decided trade-offs, current state
+
+## Run and test
 
 ```bash
-open AIEnglishApp.xcodeproj
+open AIEnglishApp.xcodeproj      # pick a simulator or device, then Cmd+R
+bash scripts/ci/test-ios.sh      # also: test-edge-functions.sh, test-database.sh
 ```
 
-在 Xcode 中选择模拟器或真机，直接 `Cmd + R` 运行。客户端的 Supabase 连接信息（`projectURL` 与可公开的 `anonKey`）位于 `AIEnglishApp/Services/SupabaseConfig.swift`。
-
-> 该 `anonKey` 是 Supabase 的 publishable key，可公开，由 RLS 保护；**不要**把 Gemini 等敏感密钥写进客户端代码。
-
-### 2. 本地/远程运行 Supabase（可选）
-
-项目已通过 Supabase CLI 关联云端项目。常用命令：
-
-```bash
-supabase login                  # 首次登录
-supabase functions deploy       # 部署所有 Edge Functions
-supabase db push                # 应用 migrations 到关联的数据库
-```
-
-Edge Function 依赖的服务端环境变量（**只配在 Supabase 服务端，切勿写入仓库或客户端**）：
-
-- `GEMINI_API_KEY` —— Gemini API 密钥
-- `SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY`
-
-> 在 Supabase 后台 `Edge Functions → Secrets` 或用 `supabase secrets set` 配置这些变量。
-
-> TODO：本地完整跑通 Supabase（`supabase start` 所需的 Docker 环境、种子数据等）尚未在仓库中固化，需要时请补充。
-
-## 文档索引
-
-- 产品总纲：[`docs/prd/IOS App-Language Learning 1.0.md`](docs/prd/IOS%20App-Language%20Learning%201.0.md)
-- 引导页 PRD：[`docs/prd/Tab0_onboarding_PRD_v1.md`](docs/prd/Tab0_onboarding_PRD_v1.md)
-- Tab1 PRD：[`docs/prd/Tab1_PRD_v1.md`](docs/prd/Tab1_PRD_v1.md) ｜ [多轮对话设计](docs/prd/Tab1_多轮对话设计_v1.md) ｜ [AI 回复卡片需求](docs/prd/Tab1_AI回复卡片需求设计_v1.md) ｜ [图片输入方案 B](docs/prd/Tab1_图片输入_方案B设计文档_v3.md)
-- Tab2 PRD：[`docs/prd/Tab2_PRD_v1.md`](docs/prd/Tab2_PRD_v1.md) ｜ [数据逻辑梳理](docs/prd/Tab2_数据逻辑梳理_v1.md)
-- 架构：[`docs/architecture/全局数据架构审计报告_v1.md`](docs/architecture/全局数据架构审计报告_v1.md)
-- 协作笔记：[`docs/architecture/AI协作手册.md`](docs/architecture/AI协作手册.md)
-- 归档（历史版本）：`docs/archive/`
-- 设计规范：`docs/design-system/`（颜色以 `AIEnglishApp/Theme/Theme.swift` 为准）
-
-## 开发规范
-
-面向 AI 辅助开发的完整协作规范（技术选型约束、设计 token 规则、垂直切片工作法等）详见 [`CLAUDE.md`](CLAUDE.md)，此处不再重复。
+The backend address and publishable key (safe to expose; protected by row-level
+security) are in `AIEnglishApp/Services/SupabaseConfig.swift`. Never put the Gemini or
+service-role key in the app. Pull requests must pass all three CI checks; the full
+workflow, including Edge Function deployment, is in
+[`docs/engineering/CI.md`](docs/engineering/CI.md) and [`CLAUDE.md`](CLAUDE.md).

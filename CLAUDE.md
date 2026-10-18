@@ -47,34 +47,32 @@ the fact** — fix the doc and say so.
 
 ## Current State (update this when a slice lands)
 
-- **Tab2 rebuild in flight** (branch `feat/tab2-rebuild`, plan =
-  `Agent内容组织与成长系统_PRD_v2.md` §十三). Scope: Tab2 + dialogue + growth only;
-  Tab1 frontend untouched, `generate` backend gets the accounting stage.
-  - **Slice 0** (`source_message_id` backfill): **skipped** — the 8th-cut unified
-    `raw_content` made materials self-contained, no consumer for the link.
-  - **Slice 0.5 · DONE + verified** (backend only): split
-    `user_original_lang` → `input_lang` (role: native/target/other) +
-    `input_lang_code`; added `intent` (normalized native intent phrase, express
-    only). Deployed; live-verified — `累死了`/`太累了` both normalize to `很累`,
-    日文 → other/ja, `I have a 会议 at 3pm` → native.
-  - **Slice 1 (core) · DONE + verified**: created `lexicon_entries` /
-    `lexicon_occurrences` (migrations `20260728000000`), added the
-    `record_lexicon_material_units` accounting RPC (`20260728010000`) and
-    Stage 3 in `generate` (read `learnable_units[]` → normalize lemma →
-    stopword backstop → upsert entry + append occurrence, non-blocking).
-    The RPC coerces model-drifted enums (kind/input_lang/granularity/direction)
-    to valid-or-null so a stray value can't abort the batch. Live-verified:
-    "set up" ×2 → one entry `total_count=2`, `entry_kind` coerced
-    phrasal-verb→phrase, occurrences carry the inherited signals.
-  - **Next · Slice 1b + Slice 2**: 1b = failure/backfill/reconcile jobs +
-    backfill history into the ledger. Slice 2 = static word-list `tier` +
-    lemmatisation (meetings→meeting) + fuller stopword list.
+*Last reviewed 2026-10-17, against `main`.*
+
+- **Shipped build: 1.0.0 (build 2)**, submitted to App Store review. iPhone only,
+  portrait.
+- **Lexicon ledger backend: done.** Slices 0.5 / 1 / 1b / 2 landed together
+  (PR #12, 2026-07-28): `input_lang` + `intent` split, `lexicon_entries` /
+  `lexicon_occurrences`, the `record_lexicon_material_units` accounting RPC and
+  Stage 3 in `generate`, the `backfill-lexicon` job, and lemma / stopword / `tier`
+  normalisation in `supabase/functions/_shared/lexicon.ts`. Slice 0
+  (`source_message_id` backfill) was skipped on purpose — the 8th-cut unified
+  `raw_content` made materials self-contained.
+- **Tab2 as shipped in 1.0.0**: a Hero card plus a "More to talk about" list,
+  topics that unlock at 20 expressions (`get-tab2-home`, `get-category-words`).
+  The PRD's slice plan (`Agent内容组织与成长系统_PRD_v2.md` §十三) is the
+  *design* sequence; **do not assume its slices 3–9 match what shipped** — check
+  the code and the Tab2 design docs under `docs/prd/` before building on them.
+- **Dialogue page: in development, switched off in 1.0.0.** The `dialogue` Edge Function and
+  `AIEnglishApp/Conversation/` exist; `FeatureFlags.conversationEnabled = false`
+  in 1.0.0, so the entry shows a "coming soon" toast. Read the warning in
+  `FeatureFlags.swift` before turning it on (usage-description strings, App Review
+  Guideline 5.1.1).
 - **Prompt backlog** (`Prompt改动需求.md` §待优化需求): N1 — pure third-language
-  input should be `comprehend` not `express` (prompt direction rule + Slice 1
+  input should be `comprehend` not `express` (prompt direction rule + the ledger
   accounting must skip `intent_text` when `input_lang='other'`).
-- **Tab1 prompt rework** (slices 1–8) already landed on main (see 8th-cut commit).
-- Slice order and what blocks what: see `整体架构_两个Tab与对话页_v1.md` §五 and
-  `Agent内容组织与成长系统_PRD_v2.md` §十三.
+- **Tab1 prompt rework** (slices 1–8) landed on main (see the 8th-cut commit).
+- Product structure and what blocks what: `整体架构_两个Tab与对话页_v1.md` §五.
 
 ## Overall Structure
 
