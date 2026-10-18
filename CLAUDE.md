@@ -226,11 +226,13 @@ PR".** Full version: `docs/engineering/交付与部署纪律.md`.
 - **"合并" / merge → `bash scripts/ci/ship-pr.sh merge`.** Requires a standalone, explicit
   instruction from the user. It re-checks that the PR has at least one check and all pass,
   squash-merges, does not delete the branch, and fast-forwards main with `--ff-only`
-  (never `reset --hard`). **PRs touching `supabase/` or `.github/` are refused by the
-  script — the user merges those by hand.**
+  (never `reset --hard`). The script refuses a PR with no checks (e.g. a `[skip ci]` commit).
+  **PRs touching `supabase/` or `.github/` are refused by the script — the user merges
+  those by hand.**
 - **"清理" / cleanup → `bash scripts/ci/ship-pr.sh cleanup <PR number>`.** Also needs its
   own instruction, and the user must have confirmed Xcode is closed. Removes the worktree
-  without `--force`, then deletes the local branch.
+  without `--force`, then deletes the local branch. If your own session is running inside
+  that worktree, leave the directory right after cleanup.
 - Trigger-word discipline: the word "merge" appearing in a message is not a merge command.
 
 ### Edge Function deploy discipline (Edge Function 部署纪律)
