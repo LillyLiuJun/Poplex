@@ -11,8 +11,7 @@ around themselves. Users record their environment or thoughts via photo, voice,
 or text; AI generates scene-based descriptions in the language being learned from
 that input. The product is built around these materials, helping users build their
 language ability (especially speaking) across listening, speaking, reading, and
-writing. At this stage it supports one language pair: Chinese speakers learning
-English; the design is not tied to that pair.
+writing. Currently it supports Chinese → English.
 
 ## Docs
 
