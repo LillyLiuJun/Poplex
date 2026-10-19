@@ -1,23 +1,28 @@
 # Poplex (AIEnglishApp)
 
-**Learn English from your own life.** Poplex is an AI-native iOS app that turns the
+**Build language from your own life.** Poplex is an AI-native iOS app that turns the
 moments around you — a photo, a few words, a passing thought — into scene-based
-English you can actually say out loud.
+language you can actually say out loud.
+
+> **Current stage:** Poplex is about building language from your own life, and today it
+> supports one language pair: **Chinese speakers learning English**. The design is not
+> tied to that pair.
 
 [中文说明](README.zh-CN.md)
 
 ## What it does
 
-Poplex turns the moments of your life into English that is yours: the expressions
+Poplex turns the moments of your life into language that is yours: the expressions
 you actually need, organised for you automatically — so everything you capture
 becomes something you can use.
 
 ### Today (Tab 1) — capture and generate
 
 Type a sentence or add a photo (camera or gallery). The AI turns it into a learning
-card: natural English for that scene with an explanation in your own language — or,
-if you wrote in your own language, the English you would have wanted to say. You can
-keep asking about the same scene.
+card: natural phrasing for that scene in the language you are learning, with an
+explanation in your own language — or, if you wrote in your own language, what you would
+have wanted to say. At this stage that means English, explained in Chinese. You can keep
+asking about the same scene.
 
 ### Library (Tab 2) — your material, organised for you
 
@@ -37,9 +42,10 @@ No sign-up, no email: the app signs in anonymously on first launch and everythin
 user creates stays private to that account. Account deletion removes the account and
 all of its data.
 
-The interface is English; learning content is English with explanations in the
-learner's native language (Chinese for the first release). Prompts and field names
-speak of a "target" and a "native" language instead of hard-coding either.
+At this stage Poplex supports one language pair: **Chinese → English**. The interface
+is English; learning content is English with explanations in Chinese. Prompts and field
+names speak of a "target" and a "native" language instead of hard-coding either, so the
+design is not tied to this pair.
 
 ## Architecture
 
