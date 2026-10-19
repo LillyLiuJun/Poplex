@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/brand/readme-banner.png" alt="Poplex — Build language from your own life. 从你自己的生活里学语言。" width="100%">
+</p>
+
 # Poplex（AIEnglishApp）
 
 **从你自己的生活里学语言。** Poplex 是一款 AI native 的 iOS 语言学习 App：把身边的瞬间——
@@ -103,3 +107,15 @@ bash scripts/ci/test-ios.sh      # 另有 test-edge-functions.sh、test-database
 后端地址和 publishable key（可公开，由行级安全保护）在 `AIEnglishApp/Services/SupabaseConfig.swift`。
 绝不要把 Gemini 或 service-role 密钥写进 App。PR 必须通过三项 CI 检查；完整流程（含 Edge Function
 部署）见 [`docs/engineering/CI.md`](docs/engineering/CI.md) 与 [`CLAUDE.md`](CLAUDE.md)。
+
+## 截图
+
+App Store 截图（iPhone，界面为英文）。
+
+<p align="center">
+  <img src="docs/screenshots/01-cover.jpg" alt="Poplex: Build your language from work & life" width="19%">
+  <img src="docs/screenshots/02-ask.jpg" alt="Ask what you're curious about: word and sentence cards" width="19%">
+  <img src="docs/screenshots/03-snap.jpg" alt="Snap it, type it: a photo turned into a bilingual sentence card" width="19%">
+  <img src="docs/screenshots/04-words.jpg" alt="Your words, sorted by topic in the Library" width="19%">
+  <img src="docs/screenshots/05-scenes.jpg" alt="Your life, sorted into scenes: topic cards in the Library" width="19%">
+</p>

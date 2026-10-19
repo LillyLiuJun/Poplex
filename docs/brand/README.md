@@ -27,6 +27,7 @@
    - 图标 + 字标（`assets/poplex-lockup-icon.svg`）：App Store、官网、分享图。
    - 单图形 + 字标（`assets/poplex-lockup-mark.svg`）：App 内页头、文档抬头。
    - 比例：字的大写高度 = 图标高度的 40%；字与图标的间距 = 图标高度的 24%；字的大写高度在图标高度内上下居中。
+5. **README 横幅**（`readme-banner.png`，1600×520）：暖纸底，横排组合（单图形 + 字标）居中，下方英文定位语用 Charter、中文一行用冬青黑 W3。源文件 `readme-banner.source.html` 用 macOS 自带字体渲染，改字后用 Chrome headless 重新导出 PNG；字体文件本身不入库。
 
 ---
 

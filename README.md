@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/brand/readme-banner.png" alt="Poplex — Build language from your own life. 从你自己的生活里学语言。" width="100%">
+</p>
+
 # Poplex (AIEnglishApp)
 
 **Build language from your own life.** Poplex is an AI-native iOS app that turns the
@@ -115,3 +119,15 @@ security) are in `AIEnglishApp/Services/SupabaseConfig.swift`. Never put the Gem
 service-role key in the app. Pull requests must pass all three CI checks; the full
 workflow, including Edge Function deployment, is in
 [`docs/engineering/CI.md`](docs/engineering/CI.md) and [`CLAUDE.md`](CLAUDE.md).
+
+## Screenshots
+
+App Store screenshots (iPhone, English interface).
+
+<p align="center">
+  <img src="docs/screenshots/01-cover.jpg" alt="Poplex: Build your language from work & life" width="19%">
+  <img src="docs/screenshots/02-ask.jpg" alt="Ask what you're curious about: word and sentence cards" width="19%">
+  <img src="docs/screenshots/03-snap.jpg" alt="Snap it, type it: a photo turned into a bilingual sentence card" width="19%">
+  <img src="docs/screenshots/04-words.jpg" alt="Your words, sorted by topic in the Library" width="19%">
+  <img src="docs/screenshots/05-scenes.jpg" alt="Your life, sorted into scenes: topic cards in the Library" width="19%">
+</p>
