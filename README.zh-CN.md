@@ -2,7 +2,7 @@
   <img src="docs/brand/readme-banner.png" alt="Poplex — Build language from your own life. 从你自己的生活里学语言。" width="100%">
 </p>
 
-# Poplex（AIEnglishApp）
+# Poplex
 
 **从你自己的生活里学语言。** Poplex 是一款 AI native 的 iOS 语言学习 App：把身边的瞬间——
 一张照片、几个词、一个念头——变成你真的能开口说出来的、带场景的表达。
@@ -10,6 +10,11 @@
 > **当前阶段：** 目前支持 **中文 → 英语**。
 
 [English](README.md)
+
+> **源码公开（source-available），不是开源。** 代码按
+> [PolyForm Noncommercial License 1.0.0](LICENSE) 发布。你可以阅读、学习、运行和修改它，
+> 但只限**非商业**用途，**本协议不授予商业使用权**。「Poplex」的名称、Logo 与设计不在授权范围内，
+> 详见[协议说明](#协议)与 [NOTICE](NOTICE)。
 
 ## 产品做什么
 
@@ -87,7 +92,7 @@ legal/                 隐私政策、条款、支持页
 CLAUDE.md, AGENTS.md   面向 AI 编码助手的项目说明
 ```
 
-`docs/` 下多数文档为中文。建议从这里读起：
+`docs/` 下多数文档为中文，少数文档提到未公开的内部工作文件（例如 `docs/review/`、`docs/testing/`、`docs/design-demos/` 下的内容）。建议从这里读起：
 
 - [`docs/prd/整体架构_两个Tab与对话页_v1.md`](docs/prd/整体架构_两个Tab与对话页_v1.md) —— 产品结构（Tab1 / Tab2）
 - [`docs/prd/Agent内容组织与成长系统_PRD_v2.md`](docs/prd/Agent内容组织与成长系统_PRD_v2.md) —— Tab2、词汇账本、成长层
@@ -97,16 +102,47 @@ CLAUDE.md, AGENTS.md   面向 AI 编码助手的项目说明
 - [`docs/design-system/`](docs/design-system/) —— 字体与组件规范（颜色以 `AIEnglishApp/Theme/Theme.swift` 为准）
 - [`CLAUDE.md`](CLAUDE.md) —— 设计规则、工作方法、已拍板的取舍、当前进度
 
-## 运行与测试
+## 自己跑起来
+
+本仓库**不指向任何真实后端**。要运行 App，你需要自己的 Supabase 项目和 Gemini API Key。
+
+1. **新建一个 Supabase 项目**，并开启**匿名登录**（Authentication → Sign In / Providers）。
+2. **应用迁移。** 把 `supabase/migrations/` 里的 SQL 按文件名顺序在你的项目上执行（可以用 Supabase CLI；先把 `supabase/config.toml.example` 复制为
+   `supabase/config.toml`，CLI 才会把这个文件夹当作 Supabase 项目）。
+3. **创建一个私有的 Storage 存储桶**，名字叫 `material_images`。
+4. **部署 `supabase/functions/` 里的 Edge Functions** 并设置密钥。Supabase 会自动注入
+   `SUPABASE_URL`、`SUPABASE_ANON_KEY`、`SUPABASE_SERVICE_ROLE_KEY`；你需要自己设置 `GEMINI_API_KEY`
+   （如果使用孤儿图片对账函数，还要设置 `RECONCILE_SECRET`）。
+5. **让 App 指向你的项目。** 编辑 `AIEnglishApp/Services/SupabaseConfig.swift`，替换两个占位符：
+   `https://YOUR-PROJECT-REF.supabase.co` 和 `YOUR_SUPABASE_PUBLISHABLE_KEY`。
+6. **用 Xcode 打开 `AIEnglishApp.xcodeproj`**，设置你自己的 Team 和 Bundle Identifier
+   （工程当前是按作者的账号配置的），在 iOS 17+ 的模拟器或真机上运行。
+
+新项目是空的。先在 Today 里添加几条内容；Library 里的话题要攒够 20 个表达才会解锁。
+
+绝对不要把 Gemini 密钥或 service-role 密钥放进 App。
+
+### 测试
 
 ```bash
-open AIEnglishApp.xcodeproj      # 选模拟器或真机，Cmd+R
-bash scripts/ci/test-ios.sh      # 另有 test-edge-functions.sh、test-database.sh
+bash scripts/ci/test-ios.sh
+bash scripts/ci/test-edge-functions.sh
+ALLOW_LOCAL_SUPABASE_RESET=1 bash scripts/ci/test-database.sh   # 会重置本地数据库
 ```
 
-后端地址和 publishable key（可公开，由行级安全保护）在 `AIEnglishApp/Services/SupabaseConfig.swift`。
-绝不要把 Gemini 或 service-role 密钥写进 App。PR 必须通过三项 CI 检查；完整流程（含 Edge Function
-部署）见 [`docs/engineering/CI.md`](docs/engineering/CI.md) 与 [`CLAUDE.md`](CLAUDE.md)。
+每个脚本检查什么，见 [`docs/engineering/CI.md`](docs/engineering/CI.md)。
+
+## 协议
+
+- **代码：** [PolyForm Noncommercial License 1.0.0](LICENSE)。个人学习、研究、业余项目，以及教育、
+  公益、公共利益组织的使用，属于允许的非商业用途。本协议不授予商业使用权。
+- **品牌与设计：** 「Poplex」名称、Logo、字标、App 图标和视觉设计，**保留所有权利**。
+- **第三方材料**（字体、Swift 依赖库、照片）各自遵循自己的条款，见 [NOTICE](NOTICE)。
+
+## 贡献与安全
+
+本项目**不接受代码贡献，欢迎提 issue**，见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+报告安全漏洞请按 [SECURITY.md](SECURITY.md) 处理，不要公开提 issue。
 
 ## 截图
 

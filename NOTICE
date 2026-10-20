@@ -1,0 +1,73 @@
+Poplex
+Copyright 2026 JUN LIU
+
+The source code in this repository is made available under the PolyForm
+Noncommercial License 1.0.0 (see LICENSE). This is a source-available license,
+not an OSI-approved open-source license: it permits noncommercial use only, and
+commercial use is not granted by it.
+
+The terms below say what the LICENSE file does and does not cover.
+
+
+1. BRAND AND DESIGN — ALL RIGHTS RESERVED
+-----------------------------------------
+The name "Poplex", the Poplex logo, wordmark and app icon (including the files
+under docs/brand/assets/ and the app icon asset), and the visual and interface
+design of the app are NOT licensed under the PolyForm Noncommercial License.
+All rights in them are reserved. The licence grants no right to use them as the
+name, identity or branding of another product.
+
+
+2. THIRD-PARTY MATERIALS — NOT COVERED BY THE LICENSE ABOVE
+-----------------------------------------------------------
+The following are the property of their respective owners and are used under
+their own terms. The PolyForm Noncommercial License does not apply to them, and
+no all-rights-reserved claim is made over them.
+
+2.1 Fonts bundled in the app (AIEnglishApp/Resources/Fonts/)
+
+  Gothic A1
+    Copyright (C) HanYang I&C Co.,Ltd.
+    SIL Open Font License, Version 1.1
+    The bundled GothicA1-*.ttf files are a Latin-script subset of Gothic A1
+    (Google Fonts, version 2.50) with adjusted vertical metrics. The font has
+    no Reserved Font Name, and the subset keeps the original family name.
+    License text: licenses/GothicA1-OFL.txt (also AIEnglishApp/Resources/Fonts/OFL.txt)
+
+  Geist
+    Copyright 2024 The Geist Project Authors (https://github.com/vercel/geist-font)
+    SIL Open Font License, Version 1.1
+    The Geist-*.ttf files are bundled but not currently used by the interface.
+    License text: licenses/Geist-OFL.txt
+
+  Apple system fonts (Charter, Hiragino Sans GB, SF) are referenced by name and
+  provided by the operating system. They are not distributed in this repository.
+
+2.2 Swift packages (resolved by Swift Package Manager; not redistributed here)
+
+  supabase-swift                   MIT           https://github.com/supabase/supabase-swift
+  swift-asn1                       Apache-2.0    https://github.com/apple/swift-asn1
+  swift-crypto                     Apache-2.0    https://github.com/apple/swift-crypto
+  swift-http-types                 Apache-2.0    https://github.com/apple/swift-http-types
+  swift-clocks                     MIT           https://github.com/pointfreeco/swift-clocks
+  swift-concurrency-extras         MIT           https://github.com/pointfreeco/swift-concurrency-extras
+  xctest-dynamic-overlay           MIT           https://github.com/pointfreeco/xctest-dynamic-overlay
+
+2.3 Photographs in the app (AIEnglishApp/Assets.xcassets)
+
+  card_scene_1 ... card_scene_4 and onboarding_hero are photographs sourced from
+  Unsplash (https://unsplash.com/license) and edited with Google Gemini. They are
+  provided so the project builds and looks complete. Individual photographer
+  credits were not retained. Identifiable people or third-party marks that
+  appear in a photograph belong to their owners; no endorsement is implied.
+
+2.4 Trademarks
+
+  Apple, iPhone, iOS, Xcode, Google, Gemini, Supabase and other product names are
+  trademarks of their respective owners and are used only to describe what this
+  project works with.
+
+
+3. NO WARRANTY
+--------------
+See the "No Liability" section of LICENSE.

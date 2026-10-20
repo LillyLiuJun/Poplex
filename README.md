@@ -2,7 +2,7 @@
   <img src="docs/brand/readme-banner.png" alt="Poplex — Build language from your own life. 从你自己的生活里学语言。" width="100%">
 </p>
 
-# Poplex (AIEnglishApp)
+# Poplex
 
 **Build language from your own life.** Poplex is an AI-native iOS app that turns the
 moments around you — a photo, a few words, a passing thought — into scene-based
@@ -11,6 +11,12 @@ language you can actually say out loud.
 > **Current stage:** Poplex currently supports **Chinese → English**.
 
 [中文说明](README.zh-CN.md)
+
+> **Source-available, not open source.** The code is published under the
+> [PolyForm Noncommercial License 1.0.0](LICENSE). You may read it, learn from it,
+> run it and modify it for noncommercial purposes. **Commercial use is not granted
+> by this license.** The Poplex name, logo and design are not licensed — see
+> [License](#license) and [NOTICE](NOTICE).
 
 ## What it does
 
@@ -97,7 +103,8 @@ legal/                 privacy policy, terms and support pages
 CLAUDE.md, AGENTS.md   project briefs for AI coding assistants
 ```
 
-Most documents under `docs/` are written in Chinese. Start here:
+Most documents under `docs/` are written in Chinese, and a few refer to internal working files
+(for example under `docs/review/`, `docs/testing/` or `docs/design-demos/`) that are not published. Start here:
 
 - [`docs/prd/整体架构_两个Tab与对话页_v1.md`](docs/prd/整体架构_两个Tab与对话页_v1.md) — product structure (Tab 1 / Tab 2)
 - [`docs/prd/Agent内容组织与成长系统_PRD_v2.md`](docs/prd/Agent内容组织与成长系统_PRD_v2.md) — Tab 2, the lexicon ledger, growth layer
@@ -107,18 +114,60 @@ Most documents under `docs/` are written in Chinese. Start here:
 - [`docs/design-system/`](docs/design-system/) — typography and component specs (colours: `AIEnglishApp/Theme/Theme.swift`)
 - [`CLAUDE.md`](CLAUDE.md) — design rules, working method, decided trade-offs, current state
 
-## Run and test
+## Running it yourself
+
+The repository does **not** point at a real backend. To run the app you need your
+own Supabase project and Gemini API key.
+
+1. **Create a Supabase project** and enable **anonymous sign-ins**
+   (Authentication → Sign In / Providers).
+2. **Apply the migrations.** Run the SQL files in `supabase/migrations/` in
+   filename order against your project (the Supabase CLI can do this; copy
+   `supabase/config.toml.example` to `supabase/config.toml` first, so the CLI
+   treats the folder as a Supabase project).
+3. **Create a private Storage bucket** named `material_images`.
+4. **Deploy the Edge Functions** in `supabase/functions/` and set their secrets.
+   Supabase injects `SUPABASE_URL`, `SUPABASE_ANON_KEY` and
+   `SUPABASE_SERVICE_ROLE_KEY` itself; you must set `GEMINI_API_KEY`
+   (and `RECONCILE_SECRET` if you use the orphan-image reconciler).
+5. **Point the app at your project.** Edit
+   `AIEnglishApp/Services/SupabaseConfig.swift` and replace the two placeholders,
+   `https://YOUR-PROJECT-REF.supabase.co` and `YOUR_SUPABASE_PUBLISHABLE_KEY`.
+6. **Open `AIEnglishApp.xcodeproj` in Xcode**, set your own Team and Bundle
+   Identifier (the project is configured for the author's), and run on an
+   iOS 17+ simulator or device.
+
+A new project starts empty. Add a few entries in Today first; Library topics
+unlock once a topic has collected 20 expressions.
+
+Never put the Gemini key or the service-role key in the app.
+
+### Tests
 
 ```bash
-open AIEnglishApp.xcodeproj      # pick a simulator or device, then Cmd+R
-bash scripts/ci/test-ios.sh      # also: test-edge-functions.sh, test-database.sh
+bash scripts/ci/test-ios.sh
+bash scripts/ci/test-edge-functions.sh
+ALLOW_LOCAL_SUPABASE_RESET=1 bash scripts/ci/test-database.sh   # resets the local database
 ```
 
-The backend address and publishable key (safe to expose; protected by row-level
-security) are in `AIEnglishApp/Services/SupabaseConfig.swift`. Never put the Gemini or
-service-role key in the app. Pull requests must pass all three CI checks; the full
-workflow, including Edge Function deployment, is in
-[`docs/engineering/CI.md`](docs/engineering/CI.md) and [`CLAUDE.md`](CLAUDE.md).
+See [`docs/engineering/CI.md`](docs/engineering/CI.md) for what each script checks.
+
+## License
+
+- **Code:** [PolyForm Noncommercial License 1.0.0](LICENSE). Personal study,
+  research, hobby projects and use by educational, charitable and public-interest
+  organisations are permitted noncommercial purposes. Commercial use is not
+  granted by this license.
+- **Brand and design:** the name "Poplex", the logo, wordmark, app icon and the
+  visual design are **all rights reserved**.
+- **Third-party materials** (fonts, Swift packages, photographs) keep their own
+  terms — see [NOTICE](NOTICE).
+
+## Contributing and security
+
+This project does not accept code contributions; **issues are welcome**. See
+[CONTRIBUTING.md](CONTRIBUTING.md). To report a vulnerability, follow
+[SECURITY.md](SECURITY.md) instead of opening a public issue.
 
 ## Screenshots
 
